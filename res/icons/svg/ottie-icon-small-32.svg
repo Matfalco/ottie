@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<title>Ottie</title>
+<rect width="512" height="512" rx="112" fill="#0E5A6B"></rect>
+<path d="M88 191 A190 190 0 0 0 88 369 M424 191 A190 190 0 0 1 424 369" fill="none" stroke="#2B8A99" style="stroke-width:9;stroke-linecap:round"></path>
+<path d="M228 404 C226 440 240 470 262 492 C276 470 288 440 284 404 Z" fill="#8B5A3C"></path>
+<path d="M256 168 C324 168 352 208 352 266 C352 330 334 382 306 410 C290 424 222 424 206 410 C178 382 160 330 160 266 C160 208 188 168 256 168 Z" fill="#8B5A3C"></path>
+<ellipse cx="256" cy="304" rx="68" ry="94" fill="#9A6444"></ellipse>
+<ellipse cx="222" cy="382" rx="18" ry="28" fill="#5A3824" transform="rotate(14 222 382)"></ellipse>
+<ellipse cx="290" cy="382" rx="18" ry="28" fill="#5A3824" transform="rotate(-14 290 382)"></ellipse>
+<circle cx="184" cy="110" r="11" fill="#8B5A3C"></circle>
+<circle cx="328" cy="110" r="11" fill="#8B5A3C"></circle>
+<ellipse cx="256" cy="130" rx="72" ry="60" fill="#D4B48E"></ellipse>
+<ellipse cx="256" cy="154" rx="32" ry="21" fill="#F3E6D3"></ellipse>
+<path d="M214 108 Q224 98 235 98 M280 98 Q289.5 97 301 110.5" fill="none" stroke="#A8845F" style="stroke-width:4;stroke-linecap:round"></path>
+<circle cx="230" cy="122" r="8" fill="#1F1712"></circle>
+<circle cx="282" cy="122" r="8" fill="#1F1712"></circle>
+<path d="M242 138 Q256 133 270 138 Q268 150 256 154 Q244 150 242 138 Z" fill="#1F1712"></path>
+<rect x="238" y="194" width="36" height="64" rx="8" fill="#FFC247"></rect>
+<path d="M202 248 H310 L256 302 Z" fill="#FFC247" stroke="#FFC247" style="stroke-width:12;stroke-linejoin:round"></path>
+<ellipse cx="224" cy="236" rx="22" ry="15" fill="#5A3824"></ellipse>
+<ellipse cx="288" cy="236" rx="22" ry="15" fill="#5A3824"></ellipse>
+</svg>
