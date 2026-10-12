@@ -1,0 +1,12 @@
+[workspace]
+resolver = "3"
+members = ["crates/core"]
+
+[workspace.package]
+edition = "2024"
+publish = false
+
+[workspace.lints.clippy]
+# No unwrap()/expect() outside tests (see clippy.toml for the test exemption).
+unwrap_used = "warn"
+expect_used = "warn"

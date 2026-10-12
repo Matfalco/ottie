@@ -1,0 +1,22 @@
+[package]
+name = "dm-core"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+percent-encoding = "2.3.2"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2", "system-proxy"] }
+thiserror = "2.0.21"
+tokio = { version = "1.53.2", features = ["fs", "io-util", "macros", "rt", "time"] }
+tokio-util = "0.7.20"
+tracing = "0.1.44"
+
+[dev-dependencies]
+axum = "0.8.9"
+futures-util = "0.3.34"
+tempfile = "3.27.0"
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "signal", "io-std"] }
