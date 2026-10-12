@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Speed limits and priorities, measured on a local server. Timings use wide
-//! margins: they check shares and lower bounds, not exact speeds.
+//! margins: they check shares and lower bounds, not exact speeds. Shares are
+//! measured by when jobs finish, which is reported at once, rather than by
+//! progress over a short window, which lags behind.
 
 mod support;
 
@@ -61,19 +63,45 @@ impl Setup {
         .unwrap_or_else(|_| panic!("job {id} never became {state:?}"));
     }
 
-    /// Lets two running jobs share the limit for a while, then returns how
-    /// many bytes each got during that time.
-    async fn race(&self, a: JobId, b: JobId) -> (f64, f64) {
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        let (a0, b0) = (self.job(a).await.downloaded, self.job(b).await.downloaded);
-        tokio::time::sleep(Duration::from_millis(1200)).await;
-        let (a1, b1) = (self.job(a).await.downloaded, self.job(b).await.downloaded);
-        ((a1 - a0) as f64, (b1 - b0) as f64)
+    /// Waits for both jobs to complete and returns how long `b` took
+    /// divided by how long `a` took, both counted from `started`.
+    async fn finish_ratio(&self, a: JobId, b: JobId, started: Instant) -> f64 {
+        let mut done: [Option<f64>; 2] = [None, None];
+        tokio::time::timeout(TIMEOUT, async {
+            while done.iter().any(Option::is_none) {
+                let jobs = self.manager.list().await.unwrap();
+                for (slot, id) in done.iter_mut().zip([a, b]) {
+                    let finished = jobs
+                        .iter()
+                        .any(|j| j.id == id && j.state == JobState::Completed);
+                    if slot.is_none() && finished {
+                        *slot = Some(started.elapsed().as_secs_f64());
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("jobs didn't finish");
+        let [Some(a), Some(b)] = done else {
+            unreachable!("the loop only ends when both are set")
+        };
+        b / a
     }
 }
 
 async fn server(size: u64) -> TestServer {
     TestServer::start(test_data(size as usize, 3)).await
+}
+
+/// No ETag, so downloads from it use one connection. Priority tests use it:
+/// a split download also receives up to a few hundred KiB past its ranges'
+/// ends (data buffered while it was throttled), which counts against the
+/// limit and would blur the shares on files this small.
+async fn single_connection_server(size: u64) -> TestServer {
+    let server = server(size).await;
+    server.configure(|b| b.etag = None);
+    server
 }
 
 #[tokio::test]
@@ -116,17 +144,22 @@ async fn a_category_limit_slows_its_jobs_together() {
 #[tokio::test]
 async fn the_global_limit_is_shared_per_download_not_per_connection() {
     let s = setup().await;
-    s.manager.set_global_limit(256 * KIB).await.unwrap();
-    // Four connections versus one (no ETag means no splitting).
+    s.manager.set_global_limit(4 * 1024 * KIB).await.unwrap();
+    // Four connections versus one.
     let split = server(4 * 1024 * KIB).await;
-    let single = server(4 * 1024 * KIB).await;
-    single.configure(|b| b.etag = None);
+    let single = single_connection_server(4 * 1024 * KIB).await;
+    let started = Instant::now();
     let a = s.add(&split, "a.bin").await;
     let b = s.add(&single, "b.bin").await;
 
-    let (got_a, got_b) = s.race(a, b).await;
-    let ratio = got_a / got_b;
-    assert!((0.6..1.6).contains(&ratio), "a {got_a}, b {got_b}");
+    // Equal shares: both finish after about 2 s, the split one a little later
+    // because of the bytes it discards (about 0.9×). Shared per connection,
+    // the split one would get 4/5 and finish at 1.25 s, the other at 2 s (1.6×).
+    let ratio = s.finish_ratio(a, b, started).await;
+    assert!(
+        (0.75..1.3).contains(&ratio),
+        "single took {ratio:.2}× as long"
+    );
 }
 
 #[tokio::test]
@@ -150,17 +183,21 @@ async fn downloads_together_stay_under_the_global_limit() {
 #[tokio::test]
 async fn high_priority_gets_twice_the_share() {
     let s = setup().await;
-    s.manager.set_global_limit(300 * KIB).await.unwrap();
-    let server = server(4 * 1024 * KIB).await;
-    let high = s.add(&server, "high.bin").await;
-    let normal = s.add(&server, "normal.bin").await;
+    s.manager.set_global_limit(384 * KIB).await.unwrap();
+    // High gets a file twice as big, so with twice the share both finish
+    // together, after about 2 s.
+    let big = single_connection_server(512 * KIB).await;
+    let small = single_connection_server(256 * KIB).await;
+    let started = Instant::now();
+    let high = s.add(&big, "high.bin").await;
     s.manager.set_priority(high, Priority::High).await.unwrap();
+    let normal = s.add(&small, "normal.bin").await;
 
-    let (got_high, got_normal) = s.race(high, normal).await;
-    let ratio = got_high / got_normal;
+    // With equal shares, Normal would finish at 1.33 s and High at 2 s (0.67×).
+    let ratio = s.finish_ratio(high, normal, started).await;
     assert!(
-        (1.4..2.8).contains(&ratio),
-        "high {got_high}, normal {got_normal}"
+        (0.85..1.2).contains(&ratio),
+        "normal took {ratio:.2}× as long"
     );
 }
 
@@ -168,19 +205,19 @@ async fn high_priority_gets_twice_the_share() {
 async fn urgent_jobs_are_served_first() {
     let s = setup().await;
     s.manager.set_global_limit(256 * KIB).await.unwrap();
-    let server = server(4 * 1024 * KIB).await;
+    let server = single_connection_server(256 * KIB).await;
+    let started = Instant::now();
     let urgent = s.add(&server, "urgent.bin").await;
-    let normal = s.add(&server, "normal.bin").await;
     s.manager
         .set_priority(urgent, Priority::Urgent)
         .await
         .unwrap();
+    let normal = s.add(&server, "normal.bin").await;
 
-    let (got_urgent, got_normal) = s.race(urgent, normal).await;
-    assert!(
-        got_normal < got_urgent / 5.0,
-        "urgent {got_urgent}, normal {got_normal}"
-    );
+    // Urgent takes the whole limit and finishes after about 1 s; Normal only
+    // starts then, and finishes at 2 s (2×). Shared equally, both at 2 s (1×).
+    let ratio = s.finish_ratio(urgent, normal, started).await;
+    assert!(ratio > 1.6, "normal took only {ratio:.2}× as long");
 }
 
 #[tokio::test]
