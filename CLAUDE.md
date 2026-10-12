@@ -21,6 +21,7 @@
 - A background **daemon** that does all the downloading, with three front ends on top: a **web UI**, a **desktop app** (Windows, Linux, later macOS) and an **Android app**. iOS is out of scope.
 - A **browser extension** (Chromium-based browsers and Firefox, desktop) that takes over downloads from the browser: intercepts them, hides the browser's own download UI where possible, and shows our download list in its popup.
 - Must-haves: pause/resume (including after a restart or crash), multi-connection downloads, and speed limits at three levels (per download, per category, global), adjustable while downloads run.
+- **Play while downloading** (uGet can): the API serves a partial file at `GET /jobs/{id}/stream` with range support, so the browser, VLC/mpv or an Android player can play a video before it finishes, locally or from a remote daemon. Needs an in-order download mode that also fetches the last chunk early (many MP4s keep their index at the end).
 - uGet features to bring over time: categories (folder + file-type rules), queue with max concurrent downloads, opt-in clipboard monitoring, batch/URL-list import, scheduler.
 
 ## Stack
@@ -62,6 +63,7 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/job.rs         JobState + state machine (can_become), JobSnapshot, JobEvent
   src/id.rs          JobId (yyyy.mm.dd-hh.mm.ss-N, UTC) and its generator
   src/backend.rs     Backend trait, HttpBackend
+  src/store.rs       SQLite on its own thread: schema migrations, save/load jobs
   src/http.rs        HTTP transfer: request, resume, stream to .part.ottie
   src/download.rs    Download state (what gets persisted), Event, Outcome
   src/filename.rs    sanitizing, collision-free names, .part.ottie → final rename
@@ -105,7 +107,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 - **One owner of job state.** The actor task in `manager.rs` owns all jobs; the cloneable `Manager` handle sends it commands over an `mpsc` channel, each with a `oneshot` reply. Job tasks report back on an internal channel (progress at most every 250 ms). Events go out on a `broadcast` channel: `Changed(JobSnapshot)` on every state change (clients upsert by ID), plus `Progress` and `Restarted`. A subscriber that lags misses events and should resync with `list()`. No shared mutable job state behind ad-hoc locks.
 - **Explicit state machine:** Queued → Connecting → Downloading → Paused | Completed | Failed | Cancelled; Paused/Failed → Queued on resume. The rules live in `JobState::can_become`, and every change goes through `Actor::transition`; invalid transitions are errors.
-- **Pause/cancel of a running job** answers only once the task has really stopped and flushed. If the job completes first, it stays Completed. Cancel deletes the `.part.ottie`. Shutdown pauses every running job and waits for them. Lowering `max_concurrent` never stops running jobs.
+- **Pause/cancel of a running job** answers only once the task has really stopped and flushed. If the job completes first, it stays Completed. Cancel deletes the `.part.ottie`. Shutdown stops every running job, waits for them and flushes the database. Lowering `max_concurrent` never stops running jobs.
 - **Job IDs:** see `docs/decisions/0006`. IDs only ever increase; `BTreeMap<JobId, _>` order = creation order = queue order.
 - **Probe first:** learn size, `Accept-Ranges`, `ETag`/`Last-Modified` and the final URL after redirects before splitting into segments.
 - **Resume safely:** `Range` + `If-Range` with a strong ETag (weak `W/` ETags are invalid in `If-Range`), else `Last-Modified`. No validator, a 200 instead of 206, or a `Content-Range` that doesn't match → restart from zero and emit `Event::Restarted(reason)`. Never splice bytes from two versions of a file.
@@ -113,7 +115,8 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 - **Resume re-requests the original URL,** not the redirect target: signed CDN links expire, and `If-Range` still guards consistency.
 - **Request `Accept-Encoding: identity`** so byte ranges map to file offsets.
 - **Throttling:** hierarchical token buckets, global → category → download. Every chunk read takes tokens from all three. All segments of a download share its bucket. Limits change live; 0 = unlimited.
-- **Persistence:** SQLite holds jobs, categories, settings and per-segment progress. Save progress periodically and on pause/shutdown; on startup, reconcile `.part.ottie` files with the DB.
+- **Persistence** (`docs/decisions/0008`): SQLite holds jobs, and later categories, settings and per-segment progress. `STRICT` tables, numbered migrations in `store.rs` (never edit a released one). Saves happen on add, on every state change (inside `transition`), on `Event::Started` (file name + validator known) and progress at most every 2 s. **From 2c: flush file data before saving the progress that covers it.** On load, running jobs become Queued and `downloaded` is reset from the `.part.ottie` length.
+- **Shutdown keeps running jobs running** in the database (it doesn't mark them Paused), so the next start continues them; user-paused jobs stay paused.
 - **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Sanitize filenames from URLs and `Content-Disposition`; never write outside the target folder; resolve collisions with ` (1)`, ` (2)`. Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files).
 - **Cancellation:** `tokio_util::sync::CancellationToken`, raced against network reads with `tokio::select! { biased; … }`. Pausing must stop all segments promptly and leave state consistent.
 - **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; aria2 (FTP, BitTorrent, Metalink) and yt-dlp may plug in later, so keep HTTP assumptions inside the HTTP backend.
@@ -147,7 +150,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 ## Working with Mathieu
 
-- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`. Still to come: `Mutex`, lifetimes, Svelte runes, etc.
+- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations. Still to come: `Mutex`, lifetimes, Svelte runes, etc.
 - For decisions that are hard to reverse (data model, API shape, crate choices, architecture), present 2–3 options with trade-offs and let him choose. For small implementation details, decide and say what you chose.
 - Work in small vertical slices that run end to end. Don't scaffold code ahead of need.
 - Show the diff and wait for a go-ahead before committing.
@@ -156,8 +159,8 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 ## Build order
 
 1. ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~ Done.
-2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ (done) → 2b SQLite persistence (also: report the file name as soon as the `.part.ottie` is reserved, the manager only learns it when a job ends today) → 2c segments → 2d throttling → 2e categories → 2f `Content-Disposition` filenames, retry with backoff.
-3. `api` + `ottie serve`, then `ui` as a web UI.
+2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ → ~~2b SQLite persistence~~ → 2c segments (with an in-order mode for streaming) → 2d throttling → 2e categories → 2f `Content-Disposition` filenames, retry with backoff.
+3. `api` + `ottie serve` (including the `/jobs/{id}/stream` endpoint), then `ui` as a web UI. Decide where the database and config live.
 4. Browser extension.
 5. Tauri desktop: tray, notifications, sidecar daemon.
 6. Tauri Android: embedded core, background downloads, share-sheet intake.

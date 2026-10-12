@@ -12,13 +12,17 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use crate::backend::Backend;
-use crate::download::{Download, Event, Outcome, RestartReason};
+use crate::download::{Download, Event, Outcome};
 use crate::error::Error;
 use crate::id::{IdGenerator, JobId};
 use crate::job::{JobEvent, JobSnapshot, JobState};
+use crate::store::{JobRecord, Store};
 
 /// Running jobs report progress to the manager at most this often.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
+/// Progress of a running job is saved at most this often (state changes are
+/// saved immediately).
+const SAVE_INTERVAL: Duration = Duration::from_secs(2);
 const COMMAND_BUFFER: usize = 64;
 /// Subscribers that fall further behind than this miss events (and should
 /// call [`Manager::list`] to catch up).
@@ -44,23 +48,34 @@ pub struct Manager {
 }
 
 impl Manager {
-    /// Starts the manager task. Must be called from inside a tokio runtime.
-    /// When every handle is dropped, the manager pauses running jobs and stops.
-    pub fn start(backend: impl Backend, config: ManagerConfig) -> Manager {
+    /// Loads saved jobs from `store` and starts the manager task. Jobs that
+    /// were running when Ottie last stopped (quit or crash) are queued again.
+    /// Must be called from inside a tokio runtime. When every handle is
+    /// dropped, the manager shuts down as if [`Manager::shutdown`] was called.
+    pub async fn start(
+        backend: impl Backend,
+        store: Store,
+        config: ManagerConfig,
+    ) -> Result<Manager, Error> {
+        let mut jobs = BTreeMap::new();
+        for record in store.load().await? {
+            jobs.insert(record.id, Job::restore(record).await);
+        }
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
         let (internal, internal_rx) = mpsc::unbounded_channel();
         let (events, _) = broadcast::channel(EVENT_BUFFER);
         let actor = Actor {
             backend: Arc::new(backend),
+            store,
             max_concurrent: config.max_concurrent.max(1),
-            jobs: BTreeMap::new(),
-            ids: IdGenerator::default(),
+            ids: IdGenerator::after(jobs.keys().next_back().copied()),
+            jobs,
             events: events.clone(),
             internal,
             shutdown: None,
         };
         tokio::spawn(actor.run(command_rx, internal_rx));
-        Manager { commands, events }
+        Ok(Manager { commands, events })
     }
 
     /// Queues a download into `dest_dir`. It starts as soon as a slot is free.
@@ -115,7 +130,9 @@ impl Manager {
         self.events.subscribe()
     }
 
-    /// Pauses every running job, waits for them to stop, then stops the manager.
+    /// Stops every running job, saves everything, then stops the manager.
+    /// Running jobs keep their state in the database, so the next start
+    /// continues them; jobs you paused stay paused.
     pub async fn shutdown(&self) -> Result<(), Error> {
         self.request(|reply| Command::Shutdown { reply }).await
     }
@@ -162,14 +179,9 @@ enum Command {
 
 /// Messages from running job tasks back to the manager.
 enum Internal {
-    Progress {
+    Event {
         id: JobId,
-        downloaded: u64,
-        total: Option<u64>,
-    },
-    Restarted {
-        id: JobId,
-        reason: RestartReason,
+        event: Event,
     },
     Ended {
         id: JobId,
@@ -178,18 +190,22 @@ enum Internal {
     },
 }
 
-/// Why a running job is being stopped. Cancel wins over Pause.
+/// Why a running job is being stopped. Later variants win: a user's pause or
+/// cancel overrides the shutdown, and cancel overrides pause.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Stop {
+    /// Leave the state as it is, so the next start continues the job.
+    Shutdown,
     Pause,
     Cancel,
 }
 
 impl Stop {
-    fn target(self) -> JobState {
+    fn target(self) -> Option<JobState> {
         match self {
-            Stop::Pause => JobState::Paused,
-            Stop::Cancel => JobState::Cancelled,
+            Stop::Shutdown => None,
+            Stop::Pause => Some(JobState::Paused),
+            Stop::Cancel => Some(JobState::Cancelled),
         }
     }
 }
@@ -200,6 +216,32 @@ struct Job {
     error: Option<String>,
     /// Present while a task is downloading this job.
     task: Option<Task>,
+    last_saved: Option<Instant>,
+}
+
+impl Job {
+    async fn restore(record: JobRecord) -> Job {
+        let mut state = record.state;
+        let mut download = record.download;
+        // Running when Ottie stopped, whether it quit or crashed: continue it.
+        if state.is_running() {
+            state = JobState::Queued;
+        }
+        // The file on disk is the truth for how much we have; the saved
+        // number can lag behind it.
+        if !matches!(state, JobState::Completed | JobState::Cancelled)
+            && let Some(part) = download.part_path()
+        {
+            download.downloaded = tokio::fs::metadata(&part).await.map_or(0, |m| m.len());
+        }
+        Job {
+            state,
+            download,
+            error: record.error,
+            task: None,
+            last_saved: None,
+        }
+    }
 }
 
 struct Task {
@@ -212,6 +254,7 @@ struct Task {
 /// The task that owns all job state. Only it reads or changes `jobs`.
 struct Actor<B> {
     backend: Arc<B>,
+    store: Store,
     max_concurrent: usize,
     /// Sorted by ID, which means by creation time.
     jobs: BTreeMap<JobId, Job>,
@@ -229,6 +272,7 @@ impl<B: Backend> Actor<B> {
         mut commands: mpsc::Receiver<Command>,
         mut internal: mpsc::UnboundedReceiver<Internal>,
     ) {
+        self.schedule();
         let mut handles_alive = true;
         loop {
             tokio::select! {
@@ -243,6 +287,7 @@ impl<B: Backend> Actor<B> {
                 },
             }
             if self.shutdown.is_some() && !self.any_task_running() {
+                self.store.flush().await;
                 for reply in self.shutdown.take().unwrap_or_default() {
                     let _ = reply.send(Ok(()));
                 }
@@ -280,28 +325,7 @@ impl<B: Backend> Actor<B> {
 
     async fn on_internal(&mut self, message: Internal) {
         match message {
-            Internal::Progress {
-                id,
-                downloaded,
-                total,
-            } => {
-                let Some(job) = self.jobs.get_mut(&id) else {
-                    return;
-                };
-                job.download.downloaded = downloaded;
-                job.download.total = total;
-                if job.state == JobState::Connecting {
-                    self.transition_or_log(id, JobState::Downloading, None);
-                }
-                let _ = self.events.send(JobEvent::Progress {
-                    id,
-                    downloaded,
-                    total,
-                });
-            }
-            Internal::Restarted { id, reason } => {
-                let _ = self.events.send(JobEvent::Restarted { id, reason });
-            }
+            Internal::Event { id, event } => self.on_event(id, event),
             Internal::Ended {
                 id,
                 download,
@@ -310,9 +334,58 @@ impl<B: Backend> Actor<B> {
         }
     }
 
+    fn on_event(&mut self, id: JobId, event: Event) {
+        let Some(job) = self.jobs.get_mut(&id) else {
+            return;
+        };
+        match event {
+            Event::Started {
+                file_name,
+                total,
+                validator,
+                resumable,
+                downloaded,
+            } => {
+                let dl = &mut job.download;
+                dl.file_name = Some(file_name);
+                dl.total = total;
+                dl.validator = validator;
+                dl.resumable = resumable;
+                dl.downloaded = downloaded;
+                // Save right away: from now on a crash must not lose the
+                // file name or the validator needed to resume.
+                self.save(id);
+                self.emit_changed(id);
+            }
+            Event::Progress { downloaded, total } => {
+                job.download.downloaded = downloaded;
+                job.download.total = total;
+                let save_due = job
+                    .last_saved
+                    .is_none_or(|at| at.elapsed() >= SAVE_INTERVAL);
+                if job.state == JobState::Connecting {
+                    self.transition_or_log(id, JobState::Downloading, None);
+                } else if save_due {
+                    self.save(id);
+                }
+                let _ = self.events.send(JobEvent::Progress {
+                    id,
+                    downloaded,
+                    total,
+                });
+            }
+            Event::Restarted(reason) => {
+                let _ = self.events.send(JobEvent::Restarted { id, reason });
+            }
+        }
+    }
+
     fn add(&mut self, url: Url, dest_dir: PathBuf) -> Result<JobId, Error> {
         if self.shutdown.is_some() {
             return Err(Error::ManagerStopped);
+        }
+        if dest_dir.to_str().is_none() {
+            return Err(Error::NonUtf8Path(dest_dir));
         }
         let download = Download::new(url, dest_dir)?;
         let id = self.ids.next(unix_now());
@@ -323,8 +396,10 @@ impl<B: Backend> Actor<B> {
                 download,
                 error: None,
                 task: None,
+                last_saved: None,
             },
         );
+        self.save(id);
         self.emit_changed(id);
         self.schedule();
         Ok(id)
@@ -335,14 +410,18 @@ impl<B: Backend> Actor<B> {
             let _ = reply.send(Err(Error::JobNotFound(id)));
             return;
         };
+        let Some(target) = stop.target() else {
+            let _ = reply.send(Ok(()));
+            return;
+        };
         if let Some(task) = &mut job.task {
             // Running: ask it to stop, and answer once it has (see `on_ended`).
             task.stop = task.stop.max(Some(stop));
             task.cancel.cancel();
-            task.waiters.push((stop.target(), reply));
+            task.waiters.push((target, reply));
             return;
         }
-        let result = self.transition(id, stop.target(), None);
+        let result = self.transition(id, target, None);
         if result.is_ok() && stop == Stop::Cancel {
             self.delete_part(id).await;
         }
@@ -406,20 +485,14 @@ impl<B: Backend> Actor<B> {
         tokio::spawn(async move {
             let mut last_progress: Option<Instant> = None;
             // Sends fail only if the manager is gone, and then nobody's listening.
-            let mut on_event = |event: Event| match event {
-                Event::Progress { downloaded, total } => {
-                    if last_progress.is_none_or(|at| at.elapsed() >= PROGRESS_INTERVAL) {
-                        last_progress = Some(Instant::now());
-                        let _ = internal.send(Internal::Progress {
-                            id,
-                            downloaded,
-                            total,
-                        });
+            let mut on_event = |event: Event| {
+                if let Event::Progress { .. } = event {
+                    if last_progress.is_some_and(|at| at.elapsed() < PROGRESS_INTERVAL) {
+                        return;
                     }
+                    last_progress = Some(Instant::now());
                 }
-                Event::Restarted(reason) => {
-                    let _ = internal.send(Internal::Restarted { id, reason });
-                }
+                let _ = internal.send(Internal::Event { id, event });
             };
             let result = backend.run(&mut download, &cancel, &mut on_event).await;
             let _ = internal.send(Internal::Ended {
@@ -444,23 +517,31 @@ impl<B: Backend> Actor<B> {
         job.download = *download;
         let stop = task.as_ref().and_then(|t| t.stop);
 
-        let (next, error) = match (result, stop) {
+        let next = match (result, stop) {
             // Finished before it noticed the stop request: keep the file.
-            (Ok(Outcome::Completed { .. }), _) => (JobState::Completed, None),
-            (_, Some(stop)) => (stop.target(), None),
+            (Ok(Outcome::Completed { .. }), _) => Some((JobState::Completed, None)),
+            (_, Some(stop)) => stop.target().map(|state| (state, None)),
             // Only the manager cancels the token, so this means paused.
-            (Ok(Outcome::Paused), None) => (JobState::Paused, None),
+            (Ok(Outcome::Paused), None) => Some((JobState::Paused, None)),
             (Err(err), None) => {
                 tracing::warn!(%id, error = %err, "download failed");
-                (JobState::Failed, Some(err.to_string()))
+                Some((JobState::Failed, Some(err.to_string())))
             }
         };
-        self.transition_or_log(id, next, error);
-        if next == JobState::Cancelled {
-            self.delete_part(id).await;
+        match next {
+            Some((state, error)) => {
+                self.transition_or_log(id, state, error);
+                if state == JobState::Cancelled {
+                    self.delete_part(id).await;
+                }
+            }
+            // Shutting down: keep the running state so the next start continues it.
+            None => self.save(id),
         }
 
-        let final_state = self.jobs.get(&id).map_or(next, |job| job.state);
+        let Some(final_state) = self.jobs.get(&id).map(|job| job.state) else {
+            return;
+        };
         for (wanted, reply) in task.map(|t| t.waiters).unwrap_or_default() {
             let _ = reply.send(if wanted == final_state {
                 Ok(())
@@ -478,7 +559,7 @@ impl<B: Backend> Actor<B> {
         self.shutdown.get_or_insert_with(Vec::new).extend(reply);
         for job in self.jobs.values_mut() {
             if let Some(task) = &mut job.task {
-                task.stop = task.stop.max(Some(Stop::Pause));
+                task.stop = task.stop.max(Some(Stop::Shutdown));
                 task.cancel.cancel();
             }
         }
@@ -489,7 +570,7 @@ impl<B: Backend> Actor<B> {
     }
 
     /// The only place a job changes state. Refuses moves the state machine
-    /// doesn't allow, and tells subscribers about the others.
+    /// doesn't allow; saves and tells subscribers about the others.
     fn transition(
         &mut self,
         id: JobId,
@@ -505,6 +586,7 @@ impl<B: Backend> Actor<B> {
         }
         job.state = next;
         job.error = error;
+        self.save(id);
         self.emit_changed(id);
         Ok(())
     }
@@ -518,6 +600,19 @@ impl<B: Backend> Actor<B> {
                 false
             }
         }
+    }
+
+    fn save(&mut self, id: JobId) {
+        let Some(job) = self.jobs.get_mut(&id) else {
+            return;
+        };
+        job.last_saved = Some(Instant::now());
+        self.store.save(JobRecord {
+            id,
+            state: job.state,
+            download: job.download.clone(),
+            error: job.error.clone(),
+        });
     }
 
     fn emit_changed(&self, id: JobId) {

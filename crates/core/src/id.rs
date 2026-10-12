@@ -15,6 +15,20 @@ pub struct JobId {
     seq: u32,
 }
 
+impl JobId {
+    pub(crate) fn from_parts(secs: u64, seq: u32) -> Self {
+        Self { secs, seq }
+    }
+
+    pub(crate) fn secs(self) -> u64 {
+        self.secs
+    }
+
+    pub(crate) fn seq(self) -> u32 {
+        self.seq
+    }
+}
+
 impl fmt::Display for JobId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (year, month, day) = civil_from_days(self.secs / SECS_PER_DAY);
@@ -72,6 +86,11 @@ pub(crate) struct IdGenerator {
 }
 
 impl IdGenerator {
+    /// Continues after the highest ID handed out before (e.g. loaded from the database).
+    pub(crate) fn after(last: Option<JobId>) -> Self {
+        Self { last }
+    }
+
     /// `now` is seconds since 1970 (UTC).
     pub(crate) fn next(&mut self, now: u64) -> JobId {
         let id = match self.last {
@@ -175,5 +194,12 @@ mod tests {
         let second = ids.next(50);
         assert_eq!(second, id(100, 2));
         assert!(second > first);
+    }
+
+    #[test]
+    fn continues_after_a_stored_id() {
+        let mut ids = IdGenerator::after(Some(id(100, 5)));
+        assert_eq!(ids.next(100), id(100, 6));
+        assert_eq!(ids.next(101), id(101, 1));
     }
 }

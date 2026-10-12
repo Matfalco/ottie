@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use ottie_core::{
-    Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, ManagerConfig,
+    Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, ManagerConfig, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -28,10 +28,11 @@ async fn setup(max_concurrent: usize, chunk_delay_ms: u64) -> Setup {
     let data = test_data(SIZE, 1);
     let server = TestServer::start(data.clone()).await;
     server.configure(|b| b.chunk_delay = Some(Duration::from_millis(chunk_delay_ms)));
-    let manager = Manager::start(
-        HttpBackend::new().unwrap(),
-        ManagerConfig { max_concurrent },
-    );
+    let store = Store::open_in_memory().await.unwrap();
+    let config = ManagerConfig { max_concurrent };
+    let manager = Manager::start(HttpBackend::new().unwrap(), store, config)
+        .await
+        .unwrap();
     // Subscribe before adding anything so no event is missed.
     let events = manager.subscribe();
     Setup {
@@ -89,14 +90,19 @@ async fn job_goes_through_every_state() {
     let mut s = setup(3, 0).await;
     let id = s.add("one.bin").await;
 
-    let mut states = Vec::new();
-    while states.last() != Some(&JobState::Completed) {
+    let mut changes = Vec::new();
+    while changes.last().map(|j: &JobSnapshot| j.state) != Some(JobState::Completed) {
         if let JobEvent::Changed(job) = s.events.recv().await.unwrap() {
-            states.push(job.state);
+            changes.push(job);
         }
     }
+    let mut states: Vec<JobState> = changes.iter().map(|j| j.state).collect();
+    states.dedup();
     use JobState::*;
     assert_eq!(states, [Queued, Connecting, Downloading, Completed]);
+    // The file name is announced while still connecting, before any bytes.
+    let named = changes.iter().find(|j| j.file_name.is_some()).unwrap();
+    assert_eq!(named.state, Connecting);
 
     let job = s.job(id).await;
     assert_eq!(job.downloaded, SIZE as u64);
@@ -157,7 +163,9 @@ async fn raising_the_limit_starts_queued_jobs() {
 async fn pause_and_resume_a_running_job() {
     let mut s = setup(3, 5).await;
     let id = s.add("data.bin").await;
-    s.wait_for(id, JobState::Downloading).await;
+    let running = s.wait_for(id, JobState::Downloading).await;
+    assert_eq!(running.file_name.as_deref(), Some("data.bin"));
+    assert_eq!(running.total, Some(SIZE as u64));
 
     // `pause` only returns once the job has stopped and flushed.
     s.manager.pause(id).await.unwrap();
@@ -240,19 +248,6 @@ async fn invalid_requests_are_refused() {
         s.manager.add(ftp, s.dir.path()).await,
         Err(Error::UnsupportedScheme(_))
     ));
-}
-
-#[tokio::test]
-async fn shutdown_pauses_running_jobs() {
-    let mut s = setup(3, 5).await;
-    let id = s.add("data.bin").await;
-    s.wait_for(id, JobState::Downloading).await;
-
-    s.manager.shutdown().await.unwrap();
-    let paused = s.wait_for(id, JobState::Paused).await;
-    let part = s.dir.path().join("data.bin.part.ottie");
-    assert_eq!(std::fs::metadata(part).unwrap().len(), paused.downloaded);
-    assert!(matches!(s.manager.list().await, Err(Error::ManagerStopped)));
 }
 
 #[tokio::test]

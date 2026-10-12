@@ -51,6 +51,13 @@ pub async fn run(
     mut on_event: impl FnMut(Event),
 ) -> Result<Outcome, Error> {
     let opened = open(client, dl, &mut on_event).await?;
+    on_event(Event::Started {
+        file_name: opened.name.clone(),
+        total: dl.total,
+        validator: dl.validator.clone(),
+        resumable: dl.resumable,
+        downloaded: dl.downloaded,
+    });
     if let Some((response, file)) = opened.body {
         let mut writer = BufWriter::new(file);
         let streamed = stream_body(response, &mut writer, dl, cancel, &mut on_event).await;

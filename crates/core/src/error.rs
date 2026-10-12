@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use reqwest::StatusCode;
 
 use crate::id::JobId;
@@ -33,6 +35,20 @@ pub enum Error {
 
     #[error("the download manager has stopped")]
     ManagerStopped,
+
+    #[error("database error: {0}")]
+    Database(#[from] rusqlite::Error),
+
+    #[error(
+        "the database was written by a newer Ottie (schema {found}, this version knows up to {supported})"
+    )]
+    DatabaseTooNew { found: usize, supported: usize },
+
+    #[error("the database thread has stopped")]
+    StoreStopped,
+
+    #[error("folder path is not valid UTF-8: {}", .0.display())]
+    NonUtf8Path(PathBuf),
 }
 
 impl From<reqwest::Error> for Error {

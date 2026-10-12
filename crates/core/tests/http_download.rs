@@ -64,7 +64,7 @@ fn restarts(events: &[Event]) -> Vec<RestartReason> {
         .iter()
         .filter_map(|e| match e {
             Event::Restarted(reason) => Some(*reason),
-            Event::Progress { .. } => None,
+            Event::Started { .. } | Event::Progress { .. } => None,
         })
         .collect()
 }

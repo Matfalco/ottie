@@ -74,7 +74,8 @@ impl JobSnapshot {
 /// Broadcast to every subscriber of the manager.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobEvent {
-    /// A job was added or changed state. Clients can insert-or-replace by `id`.
+    /// A job was added, changed state, or learned its file name and size.
+    /// Clients can insert-or-replace by `id`.
     Changed(JobSnapshot),
     /// Bytes arrived. Sent at most a few times per second per job.
     Progress {

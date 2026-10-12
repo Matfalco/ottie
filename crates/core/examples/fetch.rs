@@ -36,6 +36,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     print_progress(downloaded, total);
                 }
             }
+            Event::Started { file_name, .. } => println!("downloading {file_name}"),
             Event::Restarted(reason) => println!("\nrestarting from zero: {reason:?}"),
         })
         .await;

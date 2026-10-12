@@ -8,6 +8,7 @@ mod http;
 mod id;
 mod job;
 mod manager;
+mod store;
 
 pub use backend::{Backend, HttpBackend};
 pub use download::{Download, Event, Outcome, RestartReason, Validator};
@@ -17,3 +18,4 @@ pub use http::{build_client, run};
 pub use id::JobId;
 pub use job::{JobEvent, JobSnapshot, JobState};
 pub use manager::{Manager, ManagerConfig};
+pub use store::Store;

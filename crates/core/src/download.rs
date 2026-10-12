@@ -7,7 +7,7 @@ use crate::filename;
 
 /// Everything needed to start or resume one download. This is the state that
 /// will be persisted, so a download can resume after a restart.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Download {
     /// The URL the user gave. Resuming requests it again (rather than the URL
     /// it redirected to) because redirect targets are often short-lived signed links.
@@ -64,6 +64,17 @@ impl Validator {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
+    /// The server answered and the `.part.ottie` file is ready. Sent once per
+    /// run, before any `Progress`, so the caller can save everything needed to
+    /// resume even if the process dies before the first byte arrives.
+    Started {
+        file_name: String,
+        total: Option<u64>,
+        validator: Option<Validator>,
+        resumable: bool,
+        /// Where this run continues from (0 unless resuming).
+        downloaded: u64,
+    },
     Progress {
         downloaded: u64,
         total: Option<u64>,
