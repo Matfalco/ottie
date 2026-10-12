@@ -61,7 +61,7 @@ fn inside(root: &Path, path: &str) -> Option<PathBuf> {
 pub(crate) async fn serve(source: &UiSource, method: Method, uri: &Uri) -> Response {
     let path = uri.path();
     if path == "/api" || path.starts_with("/api/") {
-        return Failure::new(StatusCode::NOT_FOUND, "no such API endpoint").into_response();
+        return Failure::no_such_endpoint().into_response();
     }
     if method != Method::GET && method != Method::HEAD {
         return StatusCode::METHOD_NOT_ALLOWED.into_response();

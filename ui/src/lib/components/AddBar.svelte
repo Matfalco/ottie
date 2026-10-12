@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { m } from '#lib/paraglide/messages.js';
+
 	interface Props {
 		/** Resolves to true once the daemon has accepted the download. */
 		onAdd: (url: string, destDir?: string) => Promise<boolean>;
@@ -26,22 +28,22 @@
 		<input
 			bind:value={url}
 			type="url"
-			placeholder="Paste a link to download"
-			aria-label="Link to download"
+			placeholder={m.add_placeholder()}
+			aria-label={m.add_label()}
 			required
 		/>
-		<button class="primary" disabled={adding || !url.trim()}>Download</button>
+		<button class="primary" disabled={adding || !url.trim()}>{m.add_button()}</button>
 	</div>
 	<div class="row options">
 		{#if showFolder}
 			<input
 				bind:value={folder}
-				placeholder="Save in this folder (full path), instead of Downloads"
-				aria-label="Folder"
+				placeholder={m.add_folder_placeholder()}
+				aria-label={m.add_folder_label()}
 			/>
 		{:else}
 			<button type="button" class="link" onclick={() => (showFolder = true)}>
-				Choose a folder…
+				{m.add_choose_folder()}
 			</button>
 		{/if}
 	</div>

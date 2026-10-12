@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use ottie_core::{
-    Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob, Store,
+    Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob, Problem, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -222,7 +222,7 @@ async fn http_errors_mark_the_job_failed() {
         .unwrap();
 
     let failed = s.wait_for(id, JobState::Failed).await;
-    assert!(failed.error.unwrap().contains("404"));
+    assert_eq!(failed.problem, Some(Problem::HttpStatus { status: 404 }));
 }
 
 #[tokio::test]

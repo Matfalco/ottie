@@ -1,48 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import type { Job } from '@ottie/api-types/Job';
 import { displayName, formatBytes, formatDuration, formatSpeed } from './format';
+import { job, plain } from './testing';
 
-export function job(overrides: Partial<Job> = {}): Job {
-	return {
-		id: '2026.10.12-14.03.07-1',
-		url: 'https://example.com/files/movie%20night.mkv?token=x',
-		destDir: '/downloads',
-		fileName: null,
-		state: 'queued',
-		downloaded: 0,
-		total: null,
-		resumable: false,
-		error: null,
-		priority: 'normal',
-		speedLimit: 0,
-		category: 1,
-		retries: 0,
-		retryAt: null,
-		...overrides
-	};
-}
+const MB = 1024 * 1024;
 
 describe('formatBytes', () => {
-	it('uses 1024 and drops decimals for big numbers', () => {
-		expect(formatBytes(0)).toBe('0 B');
-		expect(formatBytes(1023)).toBe('1023 B');
-		expect(formatBytes(1536)).toBe('1.5 KB');
-		expect(formatBytes(234 * 1024 * 1024)).toBe('234 MB');
-		expect(formatBytes(5 * 1024 ** 5)).toBe('5120 TB');
+	it('uses 1024, one decimal below 10, and the language’s units', () => {
+		expect(formatBytes(0, 'en')).toBe('0 bytes');
+		expect(formatBytes(1023, 'en')).toBe('1,023 bytes');
+		expect(formatBytes(1536, 'en')).toBe('1.5 kB');
+		expect(formatBytes(234 * MB, 'en')).toBe('234 MB');
+		expect(plain(formatBytes(1023, 'fr'))).toBe('1 023 octets');
+		expect(plain(formatBytes(1536, 'fr'))).toBe('1,5 ko');
+		expect(plain(formatBytes(5 * 1024 ** 5, 'fr'))).toBe('5 120 To');
 	});
 
-	it('adds /s for speeds', () => {
-		expect(formatSpeed(2.5 * 1024 * 1024)).toBe('2.5 MB/s');
+	it('speaks speeds per second', () => {
+		expect(formatSpeed(2.5 * MB, 'en')).toBe('2.5 MB/s');
+		expect(plain(formatSpeed(2.5 * MB, 'fr'))).toBe('2,5 Mo/s');
 	});
 });
 
 describe('formatDuration', () => {
 	it('picks the two largest units', () => {
-		expect(formatDuration(44.6)).toBe('45 s');
-		expect(formatDuration(200)).toBe('3 min 20 s');
-		expect(formatDuration(180)).toBe('3 min');
-		expect(formatDuration(7500)).toBe('2 h 5 min');
-		expect(formatDuration(-3)).toBe('0 s');
+		expect(formatDuration(44.6, 'en')).toBe('45 sec');
+		expect(formatDuration(200, 'en')).toBe('3 min 20 sec');
+		expect(formatDuration(180, 'en')).toBe('3 min');
+		expect(formatDuration(-3, 'en')).toBe('0 sec');
+		expect(plain(formatDuration(7500, 'fr'))).toBe('2 h 5 min');
 	});
 });
 

@@ -13,6 +13,7 @@ mod http;
 mod id;
 mod job;
 mod manager;
+mod problem;
 mod segmented;
 mod store;
 mod throttle;
@@ -26,6 +27,7 @@ pub use http::{HttpConfig, build_client, run};
 pub use id::JobId;
 pub use job::{JobEvent, JobSnapshot, JobState, NewJob, Priority};
 pub use manager::Manager;
+pub use problem::Problem;
 pub use store::{RetryPolicy, Settings, Store};
 pub use throttle::Throttle;
 

@@ -18,6 +18,7 @@ use crate::error::Error;
 use crate::filename;
 use crate::id::{IdGenerator, JobId};
 use crate::job::{JobEvent, JobSnapshot, JobState, NewJob, Priority};
+use crate::problem::Problem;
 use crate::store::{JobRecord, RetryPolicy, Settings, Store};
 use crate::throttle::Limiter;
 
@@ -344,7 +345,8 @@ impl Stop {
 struct Job {
     state: JobState,
     download: Download,
-    error: Option<String>,
+    /// Why it failed, or the last failure while retrying.
+    problem: Option<Problem>,
     priority: Priority,
     /// Bytes per second; 0 = no limit of its own.
     speed_limit: u64,
@@ -385,7 +387,7 @@ impl Job {
         Job {
             state,
             download,
-            error: record.error,
+            problem: record.problem,
             priority: record.priority,
             speed_limit: record.speed_limit,
             category: record.category,
@@ -414,7 +416,7 @@ impl Job {
             downloaded: dl.downloaded,
             total: dl.total,
             resumable: dl.resumable,
-            error: self.error.clone(),
+            problem: self.problem.clone(),
             priority: self.priority,
             speed_limit: self.speed_limit,
             category: self.category,
@@ -677,7 +679,7 @@ impl<B: Backend> Actor<B> {
             Job {
                 state: JobState::Queued,
                 download,
-                error: None,
+                problem: None,
                 priority: Priority::default(),
                 speed_limit: 0,
                 category,
@@ -941,11 +943,11 @@ impl<B: Backend> Actor<B> {
                     break;
                 };
                 self.yields += 1;
-                let error = self.jobs.get_mut(&id).and_then(|job| {
+                let problem = self.jobs.get_mut(&id).and_then(|job| {
                     job.gave_way = self.yields;
-                    job.error.clone()
+                    job.problem.clone()
                 });
-                if !self.transition_or_log(id, JobState::Queued, error) {
+                if !self.transition_or_log(id, JobState::Queued, problem) {
                     break;
                 }
             }
@@ -1074,16 +1076,16 @@ impl<B: Backend> Actor<B> {
                 let wait = retry_wait(&self.settings.retry, job.retries, err.retry_after());
                 tracing::info!(%id, error = %err, retry = job.retries, ?wait, "download failed; retrying");
                 job.retry_at = Some((Instant::now() + wait, SystemTime::now() + wait));
-                Some((JobState::Retrying, Some(err.to_string())))
+                Some((JobState::Retrying, Some(Problem::from(&err))))
             }
             (Err(err), None) => {
                 tracing::warn!(%id, error = %err, "download failed");
-                Some((JobState::Failed, Some(err.to_string())))
+                Some((JobState::Failed, Some(Problem::from(&err))))
             }
         };
         match next {
-            Some((state, error)) => {
-                self.transition_or_log(id, state, error);
+            Some((state, problem)) => {
+                self.transition_or_log(id, state, problem);
                 match state {
                     JobState::Cancelled => self.delete_part(id).await,
                     JobState::Retrying => self.retry_when_due(id),
@@ -1130,7 +1132,7 @@ impl<B: Backend> Actor<B> {
         &mut self,
         id: JobId,
         next: JobState,
-        error: Option<String>,
+        problem: Option<Problem>,
     ) -> Result<(), Error> {
         let job = self.jobs.get_mut(&id).ok_or(Error::JobNotFound(id))?;
         if !job.state.can_become(next) {
@@ -1140,7 +1142,7 @@ impl<B: Backend> Actor<B> {
             });
         }
         job.state = next;
-        job.error = error;
+        job.problem = problem;
         if next != JobState::Retrying {
             job.retry_at = None;
         }
@@ -1150,8 +1152,8 @@ impl<B: Backend> Actor<B> {
     }
 
     /// For transitions the manager itself makes, which should always be valid.
-    fn transition_or_log(&mut self, id: JobId, next: JobState, error: Option<String>) -> bool {
-        match self.transition(id, next, error) {
+    fn transition_or_log(&mut self, id: JobId, next: JobState, problem: Option<Problem>) -> bool {
+        match self.transition(id, next, problem) {
             Ok(()) => true,
             Err(err) => {
                 tracing::error!(%id, error = %err, "manager made an invalid transition");
@@ -1169,7 +1171,7 @@ impl<B: Backend> Actor<B> {
             id,
             state: job.state,
             download: job.download.clone(),
-            error: job.error.clone(),
+            problem: job.problem.clone(),
             priority: job.priority,
             speed_limit: job.speed_limit,
             category: job.category,

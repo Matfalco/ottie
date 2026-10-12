@@ -16,6 +16,7 @@ use crate::download::{Download, Segment, Validator};
 use crate::error::Error;
 use crate::id::JobId;
 use crate::job::{JobState, Priority};
+use crate::problem::Problem;
 
 /// Each entry upgrades the schema by one version (`PRAGMA user_version`).
 /// Never edit an entry once released; append a new one.
@@ -116,6 +117,14 @@ const MIGRATIONS: &[&str] = &[
         CHECK (retries_before_yield >= 0);
      ALTER TABLE settings ADD COLUMN retry_wait_ms INTEGER NOT NULL DEFAULT 2000
         CHECK (retry_wait_ms >= 0);",
+    // 6: why a job failed, as a kind plus details, so clients can translate
+    // it. `error` keeps the English text; older failures become 'other'.
+    "ALTER TABLE jobs ADD COLUMN problem_kind TEXT CHECK (problem_kind IN ('network',
+        'redirect', 'http-status', 'stalled', 'incomplete', 'remote-changing', 'disk', 'other'));
+     ALTER TABLE jobs ADD COLUMN problem_number INTEGER;
+     ALTER TABLE jobs ADD COLUMN problem_total INTEGER;
+     ALTER TABLE jobs ADD COLUMN problem_detail TEXT;
+     UPDATE jobs SET problem_kind = 'other', problem_detail = error WHERE error IS NOT NULL;",
 ];
 
 /// Everything saved about one job.
@@ -124,7 +133,7 @@ pub(crate) struct JobRecord {
     pub id: JobId,
     pub state: JobState,
     pub download: Download,
-    pub error: Option<String>,
+    pub problem: Option<Problem>,
     pub priority: Priority,
     pub speed_limit: u64,
     pub category: CategoryId,
@@ -369,12 +378,21 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
         None => (None, None),
     };
     let (secs, seq) = (record.id.secs(), record.id.seq());
+    let (kind, number, total, detail) = match &record.problem {
+        Some(problem) => {
+            let (kind, number, total, detail) = problem_columns(problem);
+            (Some(kind), number, total, detail)
+        }
+        None => (None, None, None, None),
+    };
     let tx = conn.transaction()?;
     tx.prepare_cached(
         "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, file_name, state, total,
                            downloaded, validator_kind, validator_value, resumable, error,
-                           priority, speed_limit, category_id, category_chosen)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+                           priority, speed_limit, category_id, category_chosen,
+                           problem_kind, problem_number, problem_total, problem_detail)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                 ?17, ?18, ?19, ?20)
          ON CONFLICT (id_secs, id_seq) DO UPDATE SET
              url = excluded.url, dest_dir = excluded.dest_dir,
              file_name = excluded.file_name, state = excluded.state,
@@ -383,7 +401,9 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
              validator_value = excluded.validator_value,
              resumable = excluded.resumable, error = excluded.error,
              priority = excluded.priority, speed_limit = excluded.speed_limit,
-             category_id = excluded.category_id, category_chosen = excluded.category_chosen",
+             category_id = excluded.category_id, category_chosen = excluded.category_chosen,
+             problem_kind = excluded.problem_kind, problem_number = excluded.problem_number,
+             problem_total = excluded.problem_total, problem_detail = excluded.problem_detail",
     )?
     .execute(params![
         secs,
@@ -397,11 +417,15 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
         validator_kind,
         validator_value,
         dl.resumable,
-        record.error,
+        record.problem.as_ref().map(Problem::to_string),
         priority_name(record.priority),
         record.speed_limit,
         record.category.0,
         record.category_chosen,
+        kind,
+        number,
+        total,
+        detail,
     ])?;
     tx.prepare_cached("DELETE FROM segments WHERE job_secs = ?1 AND job_seq = ?2")?
         .execute(params![secs, seq])?;
@@ -430,7 +454,8 @@ fn load_jobs(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
     let mut stmt = conn.prepare(
         "SELECT id_secs, id_seq, url, dest_dir, file_name, state, total, downloaded,
                 validator_kind, validator_value, resumable, error, priority, speed_limit,
-                category_id, category_chosen
+                category_id, category_chosen,
+                problem_kind, problem_number, problem_total, problem_detail
          FROM jobs ORDER BY id_secs, id_seq",
     )?;
     let mut rows = stmt.query([])?;
@@ -502,11 +527,59 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         id,
         state,
         download,
-        error: row.get(11)?,
+        problem: problem_from_row(row)?,
         priority,
         speed_limit: row.get(13)?,
         category: CategoryId(row.get(14)?),
         category_chosen: row.get(15)?,
+    }))
+}
+
+/// How a problem is stored: its kind, up to two numbers and a text.
+fn problem_columns(problem: &Problem) -> (&'static str, Option<u64>, Option<u64>, Option<&str>) {
+    match problem {
+        Problem::Network { detail } => ("network", None, None, Some(detail)),
+        Problem::Redirect { detail } => ("redirect", None, None, Some(detail)),
+        Problem::HttpStatus { status } => ("http-status", Some(u64::from(*status)), None, None),
+        Problem::Stalled { seconds } => ("stalled", Some(*seconds), None, None),
+        Problem::Incomplete { received, expected } => {
+            ("incomplete", Some(*received), Some(*expected), None)
+        }
+        Problem::RemoteChanging => ("remote-changing", None, None, None),
+        Problem::Disk { detail } => ("disk", None, None, Some(detail)),
+        Problem::Other { detail } => ("other", None, None, Some(detail)),
+    }
+}
+
+/// Columns 11 (`error`) and 16 to 19. A problem that doesn't add up is kept
+/// as `Other` with its English text rather than dropped.
+fn problem_from_row(row: &Row) -> rusqlite::Result<Option<Problem>> {
+    let english: Option<String> = row.get(11)?;
+    let Some(kind) = row.get::<_, Option<String>>(16)? else {
+        return Ok(None);
+    };
+    let number: Option<u64> = row.get(17)?;
+    let total: Option<u64> = row.get(18)?;
+    let detail: Option<String> = row.get(19)?;
+    let problem = match (kind.as_str(), number, total, detail) {
+        ("network", _, _, Some(detail)) => Some(Problem::Network { detail }),
+        ("redirect", _, _, Some(detail)) => Some(Problem::Redirect { detail }),
+        ("http-status", Some(status), _, _) => u16::try_from(status)
+            .ok()
+            .map(|status| Problem::HttpStatus { status }),
+        ("stalled", Some(seconds), _, _) => Some(Problem::Stalled { seconds }),
+        ("incomplete", Some(received), Some(expected), _) => {
+            Some(Problem::Incomplete { received, expected })
+        }
+        ("remote-changing", ..) => Some(Problem::RemoteChanging),
+        ("disk", _, _, Some(detail)) => Some(Problem::Disk { detail }),
+        ("other", _, _, Some(detail)) => Some(Problem::Other { detail }),
+        _ => None,
+    };
+    Ok(problem.or_else(|| {
+        Some(Problem::Other {
+            detail: english.unwrap_or_else(|| format!("unknown problem `{kind}`")),
+        })
     }))
 }
 
@@ -680,7 +753,7 @@ mod tests {
             id: JobId::from_parts(1_760_279_405, seq),
             state: JobState::Paused,
             download,
-            error: None,
+            problem: None,
             priority: Priority::High,
             speed_limit: 512 * 1024,
             category: CategoryId::GENERAL,
@@ -693,7 +766,7 @@ mod tests {
         let store = Store::open_in_memory().await.unwrap();
         let mut failed = record(2);
         failed.state = JobState::Failed;
-        failed.error = Some("server answered 404".to_owned());
+        failed.problem = Some(Problem::HttpStatus { status: 404 });
         failed.download.validator = Some(Validator::LastModified("yesterday".to_owned()));
         let mut fresh = record(3);
         fresh.download = Download::new(fresh.download.url.clone(), "/x").unwrap();
@@ -702,6 +775,64 @@ mod tests {
             store.save(r);
         }
         assert_eq!(store.load().await.unwrap().jobs, [record(1), failed, fresh]);
+    }
+
+    #[tokio::test]
+    async fn every_kind_of_problem_round_trips() {
+        let store = Store::open_in_memory().await.unwrap();
+        let problems = [
+            Problem::Network {
+                detail: "connection refused".into(),
+            },
+            Problem::Redirect {
+                detail: "too many redirects".into(),
+            },
+            Problem::HttpStatus { status: 503 },
+            Problem::Stalled { seconds: 60 },
+            Problem::Incomplete {
+                received: 10,
+                expected: u64::from(u32::MAX) * 3,
+            },
+            Problem::RemoteChanging,
+            Problem::Disk {
+                detail: "disk full".into(),
+            },
+            Problem::Other {
+                detail: "something".into(),
+            },
+        ];
+        let records: Vec<JobRecord> = (1..)
+            .zip(problems)
+            .map(|(seq, problem)| JobRecord {
+                problem: Some(problem),
+                ..record(seq)
+            })
+            .collect();
+        for r in &records {
+            store.save(r.clone());
+        }
+        assert_eq!(store.load().await.unwrap().jobs, records);
+    }
+
+    #[test]
+    fn failures_from_before_problems_keep_their_text() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (i, sql) in MIGRATIONS[..5].iter().enumerate() {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", i + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, state, error)
+             VALUES (1, 1, 'https://example.com/a', '/d', 'failed', 'server answered 410 Gone')",
+            [],
+        )
+        .unwrap();
+        prepare(&mut conn).unwrap();
+        let jobs = load_jobs(&conn).unwrap();
+        let expected = Problem::Other {
+            detail: "server answered 410 Gone".into(),
+        };
+        assert_eq!(jobs[0].problem, Some(expected));
     }
 
     #[tokio::test]

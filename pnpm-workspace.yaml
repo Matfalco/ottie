@@ -1,3 +1,6 @@
 packages:
   - ui
   - shared/api-types
+minimumReleaseAgeExclude:
+  - '@inlang/plugin-message-format@4.5.2'
+  - '@inlang/sdk@4.0.2'

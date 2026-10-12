@@ -10,8 +10,8 @@ use axum::body::{Body, Bytes};
 use axum::routing::get;
 use futures_util::StreamExt;
 use ottie_api::{
-    AddJob, Added, ApiError, EVENTS_PROTOCOL, Event, Job, JobState, TOKEN_PROTOCOL_PREFIX, Token,
-    UiSource,
+    AddJob, Added, ApiError, EVENTS_PROTOCOL, Event, Job, JobState, Problem, Reason,
+    TOKEN_PROTOCOL_PREFIX, Token, UiSource,
 };
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
@@ -158,18 +158,19 @@ impl Daemon {
     }
 }
 
-async fn error_of(response: reqwest::Response) -> (StatusCode, String) {
+async fn error_of(response: reqwest::Response) -> (StatusCode, ApiError) {
     let status = response.status();
-    (status, response.json::<ApiError>().await.unwrap().error)
+    (status, response.json::<ApiError>().await.unwrap())
 }
 
 #[tokio::test]
 async fn every_request_needs_the_token() {
     let d = start().await;
     let anonymous = d.client.get(d.url("/jobs")).send().await.unwrap();
-    let (status, message) = error_of(anonymous).await;
+    let (status, refused) = error_of(anonymous).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert!(message.contains("token"));
+    assert_eq!(refused.reason, Reason::Unauthorized);
+    assert!(refused.error.contains("token"));
 
     let wrong = d.client.get(d.url("/jobs")).bearer_auth("guess");
     assert_eq!(
@@ -266,51 +267,84 @@ async fn pause_resume_and_cancel() {
 async fn bad_requests_say_what_is_wrong() {
     let d = start().await;
     let add = |job: &AddJob| d.post("/jobs").json(job).send();
+    let refused = async |request: RequestBuilder| error_of(request.send().await.unwrap()).await;
 
     let mut job = d.new_job("file.bin");
     job.url = "not a url".to_owned();
-    let (status, message) = error_of(add(&job).await.unwrap()).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(message.contains("not a URL"), "{message}");
+    let (status, body) = error_of(add(&job).await.unwrap()).await;
+    assert_eq!(
+        (status, body.reason),
+        (StatusCode::BAD_REQUEST, Reason::InvalidUrl)
+    );
+    assert!(body.error.contains("not a URL"), "{}", body.error);
 
     job.url = "ftp://example.com/file".to_owned();
-    let (status, message) = error_of(add(&job).await.unwrap()).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(message.contains("unsupported URL scheme"), "{message}");
+    let (status, body) = error_of(add(&job).await.unwrap()).await;
+    let scheme = Reason::UnsupportedScheme {
+        scheme: "ftp".into(),
+    };
+    assert_eq!((status, body.reason), (StatusCode::BAD_REQUEST, scheme));
 
     let mut job = d.new_job("file.bin");
     job.dest_dir = Some("relative/folder".to_owned());
-    let (status, message) = error_of(add(&job).await.unwrap()).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(message.contains("absolute"), "{message}");
+    let (status, body) = error_of(add(&job).await.unwrap()).await;
+    assert_eq!(
+        (status, body.reason),
+        (StatusCode::BAD_REQUEST, Reason::RelativeFolder)
+    );
 
     // General has no folder yet, so a folder is required.
     job.dest_dir = None;
-    let (status, message) = error_of(add(&job).await.unwrap()).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(message.contains("no folder"), "{message}");
+    let (status, body) = error_of(add(&job).await.unwrap()).await;
+    let no_folder = Reason::NoFolder {
+        category: "General".into(),
+    };
+    assert_eq!((status, body.reason), (StatusCode::BAD_REQUEST, no_folder));
 
     let broken = d.post("/jobs").header("content-type", "application/json");
-    let (status, _) = error_of(broken.body("{").send().await.unwrap()).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, body) = refused(broken.body("{")).await;
+    assert_eq!(
+        (status, body.reason),
+        (StatusCode::BAD_REQUEST, Reason::InvalidBody)
+    );
     let missing_url = d
         .post("/jobs")
         .json(&serde_json::json!({ "destDir": "/x" }));
-    let (status, _) = error_of(missing_url.send().await.unwrap()).await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, body) = refused(missing_url).await;
+    let expected = (StatusCode::UNPROCESSABLE_ENTITY, Reason::InvalidBody);
+    assert_eq!((status, body.reason), expected);
 
-    let (status, _) = error_of(d.post("/jobs/nonsense/pause").send().await.unwrap()).await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    let unknown = d.post("/jobs/2026.01.01-00.00.00-1/pause").send().await;
-    let (status, _) = error_of(unknown.unwrap()).await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = refused(d.post("/jobs/nonsense/pause")).await;
+    let invalid = Reason::InvalidJobId {
+        id: "nonsense".into(),
+    };
+    assert_eq!((status, body.reason), (StatusCode::BAD_REQUEST, invalid));
+    let unknown_id = "2026.01.01-00.00.00-1";
+    let (status, body) = refused(d.post(&format!("/jobs/{unknown_id}/pause"))).await;
+    let not_found = Reason::JobNotFound {
+        id: unknown_id.into(),
+    };
+    assert_eq!((status, body.reason), (StatusCode::NOT_FOUND, not_found));
 
     let id = d.add("file.bin").await;
     d.wait_until(&id, JobState::Completed).await;
-    let (status, message) =
-        error_of(d.post(&format!("/jobs/{id}/resume")).send().await.unwrap()).await;
-    assert_eq!(status, StatusCode::CONFLICT);
-    assert!(message.contains("Completed"), "{message}");
+    let (status, body) = refused(d.post(&format!("/jobs/{id}/resume"))).await;
+    let conflict = Reason::InvalidTransition {
+        from: JobState::Completed,
+        to: JobState::Queued,
+    };
+    assert_eq!((status, body.reason), (StatusCode::CONFLICT, conflict));
+    assert!(body.error.contains("Completed"), "{}", body.error);
+}
+
+#[tokio::test]
+async fn failures_carry_a_problem_code() {
+    let d = start().await;
+    let id = d.add("missing.bin").await;
+    d.wait_until(&id, JobState::Failed).await;
+    let job = d.job(&id).await;
+    assert_eq!(job.problem, Some(Problem::HttpStatus { status: 404 }));
+    assert_eq!(job.error.as_deref(), Some("server answered 404 Not Found"));
 }
 
 #[tokio::test]
@@ -359,8 +393,11 @@ async fn the_ui_is_served_without_the_token() {
     // Nothing outside the folder, and the API stays the API.
     let escape = get("/..%2Fsecret.txt").await.unwrap();
     assert_ne!(escape.text().await.unwrap(), "no");
-    let (status, _) = error_of(get("/api/v2/jobs").await.unwrap()).await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = error_of(get("/api/v2/jobs").await.unwrap()).await;
+    assert_eq!(
+        (status, body.reason),
+        (StatusCode::NOT_FOUND, Reason::NoSuchEndpoint)
+    );
 }
 
 #[tokio::test]

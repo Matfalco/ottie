@@ -19,13 +19,14 @@ export class Unauthorized extends Error {
 	}
 }
 
-/** Any other refusal, with the daemon's explanation. */
+/** Any other refusal. `body` holds the daemon's code (to translate, see
+ * `explain.ts`) and English text; it's null if the answer had no body. */
 export class ApiFailure extends Error {
 	constructor(
 		readonly status: number,
-		message: string
+		readonly body: ApiError | null
 	) {
-		super(message);
+		super(body?.error ?? `The daemon answered ${status}.`);
 	}
 }
 
@@ -73,11 +74,11 @@ export class Api {
 			throw new Unauthorized();
 		}
 		if (!response.ok) {
-			const message = await response.json().then(
-				(answer: ApiError) => answer.error,
-				() => `The daemon answered ${response.status}.`
+			const body = await response.json().then(
+				(answer: ApiError) => answer,
+				() => null
 			);
-			throw new ApiFailure(response.status, message);
+			throw new ApiFailure(response.status, body);
 		}
 		if (response.status === 204) {
 			return undefined as T;

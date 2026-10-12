@@ -6,6 +6,7 @@ use reqwest::Url;
 use crate::category::{Category, CategoryId};
 use crate::download::RestartReason;
 use crate::id::JobId;
+use crate::problem::Problem;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobState {
@@ -102,8 +103,9 @@ pub struct JobSnapshot {
     pub downloaded: u64,
     pub total: Option<u64>,
     pub resumable: bool,
-    /// Why the job failed, when `state` is `Failed`.
-    pub error: Option<String>,
+    /// Why the job failed (`Failed`), or the last failure (`Retrying`, or
+    /// `Queued` after giving its slot away). `Display` gives English text.
+    pub problem: Option<Problem>,
     pub priority: Priority,
     /// This job's own limit in bytes per second; 0 = none.
     pub speed_limit: u64,

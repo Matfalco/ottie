@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 
 use axum::http::StatusCode;
 use ottie_core::{
-    HttpBackend, HttpConfig, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob, RetryPolicy,
-    Store,
+    HttpBackend, HttpConfig, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob, Problem,
+    RetryPolicy, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -131,7 +131,7 @@ async fn server_errors_are_retried_until_they_clear() {
     let third = log.iter().filter(|j| j.state == Retrying).nth(2).unwrap();
     assert_eq!(third.retries, 3);
     assert!(third.retry_at.is_some());
-    assert!(third.error.as_deref().unwrap().contains("503"));
+    assert_eq!(third.problem, Some(Problem::HttpStatus { status: 503 }));
     s.assert_file("a.bin");
 }
 
@@ -146,7 +146,7 @@ async fn retries_run_out_and_the_job_fails() {
     assert_eq!(count(&log, id, JobState::Retrying), 2);
     let failed = log.last().unwrap();
     assert_eq!(failed.state, JobState::Failed);
-    assert!(failed.error.as_deref().unwrap().contains("500"));
+    assert_eq!(failed.problem, Some(Problem::HttpStatus { status: 500 }));
 }
 
 #[tokio::test]
@@ -194,7 +194,11 @@ async fn a_stalled_connection_is_retried() {
     let log = s.run_to_end(&[id]).await;
 
     let retrying = log.iter().find(|j| j.state == JobState::Retrying).unwrap();
-    assert!(retrying.error.as_deref().unwrap().contains("no data"));
+    assert_eq!(
+        retrying.problem,
+        Some(Problem::Stalled { seconds: 1 }),
+        "the 300 ms stall timeout, rounded up"
+    );
     assert_eq!(log.last().unwrap().state, JobState::Completed);
     s.assert_file("a.bin");
 }

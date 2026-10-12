@@ -1,3 +1,4 @@
+import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { defineConfig } from 'vitest/config';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
@@ -21,6 +22,16 @@ export default defineConfig({
 				assets: '../crates/api/ui-dist',
 				fallback: 'index.html'
 			})
+		}),
+
+		// Translations: messages/{locale}.json compiled into typed functions.
+		// The language: the one chosen in the page (remembered by the
+		// browser), else the browser's, else English. Never in the URL.
+		paraglideVitePlugin({
+			project: './project.inlang',
+			outdir: './src/lib/paraglide',
+			emitTsDeclarations: true,
+			strategy: ['localStorage', 'preferredLanguage', 'baseLocale']
 		})
 	],
 	server: {

@@ -2,7 +2,9 @@
 // updated by the events WebSocket, which reconnects on its own.
 
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
-import { Api, Unauthorized } from './api';
+import { Api, ApiFailure, Unauthorized } from './api';
+import { explainRefusal } from './explain';
+import { m } from './paraglide/messages.js';
 import { applyEvent, newestFirst, nextRate, type Jobs, type Rate } from './jobs';
 
 export type Connection = 'connecting' | 'live' | 'offline';
@@ -79,8 +81,11 @@ export class Session {
 		if (error instanceof Unauthorized) {
 			this.stop();
 			this.onUnauthorized();
+		} else if (error instanceof ApiFailure) {
+			this.error = explainRefusal(error.body, error.message);
 		} else {
-			this.error = error instanceof Error ? error.message : String(error);
+			// fetch() failed: the daemon is stopped or unreachable.
+			this.error = m.connection_offline();
 		}
 	}
 

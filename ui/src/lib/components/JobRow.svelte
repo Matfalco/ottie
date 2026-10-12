@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Job } from '@ottie/api-types/Job';
 	import { displayName } from '#lib/format.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { canCancel, canPause, canResume, describe, fraction } from '#lib/status.js';
 
 	interface Props {
@@ -18,7 +19,7 @@
 	let done = $derived(fraction(job));
 
 	function confirmCancel() {
-		if (confirm(`Cancel “${name}” and delete what's downloaded so far?`)) {
+		if (confirm(m.cancel_confirm({ name }))) {
 			onCancel();
 		}
 	}
@@ -31,20 +32,20 @@
 	</div>
 	<div class="actions">
 		{#if canPause(job)}
-			<button onclick={onPause}>Pause</button>
+			<button onclick={onPause}>{m.pause()}</button>
 		{/if}
 		{#if canResume(job)}
-			<button onclick={onResume}>Resume</button>
+			<button onclick={onResume}>{m.resume()}</button>
 		{/if}
 		{#if canCancel(job)}
-			<button onclick={confirmCancel} aria-label="Cancel {name}">Cancel</button>
+			<button onclick={confirmCancel} aria-label={m.cancel_label({ name })}>{m.cancel()}</button>
 		{/if}
 	</div>
 	<div
 		class="bar"
 		class:unknown={done === null && job.state === 'downloading'}
 		role="progressbar"
-		aria-label="Progress of {name}"
+		aria-label={m.progress_label({ name })}
 		aria-valuemin={0}
 		aria-valuemax={100}
 		aria-valuenow={done === null ? undefined : Math.round(done * 100)}

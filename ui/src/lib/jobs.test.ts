@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { job } from './format.test';
+import { job } from './testing';
 import { applyEvent, currentSpeed, newestFirst, nextRate, type Jobs } from './jobs';
 
 describe('applyEvent', () => {

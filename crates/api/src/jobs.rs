@@ -10,7 +10,7 @@ use ottie_core::{CategoryId, JobId, NewJob, Url};
 
 use crate::AppState;
 use crate::error::Failure;
-use crate::types::{AddJob, Added, Job};
+use crate::types::{AddJob, Added, Job, Reason};
 
 /// `GET /jobs`: every job, oldest first.
 pub(crate) async fn list(State(state): State<AppState>) -> Result<Json<Vec<Job>>, Failure> {
@@ -24,13 +24,23 @@ pub(crate) async fn add(
     body: Result<Json<AddJob>, JsonRejection>,
 ) -> Result<(StatusCode, Json<Added>), Failure> {
     let Json(body) = body?;
-    let url = Url::parse(&body.url).map_err(|_| Failure::bad_request("`url` is not a URL"))?;
+    let url = Url::parse(&body.url).map_err(|_| {
+        Failure::new(
+            StatusCode::BAD_REQUEST,
+            Reason::InvalidUrl,
+            "`url` is not a URL",
+        )
+    })?;
     let mut job = NewJob::new(url);
     if let Some(dir) = body.dest_dir {
         let dir = PathBuf::from(dir);
         // Relative to what? The daemon's working folder means nothing to a client.
         if !dir.is_absolute() {
-            return Err(Failure::bad_request("`destDir` must be an absolute path"));
+            return Err(Failure::new(
+                StatusCode::BAD_REQUEST,
+                Reason::RelativeFolder,
+                "`destDir` must be an absolute path",
+            ));
         }
         job = job.in_dir(dir);
     }

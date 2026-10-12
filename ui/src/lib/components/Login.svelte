@@ -1,6 +1,8 @@
 <script lang="ts">
 	import icon from '#lib/assets/ottie.svg';
 	import { Api, Unauthorized } from '#lib/api.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import LanguagePicker from './LanguagePicker.svelte';
 
 	interface Props {
 		onSignIn: (token: string) => void;
@@ -21,10 +23,7 @@
 			await new Api(candidate).listJobs();
 			onSignIn(candidate);
 		} catch (error) {
-			problem =
-				error instanceof Unauthorized
-					? "That token isn't right."
-					: "Can't reach Ottie. Is `ottie serve` running?";
+			problem = error instanceof Unauthorized ? m.login_wrong_token() : m.login_unreachable();
 		} finally {
 			checking = false;
 		}
@@ -34,22 +33,23 @@
 <main>
 	<img src={icon} alt="" width="72" height="72" />
 	<h1>Ottie</h1>
-	<p>Paste the token that <code>ottie token</code> prints.</p>
+	<p>{m.login_intro()}</p>
 	<form onsubmit={submit}>
 		<input
 			bind:value={token}
 			type="password"
 			autocomplete="off"
-			placeholder="Token"
-			aria-label="Token"
+			placeholder={m.login_token()}
+			aria-label={m.login_token()}
 			required
 		/>
-		<button class="primary" disabled={checking || !token.trim()}>Sign in</button>
+		<button class="primary" disabled={checking || !token.trim()}>{m.login_sign_in()}</button>
 	</form>
 	{#if problem}
 		<p class="problem" role="alert">{problem}</p>
 	{/if}
-	<p class="hint">Or run <code>ottie open</code> to open this page signed in.</p>
+	<p class="hint">{m.login_hint()}</p>
+	<LanguagePicker />
 </main>
 
 <style>

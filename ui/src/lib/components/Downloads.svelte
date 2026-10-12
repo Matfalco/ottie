@@ -2,9 +2,11 @@
 	import { onMount } from 'svelte';
 	import icon from '#lib/assets/ottie.svg';
 	import { currentSpeed } from '#lib/jobs.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { Session } from '#lib/session.svelte.js';
 	import AddBar from './AddBar.svelte';
 	import JobRow from './JobRow.svelte';
+	import LanguagePicker from './LanguagePicker.svelte';
 
 	interface Props {
 		token: string;
@@ -28,13 +30,14 @@
 	<h1>Ottie</h1>
 	<span class="connection {session.connection}" role="status">
 		{#if session.connection === 'live'}
-			Connected
+			{m.connection_live()}
 		{:else if session.connection === 'connecting'}
-			Connecting…
+			{m.connection_connecting()}
 		{:else}
-			Can't reach Ottie, retrying…
+			{m.connection_offline()}
 		{/if}
 	</span>
+	<LanguagePicker />
 </header>
 
 <main>
@@ -43,12 +46,12 @@
 	{#if session.error}
 		<div class="error" role="alert">
 			<span>{session.error}</span>
-			<button onclick={() => (session.error = null)} aria-label="Dismiss">✕</button>
+			<button onclick={() => (session.error = null)} aria-label={m.dismiss()}>✕</button>
 		</div>
 	{/if}
 
 	{#if session.list.length === 0 && session.connection === 'live'}
-		<p class="empty">Nothing yet. Paste a link above to tuck a file away.</p>
+		<p class="empty">{m.empty()}</p>
 	{:else}
 		<ul>
 			{#each session.list as job (job.id)}

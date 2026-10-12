@@ -18,14 +18,14 @@ mod types;
 mod ui;
 
 use axum::Router;
-use axum::http::{Method, StatusCode, Uri};
+use axum::http::{Method, Uri};
 use axum::middleware;
 use axum::routing::{get, post};
 use ottie_core::Manager;
 use tokio_util::sync::CancellationToken;
 
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
-pub use types::{AddJob, Added, ApiError, Event, Job, JobState, Priority};
+pub use types::{AddJob, Added, ApiError, Event, Job, JobState, Priority, Problem, Reason};
 pub use ui::UiSource;
 
 /// Shared by every request handler.
@@ -64,5 +64,5 @@ pub fn router(manager: Manager, token: Token, shutdown: CancellationToken, ui: U
 }
 
 async fn not_found() -> error::Failure {
-    error::Failure::new(StatusCode::NOT_FOUND, "no such API endpoint")
+    error::Failure::no_such_endpoint()
 }
