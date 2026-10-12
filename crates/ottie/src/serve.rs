@@ -22,9 +22,15 @@ pub struct ServeArgs {
     /// Serve the web UI from this folder instead of the one built into Ottie
     #[arg(long, env = "OTTIE_UI_DIR", value_name = "FOLDER")]
     pub ui_dir: Option<PathBuf>,
+    /// For a program that starts Ottie (the desktop app): print `ready` once
+    /// listening, and stop when standard input closes.
+    #[arg(long, hide = true)]
+    pub managed: bool,
 }
 
 pub async fn run(args: ServeArgs) -> Result<()> {
+    // Watched from the start: if the app quits while we start, we stop too.
+    let parent_gone = args.managed.then(stdin_closed);
     // Log to stderr; `OTTIE_LOG=debug` (or `ottie_core=debug`…) shows more.
     let filter = EnvFilter::try_from_env("OTTIE_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
     tracing_subscriber::fmt()
@@ -66,6 +72,12 @@ pub async fn run(args: ServeArgs) -> Result<()> {
         );
     }
 
+    if args.managed {
+        // Connections already wait in the listener's queue: the app can open
+        // its window now.
+        println!("ready");
+    }
+
     let ui = match args.ui_dir {
         Some(folder) => UiSource::Folder(folder),
         None => UiSource::Embedded,
@@ -74,7 +86,7 @@ pub async fn run(args: ServeArgs) -> Result<()> {
     let app = ottie_api::router(manager.clone(), Token::new(token), shutdown.clone(), ui);
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
-            stop_requested().await;
+            stop_requested(parent_gone).await;
             // Close event streams, or the server would wait for them.
             shutdown.cancel();
         })
@@ -117,8 +129,23 @@ fn downloads_folder() -> Option<PathBuf> {
     Some(named.unwrap_or_else(|| user.home_dir().join("Downloads")))
 }
 
-/// Ctrl+C, or (Unix) the SIGTERM that systemd and Docker send.
-async fn stop_requested() {
+/// `--managed`: cancelled once standard input closes, i.e. the program that
+/// started us quit (or crashed: the OS closes its end of the pipe then too).
+fn stdin_closed() -> CancellationToken {
+    let closed = CancellationToken::new();
+    let signal = closed.clone();
+    // A plain thread, not a tokio task: a read that's still waiting would
+    // hold up the runtime's shutdown after Ctrl+C.
+    std::thread::spawn(move || {
+        let _ = std::io::copy(&mut std::io::stdin().lock(), &mut std::io::sink());
+        signal.cancel();
+    });
+    closed
+}
+
+/// Ctrl+C, (Unix) the SIGTERM that systemd and Docker send, or (`--managed`)
+/// standard input closing.
+async fn stop_requested(parent_gone: Option<CancellationToken>) {
     let ctrl_c = async {
         if let Err(err) = tokio::signal::ctrl_c().await {
             // Without a handler we can't stop gracefully; keep running.
@@ -138,9 +165,16 @@ async fn stop_requested() {
     };
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
+    let parent_gone = async {
+        match parent_gone {
+            Some(closed) => closed.cancelled().await,
+            None => std::future::pending().await,
+        }
+    };
     tokio::select! {
         () = ctrl_c => {}
         () = terminate => {}
+        () = parent_gone => tracing::info!("the program that started Ottie has quit"),
     }
 }
 

@@ -125,3 +125,67 @@ fn a_taken_port_stops_serve_before_it_opens_the_database() {
     // Otherwise it would have resumed the other daemon's downloads.
     assert!(!dir.path().join("data").join("ottie.db").exists());
 }
+
+#[test]
+fn link_prints_the_signed_in_address() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = ottie(dir.path())
+        .args(["link", "--port", "9123"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let token = std::fs::read_to_string(dir.path().join("config").join("token")).unwrap();
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        format!("http://127.0.0.1:9123/#token={}\n", token.trim())
+    );
+}
+
+/// What the desktop app does: wait for `ready`, then close stdin to stop it.
+#[test]
+fn managed_serve_says_ready_and_stops_when_stdin_closes() {
+    use std::io::{BufRead, BufReader};
+
+    let dir = tempfile::tempdir().unwrap();
+    let port = free_port().to_string();
+    let mut child = ottie(dir.path())
+        .args(["serve", "--managed", "--port", &port])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let mut running = Running(child);
+
+    let (lines, ready) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            let _ = lines.send(line.unwrap());
+        }
+    });
+    let first = ready.recv_timeout(Duration::from_secs(15)).unwrap();
+    assert_eq!(first, "ready");
+    // It answers right away.
+    let answer = std::net::TcpStream::connect(format!("127.0.0.1:{port}"));
+    assert!(answer.is_ok());
+
+    drop(stdin);
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = running.0.try_wait().unwrap() {
+            break status;
+        }
+        assert!(started.elapsed() < Duration::from_secs(15), "still running");
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    assert!(status.success());
+    let logs = std::io::read_to_string(stderr).unwrap();
+    assert!(
+        logs.contains("the program that started Ottie has quit"),
+        "{logs}"
+    );
+    assert!(logs.contains("saving downloads"), "{logs}");
+}

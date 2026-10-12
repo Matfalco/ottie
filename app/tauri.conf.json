@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Ottie",
+  "mainBinaryName": "ottie-app",
+  "identifier": "io.github.matfalco.ottie",
+  "build": {
+    "beforeDevCommand": { "script": "cargo build -p ottie", "wait": true },
+    "beforeBuildCommand": "node scripts/sidecar.mjs"
+  },
+  "app": {
+    "windows": []
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "../res/icons/png/app/ottie-icon-32.png",
+      "../res/icons/png/app/ottie-icon-128.png",
+      "../res/icons/png/app/ottie-icon-256.png",
+      "icons/icon.ico"
+    ]
+  }
+}

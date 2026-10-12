@@ -1,4 +1,5 @@
-//! `ottie open`: the web UI in your browser, already signed in.
+//! `ottie open`: the web UI in your browser, already signed in. `ottie link`
+//! prints that address instead.
 
 use std::time::Duration;
 
@@ -31,6 +32,19 @@ pub async fn run(args: &DaemonArgs) -> Result<()> {
         .with_context(|| format!("can't write {}", page.display()))?;
     open::that_detached(&page).context("can't start a browser")?;
     println!("Opening Ottie in your browser…");
+    Ok(())
+}
+
+/// `ottie link`. Like `ottie token`, it creates the token on first use, so it
+/// works before the daemon's first start (the desktop app runs it first).
+pub fn print_link(args: &DaemonArgs) -> Result<()> {
+    let dirs = Dirs::resolve(&args.dirs)?;
+    let file = FileConfig::load(&dirs.config.join(CONFIG_FILE))?;
+    let addr = config::listen_addr(args.address, args.port, &file);
+    println!(
+        "{}",
+        config::ui_url(addr, &token::load_or_create(&dirs.config)?)
+    );
     Ok(())
 }
 

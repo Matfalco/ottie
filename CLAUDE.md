@@ -50,7 +50,7 @@ Android app (Tauri) ──────┘    (on Android, core + api run inside 
 
 - **The HTTP API is the only contract.** Every client talks to the engine through it. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart), never for download operations.
 - **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
-- **Desktop:** the daemon is its own process (`ottie serve`), started by the app as a Tauri sidecar if none is answering, or installed as a service. The desktop app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
+- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
 - **Headless:** the daemon runs standalone (systemd user service, Docker) and serves the built web UI itself.
 
@@ -87,11 +87,16 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
 crates/ottie/      ottie: the binary  [exists]
   src/serve.rs       `ottie serve`: logging, folders, token, database, General → Downloads folder,
                      axum::serve, graceful stop
-  src/open.rs        `ottie open`: browser on the UI, signed in (via a private redirect page)
+  src/open.rs        `ottie open`: browser on the UI, signed in (via a private redirect page); `ottie link`
   src/config.rs      folders (OS defaults / flags / OTTIE_* env), config.toml, listen address
   src/token.rs       token file: created on first use, `ottie token` prints it
   tests/cli.rs       runs the real binary
-app/               ottie-app: Tauri 2 shell (desktop + Android), depends on core + api
+app/               ottie-app: Tauri 2 shell (desktop; Android later, then with core + api)  [exists]
+  src/main.rs        window on the daemon's page, single instance, stops the daemon it started on exit
+  src/daemon.rs      find or start `ottie serve --managed` (the sidecar next to the app), ready / stop
+  tauri.conf.json    product, identifier, icons; tauri.bundle.json adds the sidecar for installers only
+  scripts/          sidecar.mjs (UI + release ottie → binaries/), ico.mjs (icons/icon.ico from res/icons)
+  package.json       pnpm package `app`: the Tauri CLI
 ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [exists]
   src/routes/        +layout.svelte (app.css, favicon), +layout.ts (ssr = false), +page.svelte (token → Login | Downloads)
   src/lib/api.ts     fetch + WebSocket client for /api/v1 (Unauthorized, ApiFailure)
@@ -107,6 +112,7 @@ extension/         WebExtension (Chrome + Firefox)
 shared/api-types/  TypeScript types generated from Rust (ts-rs, by `cargo test -p ottie-api`;
                    output folder set in .cargo/config.toml). Never edit by hand.  [exists]
 docs/decisions/    one short file per accepted decision (NNNN-title.md)       [exists]
+res/icons/         the drawn Ottie icons (app, tray), PNG + SVG               [exists]
 ```
 
 ## Commands
@@ -122,6 +128,7 @@ cargo run -p ottie -- serve          # daemon on 127.0.0.1:16889 (OTTIE_LOG=debu
 cargo run -p ottie -- token          # print the API token
 cargo test -p ottie-api              # also regenerates shared/api-types/*.ts: commit them
 cargo run -p ottie -- open           # the web UI in a browser, signed in
+cargo run -p ottie -- link           # print that signed-in address
 
 pnpm install                         # JS dependencies (workspace: ui, shared/api-types)
 pnpm --filter ui dev                 # UI with live reload on :5173, /api forwarded to the daemon
@@ -130,16 +137,18 @@ pnpm --filter ui check               # svelte-check + tsc (fails on warnings)
 pnpm --filter ui test                # Vitest unit tests
 pnpm --filter ui lint                # Prettier check (`format` fixes)
 pnpm --filter ui i18n                # recompile messages/*.json (check, dev, build and test do it too)
+pnpm --filter app dev                # desktop app (builds ottie first; starts it unless one answers)
+pnpm --filter app build              # installer: UI → release ottie → app (target/release/bundle/)
+pnpm --filter app icon               # rebuild app/icons/icon.ico after changing res/icons
 
 # planned, not scaffolded yet:
 pnpm --filter extension build
-cargo tauri dev                      # from app/: desktop
-cargo tauri android dev              # from app/: Android device/emulator
+pnpm --filter app tauri android dev  # Android device/emulator
 ```
 
 Before calling a task done: fmt, clippy, tests for the crates you touched; for TS packages you touched, `check`, `test` and `lint`. A release builds the UI before the Rust binary. Update this section when a part comes to exist.
 
-Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed.
+Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed. The workspace includes the Tauri app, so `cargo build/test/clippy --workspace` compile Tauri too (WebView2 comes with Windows 11; Linux needs the webkit2gtk 4.1 dev packages). In a dev run, set `OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` to keep away from your real downloads: the app passes them on to the daemon.
 
 ## Engine rules (crates/core)
 
@@ -197,7 +206,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 ## Working with Mathieu
 
-- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations, atomics, `JoinSet`, child cancellation tokens, `Mutex`, lifetimes (`Env<'a>`), `Drop`, newtypes + associated consts (`CategoryId::GENERAL`), builder methods (`NewJob::new(url).in_dir(..)`), struct update syntax (`..CategorySettings::named(..)`), iterator chains (`map`/`flat_map`/`collect`), `move` closures, `Option::take`, match guards (`pattern if condition =>`), derive macros with attributes (clap's `#[derive(Parser)]`, `#[arg(...)]`), axum extractors (handler arguments filled from the request), `#[cfg(...)]` conditional compilation. Also explained: Paraglide message functions (`m.key({ params })`), JSON imports, `as unknown as` in tests, Svelte components and runes (`$state`, `$derived`, `$props`), TypeScript basics (types, interfaces, unions, `import type`), classes with private fields, promises/`async` in JS. Still to come: Svelte stores/context if needed, Tauri commands, etc.
+- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations, atomics, `JoinSet`, child cancellation tokens, `Mutex`, lifetimes (`Env<'a>`), `Drop`, newtypes + associated consts (`CategoryId::GENERAL`), builder methods (`NewJob::new(url).in_dir(..)`), struct update syntax (`..CategorySettings::named(..)`), iterator chains (`map`/`flat_map`/`collect`), `move` closures, `Option::take`, match guards (`pattern if condition =>`), derive macros with attributes (clap's `#[derive(Parser)]`, `#[arg(...)]`), axum extractors (handler arguments filled from the request), `#[cfg(...)]` conditional compilation. Also explained: Paraglide message functions (`m.key({ params })`), JSON imports, `as unknown as` in tests, Svelte components and runes (`$state`, `$derived`, `$props`), TypeScript basics (types, interfaces, unions, `import type`), classes with private fields, promises/`async` in JS. Also explained: Tauri (a native window around the system's WebView), sidecar processes and their stdin/stdout pipes, `#![cfg_attr(...)]`, turbofish (`app.state::<Owned>()`), `PoisonError`. Still to come: Svelte stores/context if needed, Tauri commands, etc.
 - For decisions that are hard to reverse (data model, API shape, crate choices, architecture), present 2–3 options with trade-offs and let him choose. For small implementation details, decide and say what you chose.
 - Work in small vertical slices that run end to end. Don't scaffold code ahead of need.
 - Show the diff and wait for a go-ahead before committing.
@@ -207,7 +216,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 1. ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~ Done.
 2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ → ~~2b SQLite persistence~~ → ~~2c multi-connection~~ (streaming mode comes with the stream endpoint) → ~~2d speed limits + priorities~~ → ~~2e categories~~ → ~~2f `Content-Disposition` filenames + category re-match~~ → ~~2g retry with backoff~~.
-3. Usable app, early: ~~3a minimal `ottie serve` (jobs API + events WebSocket, token, folders)~~ → ~~3b first web UI (SvelteKit SPA built into the binary; list, add, pause/resume/cancel; token link + login page; `ottie open`)~~ → ~~3b2 translations (en, fr; Paraglide) + error codes from the daemon~~ → 3c first desktop app (Tauri window on the same UI, starts the daemon as a sidecar, Ottie icons from `res/icons/`).
+3. Usable app, early: ~~3a minimal `ottie serve` (jobs API + events WebSocket, token, folders)~~ → ~~3b first web UI (SvelteKit SPA built into the binary; list, add, pause/resume/cancel; token link + login page; `ottie open`)~~ → ~~3b2 translations (en, fr; Paraglide) + error codes from the daemon~~ → ~~3c first desktop app (Tauri window on the same UI, starts the daemon as a sidecar, Ottie icons from `res/icons/`)~~.
 4. Then features grow through API, UI and desktop app together, one slice each: categories, speed limits + priorities, settings (retry policy, max concurrent), the `/jobs/{id}/stream` endpoint (play while downloading), tray, notifications, autostart.
 5. Browser extension.
 6. Tauri Android: embedded core, background downloads, share-sheet intake.

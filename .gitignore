@@ -11,3 +11,8 @@
 node_modules/
 # The built web UI, compiled into ottie-api (pnpm --filter ui build)
 /crates/api/ui-dist/
+
+# Desktop app: the sidecar copied in by app/scripts/sidecar.mjs, and the
+# schemas tauri-build generates
+/app/binaries/
+/app/gen/

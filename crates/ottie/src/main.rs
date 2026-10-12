@@ -38,6 +38,8 @@ enum Command {
     Open(DaemonArgs),
     /// Print the API token, for the web UI's login page or the browser extension.
     Token(DirArgs),
+    /// Print the web UI's address, signed in (for another browser, or the desktop app).
+    Link(DaemonArgs),
 }
 
 #[tokio::main]
@@ -46,6 +48,7 @@ async fn main() -> ExitCode {
         Command::Serve(args) => serve::run(args).await,
         Command::Open(args) => open::run(&args).await,
         Command::Token(dirs) => token::print(&dirs),
+        Command::Link(args) => open::print_link(&args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
