@@ -1,1 +1,8 @@
 /target
+
+# Secrets: never commit tokens (cargo login writes ~/.cargo/credentials.toml,
+# but a project-local .cargo/ folder could hold one too).
+.cargo/credentials
+.cargo/credentials.toml
+.env
+.env.*
