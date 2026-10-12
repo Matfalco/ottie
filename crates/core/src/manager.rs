@@ -13,8 +13,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::backend::Backend;
 use crate::category::{self, Category, CategoryId, CategorySettings};
-use crate::download::{Download, Event, Outcome};
+use crate::download::{Download, Event, Outcome, Placement};
 use crate::error::Error;
+use crate::filename;
 use crate::id::{IdGenerator, JobId};
 use crate::job::{JobEvent, JobSnapshot, JobState, NewJob, Priority};
 use crate::store::{JobRecord, Settings, Store};
@@ -531,14 +532,28 @@ impl<B: Backend> Actor<B> {
         match event {
             Event::Started {
                 file_name,
+                dest_dir,
                 total,
                 validator,
                 resumable,
                 downloaded,
                 segments,
             } => {
+                // Named for the first time: the real name (from the server)
+                // may belong to another category than the URL suggested.
+                if job.download.file_name.is_none()
+                    && !job.category_chosen
+                    && let Some(ext) = filename::extension(&file_name)
+                {
+                    let category = owner_of(&self.categories, &ext).unwrap_or(CategoryId::GENERAL);
+                    if category != job.category {
+                        job.category = category;
+                        self.limiter.set_category(id, category);
+                    }
+                }
                 let dl = &mut job.download;
                 dl.file_name = Some(file_name);
+                dl.dest_dir = dest_dir;
                 dl.total = total;
                 dl.validator = validator;
                 dl.resumable = resumable;
@@ -628,12 +643,39 @@ impl<B: Backend> Actor<B> {
     /// The category whose extensions include the one in the URL, else General.
     fn match_category(&self, url: &Url) -> CategoryId {
         category::url_extension(url)
-            .and_then(|ext| {
-                self.categories
+            .and_then(|ext| owner_of(&self.categories, &ext))
+            .unwrap_or(CategoryId::GENERAL)
+    }
+
+    /// For a job's first run, if its category was matched automatically and
+    /// it's saved in that category's folder: where to save it instead once
+    /// its real name is known. Mirrors the re-match in `on_event`.
+    fn placement(&self, job: &Job) -> Option<Placement> {
+        let here = &job.download.dest_dir;
+        let category_folder = self.categories.get(&job.category)?.folder.as_ref();
+        if job.download.file_name.is_some() || job.category_chosen || category_folder != Some(here)
+        {
+            return None;
+        }
+        // A category without a folder of its own leaves the job where it is.
+        let folder_of = |c: &CategorySettings| c.folder.clone().unwrap_or_else(|| here.clone());
+        let by_extension = self
+            .categories
+            .values()
+            .flat_map(|c| {
+                c.extensions
                     .iter()
-                    .find(|(_, settings)| settings.extensions.contains(&ext))
+                    .map(move |ext| (ext.clone(), folder_of(c)))
             })
-            .map_or(CategoryId::GENERAL, |(id, _)| *id)
+            .collect();
+        let otherwise = self
+            .categories
+            .get(&CategoryId::GENERAL)
+            .map_or_else(|| here.clone(), folder_of);
+        Some(Placement {
+            by_extension,
+            otherwise,
+        })
     }
 
     fn category(&self, id: CategoryId) -> Result<&CategorySettings, Error> {
@@ -842,6 +884,7 @@ impl<B: Backend> Actor<B> {
         if !self.transition_or_log(id, JobState::Connecting, None) {
             return false;
         }
+        let placement = self.jobs.get(&id).and_then(|job| self.placement(job));
         let Some(job) = self.jobs.get_mut(&id) else {
             return false;
         };
@@ -853,6 +896,7 @@ impl<B: Backend> Actor<B> {
         });
         // The task works on its own copy and hands it back when it ends.
         let mut download = job.download.clone();
+        download.placement = placement;
         let backend = Arc::clone(&self.backend);
         let internal = self.internal.clone();
         // The job's speed budget lives as long as the task does.
@@ -896,6 +940,7 @@ impl<B: Backend> Actor<B> {
         };
         let task = job.task.take();
         job.download = *download;
+        job.download.placement = None;
         let stop = task.as_ref().and_then(|t| t.stop);
 
         let next = match (result, stop) {
@@ -1018,6 +1063,15 @@ impl<B: Backend> Actor<B> {
             tracing::warn!(%id, error = %err, "could not delete .part.ottie file");
         }
     }
+}
+
+/// The category that lists `ext`, if any. Takes the map rather than `&self`
+/// so it can be used while a job is borrowed.
+fn owner_of(categories: &BTreeMap<CategoryId, CategorySettings>, ext: &str) -> Option<CategoryId> {
+    categories
+        .iter()
+        .find(|(_, settings)| settings.extensions.iter().any(|e| e == ext))
+        .map(|(id, _)| *id)
 }
 
 fn unix_now() -> u64 {

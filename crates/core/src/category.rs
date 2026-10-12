@@ -89,9 +89,7 @@ pub struct Category {
 
 /// The extension of the file name `url` suggests, lowercase, if it has one.
 pub(crate) fn url_extension(url: &Url) -> Option<String> {
-    let name = filename::from_url(url);
-    let (stem, ext) = name.rsplit_once('.')?;
-    (!stem.is_empty() && !ext.is_empty()).then(|| ext.to_lowercase())
+    filename::extension(&filename::from_url(url))
 }
 
 #[cfg(test)]

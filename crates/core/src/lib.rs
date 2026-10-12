@@ -15,7 +15,7 @@ mod throttle;
 
 pub use backend::{Backend, HttpBackend};
 pub use category::{Category, CategoryId, CategorySettings};
-pub use download::{Download, Event, Outcome, RestartReason, Segment, Validator};
+pub use download::{Download, Event, Outcome, Placement, RestartReason, Segment, Validator};
 pub use error::Error;
 pub use filename::PART_SUFFIX;
 pub use http::{HttpConfig, build_client, run};

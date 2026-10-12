@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use reqwest::Url;
 
@@ -28,6 +29,29 @@ pub struct Download {
     /// then the truth for how much we have. When not empty, the `.part.ottie`
     /// file has its full size from the start and these ranges are the truth.
     pub segments: Vec<Segment>,
+    /// Moves a download that has no file yet to another folder once its real
+    /// name is known. Used once, then cleared; not saved.
+    pub placement: Option<Placement>,
+}
+
+/// Where to save a download once its real file name is known (from
+/// `Content-Disposition` or the URL after redirects), by the name's
+/// extension. The manager sets it so a job follows the category its real
+/// name belongs to (see docs/decisions/0012).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Placement {
+    /// Lowercase extension without the dot → folder.
+    pub by_extension: BTreeMap<String, PathBuf>,
+    /// For a name whose extension no entry lists.
+    pub otherwise: PathBuf,
+}
+
+impl Placement {
+    /// `None` for a name without an extension: it stays where it is.
+    pub fn folder_for(&self, name: &str) -> Option<&Path> {
+        let ext = filename::extension(name)?;
+        Some(self.by_extension.get(&ext).unwrap_or(&self.otherwise))
+    }
 }
 
 /// One range of a multi-connection download.
@@ -59,6 +83,7 @@ impl Download {
             validator: None,
             resumable: false,
             segments: Vec::new(),
+            placement: None,
         })
     }
 
@@ -92,6 +117,9 @@ pub enum Event {
     /// resume even if the process dies before the first byte arrives.
     Started {
         file_name: String,
+        /// Where the file is; a [`Placement`] may have changed it.
+        dest_dir: PathBuf,
+
         total: Option<u64>,
         validator: Option<Validator>,
         resumable: bool,

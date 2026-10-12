@@ -10,9 +10,10 @@ use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::http::header::{
-    ACCEPT_RANGES, CONTENT_LENGTH, CONTENT_RANGE, ETAG, IF_RANGE, LOCATION, RANGE,
+    ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, ETAG, IF_RANGE, LOCATION,
+    RANGE,
 };
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::Response;
 use axum::routing::get;
 use futures_util::Stream;
@@ -33,6 +34,8 @@ pub struct Behavior {
     pub slow_from: Option<(usize, Duration)>,
     /// Kill the connection after this many body bytes, once (the next request is normal).
     pub drop_after: Option<usize>,
+    /// Sent as is, so tests can include raw non-ASCII bytes.
+    pub content_disposition: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +67,7 @@ impl TestServer {
                 chunk_delay: None,
                 slow_from: None,
                 drop_after: None,
+                content_disposition: None,
             },
             requests: Vec::new(),
         }));
@@ -94,7 +98,7 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
     let text = |name| headers.get(name).map(|v| v.to_str().unwrap().to_owned());
     let range = text(RANGE);
     let if_range = text(IF_RANGE);
-    let (body, etag, ranges, pacing, drop_after) = {
+    let (body, etag, ranges, pacing, drop_after, disposition) = {
         let mut shared = state.lock().unwrap();
         shared.requests.push(RecordedRequest {
             range: range.clone(),
@@ -106,7 +110,15 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
             delay: b.chunk_delay,
             slow_from: b.slow_from,
         };
-        (b.body.clone(), b.etag.clone(), b.ranges, pacing, drop_after)
+        let disposition = b.content_disposition.clone();
+        (
+            b.body.clone(),
+            b.etag.clone(),
+            b.ranges,
+            pacing,
+            drop_after,
+            disposition,
+        )
     };
 
     let total = body.len();
@@ -138,6 +150,10 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
         .header(CONTENT_LENGTH, end - start);
     if let Some(etag) = &etag {
         response = response.header(ETAG, etag);
+    }
+    if let Some(disposition) = disposition {
+        let value = HeaderValue::from_bytes(&disposition).unwrap();
+        response = response.header(CONTENT_DISPOSITION, value);
     }
     if requested.is_some() {
         response = response

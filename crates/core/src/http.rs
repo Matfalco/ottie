@@ -6,7 +6,8 @@ use std::io;
 use std::path::Path;
 
 use reqwest::header::{
-    ACCEPT_ENCODING, ACCEPT_RANGES, CONTENT_RANGE, ETAG, HeaderMap, IF_RANGE, LAST_MODIFIED, RANGE,
+    ACCEPT_ENCODING, ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_RANGE, ETAG, HeaderMap, IF_RANGE,
+    LAST_MODIFIED, RANGE,
 };
 use reqwest::{Client, Response, StatusCode, Url, redirect};
 use tokio::fs::{self, File, OpenOptions};
@@ -155,7 +156,12 @@ async fn open(
 ) -> Result<Opened, Error> {
     let (Some(name), Some(part)) = (dl.file_name.clone(), dl.part_path()) else {
         let response = get_from_start(client, &dl.url).await?;
-        let suggested = filename::from_url(response.url());
+        let suggested = suggested_name(&response);
+        if let Some(placement) = dl.placement.take()
+            && let Some(folder) = placement.folder_for(&suggested)
+        {
+            dl.dest_dir = folder.to_owned();
+        }
         let (name, file) = filename::reserve(&dl.dest_dir, &suggested).await?;
         tracing::debug!(url = %redact(&dl.url), %name, "starting download");
         dl.file_name = Some(name.clone());
@@ -194,6 +200,16 @@ async fn open(
 
     restarting(dl, reason, on_event);
     fresh(client, dl, name, &part).await
+}
+
+/// The name from the server's `Content-Disposition`, else the last part of
+/// the URL it answered from (after redirects). Sanitized either way.
+fn suggested_name(response: &Response) -> String {
+    response
+        .headers()
+        .get(CONTENT_DISPOSITION)
+        .and_then(|value| filename::from_content_disposition(value.as_bytes()))
+        .unwrap_or_else(|| filename::from_url(response.url()))
 }
 
 /// Requests the file from the start again and empties the `.part.ottie` file.
@@ -302,6 +318,8 @@ fn restarting(dl: &mut Download, reason: RestartReason, on_event: &mut impl FnMu
 fn started(dl: &Download, name: &str, on_event: &mut impl FnMut(Event)) {
     on_event(Event::Started {
         file_name: name.to_owned(),
+        dest_dir: dl.dest_dir.clone(),
+
         total: dl.total,
         validator: dl.validator.clone(),
         resumable: dl.resumable,

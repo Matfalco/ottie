@@ -26,6 +26,99 @@ pub fn from_url(url: &Url) -> String {
     sanitize(&percent_decode_str(last).decode_utf8_lossy())
 }
 
+/// The file name a `Content-Disposition` header suggests, sanitized, or
+/// `None` if it names none. Prefers `filename*` (RFC 8187, e.g.
+/// `UTF-8''caf%C3%A9.txt`) over `filename`. A plain `filename` is read as
+/// UTF-8 when it is valid UTF-8 (many servers send that), else as Latin-1.
+pub fn from_content_disposition(value: &[u8]) -> Option<String> {
+    let text = match std::str::from_utf8(value) {
+        Ok(text) => text.to_owned(),
+        Err(_) => value.iter().map(|&b| char::from(b)).collect(),
+    };
+    let mut plain = None;
+    let mut extended = None;
+    for (key, value) in parameters(&text) {
+        if key.eq_ignore_ascii_case("filename*") {
+            extended = extended.or_else(|| decode_ext_value(&value));
+        } else if key.eq_ignore_ascii_case("filename") {
+            plain = plain.or(Some(value));
+        }
+    }
+    let raw = extended.or(plain)?;
+    (!raw.trim().is_empty()).then(|| sanitize(&raw))
+}
+
+/// The `key=value` pairs after the disposition type (`attachment; …`).
+/// Values may be quoted, with `\` escapes.
+fn parameters(header: &str) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    let mut rest = match header.split_once(';') {
+        Some((_, rest)) => rest,
+        None => return pairs,
+    };
+    loop {
+        rest = rest.trim_start_matches([' ', '\t', ';']);
+        if rest.is_empty() {
+            return pairs;
+        }
+        let key_end = rest.find(['=', ';']).unwrap_or(rest.len());
+        let key = rest[..key_end].trim().to_owned();
+        rest = &rest[key_end..];
+        let Some(after_eq) = rest.strip_prefix('=') else {
+            continue; // A key without a value: skip it.
+        };
+        let after_eq = after_eq.trim_start();
+        let (value, after) = match after_eq.strip_prefix('"') {
+            Some(quoted) => unquote(quoted),
+            None => {
+                let end = after_eq.find(';').unwrap_or(after_eq.len());
+                (after_eq[..end].trim().to_owned(), &after_eq[end..])
+            }
+        };
+        pairs.push((key, value));
+        rest = after;
+    }
+}
+
+/// Reads a quoted string whose opening `"` is already consumed. Returns its
+/// text and what follows the closing `"` (nothing, if it's missing).
+fn unquote(quoted: &str) -> (String, &str) {
+    let mut text = String::new();
+    let mut chars = quoted.char_indices();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            '\\' => text.extend(chars.next().map(|(_, escaped)| escaped)),
+            '"' => return (text, &quoted[i + 1..]),
+            c => text.push(c),
+        }
+    }
+    (text, "")
+}
+
+/// Decodes an RFC 8187 value: `charset'language'percent-encoded`. Only
+/// UTF-8 and ISO-8859-1 are required by the standard; others give `None`.
+fn decode_ext_value(value: &str) -> Option<String> {
+    let mut parts = value.splitn(3, '\'');
+    let (charset, _language, encoded) = (parts.next()?, parts.next()?, parts.next()?);
+    let bytes: Vec<u8> = percent_decode_str(encoded).collect();
+    if charset.eq_ignore_ascii_case("utf-8") {
+        String::from_utf8(bytes).ok()
+    } else if charset.eq_ignore_ascii_case("iso-8859-1") {
+        Some(bytes.iter().map(|&b| char::from(b)).collect())
+    } else {
+        None
+    }
+}
+
+/// The extension of a file name, lowercase and without the dot, if it has
+/// one (`.hidden` has none).
+pub fn extension(name: &str) -> Option<String> {
+    match split_extension(name) {
+        (_, Some(ext)) if !ext.is_empty() => Some(ext.to_lowercase()),
+        _ => None,
+    }
+}
+
 /// Turns untrusted text into a plain file name: no path separators, no
 /// characters Windows rejects, no leading/trailing dots or spaces, no reserved
 /// device names. The result can always be joined to a folder without escaping it.
@@ -164,6 +257,73 @@ mod tests {
         assert_eq!(from_url(&url), "_.._etc_passwd");
         assert_eq!(sanitize(".."), "download");
         assert_eq!(sanitize("..\\..\\x"), "_.._x");
+    }
+
+    fn disposition(value: &str) -> Option<String> {
+        from_content_disposition(value.as_bytes())
+    }
+
+    #[test]
+    fn content_disposition_names() {
+        assert_eq!(
+            disposition("attachment; filename=\"report 2026.pdf\""),
+            Some("report 2026.pdf".into())
+        );
+        assert_eq!(
+            disposition("attachment;filename=plain.txt;size=3"),
+            Some("plain.txt".into())
+        );
+        assert_eq!(
+            disposition(r#"inline; filename="a \"quoted\" name.txt""#),
+            Some("a _quoted_ name.txt".into())
+        );
+        assert_eq!(
+            disposition("attachment; FILENAME=\"Upper.TXT\""),
+            Some("Upper.TXT".into())
+        );
+        assert_eq!(disposition("attachment"), None);
+        assert_eq!(disposition("attachment; filename=\"\""), None);
+        assert_eq!(disposition("attachment; size=3"), None);
+    }
+
+    #[test]
+    fn content_disposition_prefers_the_encoded_name() {
+        let both = "attachment; filename=\"cafe.txt\"; filename*=UTF-8''caf%C3%A9%20menu.txt";
+        assert_eq!(disposition(both), Some("café menu.txt".into()));
+        let first = "attachment; filename*=utf-8'en'%E2%82%AC.txt; filename=\"EUR.txt\"";
+        assert_eq!(disposition(first), Some("€.txt".into()));
+        let latin1 = "attachment; filename*=ISO-8859-1''caf%E9.txt";
+        assert_eq!(disposition(latin1), Some("café.txt".into()));
+        // An unknown charset or broken UTF-8 falls back to `filename`.
+        let unknown = "attachment; filename*=KOI8-R''%C1.txt; filename=\"x.txt\"";
+        assert_eq!(disposition(unknown), Some("x.txt".into()));
+        let broken = "attachment; filename*=UTF-8''%FF.txt; filename=\"y.txt\"";
+        assert_eq!(disposition(broken), Some("y.txt".into()));
+    }
+
+    #[test]
+    fn content_disposition_raw_bytes() {
+        let utf8 = "attachment; filename=\"résumé.pdf\"";
+        assert_eq!(disposition(utf8), Some("résumé.pdf".into()));
+        let latin1 = b"attachment; filename=\"r\xe9sum\xe9.pdf\"";
+        assert_eq!(from_content_disposition(latin1), Some("résumé.pdf".into()));
+    }
+
+    #[test]
+    fn content_disposition_cannot_escape_the_folder() {
+        let evil = "attachment; filename=\"../../etc/passwd\"";
+        assert_eq!(disposition(evil), Some("_.._etc_passwd".into()));
+        let encoded = "attachment; filename*=UTF-8''..%2F..%5Cboot.ini";
+        assert_eq!(disposition(encoded), Some("_.._boot.ini".into()));
+    }
+
+    #[test]
+    fn extensions() {
+        assert_eq!(extension("Film.MKV"), Some("mkv".into()));
+        assert_eq!(extension("archive.tar.gz"), Some("gz".into()));
+        assert_eq!(extension(".hidden"), None);
+        assert_eq!(extension("README"), None);
+        assert_eq!(extension("dot."), None);
     }
 
     #[test]

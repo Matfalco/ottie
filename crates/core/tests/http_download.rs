@@ -5,7 +5,7 @@ mod support;
 use std::time::Duration;
 
 use ottie_core::{
-    Download, Error, Event, HttpConfig, Outcome, PART_SUFFIX, RestartReason, Throttle,
+    Download, Error, Event, HttpConfig, Outcome, PART_SUFFIX, Placement, RestartReason, Throttle,
     build_client, run,
 };
 use reqwest::Client;
@@ -305,4 +305,61 @@ fn only_http_urls_are_accepted() {
         Download::new(url, "."),
         Err(Error::UnsupportedScheme(s)) if s == "file"
     ));
+}
+
+#[tokio::test]
+async fn content_disposition_names_the_file_across_a_pause() {
+    let s = setup().await;
+    let header = "attachment; filename=\"plain.pdf\"; filename*=UTF-8''caf%C3%A9%20menu.pdf";
+    s.server
+        .configure(|b| b.content_disposition = Some(header.as_bytes().to_vec()));
+    let mut dl = s.download("/files/get");
+    pause_midway(&s, &mut dl).await;
+    assert_eq!(dl.file_name.as_deref(), Some("café menu.pdf"));
+
+    let (result, _) = run_collect(&s.client, &mut dl, None).await;
+    let outcome = result.unwrap();
+    assert_eq!(
+        outcome,
+        Outcome::Completed {
+            path: s.dir.path().join("café menu.pdf")
+        }
+    );
+    assert_completed_with(outcome, &s.data);
+}
+
+#[tokio::test]
+async fn a_placement_picks_the_folder_by_the_real_name() {
+    let s = setup().await;
+    let header = b"attachment; filename=\"report.PDF\"".to_vec();
+    s.server.configure(|b| b.content_disposition = Some(header));
+    let docs = s.dir.path().join("docs");
+    let mut dl = s.download("/files/download.php");
+    dl.placement = Some(Placement {
+        by_extension: [("pdf".to_owned(), docs.clone())].into(),
+        otherwise: s.dir.path().join("other"),
+    });
+
+    let (result, events) = run_collect(&s.client, &mut dl, None).await;
+    assert_completed_with(result.unwrap(), &s.data);
+    assert!(docs.join("report.PDF").is_file());
+    let started_in = events.iter().find_map(|e| match e {
+        Event::Started { dest_dir, .. } => Some(dest_dir.clone()),
+        _ => None,
+    });
+    assert_eq!(started_in, Some(docs));
+    assert_eq!(dl.placement, None, "used once");
+}
+
+#[tokio::test]
+async fn a_name_without_extension_stays_put() {
+    let s = setup().await;
+    let mut dl = s.download("/files/README");
+    dl.placement = Some(Placement {
+        by_extension: Default::default(),
+        otherwise: s.dir.path().join("other"),
+    });
+    let (result, _) = run_collect(&s.client, &mut dl, None).await;
+    assert_completed_with(result.unwrap(), &s.data);
+    assert!(s.dir.path().join("README").is_file());
 }

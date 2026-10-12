@@ -429,6 +429,7 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         validator,
         resumable: row.get(10)?,
         segments: Vec::new(), // filled in by `load`
+        placement: None,
     };
     Ok(Ok(JobRecord {
         id,

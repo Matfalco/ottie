@@ -256,3 +256,63 @@ async fn a_category_cap_limits_its_running_jobs() {
     assert_eq!(most_films_at_once, 1);
     assert!(other_ran_beside_a_film, "the global cap of 3 had room");
 }
+
+/// Serves `name` through a URL that doesn't show it, as download pages do.
+fn named_by_server(s: &Setup, name: &str) -> Url {
+    let header = format!("attachment; filename=\"{name}\"");
+    s.server
+        .configure(|b| b.content_disposition = Some(header.into_bytes()));
+    s.url("get.php")
+}
+
+#[tokio::test]
+async fn the_real_name_rematches_an_auto_picked_category() {
+    let mut s = setup(0).await;
+    let videos = s.videos(0).await;
+    let general = CategorySettings {
+        folder: Some(s.folder("general")),
+        ..CategorySettings::named("General")
+    };
+    s.manager
+        .update_category(CategoryId::GENERAL, general)
+        .await
+        .unwrap();
+    let url = named_by_server(&s, "film.mkv");
+    let id = s.manager.add(NewJob::new(url)).await.unwrap();
+    assert_eq!(s.job(id).await.category, CategoryId::GENERAL, "from .php");
+    s.wait_for_all(&[id], JobState::Completed).await;
+
+    let job = s.job(id).await;
+    assert_eq!(job.category, videos);
+    assert_eq!(job.dest_dir, s.folder("videos"));
+    assert!(s.folder("videos").join("film.mkv").is_file());
+}
+
+#[tokio::test]
+async fn a_chosen_folder_stays_when_the_category_is_rematched() {
+    let mut s = setup(0).await;
+    let videos = s.videos(0).await;
+    let url = named_by_server(&s, "film.mkv");
+    let job = NewJob::new(url).in_dir(s.folder("mine"));
+    let id = s.manager.add(job).await.unwrap();
+    s.wait_for_all(&[id], JobState::Completed).await;
+
+    let job = s.job(id).await;
+    assert_eq!(job.category, videos, "limits follow the real file type");
+    assert!(s.folder("mine").join("film.mkv").is_file());
+}
+
+#[tokio::test]
+async fn a_chosen_category_is_not_rematched() {
+    let mut s = setup(0).await;
+    s.videos(0).await;
+    let url = named_by_server(&s, "film.mkv");
+    let job = NewJob::new(url)
+        .in_category(CategoryId::GENERAL)
+        .in_dir(s.folder("mine"));
+    let id = s.manager.add(job).await.unwrap();
+    s.wait_for_all(&[id], JobState::Completed).await;
+
+    assert_eq!(s.job(id).await.category, CategoryId::GENERAL);
+    assert!(s.folder("mine").join("film.mkv").is_file());
+}
