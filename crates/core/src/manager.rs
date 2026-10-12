@@ -889,8 +889,12 @@ impl<B: Backend> Actor<B> {
             return;
         }
         let result = self.transition(id, target, None);
-        if result.is_ok() && stop == Stop::Cancel {
-            self.delete_part(id).await;
+        if result.is_ok() {
+            if stop == Stop::Cancel {
+                self.delete_part(id).await;
+            }
+            // A retrying job held a slot, which is now free.
+            self.schedule();
         }
         let _ = reply.send(result);
     }

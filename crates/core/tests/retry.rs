@@ -91,6 +91,21 @@ impl Setup {
         log
     }
 
+    async fn wait_until(&mut self, id: JobId, state: JobState) {
+        tokio::time::timeout(TIMEOUT, async {
+            loop {
+                if let JobEvent::Changed(job) = self.events.recv().await.unwrap()
+                    && job.id == id
+                    && job.state == state
+                {
+                    return;
+                }
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("{id} never became {state:?}"));
+    }
+
     fn assert_file(&self, name: &str) {
         let data = std::fs::read(self.dir.path().join(name)).unwrap();
         assert!(data == test_data(SIZE, 5), "content differs");
@@ -293,17 +308,7 @@ async fn pausing_a_retrying_job_stops_its_retries() {
     let server = server().await;
     server.configure(|b| b.fail_next = Some((StatusCode::SERVICE_UNAVAILABLE, ALWAYS)));
     let id = s.add(&server, "a.bin").await;
-    tokio::time::timeout(TIMEOUT, async {
-        loop {
-            if let JobEvent::Changed(job) = s.events.recv().await.unwrap()
-                && job.state == JobState::Retrying
-            {
-                return;
-            }
-        }
-    })
-    .await
-    .expect("never retrying");
+    s.wait_until(id, JobState::Retrying).await;
 
     s.manager.pause(id).await.unwrap();
     let requests = server.requests().len();
@@ -316,4 +321,30 @@ async fn pausing_a_retrying_job_stops_its_retries() {
         requests,
         "no retry after the pause"
     );
+}
+
+#[tokio::test]
+async fn pausing_or_cancelling_a_retrying_job_frees_its_slot() {
+    for cancel in [false, true] {
+        // A long wait and no giving way: only the pause or cancel frees the slot.
+        let slow = RetryPolicy {
+            first_wait: Duration::from_secs(30),
+            ..policy(10, 10)
+        };
+        let mut s = setup(slow, 1).await;
+        let bad = server().await;
+        bad.configure(|b| b.fail_next = Some((StatusCode::SERVICE_UNAVAILABLE, ALWAYS)));
+        let good = server().await;
+        let failing = s.add(&bad, "bad.bin").await; // gets the only slot
+        let waiting = s.add(&good, "good.bin").await;
+        s.wait_until(failing, JobState::Retrying).await;
+
+        if cancel {
+            s.manager.cancel(failing).await.unwrap();
+        } else {
+            s.manager.pause(failing).await.unwrap();
+        }
+        s.wait_until(waiting, JobState::Completed).await;
+        s.assert_file("good.bin");
+    }
 }
