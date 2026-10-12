@@ -1,0 +1,14 @@
+[package]
+name = "ottie"
+version = "0.0.1"
+description = "Ottie, a cross-platform download manager: pause/resume, multi-connection downloads, speed limits (early development)"
+readme = "../../README.md"
+keywords = ["download-manager", "downloader", "http", "resume", "cli"]
+categories = ["command-line-utilities", "network-programming"]
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = true
+
+[lints]
+workspace = true

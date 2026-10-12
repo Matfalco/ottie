@@ -1,6 +1,6 @@
 # 0001: Cargo package names use a `dm-` prefix
 
-Accepted 2026-10-12.
+Accepted 2026-10-12. **Superseded by [0003](0003-project-name-ottie.md)** the same day, when the project was named Ottie.
 
 **Decision:** Cargo packages are named `dm-core`, `dm-api` and `dm-daemon`. Their folders stay `crates/core`, `crates/api` and `crates/daemon`.
 

@@ -4,7 +4,7 @@ mod support;
 
 use std::time::Duration;
 
-use dm_core::{Download, Error, Event, Outcome, RestartReason, build_client, run};
+use ottie_core::{Download, Error, Event, Outcome, RestartReason, build_client, run};
 use reqwest::Client;
 use support::{TestServer, test_data};
 use tempfile::TempDir;

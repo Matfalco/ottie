@@ -208,21 +208,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dm-core"
-version = "0.1.0"
-dependencies = [
- "axum",
- "futures-util",
- "percent-encoding",
- "reqwest",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -754,6 +739,25 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
+
+[[package]]
+name = "ottie"
+version = "0.0.1"
+
+[[package]]
+name = "ottie-core"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "futures-util",
+ "percent-encoding",
+ "reqwest",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
 
 [[package]]
 name = "percent-encoding"

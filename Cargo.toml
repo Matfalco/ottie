@@ -1,9 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/core"]
+members = ["crates/core", "crates/ottie"]
 
 [workspace.package]
 edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/Matfalco/ottie"
 publish = false
 
 [workspace.lints.clippy]

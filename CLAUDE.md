@@ -1,6 +1,20 @@
 # CLAUDE.md
 
-Cross-platform download manager meant to replace uGet (unmaintained). Working name: TBD.
+**Ottie**: a cross-platform download manager meant to replace uGet (unmaintained). Licensed MPL-2.0. Repo: `github.com/Matfalco/ottie`.
+
+## Naming
+
+| Thing | Name |
+|---|---|
+| Product | Ottie. Store and extension listings: "Ottie – Download Manager" |
+| Mascot / tagline | An otter. Sea otters stash food and a favourite stone in a skin pouch, so Ottie "tucks your files away" |
+| Command / binary | `ottie` (one binary; `ottie serve` runs the daemon) |
+| Cargo packages | `ottie` (the binary), `ottie-core`, `ottie-api`, `ottie-app` (Tauri) |
+| App identifier (Tauri, = Android package) | `io.github.matfalco.ottie`. **Never change it after the first Android build**: a new identifier is a different app with no upgrade path |
+| Tauri | `productName` "Ottie", window title "Ottie" |
+| Config/data folders | `ottie` on Linux (`~/.config/ottie`, `~/.local/share/ottie`), `Ottie` on Windows/macOS |
+| Environment variables | `OTTIE_` prefix |
+| systemd unit / Docker image | `ottie.service` (`ExecStart=ottie serve`) / `ottie` |
 
 ## What we're building
 
@@ -33,24 +47,26 @@ Android app (Tauri) ──────┘    (on Android, core + api run inside 
 ```
 
 - **The HTTP API is the only contract.** Every client talks to the engine through it. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart), never for download operations.
-- **Desktop:** the daemon is its own process, started by the app as a Tauri sidecar if none is answering, or installed as a service. The desktop app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
+- **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
+- **Desktop:** the daemon is its own process (`ottie serve`), started by the app as a Tauri sidecar if none is answering, or installed as a service. The desktop app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
 - **Headless:** the daemon runs standalone (systemd user service, Docker) and serves the built web UI itself.
 
 ## Repo layout
 
-Cargo packages are prefixed `dm-` (`dm-core`, `dm-api`, `dm-daemon`): a package named `core` clashes with Rust's built-in crate. See `docs/decisions/0001`.
+Library packages are prefixed `ottie-` (a package named `core` would clash with Rust's built-in crate). See `docs/decisions/0003`.
 
 ```
-crates/core/       dm-core: engine library. No HTTP server, no UI.          [exists]
+crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exists]
   src/http.rs        HTTP transfer: request, resume, stream to .part
   src/download.rs    Download state (what gets persisted), Event, Outcome
   src/filename.rs    sanitizing, collision-free names, .part → final rename
   tests/support/     in-process axum test server with fault injection
   examples/fetch.rs  manual CLI try-out
-crates/api/        axum router: REST + WebSocket events, auth, static UI serving
-crates/daemon/     thin binary: config, logging, wiring core + api
-app/               Tauri 2 shell (desktop + Android), depends on core + api
+crates/api/        ottie-api: axum router: REST + WebSocket events, auth, static UI serving
+crates/ottie/      ottie: the binary. `ottie serve` = config, logging, wiring core + api;  [exists, 0.0.1 stub]
+                   other subcommands = API clients
+app/               ottie-app: Tauri 2 shell (desktop + Android), depends on core + api
 ui/                Svelte frontend shared by all front ends
 extension/         WebExtension (Chrome + Firefox)
 shared/api-types/  TypeScript types generated from Rust (ts-rs). Never edit by hand.
@@ -64,10 +80,11 @@ cargo build --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
-cargo run -p dm-core --example fetch -- <url> [folder]   # Ctrl+C pauses, Enter resumes
+cargo run -p ottie-core --example fetch -- <url> [folder]   # Ctrl+C pauses, Enter resumes
+cargo publish -p ottie --dry-run     # check a crates.io release (Mathieu does the real publish)
 
 # planned, not scaffolded yet:
-cargo run -p dm-daemon               # daemon on 127.0.0.1
+cargo run -p ottie -- serve          # daemon on 127.0.0.1
 pnpm install
 pnpm --filter ui dev                 # UI against a running daemon
 pnpm --filter ui check               # svelte-check + tsc
@@ -114,7 +131,8 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 ## Code conventions
 
 - Rust: `thiserror` in library crates, `anyhow` only in binaries. `tracing` for logs. No `unwrap()`/`expect()` outside tests unless the invariant is explained in a comment. Clippy enforces this (`[workspace.lints]` + `clippy.toml`). Integration test files start with `#![allow(clippy::unwrap_used, clippy::expect_used)]`.
-- New crates inherit `edition`/`publish` from `[workspace.package]` and set `[lints] workspace = true`.
+- New crates inherit `edition`, `license`, `repository` and `publish` (false) from `[workspace.package]`, and set `[lints] workspace = true`. Only `ottie` sets `publish = true`. Once it depends on `ottie-core`/`ottie-api`, those must be published too, and the dependencies need `path` + `version`.
+- License header: published crates' entry files carry the MPL "Exhibit A" notice, because the root `LICENSE` file isn't packaged.
 - TypeScript: `strict`, no `any`. API types come only from `shared/api-types/`.
 - Tests: engine behaviour is tested against the in-process server in `crates/core/tests/support/` (dropped connections, no range support, slow chunks, changed ETag). Tests never hit the real internet. A resumed download must be byte-identical to a clean one. Don't assert exact byte counts after an injected connection drop; assert `.part` length == `downloaded` instead.
 - Line endings: LF everywhere (`.gitattributes`).
@@ -133,7 +151,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 1. ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~ Done.
 2. Segments, throttling, SQLite persistence, categories, queue. Also: job manager + state machine, `Backend` trait, `Content-Disposition` filenames, retry with backoff.
-3. `api` + `daemon`, then `ui` as a web UI.
+3. `api` + `ottie serve`, then `ui` as a web UI.
 4. Browser extension.
 5. Tauri desktop: tray, notifications, sidecar daemon.
 6. Tauri Android: embedded core, background downloads, share-sheet intake.
@@ -141,7 +159,6 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 ## Open decisions
 
-- Project name and license (then rename the `dm-` prefix if wanted).
 - Extension pairing: copy-paste token vs a native messaging host (zero-config, can also launch the daemon).
 - Whether to import uGet's existing queue and categories.
 - aria2 / yt-dlp backends: if and when.

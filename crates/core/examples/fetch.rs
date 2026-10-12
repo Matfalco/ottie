@@ -1,11 +1,11 @@
-//! Try the engine by hand: `cargo run -p dm-core --example fetch -- <url> [folder]`
+//! Try the engine by hand: `cargo run -p ottie-core --example fetch -- <url> [folder]`
 //! Ctrl+C pauses, Enter resumes.
 
 use std::error::Error;
 use std::io::Write;
 use std::time::{Duration, Instant};
 
-use dm_core::{Download, Event, Outcome, build_client, run};
+use ottie_core::{Download, Event, Outcome, build_client, run};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio_util::sync::CancellationToken;
 
