@@ -95,3 +95,17 @@ async fn serve_answers_requests_that_carry_the_token() {
     assert_eq!(jobs.text().await.unwrap(), "[]");
     assert!(dir.path().join("data").join("ottie.db").is_file());
 }
+
+#[test]
+fn open_explains_when_ottie_is_not_running() {
+    let dir = tempfile::tempdir().unwrap();
+    let port = free_port().to_string();
+    let output = ottie(dir.path())
+        .args(["open", "--port", &port])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let message = String::from_utf8(output.stderr).unwrap();
+    assert!(message.contains("isn't running"), "{message}");
+    assert!(message.contains("ottie serve"), "{message}");
+}

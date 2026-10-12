@@ -19,6 +19,7 @@ axum = "0.8.9"
 clap = { version = "4.6.7", features = ["derive", "env"] }
 directories = "6.0.0"
 getrandom = "0.4.3"
+open = "5.4.4"
 ottie-api = { path = "../api", version = "0.1.0" }
 ottie-core = { path = "../core", version = "0.1.0" }
 serde = { version = "1.0.229", features = ["derive"] }

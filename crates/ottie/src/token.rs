@@ -31,7 +31,7 @@ pub fn load_or_create(config_dir: &Path) -> Result<String> {
     fs::create_dir_all(config_dir)
         .with_context(|| format!("can't create {}", config_dir.display()))?;
     let token = generate()?;
-    match write_private(&path, &token) {
+    match write_private(&path, &format!("{token}\n"), false) {
         Ok(()) => Ok(token),
         // Another `ottie` created it at the same moment: use that one.
         Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
@@ -67,19 +67,23 @@ fn generate() -> Result<String> {
     Ok(hex)
 }
 
-/// Only the owner can read it on Unix. On Windows the config folder
-/// (%APPDATA%) is already private to the user.
-fn write_private(path: &Path, token: &str) -> io::Result<()> {
+/// A file only the owner can read on Unix. (On Windows the config folder,
+/// %APPDATA%, is already private to the user.) `replace` overwrites an
+/// existing file; otherwise one that exists is an `AlreadyExists` error.
+pub fn write_private(path: &Path, contents: &str, replace: bool) -> io::Result<()> {
     let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
+    options.write(true);
+    if replace {
+        options.create(true).truncate(true);
+    } else {
+        options.create_new(true);
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    let mut file = options.open(path)?;
-    file.write_all(token.as_bytes())?;
-    file.write_all(b"\n")
+    options.open(path)?.write_all(contents.as_bytes())
 }
 
 #[cfg(test)]

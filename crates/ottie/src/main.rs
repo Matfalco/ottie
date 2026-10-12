@@ -6,6 +6,7 @@
 //! are small helpers or, later, clients of its HTTP API (docs/decisions/0004).
 
 mod config;
+mod open;
 mod serve;
 mod token;
 
@@ -13,7 +14,7 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 
-use crate::config::DirArgs;
+use crate::config::{DaemonArgs, DirArgs};
 use crate::serve::ServeArgs;
 
 #[derive(Parser)]
@@ -33,6 +34,8 @@ struct Cli {
 enum Command {
     /// Run the daemon: the download engine and its HTTP API (127.0.0.1:16889).
     Serve(ServeArgs),
+    /// Open the web UI in your browser, signed in (`ottie serve` must be running).
+    Open(DaemonArgs),
     /// Print the API token, for the web UI's login page or the browser extension.
     Token(DirArgs),
 }
@@ -41,6 +44,7 @@ enum Command {
 async fn main() -> ExitCode {
     let result = match Cli::parse().command {
         Command::Serve(args) => serve::run(args).await,
+        Command::Open(args) => open::run(&args).await,
         Command::Token(dirs) => token::print(&dirs),
     };
     match result {
@@ -80,8 +84,8 @@ mod tests {
         let Command::Serve(args) = cli.command else {
             panic!("not serve");
         };
-        assert_eq!(args.port, Some(9000));
-        assert_eq!(args.address, Some([0, 0, 0, 0].into()));
-        assert_eq!(args.dirs.data_dir.as_deref(), Some("/d".as_ref()));
+        assert_eq!(args.daemon.port, Some(9000));
+        assert_eq!(args.daemon.address, Some([0, 0, 0, 0].into()));
+        assert_eq!(args.daemon.dirs.data_dir.as_deref(), Some("/d".as_ref()));
     }
 }

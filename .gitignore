@@ -6,3 +6,8 @@
 .cargo/credentials.toml
 .env
 .env.*
+
+# JavaScript
+node_modules/
+# The built web UI, compiled into ottie-api (pnpm --filter ui build)
+/crates/api/ui-dist/

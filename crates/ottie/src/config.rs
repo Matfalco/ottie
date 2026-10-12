@@ -2,7 +2,7 @@
 //! docs/decisions/0014.
 
 use std::io;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -23,6 +23,19 @@ pub struct DirArgs {
     /// Folder for the database [default: %LOCALAPPDATA%\Ottie, ~/.local/share/ottie]
     #[arg(long, env = "OTTIE_DATA_DIR", value_name = "FOLDER")]
     pub data_dir: Option<PathBuf>,
+}
+
+/// Where the daemon is (or will be) listening: for `serve` and `open`.
+#[derive(Args, Debug, Clone, Default)]
+pub struct DaemonArgs {
+    #[command(flatten)]
+    pub dirs: DirArgs,
+    /// Address to listen on; 0.0.0.0 opens the API to other computers [default: 127.0.0.1]
+    #[arg(long, env = "OTTIE_ADDRESS")]
+    pub address: Option<IpAddr>,
+    /// Port to listen on [default: 16889]
+    #[arg(long, env = "OTTIE_PORT")]
+    pub port: Option<u16>,
 }
 
 pub struct Dirs {
@@ -82,6 +95,23 @@ pub fn listen_addr(address: Option<IpAddr>, port: Option<u16>, file: &FileConfig
     SocketAddr::new(ip, port.or(file.port).unwrap_or(DEFAULT_PORT))
 }
 
+/// How to reach a daemon listening on `addr` from this computer: "all
+/// addresses" (0.0.0.0, ::) includes the loopback one.
+pub fn local(addr: SocketAddr) -> SocketAddr {
+    let ip = match addr.ip() {
+        IpAddr::V4(ip) if ip.is_unspecified() => IpAddr::V4(Ipv4Addr::LOCALHOST),
+        IpAddr::V6(ip) if ip.is_unspecified() => IpAddr::V6(Ipv6Addr::LOCALHOST),
+        ip => ip,
+    };
+    SocketAddr::new(ip, addr.port())
+}
+
+/// The web UI, signed in. The token is after `#`, which browsers never send
+/// to the server, and the UI removes it from the address bar.
+pub fn ui_url(addr: SocketAddr, token: &str) -> String {
+    format!("http://{}/#token={token}", local(addr))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,6 +128,16 @@ mod tests {
         assert_eq!(listen_addr(None, None, &file).to_string(), "0.0.0.0:9000");
         let flags = listen_addr(Some(Ipv4Addr::LOCALHOST.into()), Some(7000), &file);
         assert_eq!(flags.to_string(), "127.0.0.1:7000");
+    }
+
+    #[test]
+    fn the_ui_link_points_at_this_computer() {
+        let any = "0.0.0.0:16889".parse().unwrap();
+        assert_eq!(ui_url(any, "abc"), "http://127.0.0.1:16889/#token=abc");
+        let v6 = "[::]:9".parse().unwrap();
+        assert_eq!(ui_url(v6, "abc"), "http://[::1]:9/#token=abc");
+        let lan = "192.168.1.5:9".parse().unwrap();
+        assert_eq!(local(lan), lan);
     }
 
     #[test]

@@ -11,6 +11,7 @@ use axum::routing::get;
 use futures_util::StreamExt;
 use ottie_api::{
     AddJob, Added, ApiError, EVENTS_PROTOCOL, Event, Job, JobState, TOKEN_PROTOCOL_PREFIX, Token,
+    UiSource,
 };
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
@@ -36,6 +37,10 @@ struct Daemon {
 
 /// `/file.bin` arrives at once; `/slow.bin` takes about 4 s.
 async fn start() -> Daemon {
+    start_with(UiSource::Embedded).await
+}
+
+async fn start_with(ui: UiSource) -> Daemon {
     let files = Router::new()
         .route("/file.bin", get(|| async { vec![7u8; SIZE] }))
         .route("/slow.bin", get(|| async { slow_body() }));
@@ -46,7 +51,7 @@ async fn start() -> Daemon {
         .await
         .unwrap();
     let shutdown = CancellationToken::new();
-    let api = ottie_api::router(manager, Token::new(TOKEN), shutdown.clone());
+    let api = ottie_api::router(manager, Token::new(TOKEN), shutdown.clone(), ui);
     Daemon {
         addr: serve(api).await,
         files: format!("http://{files}"),
@@ -306,4 +311,73 @@ async fn bad_requests_say_what_is_wrong() {
         error_of(d.post(&format!("/jobs/{id}/resume")).send().await.unwrap()).await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert!(message.contains("Completed"), "{message}");
+}
+
+#[tokio::test]
+async fn the_ui_is_served_without_the_token() {
+    let ui = tempfile::tempdir().unwrap();
+    std::fs::write(ui.path().join("index.html"), "<!doctype html>app").unwrap();
+    std::fs::create_dir_all(ui.path().join("_app/immutable")).unwrap();
+    std::fs::write(ui.path().join("_app/immutable/start.abc.js"), "code").unwrap();
+    std::fs::write(ui.path().parent().unwrap().join("secret.txt"), "no").unwrap();
+    let d = start_with(UiSource::Folder(ui.path().to_owned())).await;
+    let get = |path: &str| d.client.get(format!("http://{}{path}", d.addr)).send();
+
+    let index = get("/").await.unwrap();
+    assert_eq!(index.headers()["cache-control"], "no-cache");
+    assert!(
+        index.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/html")
+    );
+    assert_eq!(index.text().await.unwrap(), "<!doctype html>app");
+
+    let script = get("/_app/immutable/start.abc.js").await.unwrap();
+    assert!(
+        script.headers()["cache-control"]
+            .to_str()
+            .unwrap()
+            .contains("immutable")
+    );
+    assert!(
+        script.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .contains("javascript")
+    );
+
+    // A page of the app gets index.html; a missing file doesn't.
+    assert_eq!(
+        get("/settings").await.unwrap().text().await.unwrap(),
+        "<!doctype html>app"
+    );
+    assert_eq!(
+        get("/missing.js").await.unwrap().status(),
+        StatusCode::NOT_FOUND
+    );
+    // Nothing outside the folder, and the API stays the API.
+    let escape = get("/..%2Fsecret.txt").await.unwrap();
+    assert_ne!(escape.text().await.unwrap(), "no");
+    let (status, _) = error_of(get("/api/v2/jobs").await.unwrap()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn without_a_ui_build_the_page_says_how_to_make_one() {
+    let empty = tempfile::tempdir().unwrap();
+    let d = start_with(UiSource::Folder(empty.path().to_owned())).await;
+    let page = d
+        .client
+        .get(format!("http://{}/", d.addr))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(page.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert!(
+        page.text()
+            .await
+            .unwrap()
+            .contains("pnpm --filter ui build")
+    );
 }

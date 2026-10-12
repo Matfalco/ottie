@@ -79,14 +79,25 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
   src/jobs.rs        GET/POST /jobs, POST /jobs/{id}/pause|resume|cancel
   src/events.rs      GET /events WebSocket: changed / progress / resync
   src/error.rs       engine Error → status + {"error": "…"}
+  src/ui.rs          the web UI: rust-embed of ui-dist/ (from disk in debug), --ui-dir, SPA fallback
+  ui-dist/           built UI (git-ignored, but packaged for crates.io)
   tests/api.rs       end to end: real server + small file server, reqwest + tungstenite
 crates/ottie/      ottie: the binary  [exists]
-  src/serve.rs       `ottie serve`: logging, folders, token, database, axum::serve, graceful stop
+  src/serve.rs       `ottie serve`: logging, folders, token, database, General → Downloads folder,
+                     axum::serve, graceful stop
+  src/open.rs        `ottie open`: browser on the UI, signed in (via a private redirect page)
   src/config.rs      folders (OS defaults / flags / OTTIE_* env), config.toml, listen address
   src/token.rs       token file: created on first use, `ottie token` prints it
   tests/cli.rs       runs the real binary
 app/               ottie-app: Tauri 2 shell (desktop + Android), depends on core + api
-ui/                Svelte frontend shared by all front ends
+ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [exists]
+  src/routes/        +layout.svelte (app.css, favicon), +layout.ts (ssr = false), +page.svelte (token → Login | Downloads)
+  src/lib/api.ts     fetch + WebSocket client for /api/v1 (Unauthorized, ApiFailure)
+  src/lib/session.svelte.ts  live job list: events WebSocket, reconnect, buffered resync
+  src/lib/jobs.ts, status.ts, format.ts, token.ts   plain logic, unit-tested (*.test.ts, Vitest)
+  src/lib/components/  Downloads, AddBar, JobRow, Login
+  src/app.css        colour variables (light/dark) from the Ottie icon
+  vite.config.ts     SvelteKit + adapter-static → ../crates/api/ui-dist; dev proxy /api → daemon
 extension/         WebExtension (Chrome + Firefox)
 shared/api-types/  TypeScript types generated from Rust (ts-rs, by `cargo test -p ottie-api`;
                    output folder set in .cargo/config.toml). Never edit by hand.  [exists]
@@ -105,19 +116,24 @@ cargo publish --workspace --dry-run  # check a crates.io release of core → api
 cargo run -p ottie -- serve          # daemon on 127.0.0.1:16889 (OTTIE_LOG=debug for more logs)
 cargo run -p ottie -- token          # print the API token
 cargo test -p ottie-api              # also regenerates shared/api-types/*.ts: commit them
+cargo run -p ottie -- open           # the web UI in a browser, signed in
+
+pnpm install                         # JS dependencies (workspace: ui, shared/api-types)
+pnpm --filter ui dev                 # UI with live reload on :5173, /api forwarded to the daemon
+pnpm --filter ui build               # → crates/api/ui-dist (then rebuild ottie to embed it)
+pnpm --filter ui check               # svelte-check + tsc (fails on warnings)
+pnpm --filter ui test                # Vitest unit tests
+pnpm --filter ui lint                # Prettier check (`format` fixes)
 
 # planned, not scaffolded yet:
-pnpm install
-pnpm --filter ui dev                 # UI against a running daemon
-pnpm --filter ui check               # svelte-check + tsc
 pnpm --filter extension build
 cargo tauri dev                      # from app/: desktop
 cargo tauri android dev              # from app/: Android device/emulator
 ```
 
-Before calling a task done: fmt, clippy, tests for the crates you touched, `check` for the TS packages you touched. Update this section when a part comes to exist.
+Before calling a task done: fmt, clippy, tests for the crates you touched; for TS packages you touched, `check`, `test` and `lint`. A release builds the UI before the Rust binary. Update this section when a part comes to exist.
 
-Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 is installed; pnpm isn't yet.
+Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed.
 
 ## Engine rules (crates/core)
 
@@ -163,15 +179,16 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 - Rust: `thiserror` in library crates, `anyhow` only in binaries. `tracing` for logs. No `unwrap()`/`expect()` outside tests unless the invariant is explained in a comment. Clippy enforces this (`[workspace.lints]` + `clippy.toml`). Integration test files start with `#![allow(clippy::unwrap_used, clippy::expect_used)]`.
 - New crates inherit `edition`, `license`, `repository` and `publish` (false) from `[workspace.package]`, and set `[lints] workspace = true`. `ottie`, `ottie-core` and `ottie-api` set `publish = true` (the binary depends on the other two, so they're published first); their dependencies on each other need `path` + `version`. The Tauri app stays unpublished.
 - License header: published crates' entry files carry the MPL "Exhibit A" notice, because the root `LICENSE` file isn't packaged.
-- TypeScript: `strict`, no `any`. API types come only from `shared/api-types/`.
+- TypeScript: `strict`, no `any`. API types come only from `shared/api-types/` (`import type { Job } from '@ottie/api-types/Job'`). In the UI, `#lib/…` imports of TS files end in `.js` (`#lib/format.js`). Logic lives in plain `.ts` files with unit tests; components stay thin. Prettier formats (tabs, single quotes).
+- UI (`docs/decisions/0015`): runes mode; styles in each component's `<style>` using the variables in `app.css`, never raw colours; the page talks to the daemon only through `api.ts`.
 - Tests: engine behaviour is tested against the in-process server in `crates/core/tests/support/` (dropped connections, no range support, slow chunks, changed ETag). Speed-limit tests (`tests/throttle.rs`) assert shares and minimum durations with wide margins, never exact speeds; progress snapshots lag up to ~0.5 s, so don't measure rates over short windows. Multi-connection tests (`tests/segmented.rs`) use `HttpConfig { connections: 4, min_split: 64 KiB }`; the other test files pin one connection or use files too small to split. Tests never hit the real internet. A resumed download must be byte-identical to a clean one. Don't assert exact byte counts after an injected connection drop; assert `.part.ottie` length == `downloaded` instead. Manager tests subscribe before adding jobs, and wait for several concurrent jobs with `wait_for_all` (any order), never one after another.
 - Line endings: LF everywhere (`.gitattributes`).
-- Commits: Conventional Commits (`feat(core): …`, `fix(extension): …`), small and focused.
+- Commits: Conventional Commits (`feat(core): …`, `fix(extension): …`), one per slice: the code, its tests and its docs (decision record, CLAUDE.md) together. Unrelated changes (e.g. a test fix found along the way) get their own.
 - New dependency: say what it's for and why it beats the alternatives before adding it.
 
 ## Working with Mathieu
 
-- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations, atomics, `JoinSet`, child cancellation tokens, `Mutex`, lifetimes (`Env<'a>`), `Drop`, newtypes + associated consts (`CategoryId::GENERAL`), builder methods (`NewJob::new(url).in_dir(..)`), struct update syntax (`..CategorySettings::named(..)`), iterator chains (`map`/`flat_map`/`collect`), `move` closures, `Option::take`, match guards (`pattern if condition =>`), derive macros with attributes (clap's `#[derive(Parser)]`, `#[arg(...)]`), axum extractors (handler arguments filled from the request), `#[cfg(...)]` conditional compilation. Still to come: Svelte runes, TypeScript basics, etc.
+- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations, atomics, `JoinSet`, child cancellation tokens, `Mutex`, lifetimes (`Env<'a>`), `Drop`, newtypes + associated consts (`CategoryId::GENERAL`), builder methods (`NewJob::new(url).in_dir(..)`), struct update syntax (`..CategorySettings::named(..)`), iterator chains (`map`/`flat_map`/`collect`), `move` closures, `Option::take`, match guards (`pattern if condition =>`), derive macros with attributes (clap's `#[derive(Parser)]`, `#[arg(...)]`), axum extractors (handler arguments filled from the request), `#[cfg(...)]` conditional compilation. Also explained: Svelte components and runes (`$state`, `$derived`, `$props`), TypeScript basics (types, interfaces, unions, `import type`), classes with private fields, promises/`async` in JS. Still to come: Svelte stores/context if needed, Tauri commands, etc.
 - For decisions that are hard to reverse (data model, API shape, crate choices, architecture), present 2–3 options with trade-offs and let him choose. For small implementation details, decide and say what you chose.
 - Work in small vertical slices that run end to end. Don't scaffold code ahead of need.
 - Show the diff and wait for a go-ahead before committing.
@@ -181,7 +198,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 1. ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~ Done.
 2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ → ~~2b SQLite persistence~~ → ~~2c multi-connection~~ (streaming mode comes with the stream endpoint) → ~~2d speed limits + priorities~~ → ~~2e categories~~ → ~~2f `Content-Disposition` filenames + category re-match~~ → ~~2g retry with backoff~~.
-3. Usable app, early: ~~3a minimal `ottie serve` (jobs API + events WebSocket, token, folders)~~ → 3b first web UI (Svelte, served by the daemon; list, add, pause/resume/cancel; token link + login page; `ottie open`) → 3c first desktop app (Tauri window on the same UI, starts the daemon as a sidecar, Ottie icons from `res/icons/`).
+3. Usable app, early: ~~3a minimal `ottie serve` (jobs API + events WebSocket, token, folders)~~ → ~~3b first web UI (SvelteKit SPA built into the binary; list, add, pause/resume/cancel; token link + login page; `ottie open`)~~ → 3c first desktop app (Tauri window on the same UI, starts the daemon as a sidecar, Ottie icons from `res/icons/`).
 4. Then features grow through API, UI and desktop app together, one slice each: categories, speed limits + priorities, settings (retry policy, max concurrent), the `/jobs/{id}/stream` endpoint (play while downloading), tray, notifications, autostart.
 5. Browser extension.
 6. Tauri Android: embedded core, background downloads, share-sheet intake.

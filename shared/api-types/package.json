@@ -1,0 +1,9 @@
+{
+	"name": "@ottie/api-types",
+	"private": true,
+	"type": "module",
+	"description": "TypeScript types of the Ottie HTTP API, generated from Rust by ts-rs (cargo test -p ottie-api). Never edit the .ts files by hand.",
+	"exports": {
+		"./*": "./*.ts"
+	}
+}

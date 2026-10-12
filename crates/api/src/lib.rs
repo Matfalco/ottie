@@ -15,9 +15,10 @@ mod error;
 mod events;
 mod jobs;
 mod types;
+mod ui;
 
 use axum::Router;
-use axum::http::StatusCode;
+use axum::http::{Method, StatusCode, Uri};
 use axum::middleware;
 use axum::routing::{get, post};
 use ottie_core::Manager;
@@ -25,6 +26,7 @@ use tokio_util::sync::CancellationToken;
 
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
 pub use types::{AddJob, Added, ApiError, Event, Job, JobState, Priority};
+pub use ui::UiSource;
 
 /// Shared by every request handler.
 #[derive(Clone)]
@@ -35,9 +37,9 @@ struct AppState {
     shutdown: CancellationToken,
 }
 
-/// The whole API, ready to serve. Cancel `shutdown` before stopping the
-/// server so event streams end.
-pub fn router(manager: Manager, token: Token, shutdown: CancellationToken) -> Router {
+/// The API under `/api/v1`, and the web UI everywhere else. Cancel
+/// `shutdown` before stopping the server so event streams end.
+pub fn router(manager: Manager, token: Token, shutdown: CancellationToken, ui: UiSource) -> Router {
     let state = AppState {
         manager,
         token,
@@ -56,7 +58,9 @@ pub fn router(manager: Manager, token: Token, shutdown: CancellationToken) -> Ro
             auth::require_token,
         ))
         .with_state(state);
-    Router::new().nest("/api/v1", api)
+    Router::new()
+        .nest("/api/v1", api)
+        .fallback(move |method: Method, uri: Uri| async move { ui::serve(&ui, method, &uri).await })
 }
 
 async fn not_found() -> error::Failure {
