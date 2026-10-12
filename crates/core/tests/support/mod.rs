@@ -11,7 +11,7 @@ use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::http::header::{
     ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, ETAG, IF_RANGE, LOCATION,
-    RANGE,
+    RANGE, RETRY_AFTER,
 };
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::Response;
@@ -36,6 +36,12 @@ pub struct Behavior {
     pub drop_after: Option<usize>,
     /// Sent as is, so tests can include raw non-ASCII bytes.
     pub content_disposition: Option<Vec<u8>>,
+    /// Answer the next `.1` requests with status `.0` instead (`usize::MAX`: always).
+    pub fail_next: Option<(StatusCode, usize)>,
+    /// `Retry-After` seconds sent with those failures.
+    pub retry_after: Option<u64>,
+    /// After this many body bytes, stop sending without closing, once.
+    pub stall_after: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +74,9 @@ impl TestServer {
                 slow_from: None,
                 drop_after: None,
                 content_disposition: None,
+                fail_next: None,
+                retry_after: None,
+                stall_after: None,
             },
             requests: Vec::new(),
         }));
@@ -98,7 +107,7 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
     let text = |name| headers.get(name).map(|v| v.to_str().unwrap().to_owned());
     let range = text(RANGE);
     let if_range = text(IF_RANGE);
-    let (body, etag, ranges, pacing, drop_after, disposition) = {
+    let (body, etag, ranges, pacing, drop_after, disposition, failure) = {
         let mut shared = state.lock().unwrap();
         shared.requests.push(RecordedRequest {
             range: range.clone(),
@@ -109,8 +118,16 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
         let pacing = Pacing {
             delay: b.chunk_delay,
             slow_from: b.slow_from,
+            stall_after: b.stall_after.take(),
         };
         let disposition = b.content_disposition.clone();
+        let failure = match &mut b.fail_next {
+            Some((status, left)) if *left > 0 => {
+                *left = left.saturating_sub(1);
+                Some((*status, b.retry_after))
+            }
+            _ => None,
+        };
         (
             b.body.clone(),
             b.etag.clone(),
@@ -118,8 +135,16 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
             pacing,
             drop_after,
             disposition,
+            failure,
         )
     };
+    if let Some((status, retry_after)) = failure {
+        let mut response = Response::builder().status(status);
+        if let Some(secs) = retry_after {
+            response = response.header(RETRY_AFTER, secs);
+        }
+        return response.body(Body::empty()).unwrap();
+    }
 
     let total = body.len();
     let validator_ok = if_range.is_none() || if_range == etag;
@@ -170,6 +195,7 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
 struct Pacing {
     delay: Option<Duration>,
     slow_from: Option<(usize, Duration)>,
+    stall_after: Option<usize>,
 }
 
 async fn redirect_to_ftp() -> Response {
@@ -199,6 +225,10 @@ fn chunked(
                 return Some((Err(err), (Bytes::new(), sent)));
             }
             len = len.min(limit - sent);
+        }
+        if pacing.stall_after.is_some_and(|limit| sent >= limit) {
+            // Keep the connection open but send nothing more.
+            std::future::pending::<()>().await;
         }
         let delay = match pacing.slow_from {
             Some((from, slow)) if offset + sent >= from => Some(slow),

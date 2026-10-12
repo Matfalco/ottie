@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 use reqwest::Url;
 
@@ -18,6 +19,9 @@ pub enum JobState {
     /// Stopped by an error; can be resumed.
     Failed,
     Cancelled,
+    /// Stopped by an error that may go away; waiting to try again. Holds its
+    /// download slot until it gives way to a waiting job (docs/decisions/0013).
+    Retrying,
 }
 
 impl JobState {
@@ -27,11 +31,12 @@ impl JobState {
         matches!(
             (self, next),
             (Queued, Connecting | Paused | Cancelled)
+                | (Connecting, Downloading)
                 | (
-                    Connecting,
-                    Downloading | Completed | Paused | Failed | Cancelled
+                    Connecting | Downloading,
+                    Completed | Paused | Failed | Cancelled | Retrying
                 )
-                | (Downloading, Completed | Paused | Failed | Cancelled)
+                | (Retrying, Connecting | Queued | Paused | Cancelled)
                 | (Paused | Failed, Queued | Cancelled)
         )
     }
@@ -103,6 +108,11 @@ pub struct JobSnapshot {
     /// This job's own limit in bytes per second; 0 = none.
     pub speed_limit: u64,
     pub category: CategoryId,
+    /// Failed attempts since bytes last arrived. With `Retrying`, the number
+    /// of the retry it's waiting for.
+    pub retries: u32,
+    /// When it will try again, while `Retrying`.
+    pub retry_at: Option<SystemTime>,
 }
 
 /// Broadcast to every subscriber of the manager.
@@ -130,7 +140,7 @@ mod tests {
     use super::JobState::*;
     use super::*;
 
-    const ALL: [JobState; 7] = [
+    const ALL: [JobState; 8] = [
         Queued,
         Connecting,
         Downloading,
@@ -138,6 +148,7 @@ mod tests {
         Completed,
         Failed,
         Cancelled,
+        Retrying,
     ];
 
     #[test]
@@ -153,6 +164,16 @@ mod tests {
         for state in ALL {
             assert!(!state.can_become(state), "{state:?}");
         }
+    }
+
+    #[test]
+    fn retrying_starts_again_or_gives_way() {
+        assert!(Downloading.can_become(Retrying));
+        assert!(Retrying.can_become(Connecting));
+        assert!(Retrying.can_become(Queued));
+        assert!(Retrying.can_become(Paused));
+        assert!(!Retrying.can_become(Downloading));
+        assert!(!Queued.can_become(Retrying));
     }
 
     #[test]

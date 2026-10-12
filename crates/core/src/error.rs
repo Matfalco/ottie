@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use reqwest::StatusCode;
 
@@ -16,8 +17,15 @@ pub enum Error {
     #[error("HTTP request failed: {0}")]
     Http(reqwest::Error),
 
-    #[error("server answered {0}")]
-    Status(StatusCode),
+    /// `retry_after` is the server's `Retry-After`, if it sent one in seconds.
+    #[error("server answered {status}")]
+    Status {
+        status: StatusCode,
+        retry_after: Option<Duration>,
+    },
+
+    #[error("no data from the server for {} s", .0.as_secs())]
+    Stalled(Duration),
 
     #[error("download stopped after {received} of {expected} bytes")]
     Incomplete { received: u64, expected: u64 },
@@ -80,6 +88,34 @@ pub enum Error {
 
     #[error("no folder given, and category `{0}` has none")]
     NoFolder(String),
+}
+
+impl Error {
+    /// Whether trying again later may work: network trouble, a dropped or
+    /// stalled connection, or a server that is busy or failing. Not: an
+    /// answer like 404, a bad redirect, or a problem with our own disk.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Error::Http(err) => !err.is_redirect() && !err.is_builder(),
+            Error::Status { status, .. } => {
+                status.is_server_error()
+                    || matches!(
+                        *status,
+                        StatusCode::REQUEST_TIMEOUT | StatusCode::TOO_MANY_REQUESTS
+                    )
+            }
+            Error::Incomplete { .. } | Error::Stalled(_) => true,
+            _ => false,
+        }
+    }
+
+    /// How long the server asked us to wait before trying again, if it did.
+    pub fn retry_after(&self) -> Option<Duration> {
+        match self {
+            Error::Status { retry_after, .. } => *retry_after,
+            _ => None,
+        }
+    }
 }
 
 impl From<reqwest::Error> for Error {

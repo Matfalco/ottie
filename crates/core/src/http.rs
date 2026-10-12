@@ -4,10 +4,11 @@
 
 use std::io;
 use std::path::Path;
+use std::time::Duration;
 
 use reqwest::header::{
     ACCEPT_ENCODING, ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_RANGE, ETAG, HeaderMap, IF_RANGE,
-    LAST_MODIFIED, RANGE,
+    LAST_MODIFIED, RANGE, RETRY_AFTER,
 };
 use reqwest::{Client, Response, StatusCode, Url, redirect};
 use tokio::fs::{self, File, OpenOptions};
@@ -21,6 +22,7 @@ use crate::segmented::{self, Segmented};
 use crate::throttle::Throttle;
 
 const MAX_REDIRECTS: usize = 10;
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// How HTTP downloads are split across connections.
 #[derive(Debug, Clone)]
@@ -29,6 +31,9 @@ pub struct HttpConfig {
     pub connections: usize,
     /// Never split a range into pieces smaller than this many bytes.
     pub min_split: u64,
+    /// A server that sends nothing for this long, while we're waiting for
+    /// it, counts as a dropped connection (and the download is retried).
+    pub stall_timeout: Duration,
 }
 
 impl Default for HttpConfig {
@@ -36,6 +41,7 @@ impl Default for HttpConfig {
         Self {
             connections: 4,
             min_split: 1024 * 1024,
+            stall_timeout: Duration::from_secs(60),
         }
     }
 }
@@ -54,6 +60,7 @@ pub fn build_client() -> Result<Client, Error> {
     });
     Ok(Client::builder()
         .redirect(policy)
+        .connect_timeout(CONNECT_TIMEOUT)
         .user_agent(concat!(
             env!("CARGO_PKG_NAME"),
             "/",
@@ -87,13 +94,13 @@ pub async fn run(
                 Resumed::Stopped(outcome) => return Ok(outcome),
                 Resumed::Restart(reason) => {
                     restarting(dl, reason, &mut on_event);
-                    fresh(client, dl, name, &part).await?
+                    fresh(&env, dl, name, &part).await?
                 }
             }
         }
         _ => {
             dl.segments.clear();
-            open(client, dl, &mut on_event).await?
+            open(&env, dl, &mut on_event).await?
         }
     };
 
@@ -125,7 +132,7 @@ pub async fn run(
             Segmented::Restart(reason) if !restarted_mid_run => {
                 restarted_mid_run = true;
                 restarting(dl, reason, &mut on_event);
-                opened = fresh(client, dl, name, &part).await?;
+                opened = fresh(&env, dl, name, &part).await?;
             }
             Segmented::Restart(_) => return Err(Error::RemoteUnstable),
         }
@@ -150,12 +157,12 @@ struct Opened {
 /// Sends the request and prepares a single-connection `.part.ottie` file: a
 /// fresh start, a resume, or a restart from zero when resuming isn't safe.
 async fn open(
-    client: &Client,
+    env: &Env<'_>,
     dl: &mut Download,
     on_event: &mut impl FnMut(Event),
 ) -> Result<Opened, Error> {
     let (Some(name), Some(part)) = (dl.file_name.clone(), dl.part_path()) else {
-        let response = get_from_start(client, &dl.url).await?;
+        let response = get_from_start(env, &dl.url).await?;
         let suggested = suggested_name(&response);
         if let Some(placement) = dl.placement.take()
             && let Some(folder) = placement.folder_for(&suggested)
@@ -180,7 +187,7 @@ async fn open(
     let reason = match (on_disk, dl.validator.clone()) {
         (None, _) => RestartReason::PartFileMissing,
         (Some(offset), Some(validator)) if dl.resumable => {
-            match try_resume(client, dl, &part, offset, &validator).await? {
+            match try_resume(env, dl, &part, offset, &validator).await? {
                 Resume::Continue(body) => return Ok(Opened { name, body }),
                 Resume::Restart(response, reason) => {
                     // The server already sent the whole file: use it.
@@ -199,7 +206,7 @@ async fn open(
     };
 
     restarting(dl, reason, on_event);
-    fresh(client, dl, name, &part).await
+    fresh(env, dl, name, &part).await
 }
 
 /// The name from the server's `Content-Disposition`, else the last part of
@@ -214,12 +221,12 @@ fn suggested_name(response: &Response) -> String {
 
 /// Requests the file from the start again and empties the `.part.ottie` file.
 async fn fresh(
-    client: &Client,
+    env: &Env<'_>,
     dl: &mut Download,
     name: String,
     part: &Path,
 ) -> Result<Opened, Error> {
-    let response = get_from_start(client, &dl.url).await?;
+    let response = get_from_start(env, &dl.url).await?;
     learn(dl, &response);
     let file = File::create(part).await?;
     Ok(Opened {
@@ -238,13 +245,20 @@ enum Resume {
 }
 
 async fn try_resume(
-    client: &Client,
+    env: &Env<'_>,
     dl: &mut Download,
     part: &Path,
     offset: u64,
     validator: &Validator,
 ) -> Result<Resume, Error> {
-    let response = get(client, &dl.url, Some((offset, None)), Some(validator)).await?;
+    let response = get(
+        env.client,
+        env.config.stall_timeout,
+        &dl.url,
+        Some((offset, None)),
+        Some(validator),
+    )
+    .await?;
     match response.status() {
         StatusCode::PARTIAL_CONTENT => {
             if !content_range_matches(response.headers(), offset, None, dl.total) {
@@ -263,7 +277,7 @@ async fn try_resume(
             Ok(Resume::Continue(None))
         }
         StatusCode::RANGE_NOT_SATISFIABLE => Ok(Resume::Refused(RestartReason::RemoteChanged)),
-        status => Err(Error::Status(status)),
+        _ => Err(status_error(&response)),
     }
 }
 
@@ -388,15 +402,21 @@ async fn stream_body(
     on_event: &mut impl FnMut(Event),
 ) -> Result<Stop, Error> {
     let Env {
-        throttle, cancel, ..
+        throttle,
+        cancel,
+        config,
+        ..
     } = env;
+    let stall = config.stall_timeout;
     loop {
         // Wait for whichever comes first: the next chunk or a pause request.
         // `biased` checks the pause first, so a fast server can't delay it.
         let chunk = tokio::select! {
             biased;
             _ = cancel.cancelled() => return Ok(Stop::Cancelled),
-            chunk = response.chunk() => chunk?,
+            chunk = tokio::time::timeout(stall, response.chunk()) => {
+                chunk.map_err(|_| Error::Stalled(stall))??
+            }
         };
         let Some(bytes) = chunk else {
             return Ok(Stop::Finished);
@@ -442,8 +462,10 @@ async fn complete(dl: &mut Download, name: &str) -> Result<Outcome, Error> {
 
 /// Sends a GET. `range` is `(first byte, last byte if any)`; `if_range` makes
 /// the server send the whole file instead if it has changed since.
+/// Waiting longer than `stall` for the answer's headers is an error.
 pub(crate) async fn get(
     client: &Client,
+    stall: Duration,
     url: &Url,
     range: Option<(u64, Option<u64>)>,
     if_range: Option<&Validator>,
@@ -458,13 +480,38 @@ pub(crate) async fn get(
     if let Some(validator) = if_range {
         request = request.header(IF_RANGE, validator.header_value());
     }
-    Ok(request.send().await?)
+    tokio::time::timeout(stall, request.send())
+        .await
+        .map_err(|_| Error::Stalled(stall))?
+        .map_err(Error::from)
+}
+
+/// An answer we can't use, with the server's `Retry-After` if it gave one in
+/// seconds. (The HTTP-date form is ignored; the usual backoff applies.)
+pub(crate) fn status_error(response: &Response) -> Error {
+    let retry_after = response
+        .headers()
+        .get(RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse().ok())
+        .map(Duration::from_secs);
+    Error::Status {
+        status: response.status(),
+        retry_after,
+    }
 }
 
 /// Asks for `bytes=0-`: a 206 answer proves the server really supports
 /// ranges, which the `Accept-Ranges` header alone doesn't.
-async fn get_from_start(client: &Client, url: &Url) -> Result<Response, Error> {
-    let response = get(client, url, Some((0, None)), None).await?;
+async fn get_from_start(env: &Env<'_>, url: &Url) -> Result<Response, Error> {
+    let response = get(
+        env.client,
+        env.config.stall_timeout,
+        url,
+        Some((0, None)),
+        None,
+    )
+    .await?;
     match response.status() {
         StatusCode::OK => Ok(response),
         StatusCode::PARTIAL_CONTENT if content_range_matches(response.headers(), 0, None, None) => {
@@ -472,13 +519,13 @@ async fn get_from_start(client: &Client, url: &Url) -> Result<Response, Error> {
         }
         // Some servers refuse any range on an empty file.
         StatusCode::RANGE_NOT_SATISFIABLE => {
-            let response = get(client, url, None, None).await?;
+            let response = get(env.client, env.config.stall_timeout, url, None, None).await?;
             match response.status() {
                 StatusCode::OK => Ok(response),
-                status => Err(Error::Status(status)),
+                _ => Err(status_error(&response)),
             }
         }
-        status => Err(Error::Status(status)),
+        _ => Err(status_error(&response)),
     }
 }
 

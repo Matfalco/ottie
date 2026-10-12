@@ -28,6 +28,7 @@ async fn setup() -> Setup {
     let config = HttpConfig {
         connections: 4,
         min_split: 128 * KIB,
+        ..HttpConfig::default()
     };
     let store = Store::open_in_memory().await.unwrap();
     let manager = Manager::start(HttpBackend::with_config(config).unwrap(), store)

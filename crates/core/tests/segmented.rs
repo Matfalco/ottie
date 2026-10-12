@@ -18,6 +18,7 @@ const SIZE: usize = 2 * 1024 * 1024;
 const CONFIG: HttpConfig = HttpConfig {
     connections: 4,
     min_split: 64 * 1024,
+    stall_timeout: Duration::from_secs(60),
 };
 
 struct Setup {

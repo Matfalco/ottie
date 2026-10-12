@@ -22,5 +22,5 @@ pub use http::{HttpConfig, build_client, run};
 pub use id::JobId;
 pub use job::{JobEvent, JobSnapshot, JobState, NewJob, Priority};
 pub use manager::Manager;
-pub use store::{Settings, Store};
+pub use store::{RetryPolicy, Settings, Store};
 pub use throttle::Throttle;

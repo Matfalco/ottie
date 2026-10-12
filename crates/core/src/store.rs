@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::mpsc as std_mpsc;
 use std::thread;
+use std::time::Duration;
 
 use reqwest::Url;
 use rusqlite::{Connection, Row, params};
@@ -76,6 +77,45 @@ const MIGRATIONS: &[&str] = &[
         REFERENCES categories (id);
      ALTER TABLE jobs ADD COLUMN category_chosen INTEGER NOT NULL DEFAULT 0
         CHECK (category_chosen IN (0, 1));",
+    // 5: the `retrying` state and the retry policy. SQLite can't change a
+    // CHECK constraint, so `jobs` is rebuilt (with foreign keys off, see `prepare`).
+    "CREATE TABLE jobs_new (
+        id_secs         INTEGER NOT NULL,
+        id_seq          INTEGER NOT NULL,
+        url             TEXT    NOT NULL,
+        dest_dir        TEXT    NOT NULL,
+        file_name       TEXT,
+        state           TEXT    NOT NULL CHECK (state IN ('queued', 'connecting',
+                            'downloading', 'paused', 'completed', 'failed', 'cancelled',
+                            'retrying')),
+        total           INTEGER,
+        downloaded      INTEGER NOT NULL DEFAULT 0,
+        validator_kind  TEXT    CHECK (validator_kind IN ('etag', 'last-modified')),
+        validator_value TEXT,
+        resumable       INTEGER NOT NULL DEFAULT 0 CHECK (resumable IN (0, 1)),
+        error           TEXT,
+        priority        TEXT    NOT NULL DEFAULT 'normal'
+                            CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+        speed_limit     INTEGER NOT NULL DEFAULT 0 CHECK (speed_limit >= 0),
+        category_id     INTEGER NOT NULL DEFAULT 1 REFERENCES categories (id),
+        category_chosen INTEGER NOT NULL DEFAULT 0 CHECK (category_chosen IN (0, 1)),
+        PRIMARY KEY (id_secs, id_seq)
+     ) STRICT;
+     INSERT INTO jobs_new (id_secs, id_seq, url, dest_dir, file_name, state, total,
+                           downloaded, validator_kind, validator_value, resumable, error,
+                           priority, speed_limit, category_id, category_chosen)
+        SELECT id_secs, id_seq, url, dest_dir, file_name, state, total,
+               downloaded, validator_kind, validator_value, resumable, error,
+               priority, speed_limit, category_id, category_chosen
+        FROM jobs;
+     DROP TABLE jobs;
+     ALTER TABLE jobs_new RENAME TO jobs;
+     ALTER TABLE settings ADD COLUMN max_retries INTEGER NOT NULL DEFAULT 10
+        CHECK (max_retries >= 0);
+     ALTER TABLE settings ADD COLUMN retries_before_yield INTEGER NOT NULL DEFAULT 3
+        CHECK (retries_before_yield >= 0);
+     ALTER TABLE settings ADD COLUMN retry_wait_ms INTEGER NOT NULL DEFAULT 2000
+        CHECK (retry_wait_ms >= 0);",
 ];
 
 /// Everything saved about one job.
@@ -110,6 +150,7 @@ pub struct Settings {
     pub global_limit: u64,
     /// How many jobs may download at once. At least 1.
     pub max_concurrent: usize,
+    pub retry: RetryPolicy,
 }
 
 impl Default for Settings {
@@ -117,6 +158,32 @@ impl Default for Settings {
         Self {
             global_limit: 0,
             max_concurrent: 3,
+            retry: RetryPolicy::default(),
+        }
+    }
+}
+
+/// What happens when a download fails with an error that may go away (a
+/// dropped connection, a busy server). See docs/decisions/0013.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RetryPolicy {
+    /// Retries after the attempts since bytes last arrived; then the job
+    /// fails. 0 = never retry.
+    pub max_retries: u32,
+    /// Retries a job makes in its download slot before giving way to a job
+    /// that is waiting for one.
+    pub retries_before_yield: u32,
+    /// Wait before the first retry. Each next one waits twice as long, up to
+    /// a minute (or this wait, if longer); a server's `Retry-After` can ask for more.
+    pub first_wait: Duration,
+}
+
+impl Default for RetryPolicy {
+    fn default() -> Self {
+        Self {
+            max_retries: 10,
+            retries_before_yield: 3,
+            first_wait: Duration::from_secs(2),
         }
     }
 }
@@ -445,21 +512,37 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
 
 fn load_settings(conn: &Connection) -> Result<Settings, Error> {
     Ok(conn.query_row(
-        "SELECT global_limit, max_concurrent FROM settings WHERE id = 1",
+        "SELECT global_limit, max_concurrent, max_retries, retries_before_yield, retry_wait_ms
+         FROM settings WHERE id = 1",
         [],
         |row| {
             Ok(Settings {
                 global_limit: row.get(0)?,
                 max_concurrent: row.get(1)?,
+                retry: RetryPolicy {
+                    max_retries: row.get(2)?,
+                    retries_before_yield: row.get(3)?,
+                    first_wait: Duration::from_millis(row.get(4)?),
+                },
             })
         },
     )?)
 }
 
 fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
+    let retry = &settings.retry;
+    let wait_ms = u64::try_from(retry.first_wait.as_millis()).unwrap_or(u64::MAX);
     conn.execute(
-        "UPDATE settings SET global_limit = ?1, max_concurrent = ?2 WHERE id = 1",
-        params![settings.global_limit, settings.max_concurrent],
+        "UPDATE settings SET global_limit = ?1, max_concurrent = ?2, max_retries = ?3,
+                retries_before_yield = ?4, retry_wait_ms = ?5
+         WHERE id = 1",
+        params![
+            settings.global_limit,
+            settings.max_concurrent,
+            retry.max_retries,
+            retry.retries_before_yield,
+            wait_ms,
+        ],
     )?;
     Ok(())
 }
@@ -563,6 +646,7 @@ fn state_name(state: JobState) -> &'static str {
         JobState::Completed => "completed",
         JobState::Failed => "failed",
         JobState::Cancelled => "cancelled",
+        JobState::Retrying => "retrying",
     }
 }
 
@@ -575,6 +659,7 @@ fn parse_state(name: &str) -> Option<JobState> {
         "completed" => JobState::Completed,
         "failed" => JobState::Failed,
         "cancelled" => JobState::Cancelled,
+        "retrying" => JobState::Retrying,
         _ => return None,
     })
 }
@@ -655,6 +740,11 @@ mod tests {
         let changed = Settings {
             global_limit: 1_000_000,
             max_concurrent: 5,
+            retry: RetryPolicy {
+                max_retries: 4,
+                retries_before_yield: 0,
+                first_wait: Duration::from_millis(250),
+            },
         };
         store.save_settings(changed.clone());
         assert_eq!(store.load().await.unwrap().settings, changed);
@@ -735,6 +825,36 @@ mod tests {
     }
 
     #[test]
+    fn rebuilding_jobs_keeps_every_row_and_segment() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (i, sql) in MIGRATIONS[..4].iter().enumerate() {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", i + 1).unwrap();
+        }
+        conn.execute_batch(
+            "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, file_name, state, total,
+                               downloaded, priority, speed_limit)
+             VALUES (1, 1, 'https://example.com/a.bin', '/d', 'a.bin', 'paused', 100,
+                     40, 'high', 7);
+             INSERT INTO segments VALUES (1, 1, 0, 50, 30), (1, 1, 50, 100, 10);",
+        )
+        .unwrap();
+        prepare(&mut conn).unwrap();
+
+        let loaded = load_all(&conn).unwrap();
+        let job = &loaded.jobs[0];
+        assert_eq!((job.priority, job.speed_limit), (Priority::High, 7));
+        assert_eq!(job.download.segments.len(), 2);
+        assert_eq!(loaded.settings.retry, RetryPolicy::default());
+        // The segments still belong to the rebuilt table.
+        conn.execute("DELETE FROM jobs", []).unwrap();
+        let left: i64 = conn
+            .query_row("SELECT COUNT(*) FROM segments", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0, "deleting a job deletes its segments");
+    }
+
+    #[test]
     fn priority_names_round_trip() {
         use Priority::*;
         for priority in [Low, Normal, High, Urgent] {
@@ -753,6 +873,7 @@ mod tests {
             Completed,
             Failed,
             Cancelled,
+            Retrying,
         ] {
             assert_eq!(parse_state(state_name(state)), Some(state));
         }

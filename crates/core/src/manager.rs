@@ -18,7 +18,7 @@ use crate::error::Error;
 use crate::filename;
 use crate::id::{IdGenerator, JobId};
 use crate::job::{JobEvent, JobSnapshot, JobState, NewJob, Priority};
-use crate::store::{JobRecord, Settings, Store};
+use crate::store::{JobRecord, RetryPolicy, Settings, Store};
 use crate::throttle::Limiter;
 
 /// Running jobs report progress to the manager at most this often.
@@ -27,6 +27,13 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 /// saved immediately).
 const SAVE_INTERVAL: Duration = Duration::from_secs(2);
 const COMMAND_BUFFER: usize = 64;
+/// Retries wait twice as long each time, up to this (or the policy's first
+/// wait, if that's longer)...
+const MAX_RETRY_WAIT: Duration = Duration::from_secs(60);
+/// ...unless the server's `Retry-After` asks for longer, up to this.
+const MAX_RETRY_AFTER: Duration = Duration::from_secs(600);
+/// No wait is longer, whatever the policy says (a huge one would overflow).
+const LONGEST_RETRY_WAIT: Duration = Duration::from_secs(24 * 3600);
 /// Subscribers that fall further behind than this miss events (and should
 /// call [`Manager::list`] to catch up).
 const EVENT_BUFFER: usize = 1024;
@@ -68,6 +75,7 @@ impl Manager {
             ids: IdGenerator::after(jobs.keys().next_back().copied()),
             jobs,
             categories,
+            yields: 0,
             events: events.clone(),
             internal,
             shutdown: None,
@@ -131,6 +139,12 @@ impl Manager {
             reply,
         })
         .await
+    }
+
+    /// Takes effect for the next failure, and is saved.
+    pub async fn set_retry_policy(&self, policy: RetryPolicy) -> Result<(), Error> {
+        self.request(|reply| Command::SetRetryPolicy { policy, reply })
+            .await
     }
 
     /// One job's own limit in bytes per second; 0 = none (the global limit
@@ -249,6 +263,10 @@ enum Command {
         bytes_per_sec: u64,
         reply: Reply<()>,
     },
+    SetRetryPolicy {
+        policy: RetryPolicy,
+        reply: Reply<()>,
+    },
     SetSpeedLimit {
         id: JobId,
         bytes_per_sec: u64,
@@ -296,6 +314,11 @@ enum Internal {
         download: Box<Download>,
         result: Result<Outcome, Error>,
     },
+    /// A `Retrying` job's wait is over. `due` tells this wait from a later one.
+    RetryDue {
+        id: JobId,
+        due: Instant,
+    },
 }
 
 /// Why a running job is being stopped. Later variants win: a user's pause or
@@ -328,6 +351,13 @@ struct Job {
     category: CategoryId,
     /// The user picked the category, rather than it being matched by extension.
     category_chosen: bool,
+    /// Failed attempts since bytes last arrived (not saved).
+    retries: u32,
+    /// While `Retrying`: when it tries again.
+    retry_at: Option<(Instant, SystemTime)>,
+    /// 0, or the order in which it gave its slot away to a waiting job: such
+    /// jobs queue behind every job that didn't (not saved).
+    gave_way: u64,
     /// Present while a task is downloading this job.
     task: Option<Task>,
     last_saved: Option<Instant>,
@@ -337,8 +367,9 @@ impl Job {
     async fn restore(record: JobRecord) -> Job {
         let mut state = record.state;
         let mut download = record.download;
-        // Running when Ottie stopped, whether it quit or crashed: continue it.
-        if state.is_running() {
+        // Running (or about to retry) when Ottie stopped, whether it quit or
+        // crashed: continue it.
+        if state.is_running() || state == JobState::Retrying {
             state = JobState::Queued;
         }
         // What's on disk is the truth for how much we have; the saved byte
@@ -359,9 +390,17 @@ impl Job {
             speed_limit: record.speed_limit,
             category: record.category,
             category_chosen: record.category_chosen,
+            retries: 0,
+            retry_at: None,
+            gave_way: 0,
             task: None,
             last_saved: None,
         }
+    }
+
+    /// Running, or waiting to retry in the slot it ran in.
+    fn holds_slot(&self) -> bool {
+        self.task.is_some() || self.state == JobState::Retrying
     }
 
     fn snapshot(&self, id: JobId) -> JobSnapshot {
@@ -379,6 +418,8 @@ impl Job {
             priority: self.priority,
             speed_limit: self.speed_limit,
             category: self.category,
+            retries: self.retries,
+            retry_at: self.retry_at.map(|(_, at)| at),
         }
     }
 }
@@ -401,6 +442,8 @@ struct Actor<B> {
     jobs: BTreeMap<JobId, Job>,
     /// Always holds General. Saved whenever one changes.
     categories: BTreeMap<CategoryId, CategorySettings>,
+    /// How many times a retrying job has given way (see `Job::gave_way`).
+    yields: u64,
     ids: IdGenerator,
     events: broadcast::Sender<JobEvent>,
     /// Cloned into each job task so it can report back.
@@ -471,6 +514,13 @@ impl<B: Backend> Actor<B> {
                 self.limiter.set_global(bytes_per_sec);
                 let _ = reply.send(Ok(()));
             }
+            Command::SetRetryPolicy { policy, reply } => {
+                self.settings.retry = policy;
+                self.store.save_settings(self.settings.clone());
+                // Jobs past the new number of in-slot retries may now give way.
+                self.schedule();
+                let _ = reply.send(Ok(()));
+            }
             Command::SetSpeedLimit {
                 id,
                 bytes_per_sec,
@@ -522,6 +572,15 @@ impl<B: Backend> Actor<B> {
                 download,
                 result,
             } => self.on_ended(id, download, result).await,
+            Internal::RetryDue { id, due } => {
+                let waiting = self.jobs.get(&id).is_some_and(|job| {
+                    job.state == JobState::Retrying && job.retry_at.map(|(at, _)| at) == Some(due)
+                });
+                // Not if it was paused, cancelled or gave way meanwhile.
+                if waiting && self.shutdown.is_none() {
+                    self.start_job(id);
+                }
+            }
         }
     }
 
@@ -567,6 +626,9 @@ impl<B: Backend> Actor<B> {
             Event::Progress { downloaded, total } => {
                 job.download.downloaded = downloaded;
                 job.download.total = total;
+                // It works again: a later failure gets every retry anew.
+                job.retries = 0;
+                job.gave_way = 0;
                 let save_due = job
                     .last_saved
                     .is_none_or(|at| at.elapsed() >= SAVE_INTERVAL);
@@ -620,6 +682,9 @@ impl<B: Backend> Actor<B> {
                 speed_limit: 0,
                 category,
                 category_chosen: new.category.is_some(),
+                retries: 0,
+                retry_at: None,
+                gave_way: 0,
                 task: None,
                 last_saved: None,
             },
@@ -833,6 +898,11 @@ impl<B: Backend> Actor<B> {
             return Err(Error::ManagerStopped);
         }
         self.transition(id, JobState::Queued, None)?;
+        // Resumed by hand: every retry is available again.
+        if let Some(job) = self.jobs.get_mut(&id) {
+            job.retries = 0;
+            job.gave_way = 0;
+        }
         self.schedule();
         Ok(())
     }
@@ -847,37 +917,85 @@ impl<B: Backend> Actor<B> {
     /// Starts queued jobs until `max_concurrent` are running, skipping jobs
     /// whose category is at its own cap: the highest priority first, and the
     /// oldest first within a priority.
+    ///
+    /// When every slot is taken, a `Retrying` job that has used its in-slot
+    /// retries gives its slot to a queued job, and queues behind the others.
     fn schedule(&mut self) {
         if self.shutdown.is_some() {
             return;
         }
-        let mut running: HashMap<CategoryId, usize> = HashMap::new();
-        for job in self.jobs.values().filter(|j| j.task.is_some()) {
-            *running.entry(job.category).or_default() += 1;
-        }
-        let mut total: usize = running.values().sum();
-        while total < self.settings.max_concurrent {
-            let has_room = |category: CategoryId| {
-                let cap = self
-                    .categories
-                    .get(&category)
-                    .map_or(0, |c| c.max_concurrent);
-                cap == 0 || running.get(&category).copied().unwrap_or(0) < cap
-            };
-            let next = self
-                .jobs
-                .iter()
-                .filter(|(_, job)| job.state == JobState::Queued && has_room(job.category))
-                // `Reverse(id)`: among equal priorities, the smallest (oldest) ID wins.
-                .max_by_key(|(id, job)| (job.priority, Reverse(**id)))
-                .map(|(id, job)| (*id, job.category));
-            let Some((id, category)) = next else { break };
-            if !self.start_job(id) {
-                break;
+        loop {
+            let mut busy: HashMap<CategoryId, usize> = HashMap::new();
+            for job in self.jobs.values().filter(|j| j.holds_slot()) {
+                *busy.entry(job.category).or_default() += 1;
             }
-            *running.entry(category).or_default() += 1;
-            total += 1;
+            if busy.values().sum::<usize>() < self.settings.max_concurrent {
+                let Some(id) = self.next_queued(&busy) else {
+                    break;
+                };
+                if !self.start_job(id) {
+                    break;
+                }
+            } else {
+                let Some(id) = self.ready_to_give_way(&busy) else {
+                    break;
+                };
+                self.yields += 1;
+                let error = self.jobs.get_mut(&id).and_then(|job| {
+                    job.gave_way = self.yields;
+                    job.error.clone()
+                });
+                if !self.transition_or_log(id, JobState::Queued, error) {
+                    break;
+                }
+            }
         }
+    }
+
+    /// The queued job to start next, among those whose category has room:
+    /// jobs that gave their slot away come last (whatever their priority, or
+    /// they would take it straight back); then the highest priority, the oldest.
+    fn next_queued(&self, busy: &HashMap<CategoryId, usize>) -> Option<JobId> {
+        self.jobs
+            .iter()
+            .filter(|(_, job)| job.state == JobState::Queued && self.has_room(job.category, busy))
+            // `Reverse`: the smallest `gave_way` and ID win.
+            .max_by_key(|(id, job)| {
+                let never_gave_way = job.gave_way == 0;
+                (
+                    never_gave_way,
+                    job.priority,
+                    Reverse(job.gave_way),
+                    Reverse(**id),
+                )
+            })
+            .map(|(id, _)| *id)
+    }
+
+    /// A `Retrying` job past its in-slot retries whose slot a queued job could use.
+    fn ready_to_give_way(&self, busy: &HashMap<CategoryId, usize>) -> Option<JobId> {
+        let in_slot = self.settings.retry.retries_before_yield;
+        self.jobs
+            .iter()
+            .filter(|(_, job)| job.state == JobState::Retrying && job.retries > in_slot)
+            .find(|(_, job)| {
+                let mut after = busy.clone();
+                if let Some(count) = after.get_mut(&job.category) {
+                    *count = count.saturating_sub(1);
+                }
+                self.jobs.values().any(|waiting| {
+                    waiting.state == JobState::Queued && self.has_room(waiting.category, &after)
+                })
+            })
+            .map(|(id, _)| *id)
+    }
+
+    fn has_room(&self, category: CategoryId, busy: &HashMap<CategoryId, usize>) -> bool {
+        let cap = self
+            .categories
+            .get(&category)
+            .map_or(0, |c| c.max_concurrent);
+        cap == 0 || busy.get(&category).copied().unwrap_or(0) < cap
     }
 
     fn start_job(&mut self, id: JobId) -> bool {
@@ -949,6 +1067,15 @@ impl<B: Backend> Actor<B> {
             (_, Some(stop)) => stop.target().map(|state| (state, None)),
             // Only the manager cancels the token, so this means paused.
             (Ok(Outcome::Paused), None) => Some((JobState::Paused, None)),
+            (Err(err), None)
+                if err.is_retryable() && job.retries < self.settings.retry.max_retries =>
+            {
+                job.retries += 1;
+                let wait = retry_wait(&self.settings.retry, job.retries, err.retry_after());
+                tracing::info!(%id, error = %err, retry = job.retries, ?wait, "download failed; retrying");
+                job.retry_at = Some((Instant::now() + wait, SystemTime::now() + wait));
+                Some((JobState::Retrying, Some(err.to_string())))
+            }
             (Err(err), None) => {
                 tracing::warn!(%id, error = %err, "download failed");
                 Some((JobState::Failed, Some(err.to_string())))
@@ -957,8 +1084,10 @@ impl<B: Backend> Actor<B> {
         match next {
             Some((state, error)) => {
                 self.transition_or_log(id, state, error);
-                if state == JobState::Cancelled {
-                    self.delete_part(id).await;
+                match state {
+                    JobState::Cancelled => self.delete_part(id).await,
+                    JobState::Retrying => self.retry_when_due(id),
+                    _ => {}
                 }
             }
             // Shutting down: keep the running state so the next start continues it.
@@ -1012,6 +1141,9 @@ impl<B: Backend> Actor<B> {
         }
         job.state = next;
         job.error = error;
+        if next != JobState::Retrying {
+            job.retry_at = None;
+        }
         self.save(id);
         self.emit_changed(id);
         Ok(())
@@ -1053,6 +1185,19 @@ impl<B: Backend> Actor<B> {
         }
     }
 
+    /// Wakes the actor when the job's retry is due.
+    fn retry_when_due(&self, id: JobId) {
+        let Some((due, _)) = self.jobs.get(&id).and_then(|job| job.retry_at) else {
+            return;
+        };
+        let internal = self.internal.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep_until(due.into()).await;
+            // Fails only if the manager has stopped.
+            let _ = internal.send(Internal::RetryDue { id, due });
+        });
+    }
+
     async fn delete_part(&self, id: JobId) {
         let Some(part) = self.jobs.get(&id).and_then(|job| job.download.part_path()) else {
             return;
@@ -1063,6 +1208,17 @@ impl<B: Backend> Actor<B> {
             tracing::warn!(%id, error = %err, "could not delete .part.ottie file");
         }
     }
+}
+
+/// How long to wait before retry number `retry` (1 for the first): the
+/// policy's first wait, doubled each time up to a minute, or longer if the
+/// server asked for that with `Retry-After`.
+fn retry_wait(policy: &RetryPolicy, retry: u32, asked: Option<Duration>) -> Duration {
+    let doublings = retry.saturating_sub(1).min(16);
+    let cap = MAX_RETRY_WAIT.max(policy.first_wait);
+    let backoff = policy.first_wait.saturating_mul(1 << doublings).min(cap);
+    let wait = asked.map_or(backoff, |asked| asked.min(MAX_RETRY_AFTER).max(backoff));
+    wait.min(LONGEST_RETRY_WAIT)
 }
 
 /// The category that lists `ext`, if any. Takes the map rather than `&self`
@@ -1078,4 +1234,38 @@ fn unix_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retry_waits_double_up_to_a_minute() {
+        let policy = RetryPolicy::default(); // first wait 2 s
+        let secs = |retry, asked| retry_wait(&policy, retry, asked).as_secs();
+        assert_eq!(
+            [1, 2, 3, 4, 5, 6, 7].map(|r| secs(r, None)),
+            [2, 4, 8, 16, 32, 60, 60]
+        );
+        assert_eq!(secs(40, None), 60, "no overflow");
+        // Retry-After can ask for longer, never shorter, and not forever.
+        assert_eq!(secs(1, Some(Duration::from_secs(30))), 30);
+        assert_eq!(secs(5, Some(Duration::from_secs(1))), 32);
+        assert_eq!(secs(1, Some(Duration::from_secs(86_400))), 600);
+    }
+
+    #[test]
+    fn a_long_first_wait_is_not_capped() {
+        let policy = RetryPolicy {
+            first_wait: Duration::from_secs(90),
+            ..RetryPolicy::default()
+        };
+        assert_eq!(retry_wait(&policy, 3, None), Duration::from_secs(90));
+        let absurd = RetryPolicy {
+            first_wait: Duration::MAX,
+            ..RetryPolicy::default()
+        };
+        assert_eq!(retry_wait(&absurd, 1, None), LONGEST_RETRY_WAIT);
+    }
 }

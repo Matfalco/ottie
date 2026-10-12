@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use ottie_core::{
     CategoryId, CategorySettings, Error, HttpBackend, HttpConfig, JobId, JobSnapshot, JobState,
-    Manager, NewJob, PART_SUFFIX, Priority, Settings, Store,
+    Manager, NewJob, PART_SUFFIX, Priority, RetryPolicy, Settings, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -201,6 +201,7 @@ async fn multi_connection_downloads_survive_restarts_and_crashes() {
     let four = HttpConfig {
         connections: 4,
         min_split: 64 * 1024,
+        ..HttpConfig::default()
     };
     let count_segments = || {
         let db = rusqlite::Connection::open(&s.db).unwrap();
@@ -234,6 +235,12 @@ async fn settings_priorities_and_limits_survive_a_restart() {
     let manager = s.launch().await;
     manager.set_global_limit(5_000_000).await.unwrap();
     manager.set_max_concurrent(2).await.unwrap();
+    let retry = RetryPolicy {
+        max_retries: 4,
+        retries_before_yield: 1,
+        first_wait: Duration::from_millis(1500),
+    };
+    manager.set_retry_policy(retry).await.unwrap();
     let id = s.add(&manager).await;
     manager.pause(id).await.unwrap();
     manager.set_priority(id, Priority::High).await.unwrap();
@@ -244,6 +251,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
     let expected = Settings {
         global_limit: 5_000_000,
         max_concurrent: 2,
+        retry,
     };
     assert_eq!(manager.settings().await.unwrap(), expected);
     let job = &manager.list().await.unwrap()[0];
@@ -280,4 +288,27 @@ async fn categories_and_job_categories_survive_a_restart() {
         manager.list().await.unwrap()[0].category,
         CategoryId::GENERAL
     );
+}
+
+#[tokio::test]
+async fn a_job_waiting_to_retry_continues_after_a_restart() {
+    let s = setup().await;
+    s.server.configure(|b| {
+        b.chunk_delay = None;
+        b.fail_next = Some((axum::http::StatusCode::SERVICE_UNAVAILABLE, 1));
+    });
+    let manager = s.launch().await;
+    let long_wait = RetryPolicy {
+        first_wait: Duration::from_secs(3600),
+        ..RetryPolicy::default()
+    };
+    manager.set_retry_policy(long_wait).await.unwrap();
+    let id = s.add(&manager).await;
+    wait_until(&manager, id, JobState::Retrying).await;
+    manager.shutdown().await.unwrap();
+
+    // The hour-long wait doesn't survive the restart: it's queued again.
+    let manager = s.launch().await;
+    wait_until(&manager, id, JobState::Completed).await;
+    s.assert_complete();
 }

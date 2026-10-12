@@ -17,7 +17,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::download::{Download, Event, RestartReason, Segment, Validator};
 use crate::error::Error;
-use crate::http::{Env, HttpConfig, content_range_matches, flush, get, response_reason};
+use crate::http::{
+    Env, HttpConfig, content_range_matches, flush, get, response_reason, status_error,
+};
 use crate::throttle::Throttle;
 
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(200);
@@ -112,6 +114,7 @@ impl Part {
 /// What every connection needs, shared read-only.
 struct Context {
     client: Client,
+    stall: Duration,
     url: Url,
     validator: Validator,
     path: PathBuf,
@@ -142,6 +145,7 @@ pub(crate) async fn run(
     };
     let context = Arc::new(Context {
         client: env.client.clone(),
+        stall: config.stall_timeout,
         url: dl.url.clone(),
         validator,
         path: path.to_owned(),
@@ -313,7 +317,9 @@ async fn connection(
             let chunk = tokio::select! {
                 biased;
                 _ = stop.cancelled() => return Ok(Ended::Cancelled),
-                chunk = response.chunk() => chunk?,
+                chunk = tokio::time::timeout(context.stall, response.chunk()) => {
+                    chunk.map_err(|_| Error::Stalled(context.stall))??
+                }
             };
             let end = shared.end.load(SeqCst);
             let Some(bytes) = chunk else {
@@ -363,6 +369,7 @@ async fn request(
     let last = end - 1;
     let sent = get(
         &context.client,
+        context.stall,
         &context.url,
         Some((pos, Some(last))),
         Some(&context.validator),
@@ -385,7 +392,7 @@ async fn request(
             &response,
             &context.validator,
         ))),
-        status => return Err(Error::Status(status)),
+        _ => return Err(status_error(&response)),
     })
 }
 
@@ -409,6 +416,7 @@ mod tests {
         HttpConfig {
             connections,
             min_split,
+            ..HttpConfig::default()
         }
     }
 
