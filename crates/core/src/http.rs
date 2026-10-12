@@ -39,7 +39,7 @@ pub fn build_client() -> Result<Client, Error> {
         .build()?)
 }
 
-/// Downloads into `<name>.part` until the file is complete or `cancel` fires,
+/// Downloads into `<name>.part.ottie` until the file is complete or `cancel` fires,
 /// then renames it. Call again with the same `Download` to resume.
 ///
 /// `dl` is kept up to date as bytes arrive, so after an error or a pause it
@@ -54,7 +54,7 @@ pub async fn run(
     if let Some((response, file)) = opened.body {
         let mut writer = BufWriter::new(file);
         let streamed = stream_body(response, &mut writer, dl, cancel, &mut on_event).await;
-        // Flush even after an error, so the .part length matches `dl.downloaded`.
+        // Flush even after an error, so the .part.ottie length matches `dl.downloaded`.
         let flushed = flush(&mut writer).await;
         drop(writer); // Windows can't rename a file that's still open.
         if streamed? == Stop::Cancelled {
@@ -72,7 +72,7 @@ struct Opened {
     body: Option<(Response, File)>,
 }
 
-/// Sends the request and prepares the `.part` file: a fresh start, a resume,
+/// Sends the request and prepares the `.part.ottie` file: a fresh start, a resume,
 /// or a restart from zero when resuming isn't safe.
 async fn open(
     client: &Client,
@@ -129,7 +129,7 @@ async fn open(
 }
 
 enum Resume {
-    /// Continue appending to the `.part` file (or nothing left to fetch).
+    /// Continue appending to the `.part.ottie` file (or nothing left to fetch).
     Continue(Option<(Response, File)>),
     /// The server answered with the full file instead of the rest.
     Restart(Response, RestartReason),

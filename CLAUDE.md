@@ -62,9 +62,9 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/job.rs         JobState + state machine (can_become), JobSnapshot, JobEvent
   src/id.rs          JobId (yyyy.mm.dd-hh.mm.ss-N, UTC) and its generator
   src/backend.rs     Backend trait, HttpBackend
-  src/http.rs        HTTP transfer: request, resume, stream to .part
+  src/http.rs        HTTP transfer: request, resume, stream to .part.ottie
   src/download.rs    Download state (what gets persisted), Event, Outcome
-  src/filename.rs    sanitizing, collision-free names, .part → final rename
+  src/filename.rs    sanitizing, collision-free names, .part.ottie → final rename
   tests/support/     in-process axum test server with fault injection
   examples/fetch.rs  manual CLI try-out
 crates/api/        ottie-api: axum router: REST + WebSocket events, auth, static UI serving
@@ -105,16 +105,16 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 - **One owner of job state.** The actor task in `manager.rs` owns all jobs; the cloneable `Manager` handle sends it commands over an `mpsc` channel, each with a `oneshot` reply. Job tasks report back on an internal channel (progress at most every 250 ms). Events go out on a `broadcast` channel: `Changed(JobSnapshot)` on every state change (clients upsert by ID), plus `Progress` and `Restarted`. A subscriber that lags misses events and should resync with `list()`. No shared mutable job state behind ad-hoc locks.
 - **Explicit state machine:** Queued → Connecting → Downloading → Paused | Completed | Failed | Cancelled; Paused/Failed → Queued on resume. The rules live in `JobState::can_become`, and every change goes through `Actor::transition`; invalid transitions are errors.
-- **Pause/cancel of a running job** answers only once the task has really stopped and flushed. If the job completes first, it stays Completed. Cancel deletes the `.part`. Shutdown pauses every running job and waits for them. Lowering `max_concurrent` never stops running jobs.
+- **Pause/cancel of a running job** answers only once the task has really stopped and flushed. If the job completes first, it stays Completed. Cancel deletes the `.part.ottie`. Shutdown pauses every running job and waits for them. Lowering `max_concurrent` never stops running jobs.
 - **Job IDs:** see `docs/decisions/0006`. IDs only ever increase; `BTreeMap<JobId, _>` order = creation order = queue order.
 - **Probe first:** learn size, `Accept-Ranges`, `ETag`/`Last-Modified` and the final URL after redirects before splitting into segments.
 - **Resume safely:** `Range` + `If-Range` with a strong ETag (weak `W/` ETags are invalid in `If-Range`), else `Last-Modified`. No validator, a 200 instead of 206, or a `Content-Range` that doesn't match → restart from zero and emit `Event::Restarted(reason)`. Never splice bytes from two versions of a file.
-- **The `.part` length is the truth** for the resume offset. Bytes in flight when a connection dies are lost, so flush on every exit path (pause, error, completion) to keep `downloaded` equal to the file length.
+- **The `.part.ottie` length is the truth** for the resume offset. Bytes in flight when a connection dies are lost, so flush on every exit path (pause, error, completion) to keep `downloaded` equal to the file length.
 - **Resume re-requests the original URL,** not the redirect target: signed CDN links expire, and `If-Range` still guards consistency.
 - **Request `Accept-Encoding: identity`** so byte ranges map to file offsets.
 - **Throttling:** hierarchical token buckets, global → category → download. Every chunk read takes tokens from all three. All segments of a download share its bucket. Limits change live; 0 = unlimited.
-- **Persistence:** SQLite holds jobs, categories, settings and per-segment progress. Save progress periodically and on pause/shutdown; on startup, reconcile `.part` files with the DB.
-- **Files:** write to `<name>.part`, rename on completion. Sanitize filenames from URLs and `Content-Disposition`; never write outside the target folder; resolve collisions with ` (1)`, ` (2)`. Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files).
+- **Persistence:** SQLite holds jobs, categories, settings and per-segment progress. Save progress periodically and on pause/shutdown; on startup, reconcile `.part.ottie` files with the DB.
+- **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Sanitize filenames from URLs and `Content-Disposition`; never write outside the target folder; resolve collisions with ` (1)`, ` (2)`. Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files).
 - **Cancellation:** `tokio_util::sync::CancellationToken`, raced against network reads with `tokio::select! { biased; … }`. Pausing must stop all segments promptly and leave state consistent.
 - **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; aria2 (FTP, BitTorrent, Metalink) and yt-dlp may plug in later, so keep HTTP assumptions inside the HTTP backend.
 
@@ -122,7 +122,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 - **TLS:** rustls everywhere. No OpenSSL/native-tls; it breaks Android and Windows builds. On Android, `rustls-platform-verifier` must be initialised with the app's JNI context and ships a small Kotlin component. Check its docs in step 6.
 - **Android background work:** downloads must keep going when the app is in the background. Android 15 limits `dataSync` foreground services to 6 hours per 24 h; prefer user-initiated data transfer jobs. This needs a small Kotlin Tauri plugin. Check current Android docs before implementing.
-- **Android storage:** the engine needs a seekable file. Write `.part` files to app storage and publish finished files to Downloads through MediaStore.
+- **Android storage:** the engine needs a seekable file. Write `.part.ottie` files to app storage and publish finished files to Downloads through MediaStore.
 - **Android browser integration:** no reliable extension route (Chrome for Android has no extensions; Firefox for Android only partly supports the downloads API). Take URLs from the share sheet and "Open with" intent filters instead.
 - **Extension:** Chrome and Firefox downloads APIs differ; keep browser-specific code behind a small adapter. Chrome can hide its own download UI with `downloads.setUiOptions` (needs the `downloads.ui` permission). If the daemon is unreachable, let the browser download normally. Never drop a download.
 
@@ -140,7 +140,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 - New crates inherit `edition`, `license`, `repository` and `publish` (false) from `[workspace.package]`, and set `[lints] workspace = true`. Only `ottie` sets `publish = true`. Once it depends on `ottie-core`/`ottie-api`, those must be published too, and the dependencies need `path` + `version`.
 - License header: published crates' entry files carry the MPL "Exhibit A" notice, because the root `LICENSE` file isn't packaged.
 - TypeScript: `strict`, no `any`. API types come only from `shared/api-types/`.
-- Tests: engine behaviour is tested against the in-process server in `crates/core/tests/support/` (dropped connections, no range support, slow chunks, changed ETag). Tests never hit the real internet. A resumed download must be byte-identical to a clean one. Don't assert exact byte counts after an injected connection drop; assert `.part` length == `downloaded` instead. Manager tests subscribe before adding jobs, and wait for several concurrent jobs with `wait_for_all` (any order), never one after another.
+- Tests: engine behaviour is tested against the in-process server in `crates/core/tests/support/` (dropped connections, no range support, slow chunks, changed ETag). Tests never hit the real internet. A resumed download must be byte-identical to a clean one. Don't assert exact byte counts after an injected connection drop; assert `.part.ottie` length == `downloaded` instead. Manager tests subscribe before adding jobs, and wait for several concurrent jobs with `wait_for_all` (any order), never one after another.
 - Line endings: LF everywhere (`.gitattributes`).
 - Commits: Conventional Commits (`feat(core): …`, `fix(extension): …`), small and focused.
 - New dependency: say what it's for and why it beats the alternatives before adding it.
@@ -156,7 +156,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 ## Build order
 
 1. ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~ Done.
-2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ (done) → 2b SQLite persistence (also: report the file name as soon as the `.part` is reserved, the manager only learns it when a job ends today) → 2c segments → 2d throttling → 2e categories → 2f `Content-Disposition` filenames, retry with backoff.
+2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ (done) → 2b SQLite persistence (also: report the file name as soon as the `.part.ottie` is reserved, the manager only learns it when a job ends today) → 2c segments → 2d throttling → 2e categories → 2f `Content-Disposition` filenames, retry with backoff.
 3. `api` + `ottie serve`, then `ui` as a web UI.
 4. Browser extension.
 5. Tauri desktop: tray, notifications, sidecar daemon.

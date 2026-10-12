@@ -164,7 +164,7 @@ async fn pause_and_resume_a_running_job() {
     let paused = s.job(id).await;
     assert_eq!(paused.state, JobState::Paused);
     assert!(paused.downloaded > 0 && paused.downloaded < SIZE as u64);
-    let part = s.dir.path().join("data.bin.part");
+    let part = s.dir.path().join("data.bin.part.ottie");
     assert_eq!(std::fs::metadata(&part).unwrap().len(), paused.downloaded);
 
     s.manager.resume(id).await.unwrap();
@@ -250,7 +250,7 @@ async fn shutdown_pauses_running_jobs() {
 
     s.manager.shutdown().await.unwrap();
     let paused = s.wait_for(id, JobState::Paused).await;
-    let part = s.dir.path().join("data.bin.part");
+    let part = s.dir.path().join("data.bin.part.ottie");
     assert_eq!(std::fs::metadata(part).unwrap().len(), paused.downloaded);
     assert!(matches!(s.manager.list().await, Err(Error::ManagerStopped)));
 }

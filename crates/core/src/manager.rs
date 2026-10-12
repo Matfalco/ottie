@@ -74,7 +74,7 @@ impl Manager {
         .await
     }
 
-    /// Returns once the job has actually stopped and its `.part` file is flushed.
+    /// Returns once the job has actually stopped and its `.part.ottie` file is flushed.
     pub async fn pause(&self, id: JobId) -> Result<(), Error> {
         self.request(|reply| Command::Stop {
             id,
@@ -89,7 +89,7 @@ impl Manager {
         self.request(|reply| Command::Resume { id, reply }).await
     }
 
-    /// Stops the job for good and deletes its `.part` file.
+    /// Stops the job for good and deletes its `.part.ottie` file.
     pub async fn cancel(&self, id: JobId) -> Result<(), Error> {
         self.request(|reply| Command::Stop {
             id,
@@ -535,7 +535,7 @@ impl<B: Backend> Actor<B> {
         if let Err(err) = tokio::fs::remove_file(&part).await
             && err.kind() != io::ErrorKind::NotFound
         {
-            tracing::warn!(%id, error = %err, "could not delete .part file");
+            tracing::warn!(%id, error = %err, "could not delete .part.ottie file");
         }
     }
 }

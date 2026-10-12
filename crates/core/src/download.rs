@@ -13,11 +13,11 @@ pub struct Download {
     /// it redirected to) because redirect targets are often short-lived signed links.
     pub url: Url,
     pub dest_dir: PathBuf,
-    /// Final file name, without `.part`. Chosen when the first response arrives.
+    /// Final file name, without `.part.ottie`. Chosen when the first response arrives.
     pub file_name: Option<String>,
     /// Size in bytes, if the server told us.
     pub total: Option<u64>,
-    /// Bytes safely written to the `.part` file.
+    /// Bytes safely written to the `.part.ottie` file.
     pub downloaded: u64,
     /// Identifies the exact version of the remote file we've been downloading.
     pub validator: Option<Validator>,
@@ -80,7 +80,7 @@ pub enum RestartReason {
     RemoteChanged,
     /// The server ignored our `Range` header and sent the whole file.
     RangesIgnored,
-    /// The `.part` file was deleted.
+    /// The `.part.ottie` file was deleted.
     PartFileMissing,
 }
 

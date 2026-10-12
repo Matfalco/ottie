@@ -4,7 +4,7 @@ mod support;
 
 use std::time::Duration;
 
-use ottie_core::{Download, Error, Event, Outcome, RestartReason, build_client, run};
+use ottie_core::{Download, Error, Event, Outcome, PART_SUFFIX, RestartReason, build_client, run};
 use reqwest::Client;
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -69,7 +69,7 @@ fn restarts(events: &[Event]) -> Vec<RestartReason> {
         .collect()
 }
 
-/// Pauses partway and checks the `.part` file matches what `dl` claims.
+/// Pauses partway and checks the `.part.ottie` file matches what `dl` claims.
 async fn pause_midway(s: &Setup, dl: &mut Download) {
     let (result, _) = run_collect(&s.client, dl, Some(PAUSE_AT)).await;
     assert_eq!(result.unwrap(), Outcome::Paused);
@@ -86,7 +86,10 @@ fn assert_completed_with(outcome: Outcome, expected: &[u8]) {
     assert!(std::fs::read(&path).unwrap() == expected, "content differs");
     assert!(
         !path
-            .with_file_name(format!("{}.part", path.file_name().unwrap().display()))
+            .with_file_name(format!(
+                "{}{PART_SUFFIX}",
+                path.file_name().unwrap().display()
+            ))
             .exists()
     );
 }

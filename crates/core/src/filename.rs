@@ -8,7 +8,7 @@ use reqwest::Url;
 use tokio::fs::{self, File, OpenOptions};
 
 const FALLBACK_NAME: &str = "download";
-/// Leaves room for a " (999)" suffix and ".part" within common 255-byte limits.
+/// Leaves room for a " (999)" suffix and `PART_SUFFIX` within common 255-byte limits.
 const MAX_NAME_BYTES: usize = 200;
 const MAX_EXTENSION_BYTES: usize = 16;
 const MAX_COLLISION_ATTEMPTS: u32 = 1000;
@@ -53,12 +53,16 @@ pub fn sanitize(raw: &str) -> String {
     trimmed.to_owned()
 }
 
+/// Appended to the final name while downloading. The OS sees `.ottie` as the
+/// extension, so every Ottie file shares one extension (see docs/decisions/0007).
+pub const PART_SUFFIX: &str = ".part.ottie";
+
 pub fn part_name(name: &str) -> String {
-    format!("{name}.part")
+    format!("{name}{PART_SUFFIX}")
 }
 
 /// Picks the first free name among `name`, `name (1)`, `name (2)`… and creates
-/// its `.part` file. `create_new` makes the reservation atomic, so two
+/// its `.part.ottie` file. `create_new` makes the reservation atomic, so two
 /// downloads can't grab the same name.
 pub async fn reserve(dir: &Path, name: &str) -> io::Result<(String, File)> {
     for n in 0..MAX_COLLISION_ATTEMPTS {
@@ -81,7 +85,7 @@ pub async fn reserve(dir: &Path, name: &str) -> io::Result<(String, File)> {
     Err(no_free_name())
 }
 
-/// Renames the `.part` file to the first free name. Normally that's `name`,
+/// Renames the `.part.ottie` file to the first free name. Normally that's `name`,
 /// unless a file with that name appeared while we were downloading.
 pub async fn finalize(dir: &Path, name: &str, part: &Path) -> io::Result<String> {
     for n in 0..MAX_COLLISION_ATTEMPTS {
@@ -175,6 +179,13 @@ mod tests {
         let out = sanitize(&long);
         assert!(out.len() <= MAX_NAME_BYTES);
         assert!(out.ends_with(".tar"));
+    }
+
+    #[test]
+    fn partial_files_end_in_ottie() {
+        assert_eq!(part_name("video.mp4"), "video.mp4.part.ottie");
+        let longest = format!("{} (999){PART_SUFFIX}", "x".repeat(MAX_NAME_BYTES));
+        assert!(longest.len() <= 255, "names must fit common file systems");
     }
 
     #[test]
