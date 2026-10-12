@@ -17,12 +17,34 @@ pub struct Download {
     pub file_name: Option<String>,
     /// Size in bytes, if the server told us.
     pub total: Option<u64>,
-    /// Bytes safely written to the `.part.ottie` file.
+    /// Bytes written to the `.part.ottie` file.
     pub downloaded: u64,
     /// Identifies the exact version of the remote file we've been downloading.
     pub validator: Option<Validator>,
     /// Whether a resume can continue where it stopped. If not, it restarts from zero.
     pub resumable: bool,
+    /// Byte ranges fetched over separate connections, sorted by `start`.
+    /// Empty for a single-connection download, whose `.part.ottie` length is
+    /// then the truth for how much we have. When not empty, the `.part.ottie`
+    /// file has its full size from the start and these ranges are the truth.
+    pub segments: Vec<Segment>,
+}
+
+/// One range of a multi-connection download.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Segment {
+    pub start: u64,
+    /// Exclusive. Can move down while downloading, when an idle connection
+    /// takes over the second half of this range.
+    pub end: u64,
+    /// Bytes from `start` that are flushed to disk.
+    pub done: u64,
+}
+
+impl Segment {
+    pub fn is_complete(&self) -> bool {
+        self.start + self.done >= self.end
+    }
 }
 
 impl Download {
@@ -36,6 +58,7 @@ impl Download {
             downloaded: 0,
             validator: None,
             resumable: false,
+            segments: Vec::new(),
         })
     }
 
@@ -74,10 +97,17 @@ pub enum Event {
         resumable: bool,
         /// Where this run continues from (0 unless resuming).
         downloaded: u64,
+        /// The ranges this run will fetch (empty for a single connection).
+        segments: Vec<Segment>,
     },
     Progress {
         downloaded: u64,
         total: Option<u64>,
+    },
+    /// Multi-connection only: the ranges as now flushed to disk. Safe to save;
+    /// a resume from these never trusts bytes that aren't really there.
+    Checkpoint {
+        segments: Vec<Segment>,
     },
     /// The bytes already on disk were thrown away and the download started over.
     Restarted(RestartReason),
@@ -93,6 +123,8 @@ pub enum RestartReason {
     RangesIgnored,
     /// The `.part.ottie` file was deleted.
     PartFileMissing,
+    /// The `.part.ottie` file no longer has the size it was created with.
+    PartFileDamaged,
 }
 
 #[derive(Debug, PartialEq, Eq)]

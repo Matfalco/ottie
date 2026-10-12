@@ -64,7 +64,8 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/id.rs          JobId (yyyy.mm.dd-hh.mm.ss-N, UTC) and its generator
   src/backend.rs     Backend trait, HttpBackend
   src/store.rs       SQLite on its own thread: schema migrations, save/load jobs
-  src/http.rs        HTTP transfer: request, resume, stream to .part.ottie
+  src/http.rs        HTTP transfer: first request, single-connection stream, resume, restart rules
+  src/segmented.rs   multi-connection transfer: coordinator, connection tasks, dynamic splitting
   src/download.rs    Download state (what gets persisted), Event, Outcome
   src/filename.rs    sanitizing, collision-free names, .part.ottie → final rename
   tests/support/     in-process axum test server with fault injection
@@ -109,9 +110,10 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 - **Explicit state machine:** Queued → Connecting → Downloading → Paused | Completed | Failed | Cancelled; Paused/Failed → Queued on resume. The rules live in `JobState::can_become`, and every change goes through `Actor::transition`; invalid transitions are errors.
 - **Pause/cancel of a running job** answers only once the task has really stopped and flushed. If the job completes first, it stays Completed. Cancel deletes the `.part.ottie`. Shutdown stops every running job, waits for them and flushes the database. Lowering `max_concurrent` never stops running jobs.
 - **Job IDs:** see `docs/decisions/0006`. IDs only ever increase; `BTreeMap<JobId, _>` order = creation order = queue order.
-- **Probe first:** learn size, `Accept-Ranges`, `ETag`/`Last-Modified` and the final URL after redirects before splitting into segments.
+- **Probe with the first request:** it asks for `bytes=0-`; a `206` proves ranges work, and that response becomes the first range. Split only with a 206, a validator, no `Accept-Ranges: none` and at least 2 × `min_split` bytes (`docs/decisions/0009`); otherwise one connection.
+- **Multi-connection** (`segmented.rs`): the coordinator owns the ranges; connections share `end`/`pos`/`durable` atomics with it. Full-size `.part.ottie` up front. Extra requests are closed ranges with `If-Range`. A changed file restarts the run from zero at most once. Idle connections take an unfinished range, else half of the busy range with the most left.
 - **Resume safely:** `Range` + `If-Range` with a strong ETag (weak `W/` ETags are invalid in `If-Range`), else `Last-Modified`. No validator, a 200 instead of 206, or a `Content-Range` that doesn't match → restart from zero and emit `Event::Restarted(reason)`. Never splice bytes from two versions of a file.
-- **The `.part.ottie` length is the truth** for the resume offset. Bytes in flight when a connection dies are lost, so flush on every exit path (pause, error, completion) to keep `downloaded` equal to the file length.
+- **Single connection: the `.part.ottie` length is the truth** for the resume offset (multi-connection: the flushed ranges are). Bytes in flight when a connection dies are lost, so flush on every exit path (pause, error, completion) to keep `downloaded` equal to the file length.
 - **Resume re-requests the original URL,** not the redirect target: signed CDN links expire, and `If-Range` still guards consistency.
 - **Request `Accept-Encoding: identity`** so byte ranges map to file offsets.
 - **Throttling:** hierarchical token buckets, global → category → download. Every chunk read takes tokens from all three. All segments of a download share its bucket. Limits change live; 0 = unlimited.
@@ -143,14 +145,14 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 - New crates inherit `edition`, `license`, `repository` and `publish` (false) from `[workspace.package]`, and set `[lints] workspace = true`. Only `ottie` sets `publish = true`. Once it depends on `ottie-core`/`ottie-api`, those must be published too, and the dependencies need `path` + `version`.
 - License header: published crates' entry files carry the MPL "Exhibit A" notice, because the root `LICENSE` file isn't packaged.
 - TypeScript: `strict`, no `any`. API types come only from `shared/api-types/`.
-- Tests: engine behaviour is tested against the in-process server in `crates/core/tests/support/` (dropped connections, no range support, slow chunks, changed ETag). Tests never hit the real internet. A resumed download must be byte-identical to a clean one. Don't assert exact byte counts after an injected connection drop; assert `.part.ottie` length == `downloaded` instead. Manager tests subscribe before adding jobs, and wait for several concurrent jobs with `wait_for_all` (any order), never one after another.
+- Tests: engine behaviour is tested against the in-process server in `crates/core/tests/support/` (dropped connections, no range support, slow chunks, changed ETag). Multi-connection tests (`tests/segmented.rs`) use `HttpConfig { connections: 4, min_split: 64 KiB }`; the other test files pin one connection or use files too small to split. Tests never hit the real internet. A resumed download must be byte-identical to a clean one. Don't assert exact byte counts after an injected connection drop; assert `.part.ottie` length == `downloaded` instead. Manager tests subscribe before adding jobs, and wait for several concurrent jobs with `wait_for_all` (any order), never one after another.
 - Line endings: LF everywhere (`.gitattributes`).
 - Commits: Conventional Commits (`feat(core): …`, `fix(extension): …`), small and focused.
 - New dependency: say what it's for and why it beats the alternatives before adding it.
 
 ## Working with Mathieu
 
-- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations. Still to come: `Mutex`, lifetimes, Svelte runes, etc.
+- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations, atomics, `JoinSet`, child cancellation tokens. Still to come: `Mutex`, lifetimes, Svelte runes, etc.
 - For decisions that are hard to reverse (data model, API shape, crate choices, architecture), present 2–3 options with trade-offs and let him choose. For small implementation details, decide and say what you chose.
 - Work in small vertical slices that run end to end. Don't scaffold code ahead of need.
 - Show the diff and wait for a go-ahead before committing.
@@ -159,7 +161,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 ## Build order
 
 1. ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~ Done.
-2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ → ~~2b SQLite persistence~~ → 2c segments (with an in-order mode for streaming) → 2d throttling → 2e categories → 2f `Content-Disposition` filenames, retry with backoff.
+2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ → ~~2b SQLite persistence~~ → ~~2c multi-connection~~ (streaming mode comes with the stream endpoint) → 2d throttling → 2e categories → 2f `Content-Disposition` filenames, retry with backoff.
 3. `api` + `ottie serve` (including the `/jobs/{id}/stream` endpoint), then `ui` as a web UI. Decide where the database and config live.
 4. Browser extension.
 5. Tauri desktop: tray, notifications, sidecar daemon.

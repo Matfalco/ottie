@@ -1,4 +1,6 @@
-//! Single-connection HTTP(S) transfer with pause/resume.
+//! HTTP(S) transfers with pause/resume: a single connection, or several in
+//! parallel (see `segmented.rs`) when the server supports ranges and the file
+//! is big enough.
 
 use std::io;
 use std::path::Path;
@@ -14,8 +16,27 @@ use tokio_util::sync::CancellationToken;
 use crate::download::{Download, Event, Outcome, RestartReason, Validator, check_scheme};
 use crate::error::Error;
 use crate::filename;
+use crate::segmented::{self, Segmented};
 
 const MAX_REDIRECTS: usize = 10;
+
+/// How HTTP downloads are split across connections.
+#[derive(Debug, Clone)]
+pub struct HttpConfig {
+    /// Connections per download. 1 disables splitting.
+    pub connections: usize,
+    /// Never split a range into pieces smaller than this many bytes.
+    pub min_split: u64,
+}
+
+impl Default for HttpConfig {
+    fn default() -> Self {
+        Self {
+            connections: 4,
+            min_split: 1024 * 1024,
+        }
+    }
+}
 
 /// HTTP client with our redirect rules: at most 10 hops, http/https only.
 pub fn build_client() -> Result<Client, Error> {
@@ -46,31 +67,60 @@ pub fn build_client() -> Result<Client, Error> {
 /// describes what's on disk.
 pub async fn run(
     client: &Client,
+    config: &HttpConfig,
     dl: &mut Download,
     cancel: &CancellationToken,
     mut on_event: impl FnMut(Event),
 ) -> Result<Outcome, Error> {
-    let opened = open(client, dl, &mut on_event).await?;
-    on_event(Event::Started {
-        file_name: opened.name.clone(),
-        total: dl.total,
-        validator: dl.validator.clone(),
-        resumable: dl.resumable,
-        downloaded: dl.downloaded,
-    });
-    if let Some((response, file)) = opened.body {
-        let mut writer = BufWriter::new(file);
-        let streamed = stream_body(response, &mut writer, dl, cancel, &mut on_event).await;
-        // Flush even after an error, so the .part.ottie length matches `dl.downloaded`.
-        let flushed = flush(&mut writer).await;
-        drop(writer); // Windows can't rename a file that's still open.
-        if streamed? == Stop::Cancelled {
-            flushed?;
-            return Ok(Outcome::Paused);
+    let mut opened = match (dl.segments.is_empty(), dl.file_name.clone(), dl.part_path()) {
+        (false, Some(name), Some(part)) => {
+            match resume_segmented(client, config, dl, &name, &part, cancel, &mut on_event).await? {
+                Resumed::Stopped(outcome) => return Ok(outcome),
+                Resumed::Restart(reason) => {
+                    restarting(dl, reason, &mut on_event);
+                    fresh(client, dl, name, &part).await?
+                }
+            }
         }
-        flushed?;
+        _ => {
+            dl.segments.clear();
+            open(client, dl, &mut on_event).await?
+        }
+    };
+
+    // Loops at most twice: once more if the file changes on the server
+    // in the middle of a multi-connection download.
+    let mut restarted_mid_run = false;
+    loop {
+        let Opened { name, body } = opened;
+        let Some((response, file)) = body else {
+            started(dl, &name, &mut on_event);
+            return complete(dl, &name).await;
+        };
+        let Some(total) = splittable(config, dl, &response) else {
+            started(dl, &name, &mut on_event);
+            return single(response, file, dl, &name, cancel, &mut on_event).await;
+        };
+
+        // Full size up front, so every connection can write at its offset
+        // and a later resume can tell from the length that the file is intact.
+        file.set_len(total).await?;
+        drop(file);
+        dl.segments = segmented::plan(total, config);
+        started(dl, &name, &mut on_event);
+        let part = dl.dest_dir.join(filename::part_name(&name));
+        let first = Some(response);
+        match segmented::run(client, config, dl, &part, first, cancel, &mut on_event).await? {
+            Segmented::Finished => return complete(dl, &name).await,
+            Segmented::Cancelled => return Ok(Outcome::Paused),
+            Segmented::Restart(reason) if !restarted_mid_run => {
+                restarted_mid_run = true;
+                restarting(dl, reason, &mut on_event);
+                opened = fresh(client, dl, name, &part).await?;
+            }
+            Segmented::Restart(_) => return Err(Error::RemoteUnstable),
+        }
     }
-    complete(dl, &opened.name).await
 }
 
 struct Opened {
@@ -79,20 +129,20 @@ struct Opened {
     body: Option<(Response, File)>,
 }
 
-/// Sends the request and prepares the `.part.ottie` file: a fresh start, a resume,
-/// or a restart from zero when resuming isn't safe.
+/// Sends the request and prepares a single-connection `.part.ottie` file: a
+/// fresh start, a resume, or a restart from zero when resuming isn't safe.
 async fn open(
     client: &Client,
     dl: &mut Download,
     on_event: &mut impl FnMut(Event),
 ) -> Result<Opened, Error> {
     let (Some(name), Some(part)) = (dl.file_name.clone(), dl.part_path()) else {
-        let response = expect_full(get(client, &dl.url, None).await?)?;
+        let response = get_from_start(client, &dl.url).await?;
         let suggested = filename::from_url(response.url());
         let (name, file) = filename::reserve(&dl.dest_dir, &suggested).await?;
         tracing::debug!(url = %redact(&dl.url), %name, "starting download");
         dl.file_name = Some(name.clone());
-        learn(dl, response.headers(), response.content_length());
+        learn(dl, &response);
         return Ok(Opened {
             name,
             body: Some((response, file)),
@@ -112,7 +162,7 @@ async fn open(
                 Resume::Restart(response, reason) => {
                     // The server already sent the whole file: use it.
                     restarting(dl, reason, on_event);
-                    learn(dl, response.headers(), response.content_length());
+                    learn(dl, &response);
                     let file = File::create(&part).await?;
                     return Ok(Opened {
                         name,
@@ -126,9 +176,19 @@ async fn open(
     };
 
     restarting(dl, reason, on_event);
-    let response = expect_full(get(client, &dl.url, None).await?)?;
-    learn(dl, response.headers(), response.content_length());
-    let file = File::create(&part).await?;
+    fresh(client, dl, name, &part).await
+}
+
+/// Requests the file from the start again and empties the `.part.ottie` file.
+async fn fresh(
+    client: &Client,
+    dl: &mut Download,
+    name: String,
+    part: &Path,
+) -> Result<Opened, Error> {
+    let response = get_from_start(client, &dl.url).await?;
+    learn(dl, &response);
+    let file = File::create(part).await?;
     Ok(Opened {
         name,
         body: Some((response, file)),
@@ -151,24 +211,18 @@ async fn try_resume(
     offset: u64,
     validator: &Validator,
 ) -> Result<Resume, Error> {
-    let response = get(client, &dl.url, Some((offset, validator))).await?;
+    let response = get(client, &dl.url, Some((offset, None)), Some(validator)).await?;
     match response.status() {
         StatusCode::PARTIAL_CONTENT => {
-            if !content_range_matches(response.headers(), offset, dl.total) {
+            if !content_range_matches(response.headers(), offset, None, dl.total) {
                 return Ok(Resume::Refused(RestartReason::RemoteChanged));
             }
             let file = OpenOptions::new().append(true).open(part).await?;
             dl.downloaded = offset;
             Ok(Resume::Continue(Some((response, file))))
         }
-        // A 200 means either the If-Range validator didn't match (the file
-        // changed), or the server doesn't do ranges. The new validator tells which.
         StatusCode::OK => {
-            let reason = if validator_from(response.headers()).as_ref() == Some(validator) {
-                RestartReason::RangesIgnored
-            } else {
-                RestartReason::RemoteChanged
-            };
+            let reason = response_reason(&response, validator);
             Ok(Resume::Restart(response, reason))
         }
         StatusCode::RANGE_NOT_SATISFIABLE if dl.total == Some(offset) => {
@@ -180,21 +234,111 @@ async fn try_resume(
     }
 }
 
+enum Resumed {
+    /// Completed, or paused again.
+    Stopped(Outcome),
+    Restart(RestartReason),
+}
+
+async fn resume_segmented(
+    client: &Client,
+    config: &HttpConfig,
+    dl: &mut Download,
+    name: &str,
+    part: &Path,
+    cancel: &CancellationToken,
+    on_event: &mut impl FnMut(Event),
+) -> Result<Resumed, Error> {
+    let reason = match fs::metadata(part).await {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => RestartReason::PartFileMissing,
+        Err(e) => return Err(e.into()),
+        Ok(meta) if Some(meta.len()) != dl.total => RestartReason::PartFileDamaged,
+        Ok(_) if !dl.resumable || dl.validator.is_none() => RestartReason::NotResumable,
+        Ok(_) => {
+            dl.downloaded = dl.segments.iter().map(|s| s.done).sum();
+            started(dl, name, on_event);
+            match segmented::run(client, config, dl, part, None, cancel, on_event).await? {
+                Segmented::Finished => return complete(dl, name).await.map(Resumed::Stopped),
+                Segmented::Cancelled => return Ok(Resumed::Stopped(Outcome::Paused)),
+                Segmented::Restart(reason) => reason,
+            }
+        }
+    };
+    Ok(Resumed::Restart(reason))
+}
+
+/// A 200 to a range request means either the `If-Range` validator didn't
+/// match (the file changed) or the server ignores ranges. The validator tells which.
+pub(crate) fn response_reason(response: &Response, validator: &Validator) -> RestartReason {
+    if validator_from(response.headers()).as_ref() == Some(validator) {
+        RestartReason::RangesIgnored
+    } else {
+        RestartReason::RemoteChanged
+    }
+}
+
 fn restarting(dl: &mut Download, reason: RestartReason, on_event: &mut impl FnMut(Event)) {
     tracing::debug!(url = %redact(&dl.url), ?reason, "restarting download from zero");
     dl.downloaded = 0;
+    dl.segments.clear();
     on_event(Event::Restarted(reason));
 }
 
-/// Records what a full (200) response tells us about the remote file.
-fn learn(dl: &mut Download, headers: &HeaderMap, content_length: Option<u64>) {
+fn started(dl: &Download, name: &str, on_event: &mut impl FnMut(Event)) {
+    on_event(Event::Started {
+        file_name: name.to_owned(),
+        total: dl.total,
+        validator: dl.validator.clone(),
+        resumable: dl.resumable,
+        downloaded: dl.downloaded,
+        segments: dl.segments.clone(),
+    });
+}
+
+/// Records what a response from the start of the file tells us about it.
+fn learn(dl: &mut Download, response: &Response) {
+    let headers = response.headers();
     let refuses_ranges = headers
         .get(ACCEPT_RANGES)
         .is_some_and(|v| v.as_bytes().eq_ignore_ascii_case(b"none"));
-    dl.total = content_length;
+    dl.total = match response.status() {
+        StatusCode::PARTIAL_CONTENT => content_range(headers).and_then(|(_, _, size)| size),
+        _ => response.content_length(),
+    };
     dl.validator = validator_from(headers);
     dl.resumable = dl.validator.is_some() && !refuses_ranges;
     dl.downloaded = 0;
+}
+
+/// The total size if this fresh response may be split across connections:
+/// the server answered our range with a 206 (so ranges really work), we can
+/// check the file stays the same, and it's big enough to be worth it.
+fn splittable(config: &HttpConfig, dl: &Download, response: &Response) -> Option<u64> {
+    let total = dl.total?;
+    let worth_it = config.connections > 1 && total >= 2 * config.min_split.max(1);
+    let safe = response.status() == StatusCode::PARTIAL_CONTENT && dl.resumable;
+    (worth_it && safe && dl.downloaded == 0).then_some(total)
+}
+
+async fn single(
+    response: Response,
+    file: File,
+    dl: &mut Download,
+    name: &str,
+    cancel: &CancellationToken,
+    on_event: &mut impl FnMut(Event),
+) -> Result<Outcome, Error> {
+    let mut writer = BufWriter::new(file);
+    let streamed = stream_body(response, &mut writer, dl, cancel, on_event).await;
+    // Flush even after an error, so the .part.ottie length matches `dl.downloaded`.
+    let flushed = flush(&mut writer).await;
+    drop(writer); // Windows can't rename a file that's still open.
+    if streamed? == Stop::Cancelled {
+        flushed?;
+        return Ok(Outcome::Paused);
+    }
+    flushed?;
+    complete(dl, name).await
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -230,7 +374,8 @@ async fn stream_body(
     }
 }
 
-async fn flush(writer: &mut BufWriter<File>) -> io::Result<()> {
+/// Writes buffered bytes and asks the OS to put them on disk.
+pub(crate) async fn flush(writer: &mut BufWriter<File>) -> io::Result<()> {
     writer.flush().await?;
     writer.get_ref().sync_data().await
 }
@@ -249,28 +394,48 @@ async fn complete(dl: &mut Download, name: &str) -> Result<Outcome, Error> {
     let final_name = filename::finalize(&dl.dest_dir, name, &part).await?;
     let path = dl.dest_dir.join(&final_name);
     dl.file_name = Some(final_name);
+    dl.segments.clear();
     Ok(Outcome::Completed { path })
 }
 
-async fn get(
+/// Sends a GET. `range` is `(first byte, last byte if any)`; `if_range` makes
+/// the server send the whole file instead if it has changed since.
+pub(crate) async fn get(
     client: &Client,
     url: &Url,
-    range: Option<(u64, &Validator)>,
+    range: Option<(u64, Option<u64>)>,
+    if_range: Option<&Validator>,
 ) -> Result<Response, Error> {
     check_scheme(url)?;
     // Ask for the raw bytes: no compression, so ranges map to file offsets.
     let mut request = client.get(url.clone()).header(ACCEPT_ENCODING, "identity");
-    if let Some((offset, validator)) = range {
-        request = request
-            .header(RANGE, format!("bytes={offset}-"))
-            .header(IF_RANGE, validator.header_value());
+    if let Some((first, last)) = range {
+        let last = last.map(|l| l.to_string()).unwrap_or_default();
+        request = request.header(RANGE, format!("bytes={first}-{last}"));
+    }
+    if let Some(validator) = if_range {
+        request = request.header(IF_RANGE, validator.header_value());
     }
     Ok(request.send().await?)
 }
 
-fn expect_full(response: Response) -> Result<Response, Error> {
+/// Asks for `bytes=0-`: a 206 answer proves the server really supports
+/// ranges, which the `Accept-Ranges` header alone doesn't.
+async fn get_from_start(client: &Client, url: &Url) -> Result<Response, Error> {
+    let response = get(client, url, Some((0, None)), None).await?;
     match response.status() {
         StatusCode::OK => Ok(response),
+        StatusCode::PARTIAL_CONTENT if content_range_matches(response.headers(), 0, None, None) => {
+            Ok(response)
+        }
+        // Some servers refuse any range on an empty file.
+        StatusCode::RANGE_NOT_SATISFIABLE => {
+            let response = get(client, url, None, None).await?;
+            match response.status() {
+                StatusCode::OK => Ok(response),
+                status => Err(Error::Status(status)),
+            }
+        }
         status => Err(Error::Status(status)),
     }
 }
@@ -284,21 +449,34 @@ fn validator_from(headers: &HeaderMap) -> Option<Validator> {
     }
 }
 
-/// A 206 must start exactly where we asked, run to the end, and (if we know
-/// the size) describe a file of the same size.
-fn content_range_matches(headers: &HeaderMap, offset: u64, total: Option<u64>) -> bool {
-    let Some((start, end, size)) = headers
+/// A 206 must start exactly where we asked, end where we asked (or at the
+/// end of the file), and describe a file of the size we expect.
+pub(crate) fn content_range_matches(
+    headers: &HeaderMap,
+    first: u64,
+    last: Option<u64>,
+    total: Option<u64>,
+) -> bool {
+    let Some((start, end, size)) = content_range(headers) else {
+        return false;
+    };
+    let end_ok = match (last, size) {
+        (Some(last), _) => end == last,
+        (None, Some(size)) => end + 1 == size,
+        (None, None) => true,
+    };
+    let size_ok = match (total, size) {
+        (Some(total), Some(size)) => total == size,
+        _ => true,
+    };
+    start == first && end_ok && size_ok
+}
+
+fn content_range(headers: &HeaderMap) -> Option<(u64, u64, Option<u64>)> {
+    headers
         .get(CONTENT_RANGE)
         .and_then(|v| v.to_str().ok())
         .and_then(parse_content_range)
-    else {
-        return false;
-    };
-    let size_ok = match (total, size) {
-        (Some(total), Some(size)) => total == size && end + 1 == size,
-        _ => true,
-    };
-    start == offset && size_ok
 }
 
 /// Parses `bytes <start>-<end>/<size or *>`.

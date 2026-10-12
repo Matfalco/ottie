@@ -8,13 +8,14 @@ mod http;
 mod id;
 mod job;
 mod manager;
+mod segmented;
 mod store;
 
 pub use backend::{Backend, HttpBackend};
-pub use download::{Download, Event, Outcome, RestartReason, Validator};
+pub use download::{Download, Event, Outcome, RestartReason, Segment, Validator};
 pub use error::Error;
 pub use filename::PART_SUFFIX;
-pub use http::{build_client, run};
+pub use http::{HttpConfig, build_client, run};
 pub use id::JobId;
 pub use job::{JobEvent, JobSnapshot, JobState};
 pub use manager::{Manager, ManagerConfig};

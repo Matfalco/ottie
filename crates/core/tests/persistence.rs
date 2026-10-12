@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ottie_core::{
-    Error, HttpBackend, JobId, JobSnapshot, JobState, Manager, ManagerConfig, PART_SUFFIX, Store,
+    Error, HttpBackend, HttpConfig, JobId, JobSnapshot, JobState, Manager, ManagerConfig,
+    PART_SUFFIX, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -40,10 +41,16 @@ async fn setup() -> Setup {
 }
 
 impl Setup {
-    /// Starts a manager on the test database, as Ottie does at launch.
+    /// Starts a manager on the test database, as Ottie does at launch. The
+    /// default HTTP settings use one connection for this 1 MiB file.
     async fn launch(&self) -> Manager {
+        self.launch_with(HttpConfig::default()).await
+    }
+
+    async fn launch_with(&self, http: HttpConfig) -> Manager {
         let store = Store::open(&self.db).await.unwrap();
-        Manager::start(HttpBackend::new().unwrap(), store, ManagerConfig::default())
+        let backend = HttpBackend::with_config(http).unwrap();
+        Manager::start(backend, store, ManagerConfig::default())
             .await
             .unwrap()
     }
@@ -179,4 +186,40 @@ async fn a_database_from_a_newer_ottie_is_refused() {
         "got {:?}",
         result.err()
     );
+}
+
+#[tokio::test]
+async fn multi_connection_downloads_survive_restarts_and_crashes() {
+    let s = setup().await;
+    // Four connections are fast; slow down enough to quit halfway.
+    s.server
+        .configure(|b| b.chunk_delay = Some(Duration::from_millis(20)));
+    let four = HttpConfig {
+        connections: 4,
+        min_split: 64 * 1024,
+    };
+    let count_segments = || {
+        let db = rusqlite::Connection::open(&s.db).unwrap();
+        db.query_row("SELECT COUNT(*) FROM segments", [], |r| r.get::<_, i64>(0))
+            .unwrap()
+    };
+
+    // Quit halfway: the ranges are in the database.
+    let manager = s.launch_with(four.clone()).await;
+    let id = s.add(&manager).await;
+    wait_until(&manager, id, JobState::Downloading).await;
+    manager.shutdown().await.unwrap();
+    assert!(count_segments() >= 4);
+    assert_eq!(s.part_len(), SIZE as u64, "full size from the start");
+
+    // Crash: pretend the last progress saves never happened. The ranges
+    // restart from their beginning, which is safe, just slower.
+    let db = rusqlite::Connection::open(&s.db).unwrap();
+    db.execute("UPDATE segments SET done = 0", []).unwrap();
+    drop(db);
+
+    let manager = s.launch_with(four).await;
+    wait_until(&manager, id, JobState::Completed).await;
+    s.assert_complete();
+    assert_eq!(count_segments(), 0, "ranges are removed once complete");
 }

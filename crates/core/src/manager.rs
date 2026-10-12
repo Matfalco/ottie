@@ -227,9 +227,12 @@ impl Job {
         if state.is_running() {
             state = JobState::Queued;
         }
-        // The file on disk is the truth for how much we have; the saved
-        // number can lag behind it.
-        if !matches!(state, JobState::Completed | JobState::Cancelled)
+        // What's on disk is the truth for how much we have; the saved byte
+        // count can lag behind it. With several connections the file has its
+        // full size from the start, so the saved ranges tell instead.
+        if !download.segments.is_empty() {
+            download.downloaded = download.segments.iter().map(|s| s.done).sum();
+        } else if !matches!(state, JobState::Completed | JobState::Cancelled)
             && let Some(part) = download.part_path()
         {
             download.downloaded = tokio::fs::metadata(&part).await.map_or(0, |m| m.len());
@@ -345,6 +348,7 @@ impl<B: Backend> Actor<B> {
                 validator,
                 resumable,
                 downloaded,
+                segments,
             } => {
                 let dl = &mut job.download;
                 dl.file_name = Some(file_name);
@@ -352,6 +356,7 @@ impl<B: Backend> Actor<B> {
                 dl.validator = validator;
                 dl.resumable = resumable;
                 dl.downloaded = downloaded;
+                dl.segments = segments;
                 // Save right away: from now on a crash must not lose the
                 // file name or the validator needed to resume.
                 self.save(id);
@@ -374,6 +379,8 @@ impl<B: Backend> Actor<B> {
                     total,
                 });
             }
+            // Saved with the next progress save; only flushed ranges are reported.
+            Event::Checkpoint { segments } => job.download.segments = segments,
             Event::Restarted(reason) => {
                 let _ = self.events.send(JobEvent::Restarted { id, reason });
             }

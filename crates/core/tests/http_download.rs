@@ -4,7 +4,9 @@ mod support;
 
 use std::time::Duration;
 
-use ottie_core::{Download, Error, Event, Outcome, PART_SUFFIX, RestartReason, build_client, run};
+use ottie_core::{
+    Download, Error, Event, HttpConfig, Outcome, PART_SUFFIX, RestartReason, build_client, run,
+};
 use reqwest::Client;
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -12,6 +14,14 @@ use tokio_util::sync::CancellationToken;
 
 const SIZE: usize = 1024 * 1024;
 const PAUSE_AT: u64 = 400 * 1024;
+
+/// These tests cover the single-connection path; see `segmented.rs` for the rest.
+fn single() -> HttpConfig {
+    HttpConfig {
+        connections: 1,
+        ..HttpConfig::default()
+    }
+}
 
 struct Setup {
     server: TestServer,
@@ -47,7 +57,7 @@ async fn run_collect(
 ) -> (Result<Outcome, Error>, Vec<Event>) {
     let cancel = CancellationToken::new();
     let mut events = Vec::new();
-    let result = run(client, dl, &cancel, |event| {
+    let result = run(client, &single(), dl, &cancel, |event| {
         if let (Some(limit), Event::Progress { downloaded, .. }) = (pause_at, &event)
             && *downloaded >= limit
         {
@@ -64,7 +74,7 @@ fn restarts(events: &[Event]) -> Vec<RestartReason> {
         .iter()
         .filter_map(|e| match e {
             Event::Restarted(reason) => Some(*reason),
-            Event::Started { .. } | Event::Progress { .. } => None,
+            _ => None,
         })
         .collect()
 }
@@ -177,7 +187,9 @@ async fn without_validator_resume_starts_over() {
     let (result, events) = run_collect(&s.client, &mut dl, None).await;
     assert_completed_with(result.unwrap(), &s.data);
     assert_eq!(restarts(&events), [RestartReason::NotResumable]);
-    assert_eq!(s.server.requests()[1].range, None);
+    let restart = &s.server.requests()[1];
+    assert_eq!(restart.range.as_deref(), Some("bytes=0-"));
+    assert_eq!(restart.if_range, None);
 }
 
 #[tokio::test]
@@ -231,7 +243,7 @@ async fn pause_is_prompt_on_a_slow_server() {
 
     let result = tokio::time::timeout(
         Duration::from_secs(5),
-        run(&s.client, &mut dl, &cancel, |_| {}),
+        run(&s.client, &single(), &mut dl, &cancel, |_| {}),
     )
     .await
     .expect("pause took too long");

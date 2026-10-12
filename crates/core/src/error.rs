@@ -21,6 +21,9 @@ pub enum Error {
     #[error("download stopped after {received} of {expected} bytes")]
     Incomplete { received: u64, expected: u64 },
 
+    #[error("the file kept changing on the server while downloading")]
+    RemoteUnstable,
+
     #[error("file error: {0}")]
     Io(#[from] std::io::Error),
 

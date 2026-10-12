@@ -5,7 +5,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::download::{Download, Event, Outcome};
 use crate::error::Error;
-use crate::http;
+use crate::http::{self, HttpConfig};
 
 /// Something that can carry out a download. The manager only talks to this,
 /// so other protocols (aria2, yt-dlp…) can plug in later.
@@ -20,15 +20,21 @@ pub trait Backend: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Outcome, Error>> + Send;
 }
 
-/// Plain HTTP(S) downloads over a single connection.
+/// HTTP(S) downloads, split across several connections when possible.
 pub struct HttpBackend {
     client: Client,
+    config: HttpConfig,
 }
 
 impl HttpBackend {
     pub fn new() -> Result<Self, Error> {
+        Self::with_config(HttpConfig::default())
+    }
+
+    pub fn with_config(config: HttpConfig) -> Result<Self, Error> {
         Ok(Self {
             client: http::build_client()?,
+            config,
         })
     }
 }
@@ -40,6 +46,6 @@ impl Backend for HttpBackend {
         cancel: &CancellationToken,
         on_event: &mut (dyn FnMut(Event) + Send),
     ) -> Result<Outcome, Error> {
-        http::run(&self.client, dl, cancel, on_event).await
+        http::run(&self.client, &self.config, dl, cancel, on_event).await
     }
 }

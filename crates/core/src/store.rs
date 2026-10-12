@@ -1,6 +1,7 @@
 //! SQLite persistence. SQLite calls block, so the connection lives on its own
 //! thread and the manager talks to it through a channel. See docs/decisions/0008.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::mpsc as std_mpsc;
 use std::thread;
@@ -9,7 +10,7 @@ use reqwest::Url;
 use rusqlite::{Connection, Row, params};
 use tokio::sync::oneshot;
 
-use crate::download::{Download, Validator};
+use crate::download::{Download, Segment, Validator};
 use crate::error::Error;
 use crate::id::JobId;
 use crate::job::JobState;
@@ -33,6 +34,17 @@ const MIGRATIONS: &[&str] = &[
         resumable       INTEGER NOT NULL DEFAULT 0 CHECK (resumable IN (0, 1)),
         error           TEXT,
         PRIMARY KEY (id_secs, id_seq)
+    ) STRICT;",
+    // 2: ranges of multi-connection downloads
+    "CREATE TABLE segments (
+        job_secs    INTEGER NOT NULL,
+        job_seq     INTEGER NOT NULL,
+        range_start INTEGER NOT NULL,
+        range_end   INTEGER NOT NULL,
+        done        INTEGER NOT NULL,
+        PRIMARY KEY (job_secs, job_seq, range_start),
+        FOREIGN KEY (job_secs, job_seq) REFERENCES jobs (id_secs, id_seq) ON DELETE CASCADE,
+        CHECK (range_start < range_end AND done >= 0 AND done <= range_end - range_start)
     ) STRICT;",
 ];
 
@@ -120,14 +132,14 @@ impl Store {
 }
 
 /// Runs on the database thread until the `Store` is dropped.
-fn serve(conn: Connection, requests: std_mpsc::Receiver<Op>) {
+fn serve(mut conn: Connection, requests: std_mpsc::Receiver<Op>) {
     while let Ok(op) = requests.recv() {
         match op {
             Op::Load(reply) => {
                 let _ = reply.send(load(&conn));
             }
             Op::Save(record) => {
-                if let Err(err) = save(&conn, &record) {
+                if let Err(err) = save(&mut conn, &record) {
                     tracing::error!(id = %record.id, error = %err, "could not save job");
                 }
             }
@@ -165,7 +177,9 @@ fn migrate(conn: &mut Connection) -> Result<(), Error> {
     Ok(())
 }
 
-fn save(conn: &Connection, record: &JobRecord) -> Result<(), Error> {
+/// Upserts the job and replaces its segments, in one transaction so a crash
+/// can't leave the two out of step.
+fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
     let dl = &record.download;
     let dest_dir = dl
         .dest_dir
@@ -176,7 +190,9 @@ fn save(conn: &Connection, record: &JobRecord) -> Result<(), Error> {
         Some(Validator::LastModified(v)) => (Some("last-modified"), Some(v.as_str())),
         None => (None, None),
     };
-    conn.prepare_cached(
+    let (secs, seq) = (record.id.secs(), record.id.seq());
+    let tx = conn.transaction()?;
+    tx.prepare_cached(
         "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, file_name, state, total,
                            downloaded, validator_kind, validator_value, resumable, error)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
@@ -189,8 +205,8 @@ fn save(conn: &Connection, record: &JobRecord) -> Result<(), Error> {
              resumable = excluded.resumable, error = excluded.error",
     )?
     .execute(params![
-        record.id.secs(),
-        record.id.seq(),
+        secs,
+        seq,
         dl.url.as_str(),
         dest_dir,
         dl.file_name,
@@ -202,6 +218,18 @@ fn save(conn: &Connection, record: &JobRecord) -> Result<(), Error> {
         dl.resumable,
         record.error,
     ])?;
+    tx.prepare_cached("DELETE FROM segments WHERE job_secs = ?1 AND job_seq = ?2")?
+        .execute(params![secs, seq])?;
+    {
+        let mut insert = tx.prepare_cached(
+            "INSERT INTO segments (job_secs, job_seq, range_start, range_end, done)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+        )?;
+        for s in &dl.segments {
+            insert.execute(params![secs, seq, s.start, s.end, s.done])?;
+        }
+    }
+    tx.commit()?;
     Ok(())
 }
 
@@ -220,6 +248,24 @@ fn load(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
             Ok(record) => records.push(record),
             Err(problem) => tracing::error!(%problem, "skipping unreadable job in database"),
         }
+    }
+
+    let mut by_job: BTreeMap<JobId, Vec<Segment>> = BTreeMap::new();
+    let mut stmt = conn.prepare(
+        "SELECT job_secs, job_seq, range_start, range_end, done
+         FROM segments ORDER BY job_secs, job_seq, range_start",
+    )?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let id = JobId::from_parts(row.get(0)?, row.get(1)?);
+        by_job.entry(id).or_default().push(Segment {
+            start: row.get(2)?,
+            end: row.get(3)?,
+            done: row.get(4)?,
+        });
+    }
+    for record in &mut records {
+        record.download.segments = by_job.remove(&record.id).unwrap_or_default();
     }
     Ok(records)
 }
@@ -251,6 +297,7 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         downloaded: row.get(7)?,
         validator,
         resumable: row.get(10)?,
+        segments: Vec::new(), // filled in by `load`
     };
     Ok(Ok(JobRecord {
         id,
@@ -332,6 +379,24 @@ mod tests {
         done.download.downloaded = done.download.total.unwrap();
         store.save(done.clone());
         assert_eq!(store.load().await.unwrap(), [done]);
+    }
+
+    #[tokio::test]
+    async fn segments_are_saved_and_replaced() {
+        let store = Store::open_in_memory().await.unwrap();
+        let mut job = record(1);
+        let seg = |start, end, done| Segment { start, end, done };
+        job.download.segments = vec![seg(0, 50, 50), seg(50, 100, 10)];
+        store.save(job.clone());
+        assert_eq!(store.load().await.unwrap(), [job.clone()]);
+
+        // After a split there are more ranges; after completion none.
+        job.download.segments = vec![seg(0, 50, 50), seg(50, 75, 25), seg(75, 100, 3)];
+        store.save(job.clone());
+        assert_eq!(store.load().await.unwrap(), [job.clone()]);
+        job.download.segments.clear();
+        store.save(job.clone());
+        assert_eq!(store.load().await.unwrap(), [job]);
     }
 
     #[test]

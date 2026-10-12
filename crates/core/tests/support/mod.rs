@@ -28,6 +28,9 @@ pub struct Behavior {
     pub ranges: bool,
     /// Pause before each 16 KiB chunk.
     pub chunk_delay: Option<Duration>,
+    /// Pause this long instead before chunks at or after this file offset,
+    /// so one part of the file is slow.
+    pub slow_from: Option<(usize, Duration)>,
     /// Kill the connection after this many body bytes, once (the next request is normal).
     pub drop_after: Option<usize>,
 }
@@ -59,6 +62,7 @@ impl TestServer {
                 etag: Some("\"v1\"".to_owned()),
                 ranges: true,
                 chunk_delay: None,
+                slow_from: None,
                 drop_after: None,
             },
             requests: Vec::new(),
@@ -90,7 +94,7 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
     let text = |name| headers.get(name).map(|v| v.to_str().unwrap().to_owned());
     let range = text(RANGE);
     let if_range = text(IF_RANGE);
-    let (body, etag, ranges, delay, drop_after) = {
+    let (body, etag, ranges, pacing, drop_after) = {
         let mut shared = state.lock().unwrap();
         shared.requests.push(RecordedRequest {
             range: range.clone(),
@@ -98,21 +102,24 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
         });
         let b = &mut shared.behavior;
         let drop_after = b.drop_after.take();
-        (
-            b.body.clone(),
-            b.etag.clone(),
-            b.ranges,
-            b.chunk_delay,
-            drop_after,
-        )
+        let pacing = Pacing {
+            delay: b.chunk_delay,
+            slow_from: b.slow_from,
+        };
+        (b.body.clone(), b.etag.clone(), b.ranges, pacing, drop_after)
     };
 
     let total = body.len();
     let validator_ok = if_range.is_none() || if_range == etag;
-    let start = match range.as_deref().and_then(|r| r.strip_prefix("bytes=")) {
+    let requested = match range.as_deref().and_then(|r| r.strip_prefix("bytes=")) {
         Some(spec) if ranges && validator_ok => {
-            // We only ever send open-ended ranges: "bytes=N-".
-            let start: usize = spec.trim_end_matches('-').parse().unwrap();
+            // "bytes=N-" or "bytes=N-M" (M inclusive).
+            let (start, last) = spec.split_once('-').unwrap();
+            let start: usize = start.parse().unwrap();
+            let end = match last {
+                "" => total,
+                last => (last.parse::<usize>().unwrap() + 1).min(total),
+            };
             if start >= total {
                 return Response::builder()
                     .status(StatusCode::RANGE_NOT_SATISFIABLE)
@@ -120,27 +127,33 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
                     .body(Body::empty())
                     .unwrap();
             }
-            Some(start)
+            Some((start, end))
         }
         _ => None,
     };
+    let (start, end) = requested.unwrap_or((0, total));
 
     let mut response = Response::builder()
         .header(ACCEPT_RANGES, if ranges { "bytes" } else { "none" })
-        .header(CONTENT_LENGTH, total - start.unwrap_or(0));
+        .header(CONTENT_LENGTH, end - start);
     if let Some(etag) = &etag {
         response = response.header(ETAG, etag);
     }
-    if let Some(start) = start {
-        response = response.status(StatusCode::PARTIAL_CONTENT).header(
-            CONTENT_RANGE,
-            format!("bytes {start}-{}/{total}", total - 1),
-        );
+    if requested.is_some() {
+        response = response
+            .status(StatusCode::PARTIAL_CONTENT)
+            .header(CONTENT_RANGE, format!("bytes {start}-{}/{total}", end - 1));
     }
-    let data = body.slice(start.unwrap_or(0)..);
+    let data = body.slice(start..end);
     response
-        .body(Body::from_stream(chunked(data, delay, drop_after)))
+        .body(Body::from_stream(chunked(data, start, pacing, drop_after)))
         .unwrap()
+}
+
+#[derive(Clone, Copy)]
+struct Pacing {
+    delay: Option<Duration>,
+    slow_from: Option<(usize, Duration)>,
 }
 
 async fn redirect_to_ftp() -> Response {
@@ -151,10 +164,12 @@ async fn redirect_to_ftp() -> Response {
         .unwrap()
 }
 
-/// Sends `data` in 16 KiB chunks, optionally slowly, optionally failing midway.
+/// Sends `data` (which starts at file offset `offset`) in 16 KiB chunks,
+/// optionally slowly, optionally failing midway.
 fn chunked(
     data: Bytes,
-    delay: Option<Duration>,
+    offset: usize,
+    pacing: Pacing,
     drop_after: Option<usize>,
 ) -> impl Stream<Item = io::Result<Bytes>> {
     futures_util::stream::unfold((data, 0usize), move |(mut data, sent)| async move {
@@ -169,6 +184,10 @@ fn chunked(
             }
             len = len.min(limit - sent);
         }
+        let delay = match pacing.slow_from {
+            Some((from, slow)) if offset + sent >= from => Some(slow),
+            _ => pacing.delay,
+        };
         if let Some(delay) = delay {
             tokio::time::sleep(delay).await;
         }
