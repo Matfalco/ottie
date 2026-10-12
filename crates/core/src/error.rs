@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use reqwest::StatusCode;
 
+use crate::category::CategoryId;
 use crate::id::JobId;
 use crate::job::JobState;
 
@@ -47,11 +48,38 @@ pub enum Error {
     )]
     DatabaseTooNew { found: usize, supported: usize },
 
+    #[error("upgrading the database to schema {0} left references to missing rows")]
+    MigrationBroken(usize),
+
     #[error("the database thread has stopped")]
     StoreStopped,
 
     #[error("folder path is not valid UTF-8: {}", .0.display())]
     NonUtf8Path(PathBuf),
+
+    #[error("no category with ID {0}")]
+    CategoryNotFound(CategoryId),
+
+    #[error("a category name can't be empty")]
+    InvalidCategoryName,
+
+    #[error("there is already a category named `{0}`")]
+    CategoryNameTaken(String),
+
+    #[error("`{0}` is not a file extension")]
+    InvalidExtension(String),
+
+    #[error("files ending in .{extension} already go to category `{category}`")]
+    ExtensionTaken { extension: String, category: String },
+
+    #[error("no more category IDs are available")]
+    TooManyCategories,
+
+    #[error("the General category can't be removed")]
+    CannotRemoveGeneral,
+
+    #[error("no folder given, and category `{0}` has none")]
+    NoFolder(String),
 }
 
 impl From<reqwest::Error> for Error {

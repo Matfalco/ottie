@@ -62,9 +62,10 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/manager.rs     Manager handle + the actor task that owns all jobs, queue
   src/job.rs         JobState + state machine (can_become), JobSnapshot, JobEvent
   src/id.rs          JobId (yyyy.mm.dd-hh.mm.ss-N, UTC) and its generator
+  src/category.rs    CategoryId (General = 1), CategorySettings, extension matching
   src/backend.rs     Backend trait, HttpBackend
   src/store.rs       SQLite on its own thread: schema migrations, save/load jobs and settings
-  src/throttle.rs    speed limits: per-job token buckets, refill task, priority-weighted sharing
+  src/throttle.rs    speed limits: per-job token buckets, refill task, priority-weighted sharing, category caps
   src/http.rs        HTTP transfer: first request, single-connection stream, resume, restart rules
   src/segmented.rs   multi-connection transfer: coordinator, connection tasks, dynamic splitting
   src/download.rs    Download state (what gets persisted), Event, Outcome
@@ -117,9 +118,10 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 - **Single connection: the `.part.ottie` length is the truth** for the resume offset (multi-connection: the flushed ranges are). Bytes in flight when a connection dies are lost, so flush on every exit path (pause, error, completion) to keep `downloaded` equal to the file length.
 - **Resume re-requests the original URL,** not the redirect target: signed CDN links expire, and `If-Range` still guards consistency.
 - **Request `Accept-Encoding: identity`** so byte ranges map to file offsets.
-- **Speed limits and priorities** (`docs/decisions/0010`): one token bucket per running job, shared by its connections, spent after each chunk (pause still interrupts the wait). A 50 ms refill task shares the global limit: Urgent first, then weights High 4 / Normal 2 / Low 1, capped by each job's own limit, unused share redistributed (`share()`). Per download, not per connection. Categories add a middle level in 2e. Limits change live; 0 = unlimited.
+- **Speed limits and priorities** (`docs/decisions/0010`): one token bucket per running job, shared by its connections, spent after each chunk (pause still interrupts the wait). A 50 ms refill task shares the global limit: Urgent first, then weights High 4 / Normal 2 / Low 1, capped by each job's own limit, unused share redistributed (`share()`). Per download, not per connection. A category's limit caps its running jobs together (`allocate()`). Limits change live; 0 = unlimited.
 - **Queue order:** highest priority first, then oldest. Urgent waits for a free slot (no preemption).
 - **Settings** live in the single-row `settings` table and are saved on change; `Manager::start(backend, store)` loads them.
+- **Categories** (`docs/decisions/0011`): every job has one; General (ID 1) always exists and can't be removed. `add(NewJob)` uses the caller's category (`category_chosen`, never overridden), else the category owning the URL's extension, else General. Each extension belongs to one category at most. The job's folder is copied at add (caller's, else the category's, else `NoFolder`). Removing a category moves its jobs to General first (saved before the row is deleted). A category's `max_concurrent` caps its running jobs under the global cap. Migrations run with foreign keys off and check them before committing.
 - **Persistence** (`docs/decisions/0008`): SQLite holds jobs, and later categories, settings and per-segment progress. `STRICT` tables, numbered migrations in `store.rs` (never edit a released one). Saves happen on add, on every state change (inside `transition`), on `Event::Started` (file name + validator known) and progress at most every 2 s. **From 2c: flush file data before saving the progress that covers it.** On load, running jobs become Queued and `downloaded` is reset from the `.part.ottie` length.
 - **Shutdown keeps running jobs running** in the database (it doesn't mark them Paused), so the next start continues them; user-paused jobs stay paused.
 - **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Sanitize filenames from URLs and `Content-Disposition`; never write outside the target folder; resolve collisions with ` (1)`, ` (2)`. Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files).
@@ -155,7 +157,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 ## Working with Mathieu
 
-- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations, atomics, `JoinSet`, child cancellation tokens, `Mutex`, lifetimes (`Env<'a>`), `Drop`. Still to come: Svelte runes, TypeScript basics, etc.
+- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations, atomics, `JoinSet`, child cancellation tokens, `Mutex`, lifetimes (`Env<'a>`), `Drop`, newtypes + associated consts (`CategoryId::GENERAL`), builder methods (`NewJob::new(url).in_dir(..)`), struct update syntax (`..CategorySettings::named(..)`). Still to come: Svelte runes, TypeScript basics, etc.
 - For decisions that are hard to reverse (data model, API shape, crate choices, architecture), present 2–3 options with trade-offs and let him choose. For small implementation details, decide and say what you chose.
 - Work in small vertical slices that run end to end. Don't scaffold code ahead of need.
 - Show the diff and wait for a go-ahead before committing.
@@ -164,7 +166,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 ## Build order
 
 1. ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~ Done.
-2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ → ~~2b SQLite persistence~~ → ~~2c multi-connection~~ (streaming mode comes with the stream endpoint) → ~~2d speed limits + priorities~~ → 2e categories (adds the category speed-limit level) → 2f `Content-Disposition` filenames, retry with backoff.
+2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ → ~~2b SQLite persistence~~ → ~~2c multi-connection~~ (streaming mode comes with the stream endpoint) → ~~2d speed limits + priorities~~ → ~~2e categories~~ → 2f `Content-Disposition` filenames (then re-match auto-picked categories at the first response, see 0011), retry with backoff.
 3. `api` + `ottie serve` (including the `/jobs/{id}/stream` endpoint), then `ui` as a web UI. Decide where the database and config live.
 4. Browser extension.
 5. Tauri desktop: tray, notifications, sidecar daemon.

@@ -6,7 +6,10 @@ mod support;
 
 use std::time::{Duration, Instant};
 
-use ottie_core::{HttpBackend, HttpConfig, JobId, JobSnapshot, JobState, Manager, Priority, Store};
+use ottie_core::{
+    CategorySettings, HttpBackend, HttpConfig, JobId, JobSnapshot, JobState, Manager, NewJob,
+    Priority, Store,
+};
 use support::{TestServer, test_data};
 use tempfile::TempDir;
 
@@ -37,7 +40,10 @@ async fn setup() -> Setup {
 impl Setup {
     async fn add(&self, server: &TestServer, name: &str) -> JobId {
         let url = server.url(&format!("/files/{name}"));
-        self.manager.add(url, self.dir.path()).await.unwrap()
+        self.manager
+            .add(NewJob::new(url).in_dir(self.dir.path()))
+            .await
+            .unwrap()
     }
 
     async fn job(&self, id: JobId) -> JobSnapshot {
@@ -81,6 +87,28 @@ async fn a_job_limit_slows_that_job() {
     s.manager.set_speed_limit(id, 128 * KIB).await.unwrap();
     s.wait_until(id, JobState::Completed).await;
     // 256 KiB at 128 KiB/s takes about 2 s.
+    let took = started.elapsed();
+    assert!(took >= Duration::from_millis(1500), "took only {took:?}");
+}
+
+#[tokio::test]
+async fn a_category_limit_slows_its_jobs_together() {
+    let s = setup().await;
+    let videos = CategorySettings {
+        extensions: vec!["mkv".into()],
+        speed_limit: 128 * KIB,
+        ..CategorySettings::named("Videos")
+    };
+    s.manager.add_category(videos).await.unwrap();
+    // Too small to split, so one connection each.
+    let server = server(128 * KIB).await;
+    let started = Instant::now();
+    let a = s.add(&server, "a.mkv").await;
+    let b = s.add(&server, "b.mkv").await;
+    s.wait_until(a, JobState::Completed).await;
+    s.wait_until(b, JobState::Completed).await;
+    // 256 KiB at 128 KiB/s together takes about 2 s; with the limit applied
+    // to each job alone, 1 s.
     let took = started.elapsed();
     assert!(took >= Duration::from_millis(1500), "took only {took:?}");
 }

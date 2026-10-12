@@ -10,6 +10,7 @@ use reqwest::Url;
 use rusqlite::{Connection, Row, params};
 use tokio::sync::oneshot;
 
+use crate::category::{Category, CategoryId, CategorySettings};
 use crate::download::{Download, Segment, Validator};
 use crate::error::Error;
 use crate::id::JobId;
@@ -57,6 +58,24 @@ const MIGRATIONS: &[&str] = &[
         max_concurrent INTEGER NOT NULL DEFAULT 3 CHECK (max_concurrent >= 1)
      ) STRICT;
      INSERT INTO settings (id) VALUES (1);",
+    // 4: categories. Runs with foreign keys off: SQLite only adds a
+    // REFERENCES column with a non-NULL default while they are.
+    "CREATE TABLE categories (
+        id             INTEGER PRIMARY KEY CHECK (id >= 1),
+        name           TEXT    NOT NULL COLLATE NOCASE UNIQUE CHECK (name <> ''),
+        folder         TEXT,
+        speed_limit    INTEGER NOT NULL DEFAULT 0 CHECK (speed_limit >= 0),
+        max_concurrent INTEGER NOT NULL DEFAULT 0 CHECK (max_concurrent >= 0)
+     ) STRICT;
+     CREATE TABLE category_extensions (
+        extension   TEXT    PRIMARY KEY CHECK (extension <> ''),
+        category_id INTEGER NOT NULL REFERENCES categories (id) ON DELETE CASCADE
+     ) STRICT;
+     INSERT INTO categories (id, name) VALUES (1, 'General');
+     ALTER TABLE jobs ADD COLUMN category_id INTEGER NOT NULL DEFAULT 1
+        REFERENCES categories (id);
+     ALTER TABLE jobs ADD COLUMN category_chosen INTEGER NOT NULL DEFAULT 0
+        CHECK (category_chosen IN (0, 1));",
 ];
 
 /// Everything saved about one job.
@@ -68,6 +87,19 @@ pub(crate) struct JobRecord {
     pub error: Option<String>,
     pub priority: Priority,
     pub speed_limit: u64,
+    pub category: CategoryId,
+    /// The user picked the category, rather than it being matched by extension.
+    pub category_chosen: bool,
+}
+
+/// Everything the database holds, as read at start.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Loaded {
+    /// Oldest first.
+    pub jobs: Vec<JobRecord>,
+    pub settings: Settings,
+    /// By ID; General is always there.
+    pub categories: Vec<Category>,
 }
 
 /// Settings that apply to the whole manager. Stored as the single row of the
@@ -95,9 +127,11 @@ pub struct Store {
 }
 
 enum Op {
-    Load(oneshot::Sender<Result<(Vec<JobRecord>, Settings), Error>>),
+    Load(oneshot::Sender<Result<Loaded, Error>>),
     Save(Box<JobRecord>),
     SaveSettings(Settings),
+    SaveCategory(Category),
+    RemoveCategory(CategoryId),
     Flush(oneshot::Sender<()>),
 }
 
@@ -139,8 +173,7 @@ impl Store {
         Ok(Store { ops })
     }
 
-    /// Every saved job, oldest first, and the settings.
-    pub(crate) async fn load(&self) -> Result<(Vec<JobRecord>, Settings), Error> {
+    pub(crate) async fn load(&self) -> Result<Loaded, Error> {
         let (reply, answer) = oneshot::channel();
         self.ops
             .send(Op::Load(reply))
@@ -163,6 +196,20 @@ impl Store {
         }
     }
 
+    /// Queued like `save`. Replaces the category's extensions too.
+    pub(crate) fn save_category(&self, category: Category) {
+        if self.ops.send(Op::SaveCategory(category)).is_err() {
+            tracing::error!("database thread has stopped; category not saved");
+        }
+    }
+
+    /// Queued like `save`. Its jobs must have been saved in another category first.
+    pub(crate) fn remove_category(&self, id: CategoryId) {
+        if self.ops.send(Op::RemoveCategory(id)).is_err() {
+            tracing::error!("database thread has stopped; category not removed");
+        }
+    }
+
     /// Waits until every save queued before this call has been written.
     pub(crate) async fn flush(&self) {
         let (reply, done) = oneshot::channel();
@@ -177,8 +224,7 @@ fn serve(mut conn: Connection, requests: std_mpsc::Receiver<Op>) {
     while let Ok(op) = requests.recv() {
         match op {
             Op::Load(reply) => {
-                let loaded = load(&conn).and_then(|jobs| Ok((jobs, load_settings(&conn)?)));
-                let _ = reply.send(loaded);
+                let _ = reply.send(load_all(&conn));
             }
             Op::Save(record) => {
                 if let Err(err) = save(&mut conn, &record) {
@@ -188,6 +234,16 @@ fn serve(mut conn: Connection, requests: std_mpsc::Receiver<Op>) {
             Op::SaveSettings(settings) => {
                 if let Err(err) = save_settings(&conn, &settings) {
                     tracing::error!(error = %err, "could not save settings");
+                }
+            }
+            Op::SaveCategory(category) => {
+                if let Err(err) = save_category(&mut conn, &category) {
+                    tracing::error!(id = %category.id, error = %err, "could not save category");
+                }
+            }
+            Op::RemoveCategory(id) => {
+                if let Err(err) = conn.execute("DELETE FROM categories WHERE id = ?1", [id.0]) {
+                    tracing::error!(%id, error = %err, "could not remove category");
                 }
             }
             Op::Flush(reply) => {
@@ -203,8 +259,12 @@ fn prepare(conn: &mut Connection) -> Result<(), Error> {
     // re-downloading a little; it never makes us trust bytes we don't have.
     conn.pragma_update_and_check(None, "journal_mode", "WAL", |_| Ok(()))?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
+    // Some schema changes need foreign keys off, so they're only turned on
+    // after migrating; `migrate` checks them itself.
+    conn.pragma_update(None, "foreign_keys", "OFF")?;
+    migrate(conn)?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
-    migrate(conn)
+    Ok(())
 }
 
 fn migrate(conn: &mut Connection) -> Result<(), Error> {
@@ -218,6 +278,10 @@ fn migrate(conn: &mut Connection) -> Result<(), Error> {
     for (index, sql) in MIGRATIONS.iter().enumerate().skip(found) {
         let tx = conn.transaction()?;
         tx.execute_batch(sql)?;
+        if tx.prepare("PRAGMA foreign_key_check")?.exists([])? {
+            // Returning without committing undoes this migration.
+            return Err(Error::MigrationBroken(index + 1));
+        }
         tx.pragma_update(None, "user_version", index + 1)?;
         tx.commit()?;
     }
@@ -242,8 +306,8 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
     tx.prepare_cached(
         "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, file_name, state, total,
                            downloaded, validator_kind, validator_value, resumable, error,
-                           priority, speed_limit)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                           priority, speed_limit, category_id, category_chosen)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
          ON CONFLICT (id_secs, id_seq) DO UPDATE SET
              url = excluded.url, dest_dir = excluded.dest_dir,
              file_name = excluded.file_name, state = excluded.state,
@@ -251,7 +315,8 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
              validator_kind = excluded.validator_kind,
              validator_value = excluded.validator_value,
              resumable = excluded.resumable, error = excluded.error,
-             priority = excluded.priority, speed_limit = excluded.speed_limit",
+             priority = excluded.priority, speed_limit = excluded.speed_limit,
+             category_id = excluded.category_id, category_chosen = excluded.category_chosen",
     )?
     .execute(params![
         secs,
@@ -268,6 +333,8 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
         record.error,
         priority_name(record.priority),
         record.speed_limit,
+        record.category.0,
+        record.category_chosen,
     ])?;
     tx.prepare_cached("DELETE FROM segments WHERE job_secs = ?1 AND job_seq = ?2")?
         .execute(params![secs, seq])?;
@@ -284,10 +351,19 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
     Ok(())
 }
 
-fn load(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
+fn load_all(conn: &Connection) -> Result<Loaded, Error> {
+    Ok(Loaded {
+        jobs: load_jobs(conn)?,
+        settings: load_settings(conn)?,
+        categories: load_categories(conn)?,
+    })
+}
+
+fn load_jobs(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
     let mut stmt = conn.prepare(
         "SELECT id_secs, id_seq, url, dest_dir, file_name, state, total, downloaded,
-                validator_kind, validator_value, resumable, error, priority, speed_limit
+                validator_kind, validator_value, resumable, error, priority, speed_limit,
+                category_id, category_chosen
          FROM jobs ORDER BY id_secs, id_seq",
     )?;
     let mut rows = stmt.query([])?;
@@ -361,6 +437,8 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         error: row.get(11)?,
         priority,
         speed_limit: row.get(13)?,
+        category: CategoryId(row.get(14)?),
+        category_chosen: row.get(15)?,
     }))
 }
 
@@ -382,6 +460,75 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
         "UPDATE settings SET global_limit = ?1, max_concurrent = ?2 WHERE id = 1",
         params![settings.global_limit, settings.max_concurrent],
     )?;
+    Ok(())
+}
+
+fn load_categories(conn: &Connection) -> Result<Vec<Category>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, folder, speed_limit, max_concurrent FROM categories ORDER BY id",
+    )?;
+    let mut categories: BTreeMap<CategoryId, Category> = stmt
+        .query_map([], |row| {
+            let id = CategoryId(row.get(0)?);
+            let settings = CategorySettings {
+                name: row.get(1)?,
+                folder: row.get::<_, Option<String>>(2)?.map(PathBuf::from),
+                extensions: Vec::new(), // filled in below
+                speed_limit: row.get(3)?,
+                max_concurrent: row.get(4)?,
+            };
+            Ok((id, Category { id, settings }))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut stmt =
+        conn.prepare("SELECT category_id, extension FROM category_extensions ORDER BY extension")?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        if let Some(category) = categories.get_mut(&CategoryId(row.get(0)?)) {
+            category.settings.extensions.push(row.get(1)?);
+        }
+    }
+    Ok(categories.into_values().collect())
+}
+
+/// Upserts the category and replaces its extensions, in one transaction.
+fn save_category(conn: &mut Connection, category: &Category) -> Result<(), Error> {
+    let settings = &category.settings;
+    let folder = match &settings.folder {
+        Some(folder) => Some(
+            folder
+                .to_str()
+                .ok_or_else(|| Error::NonUtf8Path(folder.clone()))?,
+        ),
+        None => None,
+    };
+    let id = category.id.0;
+    let tx = conn.transaction()?;
+    tx.prepare_cached(
+        "INSERT INTO categories (id, name, folder, speed_limit, max_concurrent)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT (id) DO UPDATE SET
+             name = excluded.name, folder = excluded.folder,
+             speed_limit = excluded.speed_limit, max_concurrent = excluded.max_concurrent",
+    )?
+    .execute(params![
+        id,
+        settings.name,
+        folder,
+        settings.speed_limit,
+        settings.max_concurrent,
+    ])?;
+    tx.prepare_cached("DELETE FROM category_extensions WHERE category_id = ?1")?
+        .execute([id])?;
+    {
+        let mut insert = tx.prepare_cached(
+            "INSERT INTO category_extensions (extension, category_id) VALUES (?1, ?2)",
+        )?;
+        for ext in &settings.extensions {
+            insert.execute(params![ext, id])?;
+        }
+    }
+    tx.commit()?;
     Ok(())
 }
 
@@ -450,6 +597,8 @@ mod tests {
             error: None,
             priority: Priority::High,
             speed_limit: 512 * 1024,
+            category: CategoryId::GENERAL,
+            category_chosen: false,
         }
     }
 
@@ -466,7 +615,7 @@ mod tests {
         for r in [record(1), failed.clone(), fresh.clone()] {
             store.save(r);
         }
-        assert_eq!(store.load().await.unwrap().0, [record(1), failed, fresh]);
+        assert_eq!(store.load().await.unwrap().jobs, [record(1), failed, fresh]);
     }
 
     #[tokio::test]
@@ -477,7 +626,7 @@ mod tests {
         done.state = JobState::Completed;
         done.download.downloaded = done.download.total.unwrap();
         store.save(done.clone());
-        assert_eq!(store.load().await.unwrap().0, [done]);
+        assert_eq!(store.load().await.unwrap().jobs, [done]);
     }
 
     #[tokio::test]
@@ -487,27 +636,101 @@ mod tests {
         let seg = |start, end, done| Segment { start, end, done };
         job.download.segments = vec![seg(0, 50, 50), seg(50, 100, 10)];
         store.save(job.clone());
-        assert_eq!(store.load().await.unwrap().0, [job.clone()]);
+        assert_eq!(store.load().await.unwrap().jobs, [job.clone()]);
 
         // After a split there are more ranges; after completion none.
         job.download.segments = vec![seg(0, 50, 50), seg(50, 75, 25), seg(75, 100, 3)];
         store.save(job.clone());
-        assert_eq!(store.load().await.unwrap().0, [job.clone()]);
+        assert_eq!(store.load().await.unwrap().jobs, [job.clone()]);
         job.download.segments.clear();
         store.save(job.clone());
-        assert_eq!(store.load().await.unwrap().0, [job]);
+        assert_eq!(store.load().await.unwrap().jobs, [job]);
     }
 
     #[tokio::test]
     async fn settings_start_at_their_defaults_and_can_change() {
         let store = Store::open_in_memory().await.unwrap();
-        assert_eq!(store.load().await.unwrap().1, Settings::default());
+        assert_eq!(store.load().await.unwrap().settings, Settings::default());
         let changed = Settings {
             global_limit: 1_000_000,
             max_concurrent: 5,
         };
         store.save_settings(changed.clone());
-        assert_eq!(store.load().await.unwrap().1, changed);
+        assert_eq!(store.load().await.unwrap().settings, changed);
+    }
+
+    fn videos() -> Category {
+        Category {
+            id: CategoryId(2),
+            settings: CategorySettings {
+                folder: Some(PathBuf::from("/downloads/videos")),
+                extensions: vec!["mkv".into(), "mp4".into()],
+                speed_limit: 1_000_000,
+                max_concurrent: 2,
+                ..CategorySettings::named("Videos")
+            },
+        }
+    }
+
+    #[tokio::test]
+    async fn general_exists_from_the_start() {
+        let store = Store::open_in_memory().await.unwrap();
+        let general = Category {
+            id: CategoryId::GENERAL,
+            settings: CategorySettings::named("General"),
+        };
+        assert_eq!(store.load().await.unwrap().categories, [general]);
+    }
+
+    #[tokio::test]
+    async fn categories_are_saved_replaced_and_removed() {
+        let store = Store::open_in_memory().await.unwrap();
+        let mut videos = videos();
+        store.save_category(videos.clone());
+        assert_eq!(store.load().await.unwrap().categories[1], videos);
+
+        videos.settings.extensions = vec!["webm".into()];
+        videos.settings.folder = None;
+        store.save_category(videos.clone());
+        assert_eq!(store.load().await.unwrap().categories[1], videos);
+
+        store.remove_category(videos.id);
+        assert_eq!(store.load().await.unwrap().categories.len(), 1);
+        // Its extension went with it, so another category can take it.
+        let mut films = videos;
+        films.settings.name = "Films".into();
+        store.save_category(films.clone());
+        assert_eq!(store.load().await.unwrap().categories[1], films);
+    }
+
+    #[tokio::test]
+    async fn jobs_keep_their_category() {
+        let store = Store::open_in_memory().await.unwrap();
+        store.save_category(videos());
+        let mut job = record(1);
+        job.category = videos().id;
+        job.category_chosen = true;
+        store.save(job.clone());
+        assert_eq!(store.load().await.unwrap().jobs, [job]);
+    }
+
+    #[test]
+    fn jobs_from_before_categories_land_in_general() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (i, sql) in MIGRATIONS[..3].iter().enumerate() {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", i + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, state)
+             VALUES (1, 1, 'https://example.com/a.mkv', '/d', 'paused')",
+            [],
+        )
+        .unwrap();
+        prepare(&mut conn).unwrap();
+        let jobs = load_jobs(&conn).unwrap();
+        assert_eq!(jobs[0].category, CategoryId::GENERAL);
+        assert!(!jobs[0].category_chosen);
     }
 
     #[test]

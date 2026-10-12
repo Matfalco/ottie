@@ -5,7 +5,9 @@ mod support;
 use std::collections::HashSet;
 use std::time::Duration;
 
-use ottie_core::{Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, Store};
+use ottie_core::{
+    Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob, Store,
+};
 use support::{TestServer, test_data};
 use tempfile::TempDir;
 use tokio::sync::broadcast::Receiver;
@@ -45,7 +47,10 @@ async fn setup(max_concurrent: usize, chunk_delay_ms: u64) -> Setup {
 impl Setup {
     async fn add(&self, name: &str) -> JobId {
         let url = self.server.url(&format!("/files/{name}"));
-        self.manager.add(url, self.dir.path()).await.unwrap()
+        self.manager
+            .add(NewJob::new(url).in_dir(self.dir.path()))
+            .await
+            .unwrap()
     }
 
     async fn job(&self, id: JobId) -> JobSnapshot {
@@ -210,7 +215,11 @@ async fn cancel_deletes_the_part_file() {
 async fn http_errors_mark_the_job_failed() {
     let mut s = setup(3, 0).await;
     let url = s.server.url("/no-such-route");
-    let id = s.manager.add(url, s.dir.path()).await.unwrap();
+    let id = s
+        .manager
+        .add(NewJob::new(url).in_dir(s.dir.path()))
+        .await
+        .unwrap();
 
     let failed = s.wait_for(id, JobState::Failed).await;
     assert!(failed.error.unwrap().contains("404"));
@@ -241,9 +250,9 @@ async fn invalid_requests_are_refused() {
         Err(Error::JobNotFound(_))
     ));
 
-    let ftp = "ftp://example.com/file".parse().unwrap();
+    let ftp: reqwest::Url = "ftp://example.com/file".parse().unwrap();
     assert!(matches!(
-        s.manager.add(ftp, s.dir.path()).await,
+        s.manager.add(NewJob::new(ftp).in_dir(s.dir.path())).await,
         Err(Error::UnsupportedScheme(_))
     ));
 }

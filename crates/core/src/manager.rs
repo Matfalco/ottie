@@ -2,9 +2,8 @@
 //! sends it commands through a [`Manager`] handle and listens to [`JobEvent`]s.
 
 use std::cmp::Reverse;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -13,10 +12,11 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use crate::backend::Backend;
+use crate::category::{self, Category, CategoryId, CategorySettings};
 use crate::download::{Download, Event, Outcome};
 use crate::error::Error;
 use crate::id::{IdGenerator, JobId};
-use crate::job::{JobEvent, JobSnapshot, JobState, Priority};
+use crate::job::{JobEvent, JobSnapshot, JobState, NewJob, Priority};
 use crate::store::{JobRecord, Settings, Store};
 use crate::throttle::Limiter;
 
@@ -44,10 +44,17 @@ impl Manager {
     /// every handle is dropped, the manager shuts down as if
     /// [`Manager::shutdown`] was called.
     pub async fn start(backend: impl Backend, store: Store) -> Result<Manager, Error> {
-        let (records, settings) = store.load().await?;
+        let loaded = store.load().await?;
         let mut jobs = BTreeMap::new();
-        for record in records {
+        for record in loaded.jobs {
             jobs.insert(record.id, Job::restore(record).await);
+        }
+        let settings = loaded.settings;
+        let limiter = Limiter::new(settings.global_limit);
+        let mut categories = BTreeMap::new();
+        for category in loaded.categories {
+            limiter.set_category_limit(category.id, category.settings.speed_limit);
+            categories.insert(category.id, category.settings);
         }
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
         let (internal, internal_rx) = mpsc::unbounded_channel();
@@ -55,10 +62,11 @@ impl Manager {
         let actor = Actor {
             backend: Arc::new(backend),
             store,
-            limiter: Limiter::new(settings.global_limit),
+            limiter,
             settings,
             ids: IdGenerator::after(jobs.keys().next_back().copied()),
             jobs,
+            categories,
             events: events.clone(),
             internal,
             shutdown: None,
@@ -67,15 +75,10 @@ impl Manager {
         Ok(Manager { commands, events })
     }
 
-    /// Queues a download into `dest_dir`. It starts as soon as a slot is free.
-    pub async fn add(&self, url: Url, dest_dir: impl Into<PathBuf>) -> Result<JobId, Error> {
-        let dest_dir = dest_dir.into();
-        self.request(|reply| Command::Add {
-            url,
-            dest_dir,
-            reply,
-        })
-        .await
+    /// Queues a download. It starts as soon as a slot is free (in total and
+    /// in its category).
+    pub async fn add(&self, job: NewJob) -> Result<JobId, Error> {
+        self.request(|reply| Command::Add { job, reply }).await
     }
 
     /// Returns once the job has actually stopped and its `.part.ottie` file is flushed.
@@ -150,6 +153,49 @@ impl Manager {
         .await
     }
 
+    /// Every category, by ID. General (ID 1) is always first.
+    pub async fn categories(&self) -> Result<Vec<Category>, Error> {
+        self.request(|reply| Command::Categories { reply }).await
+    }
+
+    pub async fn add_category(&self, settings: CategorySettings) -> Result<CategoryId, Error> {
+        self.request(|reply| Command::AddCategory { settings, reply })
+            .await
+    }
+
+    /// Replaces the category's settings. Limits take effect immediately; a
+    /// new folder applies to jobs added from now on.
+    pub async fn update_category(
+        &self,
+        id: CategoryId,
+        settings: CategorySettings,
+    ) -> Result<(), Error> {
+        self.request(|reply| Command::UpdateCategory {
+            id,
+            settings,
+            reply,
+        })
+        .await
+    }
+
+    /// Moves its jobs to General (they stay where they are on disk), then
+    /// removes it. General itself can't be removed.
+    pub async fn remove_category(&self, id: CategoryId) -> Result<(), Error> {
+        self.request(|reply| Command::RemoveCategory { id, reply })
+            .await
+    }
+
+    /// Moves a job to another category, as the user's choice. If nothing has
+    /// been downloaded yet, it will also be saved in that category's folder.
+    pub async fn set_category(&self, id: JobId, category: CategoryId) -> Result<(), Error> {
+        self.request(|reply| Command::SetCategory {
+            id,
+            category,
+            reply,
+        })
+        .await
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<JobEvent> {
         self.events.subscribe()
     }
@@ -176,8 +222,7 @@ type Reply<T> = oneshot::Sender<Result<T, Error>>;
 
 enum Command {
     Add {
-        url: Url,
-        dest_dir: PathBuf,
+        job: NewJob,
         reply: Reply<JobId>,
     },
     Stop {
@@ -211,6 +256,27 @@ enum Command {
     SetPriority {
         id: JobId,
         priority: Priority,
+        reply: Reply<()>,
+    },
+    Categories {
+        reply: Reply<Vec<Category>>,
+    },
+    AddCategory {
+        settings: CategorySettings,
+        reply: Reply<CategoryId>,
+    },
+    UpdateCategory {
+        id: CategoryId,
+        settings: CategorySettings,
+        reply: Reply<()>,
+    },
+    RemoveCategory {
+        id: CategoryId,
+        reply: Reply<()>,
+    },
+    SetCategory {
+        id: JobId,
+        category: CategoryId,
         reply: Reply<()>,
     },
     Shutdown {
@@ -258,6 +324,9 @@ struct Job {
     priority: Priority,
     /// Bytes per second; 0 = no limit of its own.
     speed_limit: u64,
+    category: CategoryId,
+    /// The user picked the category, rather than it being matched by extension.
+    category_chosen: bool,
     /// Present while a task is downloading this job.
     task: Option<Task>,
     last_saved: Option<Instant>,
@@ -287,6 +356,8 @@ impl Job {
             error: record.error,
             priority: record.priority,
             speed_limit: record.speed_limit,
+            category: record.category,
+            category_chosen: record.category_chosen,
             task: None,
             last_saved: None,
         }
@@ -306,6 +377,7 @@ impl Job {
             error: self.error.clone(),
             priority: self.priority,
             speed_limit: self.speed_limit,
+            category: self.category,
         }
     }
 }
@@ -326,6 +398,8 @@ struct Actor<B> {
     limiter: Limiter,
     /// Sorted by ID, which means by creation time.
     jobs: BTreeMap<JobId, Job>,
+    /// Always holds General. Saved whenever one changes.
+    categories: BTreeMap<CategoryId, CategorySettings>,
     ids: IdGenerator,
     events: broadcast::Sender<JobEvent>,
     /// Cloned into each job task so it can report back.
@@ -368,12 +442,8 @@ impl<B: Backend> Actor<B> {
     // stopped waiting, and then there's nobody to tell.
     async fn on_command(&mut self, command: Command) {
         match command {
-            Command::Add {
-                url,
-                dest_dir,
-                reply,
-            } => {
-                let _ = reply.send(self.add(url, dest_dir));
+            Command::Add { job, reply } => {
+                let _ = reply.send(self.add(job));
             }
             Command::Stop { id, stop, reply } => self.stop(id, stop, reply).await,
             Command::Resume { id, reply } => {
@@ -415,6 +485,29 @@ impl<B: Backend> Actor<B> {
             } => {
                 let _ = reply.send(self.change(id, |job| job.priority = priority));
                 self.limiter.set_priority(id, priority);
+            }
+            Command::Categories { reply } => {
+                let _ = reply.send(Ok(self.categories()));
+            }
+            Command::AddCategory { settings, reply } => {
+                let _ = reply.send(self.add_category(settings));
+            }
+            Command::UpdateCategory {
+                id,
+                settings,
+                reply,
+            } => {
+                let _ = reply.send(self.update_category(id, settings));
+            }
+            Command::RemoveCategory { id, reply } => {
+                let _ = reply.send(self.remove_category(id));
+            }
+            Command::SetCategory {
+                id,
+                category,
+                reply,
+            } => {
+                let _ = reply.send(self.set_category(id, category));
             }
             Command::Shutdown { reply } => self.begin_shutdown(Some(reply)),
         }
@@ -481,14 +574,26 @@ impl<B: Backend> Actor<B> {
         }
     }
 
-    fn add(&mut self, url: Url, dest_dir: PathBuf) -> Result<JobId, Error> {
+    fn add(&mut self, new: NewJob) -> Result<JobId, Error> {
         if self.shutdown.is_some() {
             return Err(Error::ManagerStopped);
         }
+        let category = match new.category {
+            Some(category) => category,
+            None => self.match_category(&new.url),
+        };
+        let settings = self.category(category)?;
+        let dest_dir = match new.dest_dir {
+            Some(dir) => dir,
+            None => settings
+                .folder
+                .clone()
+                .ok_or_else(|| Error::NoFolder(settings.name.clone()))?,
+        };
         if dest_dir.to_str().is_none() {
             return Err(Error::NonUtf8Path(dest_dir));
         }
-        let download = Download::new(url, dest_dir)?;
+        let download = Download::new(new.url, dest_dir)?;
         let id = self.ids.next(unix_now());
         self.jobs.insert(
             id,
@@ -498,6 +603,8 @@ impl<B: Backend> Actor<B> {
                 error: None,
                 priority: Priority::default(),
                 speed_limit: 0,
+                category,
+                category_chosen: new.category.is_some(),
                 task: None,
                 last_saved: None,
             },
@@ -516,6 +623,144 @@ impl<B: Backend> Actor<B> {
         self.save(id);
         self.emit_changed(id);
         Ok(())
+    }
+
+    /// The category whose extensions include the one in the URL, else General.
+    fn match_category(&self, url: &Url) -> CategoryId {
+        category::url_extension(url)
+            .and_then(|ext| {
+                self.categories
+                    .iter()
+                    .find(|(_, settings)| settings.extensions.contains(&ext))
+            })
+            .map_or(CategoryId::GENERAL, |(id, _)| *id)
+    }
+
+    fn category(&self, id: CategoryId) -> Result<&CategorySettings, Error> {
+        self.categories.get(&id).ok_or(Error::CategoryNotFound(id))
+    }
+
+    fn categories(&self) -> Vec<Category> {
+        self.categories
+            .iter()
+            .map(|(&id, settings)| Category {
+                id,
+                settings: settings.clone(),
+            })
+            .collect()
+    }
+
+    /// Normalizes `settings` and checks that its name and extensions aren't
+    /// used by another category (`own` is the one being edited, if any).
+    fn check_category(
+        &self,
+        settings: CategorySettings,
+        own: Option<CategoryId>,
+    ) -> Result<CategorySettings, Error> {
+        let settings = settings.normalized()?;
+        let name = settings.name.to_lowercase();
+        for (&id, other) in &self.categories {
+            if Some(id) == own {
+                continue;
+            }
+            if other.name.to_lowercase() == name {
+                return Err(Error::CategoryNameTaken(settings.name));
+            }
+            if let Some(ext) = settings
+                .extensions
+                .iter()
+                .find(|ext| other.extensions.contains(ext))
+            {
+                return Err(Error::ExtensionTaken {
+                    extension: ext.clone(),
+                    category: other.name.clone(),
+                });
+            }
+        }
+        Ok(settings)
+    }
+
+    fn add_category(&mut self, settings: CategorySettings) -> Result<CategoryId, Error> {
+        let settings = self.check_category(settings, None)?;
+        // General always exists, so there is a last ID.
+        let last = self.categories.keys().next_back().map_or(0, |id| id.0);
+        let id = CategoryId(last.checked_add(1).ok_or(Error::TooManyCategories)?);
+        self.limiter.set_category_limit(id, settings.speed_limit);
+        self.categories.insert(id, settings);
+        self.save_category(id);
+        Ok(id)
+    }
+
+    fn update_category(&mut self, id: CategoryId, settings: CategorySettings) -> Result<(), Error> {
+        self.category(id)?;
+        let settings = self.check_category(settings, Some(id))?;
+        self.limiter.set_category_limit(id, settings.speed_limit);
+        self.categories.insert(id, settings);
+        self.save_category(id);
+        // A higher cap on running jobs may let queued ones start.
+        self.schedule();
+        Ok(())
+    }
+
+    fn remove_category(&mut self, id: CategoryId) -> Result<(), Error> {
+        if id == CategoryId::GENERAL {
+            return Err(Error::CannotRemoveGeneral);
+        }
+        self.category(id)?;
+        let members: Vec<JobId> = self
+            .jobs
+            .iter()
+            .filter(|(_, job)| job.category == id)
+            .map(|(job_id, _)| *job_id)
+            .collect();
+        // Moved and saved before the category row is deleted, which the
+        // database would refuse while jobs still point at it.
+        for job_id in members {
+            self.change(job_id, |job| {
+                job.category = CategoryId::GENERAL;
+                job.category_chosen = false;
+            })?;
+            self.limiter.set_category(job_id, CategoryId::GENERAL);
+        }
+        self.categories.remove(&id);
+        self.limiter.set_category_limit(id, 0);
+        self.store.remove_category(id);
+        // Fails only when nobody is subscribed.
+        let _ = self.events.send(JobEvent::CategoryRemoved(id));
+        self.schedule();
+        Ok(())
+    }
+
+    fn set_category(&mut self, id: JobId, category: CategoryId) -> Result<(), Error> {
+        let folder = self.category(category)?.folder.clone();
+        self.change(id, |job| {
+            job.category = category;
+            job.category_chosen = true;
+            // Nothing on disk yet, and no task holding its own copy of the
+            // download: it can still be saved somewhere else.
+            if let Some(folder) = folder
+                && job.download.file_name.is_none()
+                && job.task.is_none()
+            {
+                job.download.dest_dir = folder;
+            }
+        })?;
+        self.limiter.set_category(id, category);
+        self.schedule();
+        Ok(())
+    }
+
+    fn save_category(&self, id: CategoryId) {
+        let Some(settings) = self.categories.get(&id) else {
+            return;
+        };
+        let category = Category {
+            id,
+            settings: settings.clone(),
+        };
+        self.store.save_category(category.clone());
+        // Fails only when nobody is subscribed.
+        let _ = self.events.send(JobEvent::CategoryChanged(category));
     }
 
     async fn stop(&mut self, id: JobId, stop: Stop, reply: Reply<()>) {
@@ -557,26 +802,39 @@ impl<B: Backend> Actor<B> {
             .collect()
     }
 
-    /// Starts queued jobs until `max_concurrent` are running: the highest
-    /// priority first, and the oldest first within a priority.
+    /// Starts queued jobs until `max_concurrent` are running, skipping jobs
+    /// whose category is at its own cap: the highest priority first, and the
+    /// oldest first within a priority.
     fn schedule(&mut self) {
         if self.shutdown.is_some() {
             return;
         }
-        let mut running = self.jobs.values().filter(|j| j.task.is_some()).count();
-        while running < self.settings.max_concurrent {
+        let mut running: HashMap<CategoryId, usize> = HashMap::new();
+        for job in self.jobs.values().filter(|j| j.task.is_some()) {
+            *running.entry(job.category).or_default() += 1;
+        }
+        let mut total: usize = running.values().sum();
+        while total < self.settings.max_concurrent {
+            let has_room = |category: CategoryId| {
+                let cap = self
+                    .categories
+                    .get(&category)
+                    .map_or(0, |c| c.max_concurrent);
+                cap == 0 || running.get(&category).copied().unwrap_or(0) < cap
+            };
             let next = self
                 .jobs
                 .iter()
-                .filter(|(_, job)| job.state == JobState::Queued)
+                .filter(|(_, job)| job.state == JobState::Queued && has_room(job.category))
                 // `Reverse(id)`: among equal priorities, the smallest (oldest) ID wins.
                 .max_by_key(|(id, job)| (job.priority, Reverse(**id)))
-                .map(|(id, _)| *id);
-            let Some(id) = next else { break };
+                .map(|(id, job)| (*id, job.category));
+            let Some((id, category)) = next else { break };
             if !self.start_job(id) {
                 break;
             }
-            running += 1;
+            *running.entry(category).or_default() += 1;
+            total += 1;
         }
     }
 
@@ -598,7 +856,9 @@ impl<B: Backend> Actor<B> {
         let backend = Arc::clone(&self.backend);
         let internal = self.internal.clone();
         // The job's speed budget lives as long as the task does.
-        let throttle = self.limiter.register(id, job.speed_limit, job.priority);
+        let throttle = self
+            .limiter
+            .register(id, job.speed_limit, job.priority, job.category);
 
         tokio::spawn(async move {
             let mut last_progress: Option<Instant> = None;
@@ -735,6 +995,8 @@ impl<B: Backend> Actor<B> {
             error: job.error.clone(),
             priority: job.priority,
             speed_limit: job.speed_limit,
+            category: job.category,
+            category_chosen: job.category_chosen,
         });
     }
 

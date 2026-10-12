@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ottie_core::{
-    Error, HttpBackend, HttpConfig, JobId, JobSnapshot, JobState, Manager, PART_SUFFIX, Priority,
-    Settings, Store,
+    CategoryId, CategorySettings, Error, HttpBackend, HttpConfig, JobId, JobSnapshot, JobState,
+    Manager, NewJob, PART_SUFFIX, Priority, Settings, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -55,7 +55,10 @@ impl Setup {
 
     async fn add(&self, manager: &Manager) -> JobId {
         let url = self.server.url("/files/data.bin");
-        manager.add(url, &self.downloads).await.unwrap()
+        manager
+            .add(NewJob::new(url).in_dir(&self.downloads))
+            .await
+            .unwrap()
     }
 
     fn part(&self) -> PathBuf {
@@ -166,7 +169,10 @@ async fn history_and_ids_survive_a_restart() {
     assert_eq!(jobs, [done]);
 
     let url = s.server.url("/files/other.bin");
-    let second = manager.add(url, &s.downloads).await.unwrap();
+    let second = manager
+        .add(NewJob::new(url).in_dir(&s.downloads))
+        .await
+        .unwrap();
     assert!(second > first);
     wait_until(&manager, second, JobState::Completed).await;
 }
@@ -242,4 +248,36 @@ async fn settings_priorities_and_limits_survive_a_restart() {
     assert_eq!(manager.settings().await.unwrap(), expected);
     let job = &manager.list().await.unwrap()[0];
     assert_eq!((job.priority, job.speed_limit), (Priority::High, 123_456));
+}
+
+#[tokio::test]
+async fn categories_and_job_categories_survive_a_restart() {
+    let s = setup().await;
+    let manager = s.launch().await;
+    let videos = CategorySettings {
+        folder: Some(s.downloads.join("videos")),
+        extensions: vec!["mkv".into(), "mp4".into()],
+        speed_limit: 1_000_000,
+        max_concurrent: 1,
+        ..CategorySettings::named("Videos")
+    };
+    let id = manager.add_category(videos).await.unwrap();
+    let job = s.add(&manager).await;
+    manager.pause(job).await.unwrap();
+    manager.set_category(job, id).await.unwrap();
+    let before = manager.categories().await.unwrap();
+    manager.shutdown().await.unwrap();
+
+    let manager = s.launch().await;
+    assert_eq!(manager.categories().await.unwrap(), before);
+    assert_eq!(manager.list().await.unwrap()[0].category, id);
+    // Removing it still works on a reloaded database.
+    manager.remove_category(id).await.unwrap();
+    manager.shutdown().await.unwrap();
+    let manager = s.launch().await;
+    assert_eq!(manager.categories().await.unwrap().len(), 1);
+    assert_eq!(
+        manager.list().await.unwrap()[0].category,
+        CategoryId::GENERAL
+    );
 }

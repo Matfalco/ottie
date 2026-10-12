@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use reqwest::Url;
 
+use crate::category::{Category, CategoryId};
 use crate::download::RestartReason;
 use crate::id::JobId;
 
@@ -54,6 +55,37 @@ pub enum Priority {
     Urgent,
 }
 
+/// What [`crate::Manager::add`] needs to know about a new download.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewJob {
+    pub url: Url,
+    /// Where to save it. `None`: the category's folder.
+    pub dest_dir: Option<PathBuf>,
+    /// `None`: the category whose extensions include the file extension in
+    /// the URL, or General if none does.
+    pub category: Option<CategoryId>,
+}
+
+impl NewJob {
+    pub fn new(url: Url) -> Self {
+        Self {
+            url,
+            dest_dir: None,
+            category: None,
+        }
+    }
+
+    pub fn in_dir(mut self, dest_dir: impl Into<PathBuf>) -> Self {
+        self.dest_dir = Some(dest_dir.into());
+        self
+    }
+
+    pub fn in_category(mut self, category: CategoryId) -> Self {
+        self.category = Some(category);
+        self
+    }
+}
+
 /// A copy of a job's public state, for listing and events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobSnapshot {
@@ -70,6 +102,7 @@ pub struct JobSnapshot {
     pub priority: Priority,
     /// This job's own limit in bytes per second; 0 = none.
     pub speed_limit: u64,
+    pub category: CategoryId,
 }
 
 /// Broadcast to every subscriber of the manager.
@@ -86,6 +119,10 @@ pub enum JobEvent {
     },
     /// The job threw away its partial file and started over.
     Restarted { id: JobId, reason: RestartReason },
+    /// A category was added or changed. Clients can insert-or-replace by `id`.
+    CategoryChanged(Category),
+    /// A category was removed; its jobs were moved to General first.
+    CategoryRemoved(CategoryId),
 }
 
 #[cfg(test)]

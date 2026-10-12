@@ -65,6 +65,8 @@ pub fn part_name(name: &str) -> String {
 /// its `.part.ottie` file. `create_new` makes the reservation atomic, so two
 /// downloads can't grab the same name.
 pub async fn reserve(dir: &Path, name: &str) -> io::Result<(String, File)> {
+    // A category's folder may not exist yet.
+    fs::create_dir_all(dir).await?;
     for n in 0..MAX_COLLISION_ATTEMPTS {
         let candidate = numbered(name, n);
         if fs::try_exists(dir.join(&candidate)).await? {
