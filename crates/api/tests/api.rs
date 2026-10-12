@@ -264,6 +264,47 @@ async fn pause_resume_and_cancel() {
 }
 
 #[tokio::test]
+async fn remove_takes_a_job_off_the_list() {
+    let d = start().await;
+    let offered = format!("{EVENTS_PROTOCOL}, {TOKEN_PROTOCOL_PREFIX}{TOKEN}");
+    let (mut events, _) = d.events(&offered).await.unwrap();
+    let id = d.add("slow.bin").await;
+    d.wait_until(&id, JobState::Downloading).await;
+
+    let removed = d
+        .client
+        .delete(d.url(&format!("/jobs/{id}")))
+        .bearer_auth(TOKEN);
+    assert_eq!(
+        removed.send().await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    let jobs: Vec<Job> = d.get("/jobs").send().await.unwrap().json().await.unwrap();
+    assert!(jobs.is_empty());
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            let Some(Ok(Message::Text(text))) = events.next().await else {
+                continue;
+            };
+            if let Event::Removed { id: gone } = serde_json::from_str(&text).unwrap() {
+                assert_eq!(gone, id);
+                return;
+            }
+        }
+    })
+    .await
+    .expect("no removed event");
+
+    let again = d
+        .client
+        .delete(d.url(&format!("/jobs/{id}")))
+        .bearer_auth(TOKEN);
+    let (status, refused) = error_of(again.send().await.unwrap()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(refused.reason, Reason::JobNotFound { id });
+}
+
+#[tokio::test]
 async fn bad_requests_say_what_is_wrong() {
     let d = start().await;
     let add = |job: &AddJob| d.post("/jobs").json(job).send();

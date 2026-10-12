@@ -14,6 +14,7 @@
 	--on-accent: #ffffff;
 	--progress: var(--teal-light);
 	--track: #ece3d8;
+	--selected: #e2eff0;
 	--danger: #b3261e;
 	--danger-bg: #fbe9e7;
 	--focus: var(--amber);
@@ -29,6 +30,7 @@
 		--accent: var(--teal-light);
 		--progress: var(--teal-light);
 		--track: #26343a;
+		--selected: #1c3a41;
 		--danger: #f2b8b5;
 		--danger-bg: #3b1e1c;
 	}

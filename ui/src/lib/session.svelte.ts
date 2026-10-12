@@ -65,6 +65,15 @@ export class Session {
 		return this.attempt(() => this.api.cancel(id));
 	}
 
+	remove(id: string): Promise<boolean> {
+		return this.attempt(() => this.api.remove(id));
+	}
+
+	/** Removes them all at once; any failure shows on the page. */
+	async removeAll(ids: string[]): Promise<void> {
+		await Promise.all(ids.map((id) => this.remove(id)));
+	}
+
 	/** Runs a request; on failure shows why and returns false. */
 	private async attempt(request: () => Promise<unknown>): Promise<boolean> {
 		try {
@@ -131,6 +140,8 @@ export class Session {
 		}
 		if (event.type === 'progress') {
 			this.rates[event.id] = nextRate(this.rates[event.id], event.downloaded, Date.now());
+		} else if (event.type === 'removed') {
+			delete this.rates[event.id];
 		}
 		if (applyEvent(this.jobs, event)) {
 			void this.resync();

@@ -1,5 +1,13 @@
 import { describe as group, expect, it } from 'vitest';
-import { canCancel, canPause, canResume, describe, fraction } from './status';
+import {
+	canCancel,
+	canPause,
+	canResume,
+	describe,
+	fraction,
+	isFinished,
+	removeLosesData
+} from './status';
 import { job, plain } from './testing';
 
 const MB = 1024 * 1024;
@@ -60,5 +68,18 @@ group('progress and buttons', () => {
 		expect(canResume(job({ state: 'downloading' }))).toBe(false);
 		expect(canCancel(job({ state: 'completed' }))).toBe(false);
 		expect(canCancel(job({ state: 'paused' }))).toBe(true);
+	});
+});
+
+group('removing', () => {
+	it('asks first only when downloaded data would be deleted', () => {
+		expect(removeLosesData(job({ state: 'paused', downloaded: 10 }))).toBe(true);
+		expect(removeLosesData(job({ state: 'queued' }))).toBe(false);
+		expect(removeLosesData(job({ state: 'completed', downloaded: 10 }))).toBe(false);
+	});
+
+	it('counts completed and cancelled jobs as finished', () => {
+		expect(isFinished(job({ state: 'cancelled' }))).toBe(true);
+		expect(isFinished(job({ state: 'failed' }))).toBe(false);
 	});
 });

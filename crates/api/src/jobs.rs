@@ -1,4 +1,4 @@
-//! `/jobs`: list, add, pause, resume, cancel.
+//! `/jobs`: list, add, pause, resume, cancel, remove.
 
 use std::path::PathBuf;
 
@@ -75,5 +75,16 @@ pub(crate) async fn cancel(
     Path(id): Path<String>,
 ) -> Result<StatusCode, Failure> {
     state.manager.cancel(id.parse::<JobId>()?).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `DELETE /jobs/{id}`: takes the job off the list, in any state. Stops it
+/// first if it's running (answering once it has) and deletes its partial
+/// file; a completed file stays on disk.
+pub(crate) async fn remove(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, Failure> {
+    state.manager.remove(id.parse::<JobId>()?).await?;
     Ok(StatusCode::NO_CONTENT)
 }

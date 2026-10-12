@@ -125,6 +125,12 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE jobs ADD COLUMN problem_total INTEGER;
      ALTER TABLE jobs ADD COLUMN problem_detail TEXT;
      UPDATE jobs SET problem_kind = 'other', problem_detail = error WHERE error IS NOT NULL;",
+    // 7: the highest job ID handed out, so removing the newest job can't
+    // make its ID come back. 0 / 0 = none recorded (the jobs table tells).
+    "ALTER TABLE settings ADD COLUMN last_id_secs INTEGER NOT NULL DEFAULT 0
+        CHECK (last_id_secs >= 0);
+     ALTER TABLE settings ADD COLUMN last_id_seq INTEGER NOT NULL DEFAULT 0
+        CHECK (last_id_seq >= 0);",
 ];
 
 /// Everything saved about one job.
@@ -149,6 +155,8 @@ pub(crate) struct Loaded {
     pub settings: Settings,
     /// By ID; General is always there.
     pub categories: Vec<Category>,
+    /// The highest job ID handed out, whether or not that job still exists.
+    pub last_id: Option<JobId>,
 }
 
 /// Settings that apply to the whole manager. Stored as the single row of the
@@ -208,6 +216,7 @@ enum Op {
     SaveSettings(Settings),
     SaveCategory(Category),
     RemoveCategory(CategoryId),
+    RemoveJob { id: JobId, last_id: JobId },
     Flush(oneshot::Sender<()>),
 }
 
@@ -286,6 +295,14 @@ impl Store {
         }
     }
 
+    /// Queued like `save`. Deletes the job and its segments, and records
+    /// `last_id`, the highest ID handed out, so it's never handed out again.
+    pub(crate) fn remove_job(&self, id: JobId, last_id: JobId) {
+        if self.ops.send(Op::RemoveJob { id, last_id }).is_err() {
+            tracing::error!("database thread has stopped; job not removed");
+        }
+    }
+
     /// Waits until every save queued before this call has been written.
     pub(crate) async fn flush(&self) {
         let (reply, done) = oneshot::channel();
@@ -320,6 +337,11 @@ fn serve(mut conn: Connection, requests: std_mpsc::Receiver<Op>) {
             Op::RemoveCategory(id) => {
                 if let Err(err) = conn.execute("DELETE FROM categories WHERE id = ?1", [id.0]) {
                     tracing::error!(%id, error = %err, "could not remove category");
+                }
+            }
+            Op::RemoveJob { id, last_id } => {
+                if let Err(err) = remove_job(&mut conn, id, last_id) {
+                    tracing::error!(%id, error = %err, "could not remove job");
                 }
             }
             Op::Flush(reply) => {
@@ -442,12 +464,37 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
     Ok(())
 }
 
+/// Segments go with the job (`ON DELETE CASCADE`).
+fn remove_job(conn: &mut Connection, id: JobId, last_id: JobId) -> Result<(), Error> {
+    let tx = conn.transaction()?;
+    tx.execute(
+        "DELETE FROM jobs WHERE id_secs = ?1 AND id_seq = ?2",
+        params![id.secs(), id.seq()],
+    )?;
+    tx.execute(
+        "UPDATE settings SET last_id_secs = ?1, last_id_seq = ?2 WHERE id = 1",
+        params![last_id.secs(), last_id.seq()],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
 fn load_all(conn: &Connection) -> Result<Loaded, Error> {
     Ok(Loaded {
         jobs: load_jobs(conn)?,
         settings: load_settings(conn)?,
         categories: load_categories(conn)?,
+        last_id: load_last_id(conn)?,
     })
+}
+
+fn load_last_id(conn: &Connection) -> Result<Option<JobId>, Error> {
+    let (secs, seq): (u64, u32) = conn.query_row(
+        "SELECT last_id_secs, last_id_seq FROM settings WHERE id = 1",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    Ok((seq > 0).then(|| JobId::from_parts(secs, seq)))
 }
 
 fn load_jobs(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
@@ -862,6 +909,29 @@ mod tests {
         job.download.segments.clear();
         store.save(job.clone());
         assert_eq!(store.load().await.unwrap().jobs, [job]);
+    }
+
+    #[tokio::test]
+    async fn removed_jobs_are_gone_but_their_ids_are_remembered() {
+        let store = Store::open_in_memory().await.unwrap();
+        assert_eq!(store.load().await.unwrap().last_id, None);
+        let mut older = record(1);
+        older.download.segments = vec![Segment {
+            start: 0,
+            end: 50,
+            done: 5,
+        }];
+        let newer = record(2);
+        store.save(older.clone());
+        store.save(newer.clone());
+
+        store.remove_job(newer.id, newer.id);
+        let loaded = store.load().await.unwrap();
+        assert_eq!(loaded.jobs, [older.clone()]);
+        assert_eq!(loaded.last_id, Some(newer.id));
+
+        store.remove_job(older.id, newer.id);
+        assert!(store.load().await.unwrap().jobs.is_empty());
     }
 
     #[tokio::test]

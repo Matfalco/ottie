@@ -3,6 +3,7 @@ import type { Job } from "./Job";
 
 /**
  * A message on the `GET /events` WebSocket. Connect first, then fetch
- * `GET /jobs`, then apply events in order (insert-or-replace by `id`).
+ * `GET /jobs`, then apply events in order (insert-or-replace by `id`, or
+ * drop on `removed`).
  */
-export type Event = { "type": "changed", job: Job, } | { "type": "progress", id: string, downloaded: number, total: number | null, } | { "type": "resync" };
+export type Event = { "type": "changed", job: Job, } | { "type": "progress", id: string, downloaded: number, total: number | null, } | { "type": "removed", id: string, } | { "type": "resync" };

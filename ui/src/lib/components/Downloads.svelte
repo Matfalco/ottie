@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import icon from '#lib/assets/ottie.svg';
+	import { countByFilter, filterName, matches, showsNewJobs, type Filter } from '#lib/filters.js';
 	import { currentSpeed } from '#lib/jobs.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { Session } from '#lib/session.svelte.js';
+	import { isFinished } from '#lib/status.js';
 	import AddBar from './AddBar.svelte';
 	import JobRow from './JobRow.svelte';
-	import LanguagePicker from './LanguagePicker.svelte';
+	import Sidebar from './Sidebar.svelte';
 
 	interface Props {
 		token: string;
@@ -19,99 +20,100 @@
 	// svelte-ignore state_referenced_locally
 	const session = new Session(token, onUnauthorized);
 
+	let filter: Filter = $state('all');
+	let counts = $derived(countByFilter(session.list));
+	let shown = $derived(session.list.filter((job) => matches(job, filter)));
+	let finished = $derived(shown.filter(isFinished));
+
 	onMount(() => {
 		session.start();
 		return () => session.stop();
 	});
+
+	async function add(url: string, destDir?: string): Promise<boolean> {
+		const added = await session.add(url, destDir);
+		// Otherwise the new download would be hidden.
+		if (added && !showsNewJobs(filter)) {
+			filter = 'all';
+		}
+		return added;
+	}
 </script>
 
-<header>
-	<img src={icon} alt="" width="36" height="36" />
-	<h1>Ottie</h1>
-	<span class="connection {session.connection}" role="status">
-		{#if session.connection === 'live'}
-			{m.connection_live()}
-		{:else if session.connection === 'connecting'}
-			{m.connection_connecting()}
-		{:else}
-			{m.connection_offline()}
+<div class="page">
+	<Sidebar {filter} {counts} connection={session.connection} onSelect={(f) => (filter = f)} />
+
+	<main>
+		<AddBar onAdd={add} />
+
+		{#if session.error}
+			<div class="error" role="alert">
+				<span>{session.error}</span>
+				<button onclick={() => (session.error = null)} aria-label={m.dismiss()}>✕</button>
+			</div>
 		{/if}
-	</span>
-	<LanguagePicker />
-</header>
 
-<main>
-	<AddBar onAdd={(url, destDir) => session.add(url, destDir)} />
-
-	{#if session.error}
-		<div class="error" role="alert">
-			<span>{session.error}</span>
-			<button onclick={() => (session.error = null)} aria-label={m.dismiss()}>✕</button>
+		<div class="heading">
+			<h2>{filterName(filter)}</h2>
+			{#if finished.length > 0}
+				<button onclick={() => session.removeAll(finished.map((job) => job.id))}>
+					{m.clear_finished()}
+				</button>
+			{/if}
 		</div>
-	{/if}
 
-	{#if session.list.length === 0 && session.connection === 'live'}
-		<p class="empty">{m.empty()}</p>
-	{:else}
-		<ul>
-			{#each session.list as job (job.id)}
-				<JobRow
-					{job}
-					speed={currentSpeed(session.rates[job.id], session.now)}
-					now={session.now}
-					onPause={() => session.pause(job.id)}
-					onResume={() => session.resume(job.id)}
-					onCancel={() => session.cancel(job.id)}
-				/>
-			{/each}
-		</ul>
-	{/if}
-</main>
+		{#if session.list.length === 0 && session.connection === 'live'}
+			<p class="empty">{m.empty()}</p>
+		{:else if shown.length === 0 && session.connection === 'live'}
+			<p class="empty">{m.empty_filter()}</p>
+		{:else}
+			<ul>
+				{#each shown as job (job.id)}
+					<JobRow
+						{job}
+						speed={currentSpeed(session.rates[job.id], session.now)}
+						now={session.now}
+						onPause={() => session.pause(job.id)}
+						onResume={() => session.resume(job.id)}
+						onCancel={() => session.cancel(job.id)}
+						onRemove={() => session.remove(job.id)}
+					/>
+				{/each}
+			</ul>
+		{/if}
+	</main>
+</div>
 
 <style>
-	header {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-		max-width: 56rem;
-		margin: 0 auto;
-		padding: 1rem 1.5rem 0.5rem;
-	}
-
-	header img {
-		border-radius: 9px;
-	}
-
-	h1 {
-		margin: 0;
-		font-size: 1.35rem;
-	}
-
-	.connection {
-		margin-left: auto;
-		color: var(--muted);
-		font-size: 0.85em;
-	}
-
-	.connection::before {
-		content: '●';
-		margin-right: 0.35em;
-	}
-
-	.connection.live::before {
-		color: var(--progress);
-	}
-
-	.connection.offline {
-		color: var(--danger);
+	.page {
+		display: grid;
+		/* minmax(0, …): wide content (a long name) scrolls or shrinks rather
+		   than widening the page. */
+		grid-template-columns: 14rem minmax(0, 1fr);
+		min-height: 100vh;
 	}
 
 	main {
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		align-content: start;
 		gap: 1rem;
-		max-width: 56rem;
-		margin: 0 auto;
-		padding: 0.5rem 1.5rem 2rem;
+		width: 100%;
+		max-width: 60rem;
+		padding: 1.25rem 1.5rem 2rem;
+	}
+
+	.heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		min-height: 2.2rem;
+	}
+
+	h2 {
+		margin: 0;
+		font-size: 1.05rem;
 	}
 
 	.error {
@@ -143,5 +145,16 @@
 		margin-top: 3rem;
 		text-align: center;
 		color: var(--muted);
+	}
+
+	@media (max-width: 40rem) {
+		.page {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-rows: auto 1fr;
+		}
+
+		main {
+			padding: 1rem;
+		}
 	}
 </style>

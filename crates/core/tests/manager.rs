@@ -278,3 +278,77 @@ async fn ids_are_unique_and_in_order() {
         .collect();
     assert_eq!(listed, ids);
 }
+
+#[tokio::test]
+async fn removing_a_running_job_stops_it_and_deletes_the_part_file() {
+    let mut s = setup(3, 5).await;
+    let id = s.add("data.bin").await;
+    s.wait_for(id, JobState::Downloading).await;
+
+    // Like pause, it answers once the job has stopped.
+    s.manager.remove(id).await.unwrap();
+    assert!(s.manager.list().await.unwrap().is_empty());
+    assert_eq!(std::fs::read_dir(s.dir.path()).unwrap().count(), 0);
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            if let JobEvent::Removed(removed) = s.events.recv().await.unwrap() {
+                assert_eq!(removed, id);
+                return;
+            }
+        }
+    })
+    .await
+    .expect("no Removed event");
+}
+
+#[tokio::test]
+async fn removing_a_completed_job_keeps_the_file() {
+    let mut s = setup(3, 0).await;
+    let id = s.add("data.bin").await;
+    let done = s.wait_for(id, JobState::Completed).await;
+
+    s.manager.remove(id).await.unwrap();
+    assert!(s.manager.list().await.unwrap().is_empty());
+    s.assert_file(&done);
+}
+
+#[tokio::test]
+async fn jobs_can_be_removed_in_any_state() {
+    let mut s = setup(1, 5).await;
+    let running = s.add("a.bin").await;
+    let queued = s.add("b.bin").await;
+    let paused = s.add("c.bin").await;
+    let cancelled = s.add("d.bin").await;
+    s.manager.pause(paused).await.unwrap();
+    s.manager.cancel(cancelled).await.unwrap();
+    s.wait_for(running, JobState::Downloading).await;
+
+    for id in [queued, paused, cancelled] {
+        s.manager.remove(id).await.unwrap();
+    }
+    let left: Vec<JobId> = s
+        .manager
+        .list()
+        .await
+        .unwrap()
+        .iter()
+        .map(|j| j.id)
+        .collect();
+    assert_eq!(left, [running]);
+    assert!(matches!(
+        s.manager.remove(queued).await,
+        Err(Error::JobNotFound(_))
+    ));
+}
+
+#[tokio::test]
+async fn removing_a_running_job_frees_its_slot() {
+    let mut s = setup(1, 5).await;
+    let first = s.add("a.bin").await;
+    let second = s.add("b.bin").await;
+    s.wait_for(first, JobState::Downloading).await;
+
+    s.manager.remove(first).await.unwrap();
+    let done = s.wait_for(second, JobState::Completed).await;
+    s.assert_file(&done);
+}

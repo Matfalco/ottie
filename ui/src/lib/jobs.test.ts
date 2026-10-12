@@ -12,6 +12,12 @@ describe('applyEvent', () => {
 		expect(jobs[job().id].state).toBe('completed');
 	});
 
+	it('drops removed jobs', () => {
+		const jobs: Jobs = { [job().id]: job() };
+		expect(applyEvent(jobs, { type: 'removed', id: job().id })).toBe(false);
+		expect(jobs).toEqual({});
+	});
+
 	it('ignores progress for unknown jobs and asks for a resync when told', () => {
 		const jobs: Jobs = {};
 		applyEvent(jobs, { type: 'progress', id: 'nope', downloaded: 1, total: null });

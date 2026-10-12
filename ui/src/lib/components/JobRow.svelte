@@ -2,7 +2,14 @@
 	import type { Job } from '@ottie/api-types/Job';
 	import { displayName } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { canCancel, canPause, canResume, describe, fraction } from '#lib/status.js';
+	import {
+		canCancel,
+		canPause,
+		canResume,
+		describe,
+		fraction,
+		removeLosesData
+	} from '#lib/status.js';
 
 	interface Props {
 		job: Job;
@@ -12,15 +19,23 @@
 		onPause: () => void;
 		onResume: () => void;
 		onCancel: () => void;
+		onRemove: () => void;
 	}
 
-	let { job, speed, now, onPause, onResume, onCancel }: Props = $props();
+	let { job, speed, now, onPause, onResume, onCancel, onRemove }: Props = $props();
 	let name = $derived(displayName(job));
 	let done = $derived(fraction(job));
 
 	function confirmCancel() {
 		if (confirm(m.cancel_confirm({ name }))) {
 			onCancel();
+		}
+	}
+
+	// A completed file stays on disk, so there's nothing to confirm then.
+	function confirmRemove() {
+		if (!removeLosesData(job) || confirm(m.remove_confirm({ name }))) {
+			onRemove();
 		}
 	}
 </script>
@@ -40,6 +55,7 @@
 		{#if canCancel(job)}
 			<button onclick={confirmCancel} aria-label={m.cancel_label({ name })}>{m.cancel()}</button>
 		{/if}
+		<button onclick={confirmRemove} aria-label={m.remove_label({ name })}>{m.remove()}</button>
 	</div>
 	<div
 		class="bar"
@@ -93,6 +109,14 @@
 	.actions {
 		display: flex;
 		gap: 0.4rem;
+	}
+
+	/* Phones: the buttons get a row of their own, so the name keeps its room. */
+	@media (max-width: 40rem) {
+		.actions {
+			grid-column: 1 / -1;
+			order: 1;
+		}
 	}
 
 	.bar {

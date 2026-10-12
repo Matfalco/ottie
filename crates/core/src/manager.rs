@@ -73,7 +73,8 @@ impl Manager {
             store,
             limiter,
             settings,
-            ids: IdGenerator::after(jobs.keys().next_back().copied()),
+            // A removed job's ID may be higher than any left (`None` < `Some`).
+            ids: IdGenerator::after(jobs.keys().next_back().copied().max(loaded.last_id)),
             jobs,
             categories,
             yields: 0,
@@ -111,6 +112,18 @@ impl Manager {
         self.request(|reply| Command::Stop {
             id,
             stop: Stop::Cancel,
+            reply,
+        })
+        .await
+    }
+
+    /// Takes the job off the list for good. A running job is stopped first
+    /// (this answers once it has), and an unfinished one's `.part.ottie` file
+    /// is deleted, as with `cancel`. A completed file stays on disk.
+    pub async fn remove(&self, id: JobId) -> Result<(), Error> {
+        self.request(|reply| Command::Stop {
+            id,
+            stop: Stop::Remove,
             reply,
         })
         .await
@@ -323,13 +336,15 @@ enum Internal {
 }
 
 /// Why a running job is being stopped. Later variants win: a user's pause or
-/// cancel overrides the shutdown, and cancel overrides pause.
+/// cancel overrides the shutdown, cancel overrides pause, remove overrides all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Stop {
     /// Leave the state as it is, so the next start continues the job.
     Shutdown,
     Pause,
     Cancel,
+    /// Cancel (unless it completed), then forget the job.
+    Remove,
 }
 
 impl Stop {
@@ -337,7 +352,7 @@ impl Stop {
         match self {
             Stop::Shutdown => None,
             Stop::Pause => Some(JobState::Paused),
-            Stop::Cancel => Some(JobState::Cancelled),
+            Stop::Cancel | Stop::Remove => Some(JobState::Cancelled),
         }
     }
 }
@@ -429,8 +444,8 @@ impl Job {
 struct Task {
     cancel: CancellationToken,
     stop: Option<Stop>,
-    /// Pause/cancel requests to answer once the task has really stopped.
-    waiters: Vec<(JobState, Reply<()>)>,
+    /// Pause/cancel/remove requests to answer once the task has really stopped.
+    waiters: Vec<(Stop, Reply<()>)>,
 }
 
 /// The task that owns all job state. Only it reads or changes `jobs`.
@@ -885,13 +900,21 @@ impl<B: Backend> Actor<B> {
             // Running: ask it to stop, and answer once it has (see `on_ended`).
             task.stop = task.stop.max(Some(stop));
             task.cancel.cancel();
-            task.waiters.push((target, reply));
+            task.waiters.push((stop, reply));
             return;
         }
-        let result = self.transition(id, target, None);
+        let finished = matches!(job.state, JobState::Completed | JobState::Cancelled);
+        let result = if stop == Stop::Remove && finished {
+            Ok(())
+        } else {
+            self.transition(id, target, None)
+        };
         if result.is_ok() {
-            if stop == Stop::Cancel {
+            if matches!(stop, Stop::Cancel | Stop::Remove) && !finished {
                 self.delete_part(id).await;
+            }
+            if stop == Stop::Remove {
+                self.forget(id);
             }
             // A retrying job held a slot, which is now free.
             self.schedule();
@@ -1103,15 +1126,22 @@ impl<B: Backend> Actor<B> {
         let Some(final_state) = self.jobs.get(&id).map(|job| job.state) else {
             return;
         };
-        for (wanted, reply) in task.map(|t| t.waiters).unwrap_or_default() {
-            let _ = reply.send(if wanted == final_state {
-                Ok(())
-            } else {
-                Err(Error::InvalidTransition {
+        // Forgotten before answering, so a caller that lists next won't see it.
+        let removed = stop == Some(Stop::Remove);
+        if removed {
+            self.forget(id);
+        }
+        for (asked, reply) in task.map(|t| t.waiters).unwrap_or_default() {
+            let answer = match asked.target() {
+                _ if removed && asked == Stop::Remove => Ok(()),
+                _ if removed => Err(Error::JobNotFound(id)),
+                Some(wanted) if wanted != final_state => Err(Error::InvalidTransition {
                     from: final_state,
                     to: wanted,
-                })
-            });
+                }),
+                _ => Ok(()),
+            };
+            let _ = reply.send(answer);
         }
         self.schedule();
     }
@@ -1181,6 +1211,18 @@ impl<B: Backend> Actor<B> {
             category: job.category,
             category_chosen: job.category_chosen,
         });
+    }
+
+    /// Takes a stopped job off the list and out of the database.
+    fn forget(&mut self, id: JobId) {
+        if self.jobs.remove(&id).is_none() {
+            return;
+        }
+        // The generator has handed out at least this job's ID.
+        let last_id = self.ids.last().unwrap_or(id);
+        self.store.remove_job(id, last_id);
+        // Fails only when nobody is subscribed.
+        let _ = self.events.send(JobEvent::Removed(id));
     }
 
     fn emit_changed(&self, id: JobId) {

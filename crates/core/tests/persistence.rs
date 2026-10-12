@@ -312,3 +312,22 @@ async fn a_job_waiting_to_retry_continues_after_a_restart() {
     wait_until(&manager, id, JobState::Completed).await;
     s.assert_complete();
 }
+
+#[tokio::test]
+async fn removed_jobs_stay_removed_and_their_ids_are_not_reused() {
+    let s = setup().await;
+    let manager = s.launch().await;
+    let kept = s.add(&manager).await;
+    wait_until(&manager, kept, JobState::Completed).await;
+    let removed = s.add(&manager).await;
+    manager.remove(removed).await.unwrap();
+    manager.shutdown().await.unwrap();
+
+    let manager = s.launch().await;
+    let ids: Vec<JobId> = manager.list().await.unwrap().iter().map(|j| j.id).collect();
+    assert_eq!(ids, [kept]);
+    // Likely within the same second as `removed`, which only the saved
+    // last ID can tell apart.
+    let next = s.add(&manager).await;
+    assert!(next > removed, "{next} reuses or precedes {removed}");
+}

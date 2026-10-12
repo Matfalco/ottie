@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { displayName, formatBytes, formatDuration, formatSpeed } from './format';
+import { displayName, formatBytes, formatCount, formatDuration, formatSpeed } from './format';
 import { job, plain } from './testing';
 
 const MB = 1024 * 1024;
@@ -18,6 +18,13 @@ describe('formatBytes', () => {
 	it('speaks speeds per second', () => {
 		expect(formatSpeed(2.5 * MB, 'en')).toBe('2.5 MB/s');
 		expect(plain(formatSpeed(2.5 * MB, 'fr'))).toBe('2,5 Mo/s');
+	});
+});
+
+describe('formatCount', () => {
+	it('separates thousands the language’s way', () => {
+		expect(formatCount(1234, 'en')).toBe('1,234');
+		expect(plain(formatCount(1234, 'fr'))).toBe('1 234');
 	});
 });
 

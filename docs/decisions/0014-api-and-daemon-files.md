@@ -20,9 +20,9 @@ Accepted 2026-10-12.
 - The web UI (3b) gets it from a printed link (`…/#token=…`, the part after `#` never reaches the server) or a login page. The desktop app reads the file.
 
 **API shape (v1, under `/api/v1`):**
-- `GET /jobs` lists every job; `POST /jobs` adds one (`{url, destDir?, category?}` → 201 `{id}`); `POST /jobs/{id}/pause|resume|cancel` → 204.
+- `GET /jobs` lists every job; `POST /jobs` adds one (`{url, destDir?, category?}` → 201 `{id}`); `POST /jobs/{id}/pause|resume|cancel` → 204; `DELETE /jobs/{id}` → 204 removes it (`docs/decisions/0018`).
 - `destDir` must be absolute.
-- `GET /events` is a WebSocket of `{"type": "changed", job}`, `{"type": "progress", id, downloaded, total}` and `{"type": "resync"}` (events were missed: fetch the list again). Clients connect first, then fetch `GET /jobs`, then apply events in order.
+- `GET /events` is a WebSocket of `{"type": "changed", job}`, `{"type": "progress", id, downloaded, total}`, `{"type": "removed", id}` and `{"type": "resync"}` (events were missed: fetch the list again). Clients connect first, then fetch `GET /jobs`, then apply events in order.
 - Errors are `{"error": "…"}`: 400 bad input, 401 no token, 404 unknown job, 409 not possible in this state, 422 missing fields, 503 stopping.
 - JSON is camelCase. IDs are strings. Byte counts and times (Unix milliseconds) are numbers.
 - The API has its own types (`crates/api/src/types.rs`), converted from the engine's, so engine changes don't break clients. ts-rs writes them to `shared/api-types/` on `cargo test -p ottie-api`.

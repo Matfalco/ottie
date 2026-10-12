@@ -53,6 +53,11 @@ export class Api {
 		return this.request('POST', `/jobs/${encodeURIComponent(id)}/cancel`);
 	}
 
+	/** Takes the job off the list (stopping it first if it runs). */
+	remove(id: string): Promise<void> {
+		return this.request('DELETE', `/jobs/${encodeURIComponent(id)}`);
+	}
+
 	/** Opens the live events stream. */
 	events(): WebSocket {
 		const url = new URL(`${BASE}/events`, location.href);

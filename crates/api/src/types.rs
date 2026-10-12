@@ -210,7 +210,8 @@ pub enum Reason {
 }
 
 /// A message on the `GET /events` WebSocket. Connect first, then fetch
-/// `GET /jobs`, then apply events in order (insert-or-replace by `id`).
+/// `GET /jobs`, then apply events in order (insert-or-replace by `id`, or
+/// drop on `removed`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(
     tag = "type",
@@ -229,6 +230,8 @@ pub enum Event {
         #[ts(type = "number | null")]
         total: Option<u64>,
     },
+    /// A job was removed (`DELETE /jobs/{id}`): drop it.
+    Removed { id: String },
     /// Events were missed (the client was too slow): fetch `GET /jobs` again.
     Resync,
 }

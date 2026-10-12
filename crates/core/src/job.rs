@@ -129,6 +129,8 @@ pub enum JobEvent {
         downloaded: u64,
         total: Option<u64>,
     },
+    /// The job was removed. Clients drop it.
+    Removed(JobId),
     /// The job threw away its partial file and started over.
     Restarted { id: JobId, reason: RestartReason },
     /// A category was added or changed. Clients can insert-or-replace by `id`.

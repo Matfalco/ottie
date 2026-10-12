@@ -43,7 +43,12 @@ export function formatSpeed(bytesPerSec: number, locale: Locale = getLocale()): 
 	return number(value, unit, locale, `${UNITS[unit]}-per-second`, false);
 }
 
-/** The two largest units: "45 sec", "3 min 20 sec", "2 hr 5 min" (French: "2 h 5 min"). */
+/** "1,234" (French: "1 234"). */
+export function formatCount(count: number, locale: Locale = getLocale()): string {
+	return new Intl.NumberFormat(locale).format(count);
+}
+
+/** The two largest units:"45 sec", "3 min 20 sec", "2 hr 5 min" (French: "2 h 5 min"). */
 export function formatDuration(seconds: number, locale: Locale = getLocale()): string {
 	const part = (value: number, unit: string) =>
 		new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'short' }).format(value);

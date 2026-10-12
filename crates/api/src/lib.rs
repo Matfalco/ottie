@@ -20,7 +20,7 @@ mod ui;
 use axum::Router;
 use axum::http::{Method, Uri};
 use axum::middleware;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use ottie_core::Manager;
 use tokio_util::sync::CancellationToken;
 
@@ -47,6 +47,7 @@ pub fn router(manager: Manager, token: Token, shutdown: CancellationToken, ui: U
     };
     let api = Router::new()
         .route("/jobs", get(jobs::list).post(jobs::add))
+        .route("/jobs/{id}", delete(jobs::remove))
         .route("/jobs/{id}/pause", post(jobs::pause))
         .route("/jobs/{id}/resume", post(jobs::resume))
         .route("/jobs/{id}/cancel", post(jobs::cancel))

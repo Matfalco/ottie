@@ -91,6 +91,11 @@ impl IdGenerator {
         Self { last }
     }
 
+    /// The highest ID handed out so far.
+    pub(crate) fn last(&self) -> Option<JobId> {
+        self.last
+    }
+
     /// `now` is seconds since 1970 (UTC).
     pub(crate) fn next(&mut self, now: u64) -> JobId {
         let id = match self.last {

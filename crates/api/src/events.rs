@@ -50,6 +50,7 @@ async fn forward(
                 downloaded,
                 total,
             },
+            Ok(JobEvent::Removed(id)) => Event::Removed { id: id.to_string() },
             // Not part of the API yet (restarts, categories).
             Ok(_) => continue,
             Err(RecvError::Lagged(_)) => Event::Resync,

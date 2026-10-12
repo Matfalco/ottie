@@ -19,6 +19,8 @@ Accepted 2026-10-12.
 - The UI reads the fragment, removes it from the address bar and history, and keeps the token in `localStorage`.
 - Without a token, a login page asks for it (`ottie token`). A 401 signs out.
 
+**Layout:** a sidebar with the views (All, Active, Queued, Stopped, Completed), each with its count, plus the connection status and the language. The main column holds the add bar and the list. "Stopped" means paused, failed or cancelled: whatever won't carry on by itself. Adding a download while a view would hide it switches back to All. Categories, settings and the like will join the sidebar. On a phone-wide screen (under 40rem), the sidebar becomes a top bar with the views in a row that scrolls sideways.
+
 **Live data:**
 - The page opens the events WebSocket first, then fetches `GET /jobs`. Events that arrive during the fetch are buffered and replayed after it. They're full states in order, so the replay always ends on the latest state.
 - The WebSocket reconnects with growing waits (0.5 s → 10 s) and resyncs.

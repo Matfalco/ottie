@@ -88,5 +88,15 @@ export function canResume(job: Job): boolean {
 }
 
 export function canCancel(job: Job): boolean {
-	return job.state !== 'completed' && job.state !== 'cancelled';
+	return !isFinished(job);
+}
+
+/** Nothing left to do: "Clear finished" removes these. */
+export function isFinished(job: Job): boolean {
+	return job.state === 'completed' || job.state === 'cancelled';
+}
+
+/** Whether removing it deletes downloaded data (a completed file stays). */
+export function removeLosesData(job: Job): boolean {
+	return !isFinished(job) && job.downloaded > 0;
 }
