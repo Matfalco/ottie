@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use ottie_core::{
-    Download, Error, Event, HttpConfig, Outcome, PART_SUFFIX, RestartReason, Segment, build_client,
-    run,
+    Download, Error, Event, HttpConfig, Outcome, PART_SUFFIX, RestartReason, Segment, Throttle,
+    build_client, run,
 };
 use reqwest::Client;
 use support::{TestServer, test_data};
@@ -54,7 +54,8 @@ impl Setup {
     ) -> (Result<Outcome, Error>, Vec<Event>) {
         let cancel = CancellationToken::new();
         let mut events = Vec::new();
-        let result = run(&self.client, &CONFIG, dl, &cancel, |event| {
+        let throttle = Throttle::unlimited();
+        let result = run(&self.client, &CONFIG, dl, &throttle, &cancel, |event| {
             match &event {
                 Event::Started { .. } => on_started(),
                 Event::Progress { downloaded, .. }

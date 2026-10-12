@@ -5,7 +5,7 @@ use std::error::Error;
 use std::io::Write;
 use std::time::{Duration, Instant};
 
-use ottie_core::{Download, Event, HttpConfig, Outcome, build_client, run};
+use ottie_core::{Download, Event, HttpConfig, Outcome, Throttle, build_client, run};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio_util::sync::CancellationToken;
 
@@ -17,6 +17,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let client = build_client()?;
     let config = HttpConfig::default();
+    let throttle = Throttle::unlimited();
     let mut dl = Download::new(url, folder)?;
     let mut stdin = BufReader::new(tokio::io::stdin()).lines();
 
@@ -30,17 +31,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
         });
 
         let mut last_print = Instant::now() - Duration::from_secs(1);
-        let outcome = run(&client, &config, &mut dl, &cancel, |event| match event {
-            Event::Progress { downloaded, total } => {
-                if last_print.elapsed() >= Duration::from_millis(200) {
-                    last_print = Instant::now();
-                    print_progress(downloaded, total);
+        let outcome = run(
+            &client,
+            &config,
+            &mut dl,
+            &throttle,
+            &cancel,
+            |event| match event {
+                Event::Progress { downloaded, total } => {
+                    if last_print.elapsed() >= Duration::from_millis(200) {
+                        last_print = Instant::now();
+                        print_progress(downloaded, total);
+                    }
                 }
-            }
-            Event::Started { file_name, .. } => println!("downloading {file_name}"),
-            Event::Restarted(reason) => println!("\nrestarting from zero: {reason:?}"),
-            Event::Checkpoint { .. } => {}
-        })
+                Event::Started { file_name, .. } => println!("downloading {file_name}"),
+                Event::Restarted(reason) => println!("\nrestarting from zero: {reason:?}"),
+                Event::Checkpoint { .. } => {}
+            },
+        )
         .await;
         ctrl_c.abort();
 

@@ -17,6 +17,7 @@ use crate::download::{Download, Event, Outcome, RestartReason, Validator, check_
 use crate::error::Error;
 use crate::filename;
 use crate::segmented::{self, Segmented};
+use crate::throttle::Throttle;
 
 const MAX_REDIRECTS: usize = 10;
 
@@ -69,12 +70,19 @@ pub async fn run(
     client: &Client,
     config: &HttpConfig,
     dl: &mut Download,
+    throttle: &Throttle,
     cancel: &CancellationToken,
     mut on_event: impl FnMut(Event),
 ) -> Result<Outcome, Error> {
+    let env = Env {
+        client,
+        config,
+        throttle,
+        cancel,
+    };
     let mut opened = match (dl.segments.is_empty(), dl.file_name.clone(), dl.part_path()) {
         (false, Some(name), Some(part)) => {
-            match resume_segmented(client, config, dl, &name, &part, cancel, &mut on_event).await? {
+            match resume_segmented(&env, dl, &name, &part, &mut on_event).await? {
                 Resumed::Stopped(outcome) => return Ok(outcome),
                 Resumed::Restart(reason) => {
                     restarting(dl, reason, &mut on_event);
@@ -99,7 +107,7 @@ pub async fn run(
         };
         let Some(total) = splittable(config, dl, &response) else {
             started(dl, &name, &mut on_event);
-            return single(response, file, dl, &name, cancel, &mut on_event).await;
+            return single(&env, response, file, dl, &name, &mut on_event).await;
         };
 
         // Full size up front, so every connection can write at its offset
@@ -110,7 +118,7 @@ pub async fn run(
         started(dl, &name, &mut on_event);
         let part = dl.dest_dir.join(filename::part_name(&name));
         let first = Some(response);
-        match segmented::run(client, config, dl, &part, first, cancel, &mut on_event).await? {
+        match segmented::run(&env, dl, &part, first, &mut on_event).await? {
             Segmented::Finished => return complete(dl, &name).await,
             Segmented::Cancelled => return Ok(Outcome::Paused),
             Segmented::Restart(reason) if !restarted_mid_run => {
@@ -121,6 +129,15 @@ pub async fn run(
             Segmented::Restart(_) => return Err(Error::RemoteUnstable),
         }
     }
+}
+
+/// What every step of one run shares. The `'a` says these are borrowed from
+/// the caller of [`run`] and only live as long as that call.
+pub(crate) struct Env<'a> {
+    pub client: &'a Client,
+    pub config: &'a HttpConfig,
+    pub throttle: &'a Throttle,
+    pub cancel: &'a CancellationToken,
 }
 
 struct Opened {
@@ -241,12 +258,10 @@ enum Resumed {
 }
 
 async fn resume_segmented(
-    client: &Client,
-    config: &HttpConfig,
+    env: &Env<'_>,
     dl: &mut Download,
     name: &str,
     part: &Path,
-    cancel: &CancellationToken,
     on_event: &mut impl FnMut(Event),
 ) -> Result<Resumed, Error> {
     let reason = match fs::metadata(part).await {
@@ -257,7 +272,7 @@ async fn resume_segmented(
         Ok(_) => {
             dl.downloaded = dl.segments.iter().map(|s| s.done).sum();
             started(dl, name, on_event);
-            match segmented::run(client, config, dl, part, None, cancel, on_event).await? {
+            match segmented::run(env, dl, part, None, on_event).await? {
                 Segmented::Finished => return complete(dl, name).await.map(Resumed::Stopped),
                 Segmented::Cancelled => return Ok(Resumed::Stopped(Outcome::Paused)),
                 Segmented::Restart(reason) => reason,
@@ -321,15 +336,15 @@ fn splittable(config: &HttpConfig, dl: &Download, response: &Response) -> Option
 }
 
 async fn single(
+    env: &Env<'_>,
     response: Response,
     file: File,
     dl: &mut Download,
     name: &str,
-    cancel: &CancellationToken,
     on_event: &mut impl FnMut(Event),
 ) -> Result<Outcome, Error> {
     let mut writer = BufWriter::new(file);
-    let streamed = stream_body(response, &mut writer, dl, cancel, on_event).await;
+    let streamed = stream_body(env, response, &mut writer, dl, on_event).await;
     // Flush even after an error, so the .part.ottie length matches `dl.downloaded`.
     let flushed = flush(&mut writer).await;
     drop(writer); // Windows can't rename a file that's still open.
@@ -348,12 +363,15 @@ enum Stop {
 }
 
 async fn stream_body(
+    env: &Env<'_>,
     mut response: Response,
     writer: &mut BufWriter<File>,
     dl: &mut Download,
-    cancel: &CancellationToken,
     on_event: &mut impl FnMut(Event),
 ) -> Result<Stop, Error> {
+    let Env {
+        throttle, cancel, ..
+    } = env;
     loop {
         // Wait for whichever comes first: the next chunk or a pause request.
         // `biased` checks the pause first, so a fast server can't delay it.
@@ -371,6 +389,12 @@ async fn stream_body(
             downloaded: dl.downloaded,
             total: dl.total,
         });
+        // Over the speed limit: wait before reading more (a pause still wins).
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Ok(Stop::Cancelled),
+            () = throttle.spend(bytes.len()) => {}
+        }
     }
 }
 

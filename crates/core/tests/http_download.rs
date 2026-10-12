@@ -5,7 +5,8 @@ mod support;
 use std::time::Duration;
 
 use ottie_core::{
-    Download, Error, Event, HttpConfig, Outcome, PART_SUFFIX, RestartReason, build_client, run,
+    Download, Error, Event, HttpConfig, Outcome, PART_SUFFIX, RestartReason, Throttle,
+    build_client, run,
 };
 use reqwest::Client;
 use support::{TestServer, test_data};
@@ -57,14 +58,21 @@ async fn run_collect(
 ) -> (Result<Outcome, Error>, Vec<Event>) {
     let cancel = CancellationToken::new();
     let mut events = Vec::new();
-    let result = run(client, &single(), dl, &cancel, |event| {
-        if let (Some(limit), Event::Progress { downloaded, .. }) = (pause_at, &event)
-            && *downloaded >= limit
-        {
-            cancel.cancel();
-        }
-        events.push(event);
-    })
+    let result = run(
+        client,
+        &single(),
+        dl,
+        &Throttle::unlimited(),
+        &cancel,
+        |event| {
+            if let (Some(limit), Event::Progress { downloaded, .. }) = (pause_at, &event)
+                && *downloaded >= limit
+            {
+                cancel.cancel();
+            }
+            events.push(event);
+        },
+    )
     .await;
     (result, events)
 }
@@ -243,7 +251,14 @@ async fn pause_is_prompt_on_a_slow_server() {
 
     let result = tokio::time::timeout(
         Duration::from_secs(5),
-        run(&s.client, &single(), &mut dl, &cancel, |_| {}),
+        run(
+            &s.client,
+            &single(),
+            &mut dl,
+            &Throttle::unlimited(),
+            &cancel,
+            |_| {},
+        ),
     )
     .await
     .expect("pause took too long");

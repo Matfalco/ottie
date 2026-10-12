@@ -17,7 +17,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::download::{Download, Event, RestartReason, Segment, Validator};
 use crate::error::Error;
-use crate::http::{HttpConfig, content_range_matches, flush, get, response_reason};
+use crate::http::{Env, HttpConfig, content_range_matches, flush, get, response_reason};
+use crate::throttle::Throttle;
 
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(200);
 /// How often each connection flushes to disk, and so how often the saved
@@ -115,6 +116,7 @@ struct Context {
     validator: Validator,
     path: PathBuf,
     total: u64,
+    throttle: Throttle,
 }
 
 enum Ended {
@@ -128,23 +130,23 @@ enum Ended {
 /// at `path`. `first` is an already-open response starting at byte 0 (fresh
 /// downloads reuse the request that discovered the file).
 pub(crate) async fn run(
-    client: &Client,
-    config: &HttpConfig,
+    env: &Env<'_>,
     dl: &mut Download,
     path: &Path,
     first: Option<Response>,
-    cancel: &CancellationToken,
     on_event: &mut impl FnMut(Event),
 ) -> Result<Segmented, Error> {
+    let Env { config, cancel, .. } = env;
     let (Some(total), Some(validator)) = (dl.total, dl.validator.clone()) else {
         return Ok(Segmented::Restart(RestartReason::NotResumable));
     };
     let context = Arc::new(Context {
-        client: client.clone(),
+        client: env.client.clone(),
         url: dl.url.clone(),
         validator,
         path: path.to_owned(),
         total,
+        throttle: env.throttle.clone(),
     });
     let mut parts: Vec<Part> = dl.segments.iter().copied().map(Part::new).collect();
     // Stops every connection, either because the user paused or because
@@ -330,6 +332,12 @@ async fn connection(
                 flush(&mut writer).await?;
                 shared.durable.store(pos, SeqCst);
                 last_flush = Instant::now();
+            }
+            // Every connection spends from the same job budget.
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return Ok(Ended::Cancelled),
+                () = context.throttle.spend(bytes.len()) => {}
             }
         }
     }

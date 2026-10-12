@@ -5,9 +5,7 @@ mod support;
 use std::collections::HashSet;
 use std::time::Duration;
 
-use ottie_core::{
-    Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, ManagerConfig, Store,
-};
+use ottie_core::{Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, Store};
 use support::{TestServer, test_data};
 use tempfile::TempDir;
 use tokio::sync::broadcast::Receiver;
@@ -29,10 +27,10 @@ async fn setup(max_concurrent: usize, chunk_delay_ms: u64) -> Setup {
     let server = TestServer::start(data.clone()).await;
     server.configure(|b| b.chunk_delay = Some(Duration::from_millis(chunk_delay_ms)));
     let store = Store::open_in_memory().await.unwrap();
-    let config = ManagerConfig { max_concurrent };
-    let manager = Manager::start(HttpBackend::new().unwrap(), store, config)
+    let manager = Manager::start(HttpBackend::new().unwrap(), store)
         .await
         .unwrap();
+    manager.set_max_concurrent(max_concurrent).await.unwrap();
     // Subscribe before adding anything so no event is missed.
     let events = manager.subscribe();
     Setup {

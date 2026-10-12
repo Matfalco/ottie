@@ -13,7 +13,7 @@ use tokio::sync::oneshot;
 use crate::download::{Download, Segment, Validator};
 use crate::error::Error;
 use crate::id::JobId;
-use crate::job::JobState;
+use crate::job::{JobState, Priority};
 
 /// Each entry upgrades the schema by one version (`PRAGMA user_version`).
 /// Never edit an entry once released; append a new one.
@@ -46,6 +46,17 @@ const MIGRATIONS: &[&str] = &[
         FOREIGN KEY (job_secs, job_seq) REFERENCES jobs (id_secs, id_seq) ON DELETE CASCADE,
         CHECK (range_start < range_end AND done >= 0 AND done <= range_end - range_start)
     ) STRICT;",
+    // 3: priorities, speed limits and settings
+    "ALTER TABLE jobs ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'
+        CHECK (priority IN ('low', 'normal', 'high', 'urgent'));
+     ALTER TABLE jobs ADD COLUMN speed_limit INTEGER NOT NULL DEFAULT 0
+        CHECK (speed_limit >= 0);
+     CREATE TABLE settings (
+        id             INTEGER PRIMARY KEY CHECK (id = 1),
+        global_limit   INTEGER NOT NULL DEFAULT 0 CHECK (global_limit >= 0),
+        max_concurrent INTEGER NOT NULL DEFAULT 3 CHECK (max_concurrent >= 1)
+     ) STRICT;
+     INSERT INTO settings (id) VALUES (1);",
 ];
 
 /// Everything saved about one job.
@@ -55,6 +66,27 @@ pub(crate) struct JobRecord {
     pub state: JobState,
     pub download: Download,
     pub error: Option<String>,
+    pub priority: Priority,
+    pub speed_limit: u64,
+}
+
+/// Settings that apply to the whole manager. Stored as the single row of the
+/// `settings` table; the defaults here match the table's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Settings {
+    /// Bytes per second for all downloads together; 0 = unlimited.
+    pub global_limit: u64,
+    /// How many jobs may download at once. At least 1.
+    pub max_concurrent: usize,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            global_limit: 0,
+            max_concurrent: 3,
+        }
+    }
 }
 
 /// Handle to the database thread. The thread stops when this is dropped.
@@ -63,8 +95,9 @@ pub struct Store {
 }
 
 enum Op {
-    Load(oneshot::Sender<Result<Vec<JobRecord>, Error>>),
+    Load(oneshot::Sender<Result<(Vec<JobRecord>, Settings), Error>>),
     Save(Box<JobRecord>),
+    SaveSettings(Settings),
     Flush(oneshot::Sender<()>),
 }
 
@@ -106,7 +139,8 @@ impl Store {
         Ok(Store { ops })
     }
 
-    pub(crate) async fn load(&self) -> Result<Vec<JobRecord>, Error> {
+    /// Every saved job, oldest first, and the settings.
+    pub(crate) async fn load(&self) -> Result<(Vec<JobRecord>, Settings), Error> {
         let (reply, answer) = oneshot::channel();
         self.ops
             .send(Op::Load(reply))
@@ -119,6 +153,13 @@ impl Store {
     pub(crate) fn save(&self, record: JobRecord) {
         if self.ops.send(Op::Save(Box::new(record))).is_err() {
             tracing::error!("database thread has stopped; job not saved");
+        }
+    }
+
+    /// Queued like `save`.
+    pub(crate) fn save_settings(&self, settings: Settings) {
+        if self.ops.send(Op::SaveSettings(settings)).is_err() {
+            tracing::error!("database thread has stopped; settings not saved");
         }
     }
 
@@ -136,11 +177,17 @@ fn serve(mut conn: Connection, requests: std_mpsc::Receiver<Op>) {
     while let Ok(op) = requests.recv() {
         match op {
             Op::Load(reply) => {
-                let _ = reply.send(load(&conn));
+                let loaded = load(&conn).and_then(|jobs| Ok((jobs, load_settings(&conn)?)));
+                let _ = reply.send(loaded);
             }
             Op::Save(record) => {
                 if let Err(err) = save(&mut conn, &record) {
                     tracing::error!(id = %record.id, error = %err, "could not save job");
+                }
+            }
+            Op::SaveSettings(settings) => {
+                if let Err(err) = save_settings(&conn, &settings) {
+                    tracing::error!(error = %err, "could not save settings");
                 }
             }
             Op::Flush(reply) => {
@@ -194,15 +241,17 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
     let tx = conn.transaction()?;
     tx.prepare_cached(
         "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, file_name, state, total,
-                           downloaded, validator_kind, validator_value, resumable, error)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                           downloaded, validator_kind, validator_value, resumable, error,
+                           priority, speed_limit)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
          ON CONFLICT (id_secs, id_seq) DO UPDATE SET
              url = excluded.url, dest_dir = excluded.dest_dir,
              file_name = excluded.file_name, state = excluded.state,
              total = excluded.total, downloaded = excluded.downloaded,
              validator_kind = excluded.validator_kind,
              validator_value = excluded.validator_value,
-             resumable = excluded.resumable, error = excluded.error",
+             resumable = excluded.resumable, error = excluded.error,
+             priority = excluded.priority, speed_limit = excluded.speed_limit",
     )?
     .execute(params![
         secs,
@@ -217,6 +266,8 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
         validator_value,
         dl.resumable,
         record.error,
+        priority_name(record.priority),
+        record.speed_limit,
     ])?;
     tx.prepare_cached("DELETE FROM segments WHERE job_secs = ?1 AND job_seq = ?2")?
         .execute(params![secs, seq])?;
@@ -236,7 +287,7 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
 fn load(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
     let mut stmt = conn.prepare(
         "SELECT id_secs, id_seq, url, dest_dir, file_name, state, total, downloaded,
-                validator_kind, validator_value, resumable, error
+                validator_kind, validator_value, resumable, error, priority, speed_limit
          FROM jobs ORDER BY id_secs, id_seq",
     )?;
     let mut rows = stmt.query([])?;
@@ -284,6 +335,10 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
     let Some(state) = parse_state(&state) else {
         return Ok(Err(format!("job {id}: unknown state `{state}`")));
     };
+    let priority: String = row.get(12)?;
+    let Some(priority) = parse_priority(&priority) else {
+        return Ok(Err(format!("job {id}: unknown priority `{priority}`")));
+    };
     let validator = match (validator_kind.as_deref(), validator_value) {
         (Some("etag"), Some(v)) => Some(Validator::ETag(v)),
         (Some("last-modified"), Some(v)) => Some(Validator::LastModified(v)),
@@ -304,7 +359,49 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         state,
         download,
         error: row.get(11)?,
+        priority,
+        speed_limit: row.get(13)?,
     }))
+}
+
+fn load_settings(conn: &Connection) -> Result<Settings, Error> {
+    Ok(conn.query_row(
+        "SELECT global_limit, max_concurrent FROM settings WHERE id = 1",
+        [],
+        |row| {
+            Ok(Settings {
+                global_limit: row.get(0)?,
+                max_concurrent: row.get(1)?,
+            })
+        },
+    )?)
+}
+
+fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
+    conn.execute(
+        "UPDATE settings SET global_limit = ?1, max_concurrent = ?2 WHERE id = 1",
+        params![settings.global_limit, settings.max_concurrent],
+    )?;
+    Ok(())
+}
+
+fn priority_name(priority: Priority) -> &'static str {
+    match priority {
+        Priority::Low => "low",
+        Priority::Normal => "normal",
+        Priority::High => "high",
+        Priority::Urgent => "urgent",
+    }
+}
+
+fn parse_priority(name: &str) -> Option<Priority> {
+    Some(match name {
+        "low" => Priority::Low,
+        "normal" => Priority::Normal,
+        "high" => Priority::High,
+        "urgent" => Priority::Urgent,
+        _ => return None,
+    })
 }
 
 /// How states are written in the database. Independent of the Rust names, so
@@ -351,6 +448,8 @@ mod tests {
             state: JobState::Paused,
             download,
             error: None,
+            priority: Priority::High,
+            speed_limit: 512 * 1024,
         }
     }
 
@@ -367,7 +466,7 @@ mod tests {
         for r in [record(1), failed.clone(), fresh.clone()] {
             store.save(r);
         }
-        assert_eq!(store.load().await.unwrap(), [record(1), failed, fresh]);
+        assert_eq!(store.load().await.unwrap().0, [record(1), failed, fresh]);
     }
 
     #[tokio::test]
@@ -378,7 +477,7 @@ mod tests {
         done.state = JobState::Completed;
         done.download.downloaded = done.download.total.unwrap();
         store.save(done.clone());
-        assert_eq!(store.load().await.unwrap(), [done]);
+        assert_eq!(store.load().await.unwrap().0, [done]);
     }
 
     #[tokio::test]
@@ -388,15 +487,35 @@ mod tests {
         let seg = |start, end, done| Segment { start, end, done };
         job.download.segments = vec![seg(0, 50, 50), seg(50, 100, 10)];
         store.save(job.clone());
-        assert_eq!(store.load().await.unwrap(), [job.clone()]);
+        assert_eq!(store.load().await.unwrap().0, [job.clone()]);
 
         // After a split there are more ranges; after completion none.
         job.download.segments = vec![seg(0, 50, 50), seg(50, 75, 25), seg(75, 100, 3)];
         store.save(job.clone());
-        assert_eq!(store.load().await.unwrap(), [job.clone()]);
+        assert_eq!(store.load().await.unwrap().0, [job.clone()]);
         job.download.segments.clear();
         store.save(job.clone());
-        assert_eq!(store.load().await.unwrap(), [job]);
+        assert_eq!(store.load().await.unwrap().0, [job]);
+    }
+
+    #[tokio::test]
+    async fn settings_start_at_their_defaults_and_can_change() {
+        let store = Store::open_in_memory().await.unwrap();
+        assert_eq!(store.load().await.unwrap().1, Settings::default());
+        let changed = Settings {
+            global_limit: 1_000_000,
+            max_concurrent: 5,
+        };
+        store.save_settings(changed.clone());
+        assert_eq!(store.load().await.unwrap().1, changed);
+    }
+
+    #[test]
+    fn priority_names_round_trip() {
+        use Priority::*;
+        for priority in [Low, Normal, High, Urgent] {
+            assert_eq!(parse_priority(priority_name(priority)), Some(priority));
+        }
     }
 
     #[test]

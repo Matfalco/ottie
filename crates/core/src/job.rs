@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use reqwest::Url;
 
-use crate::download::{Download, RestartReason};
+use crate::download::RestartReason;
 use crate::id::JobId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +40,20 @@ impl JobState {
     }
 }
 
+/// Decides which queued job starts next and how the global speed limit is
+/// shared. See docs/decisions/0010.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub enum Priority {
+    /// Half a Normal download's share of the global limit.
+    Low,
+    #[default]
+    Normal,
+    /// Twice a Normal download's share.
+    High,
+    /// Served before everything else: others only get what Urgent jobs can't use.
+    Urgent,
+}
+
 /// A copy of a job's public state, for listing and events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobSnapshot {
@@ -53,22 +67,9 @@ pub struct JobSnapshot {
     pub resumable: bool,
     /// Why the job failed, when `state` is `Failed`.
     pub error: Option<String>,
-}
-
-impl JobSnapshot {
-    pub(crate) fn new(id: JobId, state: JobState, dl: &Download, error: Option<String>) -> Self {
-        Self {
-            id,
-            url: dl.url.clone(),
-            dest_dir: dl.dest_dir.clone(),
-            file_name: dl.file_name.clone(),
-            state,
-            downloaded: dl.downloaded,
-            total: dl.total,
-            resumable: dl.resumable,
-            error,
-        }
-    }
+    pub priority: Priority,
+    /// This job's own limit in bytes per second; 0 = none.
+    pub speed_limit: u64,
 }
 
 /// Broadcast to every subscriber of the manager.

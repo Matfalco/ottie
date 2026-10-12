@@ -1,6 +1,7 @@
 //! The job manager. One task (the "actor") owns every job; everything else
 //! sends it commands through a [`Manager`] handle and listens to [`JobEvent`]s.
 
+use std::cmp::Reverse;
 use std::collections::BTreeMap;
 use std::io;
 use std::path::PathBuf;
@@ -15,8 +16,9 @@ use crate::backend::Backend;
 use crate::download::{Download, Event, Outcome};
 use crate::error::Error;
 use crate::id::{IdGenerator, JobId};
-use crate::job::{JobEvent, JobSnapshot, JobState};
-use crate::store::{JobRecord, Store};
+use crate::job::{JobEvent, JobSnapshot, JobState, Priority};
+use crate::store::{JobRecord, Settings, Store};
+use crate::throttle::Limiter;
 
 /// Running jobs report progress to the manager at most this often.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
@@ -28,18 +30,6 @@ const COMMAND_BUFFER: usize = 64;
 /// call [`Manager::list`] to catch up).
 const EVENT_BUFFER: usize = 1024;
 
-#[derive(Debug, Clone)]
-pub struct ManagerConfig {
-    /// How many jobs may download at once. At least 1.
-    pub max_concurrent: usize,
-}
-
-impl Default for ManagerConfig {
-    fn default() -> Self {
-        Self { max_concurrent: 3 }
-    }
-}
-
 /// Handle to the job manager. Cheap to clone; every clone talks to the same jobs.
 #[derive(Clone)]
 pub struct Manager {
@@ -48,17 +38,15 @@ pub struct Manager {
 }
 
 impl Manager {
-    /// Loads saved jobs from `store` and starts the manager task. Jobs that
-    /// were running when Ottie last stopped (quit or crash) are queued again.
-    /// Must be called from inside a tokio runtime. When every handle is
-    /// dropped, the manager shuts down as if [`Manager::shutdown`] was called.
-    pub async fn start(
-        backend: impl Backend,
-        store: Store,
-        config: ManagerConfig,
-    ) -> Result<Manager, Error> {
+    /// Loads saved jobs and settings from `store` and starts the manager
+    /// task. Jobs that were running when Ottie last stopped (quit or crash)
+    /// are queued again. Must be called from inside a tokio runtime. When
+    /// every handle is dropped, the manager shuts down as if
+    /// [`Manager::shutdown`] was called.
+    pub async fn start(backend: impl Backend, store: Store) -> Result<Manager, Error> {
+        let (records, settings) = store.load().await?;
         let mut jobs = BTreeMap::new();
-        for record in store.load().await? {
+        for record in records {
             jobs.insert(record.id, Job::restore(record).await);
         }
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
@@ -67,7 +55,8 @@ impl Manager {
         let actor = Actor {
             backend: Arc::new(backend),
             store,
-            max_concurrent: config.max_concurrent.max(1),
+            limiter: Limiter::new(settings.global_limit),
+            settings,
             ids: IdGenerator::after(jobs.keys().next_back().copied()),
             jobs,
             events: events.clone(),
@@ -119,11 +108,46 @@ impl Manager {
         self.request(|reply| Command::List { reply }).await
     }
 
-    /// Takes effect immediately. Lowering it doesn't stop running jobs; it
-    /// only delays new ones.
+    pub async fn settings(&self) -> Result<Settings, Error> {
+        self.request(|reply| Command::Settings { reply }).await
+    }
+
+    /// Takes effect immediately and is saved. Lowering it doesn't stop
+    /// running jobs; it only delays new ones. At least 1.
     pub async fn set_max_concurrent(&self, max: usize) -> Result<(), Error> {
         self.request(|reply| Command::SetMaxConcurrent { max, reply })
             .await
+    }
+
+    /// Bytes per second for all downloads together; 0 = unlimited. Takes
+    /// effect immediately and is saved.
+    pub async fn set_global_limit(&self, bytes_per_sec: u64) -> Result<(), Error> {
+        self.request(|reply| Command::SetGlobalLimit {
+            bytes_per_sec,
+            reply,
+        })
+        .await
+    }
+
+    /// One job's own limit in bytes per second; 0 = none (the global limit
+    /// still applies). Takes effect immediately, even while it runs.
+    pub async fn set_speed_limit(&self, id: JobId, bytes_per_sec: u64) -> Result<(), Error> {
+        self.request(|reply| Command::SetSpeedLimit {
+            id,
+            bytes_per_sec,
+            reply,
+        })
+        .await
+    }
+
+    /// Changes the job's share of the global limit and its place in the queue.
+    pub async fn set_priority(&self, id: JobId, priority: Priority) -> Result<(), Error> {
+        self.request(|reply| Command::SetPriority {
+            id,
+            priority,
+            reply,
+        })
+        .await
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<JobEvent> {
@@ -168,8 +192,25 @@ enum Command {
     List {
         reply: Reply<Vec<JobSnapshot>>,
     },
+    Settings {
+        reply: Reply<Settings>,
+    },
     SetMaxConcurrent {
         max: usize,
+        reply: Reply<()>,
+    },
+    SetGlobalLimit {
+        bytes_per_sec: u64,
+        reply: Reply<()>,
+    },
+    SetSpeedLimit {
+        id: JobId,
+        bytes_per_sec: u64,
+        reply: Reply<()>,
+    },
+    SetPriority {
+        id: JobId,
+        priority: Priority,
         reply: Reply<()>,
     },
     Shutdown {
@@ -214,6 +255,9 @@ struct Job {
     state: JobState,
     download: Download,
     error: Option<String>,
+    priority: Priority,
+    /// Bytes per second; 0 = no limit of its own.
+    speed_limit: u64,
     /// Present while a task is downloading this job.
     task: Option<Task>,
     last_saved: Option<Instant>,
@@ -241,8 +285,27 @@ impl Job {
             state,
             download,
             error: record.error,
+            priority: record.priority,
+            speed_limit: record.speed_limit,
             task: None,
             last_saved: None,
+        }
+    }
+
+    fn snapshot(&self, id: JobId) -> JobSnapshot {
+        let dl = &self.download;
+        JobSnapshot {
+            id,
+            url: dl.url.clone(),
+            dest_dir: dl.dest_dir.clone(),
+            file_name: dl.file_name.clone(),
+            state: self.state,
+            downloaded: dl.downloaded,
+            total: dl.total,
+            resumable: dl.resumable,
+            error: self.error.clone(),
+            priority: self.priority,
+            speed_limit: self.speed_limit,
         }
     }
 }
@@ -258,7 +321,9 @@ struct Task {
 struct Actor<B> {
     backend: Arc<B>,
     store: Store,
-    max_concurrent: usize,
+    /// Saved whenever it changes.
+    settings: Settings,
+    limiter: Limiter,
     /// Sorted by ID, which means by creation time.
     jobs: BTreeMap<JobId, Job>,
     ids: IdGenerator,
@@ -317,10 +382,39 @@ impl<B: Backend> Actor<B> {
             Command::List { reply } => {
                 let _ = reply.send(Ok(self.list()));
             }
+            Command::Settings { reply } => {
+                let _ = reply.send(Ok(self.settings.clone()));
+            }
             Command::SetMaxConcurrent { max, reply } => {
-                self.max_concurrent = max.max(1);
+                self.settings.max_concurrent = max.max(1);
+                self.store.save_settings(self.settings.clone());
                 self.schedule();
                 let _ = reply.send(Ok(()));
+            }
+            Command::SetGlobalLimit {
+                bytes_per_sec,
+                reply,
+            } => {
+                self.settings.global_limit = bytes_per_sec;
+                self.store.save_settings(self.settings.clone());
+                self.limiter.set_global(bytes_per_sec);
+                let _ = reply.send(Ok(()));
+            }
+            Command::SetSpeedLimit {
+                id,
+                bytes_per_sec,
+                reply,
+            } => {
+                let _ = reply.send(self.change(id, |job| job.speed_limit = bytes_per_sec));
+                self.limiter.set_limit(id, bytes_per_sec);
+            }
+            Command::SetPriority {
+                id,
+                priority,
+                reply,
+            } => {
+                let _ = reply.send(self.change(id, |job| job.priority = priority));
+                self.limiter.set_priority(id, priority);
             }
             Command::Shutdown { reply } => self.begin_shutdown(Some(reply)),
         }
@@ -402,6 +496,8 @@ impl<B: Backend> Actor<B> {
                 state: JobState::Queued,
                 download,
                 error: None,
+                priority: Priority::default(),
+                speed_limit: 0,
                 task: None,
                 last_saved: None,
             },
@@ -410,6 +506,16 @@ impl<B: Backend> Actor<B> {
         self.emit_changed(id);
         self.schedule();
         Ok(id)
+    }
+
+    /// Changes a setting of one job (any state), saves it and tells
+    /// subscribers. A queued job's new priority counts at the next `schedule`.
+    fn change(&mut self, id: JobId, edit: impl FnOnce(&mut Job)) -> Result<(), Error> {
+        let job = self.jobs.get_mut(&id).ok_or(Error::JobNotFound(id))?;
+        edit(job);
+        self.save(id);
+        self.emit_changed(id);
+        Ok(())
     }
 
     async fn stop(&mut self, id: JobId, stop: Stop, reply: Reply<()>) {
@@ -447,21 +553,24 @@ impl<B: Backend> Actor<B> {
     fn list(&self) -> Vec<JobSnapshot> {
         self.jobs
             .iter()
-            .map(|(id, job)| JobSnapshot::new(*id, job.state, &job.download, job.error.clone()))
+            .map(|(id, job)| job.snapshot(*id))
             .collect()
     }
 
-    /// Starts the oldest queued jobs until `max_concurrent` are running.
+    /// Starts queued jobs until `max_concurrent` are running: the highest
+    /// priority first, and the oldest first within a priority.
     fn schedule(&mut self) {
         if self.shutdown.is_some() {
             return;
         }
         let mut running = self.jobs.values().filter(|j| j.task.is_some()).count();
-        while running < self.max_concurrent {
+        while running < self.settings.max_concurrent {
             let next = self
                 .jobs
                 .iter()
-                .find(|(_, job)| job.state == JobState::Queued)
+                .filter(|(_, job)| job.state == JobState::Queued)
+                // `Reverse(id)`: among equal priorities, the smallest (oldest) ID wins.
+                .max_by_key(|(id, job)| (job.priority, Reverse(**id)))
                 .map(|(id, _)| *id);
             let Some(id) = next else { break };
             if !self.start_job(id) {
@@ -488,6 +597,8 @@ impl<B: Backend> Actor<B> {
         let mut download = job.download.clone();
         let backend = Arc::clone(&self.backend);
         let internal = self.internal.clone();
+        // The job's speed budget lives as long as the task does.
+        let throttle = self.limiter.register(id, job.speed_limit, job.priority);
 
         tokio::spawn(async move {
             let mut last_progress: Option<Instant> = None;
@@ -501,7 +612,10 @@ impl<B: Backend> Actor<B> {
                 }
                 let _ = internal.send(Internal::Event { id, event });
             };
-            let result = backend.run(&mut download, &cancel, &mut on_event).await;
+            let result = backend
+                .run(&mut download, &throttle, &cancel, &mut on_event)
+                .await;
+            drop(throttle);
             let _ = internal.send(Internal::Ended {
                 id,
                 download: Box::new(download),
@@ -619,12 +733,14 @@ impl<B: Backend> Actor<B> {
             state: job.state,
             download: job.download.clone(),
             error: job.error.clone(),
+            priority: job.priority,
+            speed_limit: job.speed_limit,
         });
     }
 
     fn emit_changed(&self, id: JobId) {
         if let Some(job) = self.jobs.get(&id) {
-            let snapshot = JobSnapshot::new(id, job.state, &job.download, job.error.clone());
+            let snapshot = job.snapshot(id);
             // Fails only when nobody is subscribed.
             let _ = self.events.send(JobEvent::Changed(snapshot));
         }

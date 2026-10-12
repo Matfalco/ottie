@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ottie_core::{
-    Error, HttpBackend, HttpConfig, JobId, JobSnapshot, JobState, Manager, ManagerConfig,
-    PART_SUFFIX, Store,
+    Error, HttpBackend, HttpConfig, JobId, JobSnapshot, JobState, Manager, PART_SUFFIX, Priority,
+    Settings, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -50,9 +50,7 @@ impl Setup {
     async fn launch_with(&self, http: HttpConfig) -> Manager {
         let store = Store::open(&self.db).await.unwrap();
         let backend = HttpBackend::with_config(http).unwrap();
-        Manager::start(backend, store, ManagerConfig::default())
-            .await
-            .unwrap()
+        Manager::start(backend, store).await.unwrap()
     }
 
     async fn add(&self, manager: &Manager) -> JobId {
@@ -222,4 +220,26 @@ async fn multi_connection_downloads_survive_restarts_and_crashes() {
     wait_until(&manager, id, JobState::Completed).await;
     s.assert_complete();
     assert_eq!(count_segments(), 0, "ranges are removed once complete");
+}
+
+#[tokio::test]
+async fn settings_priorities_and_limits_survive_a_restart() {
+    let s = setup().await;
+    let manager = s.launch().await;
+    manager.set_global_limit(5_000_000).await.unwrap();
+    manager.set_max_concurrent(2).await.unwrap();
+    let id = s.add(&manager).await;
+    manager.pause(id).await.unwrap();
+    manager.set_priority(id, Priority::High).await.unwrap();
+    manager.set_speed_limit(id, 123_456).await.unwrap();
+    manager.shutdown().await.unwrap();
+
+    let manager = s.launch().await;
+    let expected = Settings {
+        global_limit: 5_000_000,
+        max_concurrent: 2,
+    };
+    assert_eq!(manager.settings().await.unwrap(), expected);
+    let job = &manager.list().await.unwrap()[0];
+    assert_eq!((job.priority, job.speed_limit), (Priority::High, 123_456));
 }
