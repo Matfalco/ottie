@@ -37,6 +37,13 @@ pub async fn run(args: ServeArgs) -> Result<()> {
     let file = FileConfig::load(&dirs.config.join(CONFIG_FILE))?;
     let addr = config::listen_addr(daemon.address, daemon.port, &file);
     let token = token::load_or_create(&dirs.config)?;
+
+    // The usual failure: another Ottie already has the port. Checked before
+    // the database is opened, or this one would resume its downloads too.
+    let listener = TcpListener::bind(addr)
+        .await
+        .with_context(|| format!("can't listen on {addr} (is Ottie already running?)"))?;
+
     std::fs::create_dir_all(&dirs.data)
         .with_context(|| format!("can't create {}", dirs.data.display()))?;
     let database = dirs.data.join(DATABASE_FILE);
@@ -46,10 +53,6 @@ pub async fn run(args: ServeArgs) -> Result<()> {
     let manager = Manager::start(HttpBackend::new()?, store).await?;
     default_general_folder(&manager, downloads_folder()).await?;
 
-    // The usual failure: another Ottie already has the port.
-    let listener = TcpListener::bind(addr)
-        .await
-        .with_context(|| format!("can't listen on {addr} (is Ottie already running?)"))?;
     if !addr.ip().is_loopback() {
         tracing::warn!(%addr, "the API is open to other computers: keep it behind a VPN or reverse proxy");
     }

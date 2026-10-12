@@ -109,3 +109,19 @@ fn open_explains_when_ottie_is_not_running() {
     assert!(message.contains("isn't running"), "{message}");
     assert!(message.contains("ottie serve"), "{message}");
 }
+
+#[test]
+fn a_taken_port_stops_serve_before_it_opens_the_database() {
+    let dir = tempfile::tempdir().unwrap();
+    let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = taken.local_addr().unwrap().port().to_string();
+    let output = ottie(dir.path())
+        .args(["serve", "--port", &port])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let message = String::from_utf8(output.stderr).unwrap();
+    assert!(message.contains("already running"), "{message}");
+    // Otherwise it would have resumed the other daemon's downloads.
+    assert!(!dir.path().join("data").join("ottie.db").exists());
+}
