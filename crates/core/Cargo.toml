@@ -1,10 +1,13 @@
 [package]
 name = "ottie-core"
 version = "0.1.0"
+description = "Download engine of the Ottie download manager: resumable, multi-connection HTTP downloads with speed limits"
+keywords = ["download-manager", "downloader", "http", "resume"]
+categories = ["network-programming"]
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-publish.workspace = true
+publish = true
 
 [lints]
 workspace = true

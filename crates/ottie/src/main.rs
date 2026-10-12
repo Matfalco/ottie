@@ -2,70 +2,86 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! The `ottie` command. `ottie serve` will run the daemon; the other
-//! subcommands will talk to it over its HTTP API.
+//! The `ottie` command. `ottie serve` runs the daemon; the other subcommands
+//! are small helpers or, later, clients of its HTTP API (docs/decisions/0004).
+
+mod config;
+mod serve;
+mod token;
 
 use std::process::ExitCode;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
+use clap::{Parser, Subcommand};
 
-fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let (output, code) = respond(&args);
-    if code == 0 {
-        println!("{output}");
-    } else {
-        eprintln!("{output}");
-    }
-    ExitCode::from(code)
+use crate::config::DirArgs;
+use crate::serve::ServeArgs;
+
+#[derive(Parser)]
+#[command(
+    name = "ottie",
+    bin_name = "ottie",
+    version,
+    about = "Ottie tucks your files away: a cross-platform download manager.",
+    arg_required_else_help = true
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
 }
 
-/// What to print for the given arguments, and the exit code.
-fn respond(args: &[String]) -> (String, u8) {
-    match args.first().map(String::as_str) {
-        None | Some("-h" | "--help" | "help") => (help(), 0),
-        Some("-V" | "--version") => (format!("ottie {VERSION}"), 0),
-        Some(other) => (format!("ottie: unknown command `{other}`\n\n{}", help()), 2),
-    }
+#[derive(Subcommand)]
+enum Command {
+    /// Run the daemon: the download engine and its HTTP API (127.0.0.1:16889).
+    Serve(ServeArgs),
+    /// Print the API token, for the web UI's login page or the browser extension.
+    Token(DirArgs),
 }
 
-fn help() -> String {
-    format!(
-        "Ottie {VERSION}: tucks your files away.\n\
-         A cross-platform download manager (early development).\n\
-         \n\
-         This release only provides --help and --version. The daemon\n\
-         (`ottie serve`) and download commands are being built at\n\
-         {REPOSITORY}\n\
-         \n\
-         Usage: ottie [--help | --version]"
-    )
+#[tokio::main]
+async fn main() -> ExitCode {
+    let result = match Cli::parse().command {
+        Command::Serve(args) => serve::run(args).await,
+        Command::Token(dirs) => token::print(&dirs),
+    };
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            // `:#` prints the whole chain: "could not …: because …".
+            eprintln!("ottie: {err:#}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use clap::CommandFactory;
+
     use super::*;
 
-    fn run(args: &[&str]) -> (String, u8) {
-        respond(&args.iter().map(|a| a.to_string()).collect::<Vec<_>>())
+    #[test]
+    fn the_command_line_is_well_formed() {
+        Cli::command().debug_assert();
     }
 
     #[test]
-    fn version() {
-        assert_eq!(run(&["--version"]), (format!("ottie {VERSION}"), 0));
-    }
-
-    #[test]
-    fn help_is_the_default() {
-        assert_eq!(run(&[]).1, 0);
-        assert!(run(&["--help"]).0.contains("download manager"));
-    }
-
-    #[test]
-    fn unknown_command_fails() {
-        let (output, code) = run(&["serve"]);
-        assert_eq!(code, 2);
-        assert!(output.contains("unknown command `serve`"));
+    fn serve_takes_folders_address_and_port() {
+        let cli = Cli::try_parse_from([
+            "ottie",
+            "serve",
+            "--port",
+            "9000",
+            "--address",
+            "0.0.0.0",
+            "--data-dir",
+            "/d",
+        ])
+        .unwrap();
+        let Command::Serve(args) = cli.command else {
+            panic!("not serve");
+        };
+        assert_eq!(args.port, Some(9000));
+        assert_eq!(args.address, Some([0, 0, 0, 0].into()));
+        assert_eq!(args.dirs.data_dir.as_deref(), Some("/d".as_ref()));
     }
 }

@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //! Download engine. No HTTP server, no UI.
 
 mod backend;
@@ -24,3 +28,6 @@ pub use job::{JobEvent, JobSnapshot, JobState, NewJob, Priority};
 pub use manager::Manager;
 pub use store::{RetryPolicy, Settings, Store};
 pub use throttle::Throttle;
+
+/// The URL type every download uses, so clients don't need `reqwest` themselves.
+pub use reqwest::Url;

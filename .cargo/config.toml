@@ -1,0 +1,3 @@
+[env]
+# ts-rs writes the TypeScript API types here (from `cargo test -p ottie-api`).
+TS_RS_EXPORT_DIR = { value = "shared/api-types", relative = true }

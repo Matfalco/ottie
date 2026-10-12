@@ -1,0 +1,309 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! The API end to end: a real server on 127.0.0.1, called the way clients
+//! will, next to a small file server.
+
+use std::path::Path;
+use std::time::Duration;
+
+use axum::Router;
+use axum::body::{Body, Bytes};
+use axum::routing::get;
+use futures_util::StreamExt;
+use ottie_api::{
+    AddJob, Added, ApiError, EVENTS_PROTOCOL, Event, Job, JobState, TOKEN_PROTOCOL_PREFIX, Token,
+};
+use ottie_core::{HttpBackend, Manager, Store};
+use reqwest::{RequestBuilder, StatusCode};
+use tempfile::TempDir;
+use tokio::net::TcpListener;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::{self, Message};
+use tokio_util::sync::CancellationToken;
+
+const TOKEN: &str = "0123456789abcdef";
+const SIZE: usize = 64 * 1024;
+const TIMEOUT: Duration = Duration::from_secs(10);
+
+struct Daemon {
+    /// `127.0.0.1:port` of the API.
+    addr: String,
+    /// Base URL of the file server.
+    files: String,
+    client: reqwest::Client,
+    dir: TempDir,
+    _shutdown: CancellationToken,
+}
+
+/// `/file.bin` arrives at once; `/slow.bin` takes about 4 s.
+async fn start() -> Daemon {
+    let files = Router::new()
+        .route("/file.bin", get(|| async { vec![7u8; SIZE] }))
+        .route("/slow.bin", get(|| async { slow_body() }));
+    let files = serve(files).await;
+
+    let store = Store::open_in_memory().await.unwrap();
+    let manager = Manager::start(HttpBackend::new().unwrap(), store)
+        .await
+        .unwrap();
+    let shutdown = CancellationToken::new();
+    let api = ottie_api::router(manager, Token::new(TOKEN), shutdown.clone());
+    Daemon {
+        addr: serve(api).await,
+        files: format!("http://{files}"),
+        client: reqwest::Client::new(),
+        dir: tempfile::tempdir().unwrap(),
+        _shutdown: shutdown,
+    }
+}
+
+async fn serve(app: Router) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    addr
+}
+
+fn slow_body() -> Body {
+    let chunks = futures_util::stream::unfold(0, |sent| async move {
+        if sent == 200 {
+            return None;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        Some((
+            Ok::<_, std::io::Error>(Bytes::from(vec![1u8; 1024])),
+            sent + 1,
+        ))
+    });
+    Body::from_stream(chunks)
+}
+
+impl Daemon {
+    fn url(&self, path: &str) -> String {
+        format!("http://{}/api/v1{path}", self.addr)
+    }
+
+    fn get(&self, path: &str) -> RequestBuilder {
+        self.client.get(self.url(path)).bearer_auth(TOKEN)
+    }
+
+    fn post(&self, path: &str) -> RequestBuilder {
+        self.client.post(self.url(path)).bearer_auth(TOKEN)
+    }
+
+    fn new_job(&self, file: &str) -> AddJob {
+        AddJob {
+            url: format!("{}/{file}", self.files),
+            dest_dir: Some(self.dir.path().to_string_lossy().into_owned()),
+            category: None,
+        }
+    }
+
+    async fn add(&self, file: &str) -> String {
+        let response = self.post("/jobs").json(&self.new_job(file)).send().await;
+        let response = response.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        response.json::<Added>().await.unwrap().id
+    }
+
+    async fn job(&self, id: &str) -> Job {
+        let jobs: Vec<Job> = self
+            .get("/jobs")
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        jobs.into_iter().find(|job| job.id == id).unwrap()
+    }
+
+    async fn wait_until(&self, id: &str, state: JobState) {
+        tokio::time::timeout(TIMEOUT, async {
+            while self.job(id).await.state != state {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("job {id} never became {state:?}"));
+    }
+
+    /// Opens the events WebSocket, offering `protocols`.
+    async fn events(
+        &self,
+        protocols: &str,
+    ) -> Result<
+        (
+            tokio_tungstenite::WebSocketStream<
+                tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+            >,
+            tungstenite::handshake::client::Response,
+        ),
+        tungstenite::Error,
+    > {
+        let mut request = format!("ws://{}/api/v1/events", self.addr)
+            .into_client_request()
+            .unwrap();
+        if !protocols.is_empty() {
+            let value = protocols.parse().unwrap();
+            request
+                .headers_mut()
+                .insert("Sec-WebSocket-Protocol", value);
+        }
+        tokio_tungstenite::connect_async(request).await
+    }
+}
+
+async fn error_of(response: reqwest::Response) -> (StatusCode, String) {
+    let status = response.status();
+    (status, response.json::<ApiError>().await.unwrap().error)
+}
+
+#[tokio::test]
+async fn every_request_needs_the_token() {
+    let d = start().await;
+    let anonymous = d.client.get(d.url("/jobs")).send().await.unwrap();
+    let (status, message) = error_of(anonymous).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(message.contains("token"));
+
+    let wrong = d.client.get(d.url("/jobs")).bearer_auth("guess");
+    assert_eq!(
+        wrong.send().await.unwrap().status(),
+        StatusCode::UNAUTHORIZED
+    );
+    // Unknown paths don't reveal themselves without the token either.
+    let unknown = d.client.get(d.url("/nope")).send().await.unwrap();
+    assert_eq!(unknown.status(), StatusCode::UNAUTHORIZED);
+    let unknown = d.get("/nope").send().await.unwrap();
+    assert_eq!(unknown.status(), StatusCode::NOT_FOUND);
+
+    let jobs: Vec<Job> = d.get("/jobs").send().await.unwrap().json().await.unwrap();
+    assert!(jobs.is_empty());
+}
+
+#[tokio::test]
+async fn the_event_stream_needs_the_token() {
+    let d = start().await;
+    for offered in [
+        "",
+        EVENTS_PROTOCOL,
+        &format!("{EVENTS_PROTOCOL}, {TOKEN_PROTOCOL_PREFIX}guess"),
+    ] {
+        match d.events(offered).await {
+            Err(tungstenite::Error::Http(response)) => {
+                assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+            }
+            other => panic!("expected a refusal for {offered:?}, got {other:?}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_download_from_start_to_finish() {
+    let d = start().await;
+    let offered = format!("{EVENTS_PROTOCOL}, {TOKEN_PROTOCOL_PREFIX}{TOKEN}");
+    let (mut events, response) = d.events(&offered).await.unwrap();
+    // The server picks the events protocol, never echoing the token.
+    assert_eq!(
+        response.headers()["sec-websocket-protocol"],
+        EVENTS_PROTOCOL
+    );
+
+    let id = d.add("file.bin").await;
+    let mut states = Vec::new();
+    tokio::time::timeout(TIMEOUT, async {
+        while states.last() != Some(&JobState::Completed) {
+            let Some(Ok(Message::Text(text))) = events.next().await else {
+                continue;
+            };
+            if let Event::Changed { job } = serde_json::from_str(&text).unwrap() {
+                assert_eq!(job.id, id);
+                if states.last() != Some(&job.state) {
+                    states.push(job.state);
+                }
+            }
+        }
+    })
+    .await
+    .expect("never completed");
+    assert_eq!(states.first(), Some(&JobState::Queued));
+
+    let job = d.job(&id).await;
+    assert_eq!(job.file_name.as_deref(), Some("file.bin"));
+    assert_eq!(
+        (job.downloaded, job.total),
+        (SIZE as u64, Some(SIZE as u64))
+    );
+    let file = Path::new(&job.dest_dir).join("file.bin");
+    assert_eq!(std::fs::read(file).unwrap(), vec![7u8; SIZE]);
+}
+
+#[tokio::test]
+async fn pause_resume_and_cancel() {
+    let d = start().await;
+    let id = d.add("slow.bin").await;
+    d.wait_until(&id, JobState::Downloading).await;
+
+    let paused = d.post(&format!("/jobs/{id}/pause")).send().await.unwrap();
+    assert_eq!(paused.status(), StatusCode::NO_CONTENT);
+    assert_eq!(d.job(&id).await.state, JobState::Paused);
+
+    let resumed = d.post(&format!("/jobs/{id}/resume")).send().await.unwrap();
+    assert_eq!(resumed.status(), StatusCode::NO_CONTENT);
+    d.wait_until(&id, JobState::Downloading).await;
+
+    let cancelled = d.post(&format!("/jobs/{id}/cancel")).send().await.unwrap();
+    assert_eq!(cancelled.status(), StatusCode::NO_CONTENT);
+    assert_eq!(d.job(&id).await.state, JobState::Cancelled);
+}
+
+#[tokio::test]
+async fn bad_requests_say_what_is_wrong() {
+    let d = start().await;
+    let add = |job: &AddJob| d.post("/jobs").json(job).send();
+
+    let mut job = d.new_job("file.bin");
+    job.url = "not a url".to_owned();
+    let (status, message) = error_of(add(&job).await.unwrap()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(message.contains("not a URL"), "{message}");
+
+    job.url = "ftp://example.com/file".to_owned();
+    let (status, message) = error_of(add(&job).await.unwrap()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(message.contains("unsupported URL scheme"), "{message}");
+
+    let mut job = d.new_job("file.bin");
+    job.dest_dir = Some("relative/folder".to_owned());
+    let (status, message) = error_of(add(&job).await.unwrap()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(message.contains("absolute"), "{message}");
+
+    // General has no folder yet, so a folder is required.
+    job.dest_dir = None;
+    let (status, message) = error_of(add(&job).await.unwrap()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(message.contains("no folder"), "{message}");
+
+    let broken = d.post("/jobs").header("content-type", "application/json");
+    let (status, _) = error_of(broken.body("{").send().await.unwrap()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let missing_url = d
+        .post("/jobs")
+        .json(&serde_json::json!({ "destDir": "/x" }));
+    let (status, _) = error_of(missing_url.send().await.unwrap()).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (status, _) = error_of(d.post("/jobs/nonsense/pause").send().await.unwrap()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let unknown = d.post("/jobs/2026.01.01-00.00.00-1/pause").send().await;
+    let (status, _) = error_of(unknown.unwrap()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let id = d.add("file.bin").await;
+    d.wait_until(&id, JobState::Completed).await;
+    let (status, message) =
+        error_of(d.post(&format!("/jobs/{id}/resume")).send().await.unwrap()).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(message.contains("Completed"), "{message}");
+}
