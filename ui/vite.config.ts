@@ -4,7 +4,7 @@ import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 /** Where `pnpm --filter ui dev` sends API calls: a daemon started with `ottie serve`. */
-const DAEMON = process.env.OTTIE_DAEMON ?? 'http://127.0.0.1:16889';
+const DAEMON = process.env.OTTIE_DAEMON ?? 'http://127.0.0.1:24068';
 
 export default defineConfig({
 	plugins: [

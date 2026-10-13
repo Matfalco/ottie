@@ -1,6 +1,10 @@
 <script lang="ts">
 	import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 	import Copy from '@lucide/svelte/icons/copy';
+	import Download from '@lucide/svelte/icons/download';
+	import Paintbrush from '@lucide/svelte/icons/palette';
+	import Plug from '@lucide/svelte/icons/plug';
+	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
 	import { useApp } from '#lib/context.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -141,6 +145,7 @@
 
 		<section id="set-appearance" class="card" aria-labelledby="appearance">
 			<header class="with-switch">
+				<span class="icon" aria-hidden="true"><Paintbrush size={16} /></span>
 				<span class="names">
 					<h2 id="appearance">{m.set_appearance()}</h2>
 					<span class="hint">{appearance.synced ? m.set_sync_hint() : m.set_appearance_hint()}</span
@@ -224,6 +229,7 @@
 
 		<section id="set-downloads" class="card" aria-labelledby="downloads-title">
 			<header>
+				<span class="icon" aria-hidden="true"><Download size={16} /></span>
 				<h2 id="downloads-title">{m.set_downloads()}</h2>
 			</header>
 			{#if settings}
@@ -268,6 +274,7 @@
 
 		<section id="set-retries" class="card" aria-labelledby="retries-title">
 			<header>
+				<span class="icon" aria-hidden="true"><RotateCw size={16} /></span>
 				<h2 id="retries-title">{m.set_retries()}</h2>
 				<p class="hint">{m.set_retries_hint()}</p>
 			</header>
@@ -319,6 +326,7 @@
 
 		<section id="set-connection" class="card" aria-labelledby="connection-title">
 			<header>
+				<span class="icon" aria-hidden="true"><Plug size={16} /></span>
 				<h2 id="connection-title">{m.set_connection()}</h2>
 			</header>
 			<div class="setting">
@@ -430,18 +438,37 @@
 		background: var(--surface);
 	}
 
+	/* A band across the top of each card, so its title stands apart from
+	   the settings under it. */
 	header {
-		padding: 1rem 1.25rem 0.25rem;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.75rem;
+		padding: 0.8rem 1.25rem;
+		border-bottom: 1px solid var(--border);
+		border-radius: calc(var(--radius-l) - 1px) calc(var(--radius-l) - 1px) 0 0;
+		background: var(--well);
+	}
+
+	.icon {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: var(--radius-s);
+		background: var(--selected);
+		color: var(--accent);
 	}
 
 	/* The card's title and hint, and a switch for all of it on the right. */
 	header.with-switch {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem 1rem;
-		padding-bottom: 0.75rem;
-		border-bottom: 1px solid var(--border-soft);
+		column-gap: 1rem;
+	}
+
+	header.with-switch .icon {
+		margin-right: -0.25rem;
 	}
 
 	.sync {
@@ -454,7 +481,7 @@
 
 	h2 {
 		margin: 0;
-		font-size: 1.05rem;
+		font-size: 1.15rem;
 		font-weight: 600;
 	}
 
@@ -471,11 +498,14 @@
 		border-bottom: 1px solid var(--border-soft);
 	}
 
+	/* Headings within a card: smaller than its title, unlike a setting's name. */
 	legend {
 		float: left;
 		margin-bottom: 0.6rem;
 		padding: 0;
-		font-weight: 500;
+		color: var(--muted);
+		font-size: 0.85rem;
+		font-weight: 600;
 	}
 
 	.options {

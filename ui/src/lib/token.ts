@@ -1,4 +1,4 @@
-// The API token: from a link like `http://127.0.0.1:16889/#token=…` (printed
+// The API token: from a link like `http://127.0.0.1:24068/#token=…` (printed
 // by `ottie serve`, opened by `ottie open`), or typed on the login page.
 // Remembered in this browser until the daemon refuses it.
 

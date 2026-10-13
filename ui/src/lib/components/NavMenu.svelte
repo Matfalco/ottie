@@ -7,7 +7,7 @@
 	import Tags from '@lucide/svelte/icons/tags';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { matches } from '#lib/filters.js';
+	import { isActive } from '#lib/filters.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 
@@ -16,7 +16,7 @@
 	}
 
 	let { jobs }: Props = $props();
-	let active = $derived(jobs.filter((job) => matches(job, 'active')).length);
+	let active = $derived(jobs.filter(isActive).length);
 
 	interface Entry {
 		href: string;

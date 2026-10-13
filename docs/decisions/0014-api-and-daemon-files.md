@@ -9,7 +9,8 @@ Accepted 2026-10-12.
 
 **`config.toml`** holds the daemon's own options only: `address` and `port`. Unknown keys are refused, so a typo is caught rather than ignored. Download settings stay in the database, where the API can change them. Precedence: flag, then `OTTIE_*` variable, then the file, then the default. A missing file means all defaults.
 
-**Address:** 127.0.0.1:16889. The port is "OTTY" (6889) on a phone keypad, with a 1 in front to keep clear of the BitTorrent range 6881–6889 and of aria2 (6800, 6881–6999). Any non-loopback address logs a warning: remote access belongs behind a VPN or reverse proxy.
+**Address:** 127.0.0.1:24068. Any non-loopback address logs a warning: remote access belongs behind a VPN or reverse proxy.
+- *Changed 2026-10-13* (Mathieu's choice): the port was 16889 ("OTTY", 6889 on a phone keypad, with a 1 in front to keep clear of BitTorrent's 6881–6889 and aria2's 6800, 6881–6999). 24068 stays clear of those too, and is below the ports systems hand out for outgoing connections (Linux from 32768, Windows from 49152). A daemon set to another port in `config.toml` or `OTTIE_PORT` keeps it.
 
 **Token:**
 - 32 random bytes as hex in `<config>/token`, created on first use (`ottie serve` or `ottie token`). On Unix it's readable only by the owner; on Windows `%APPDATA%` is already private to the user.

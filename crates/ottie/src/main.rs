@@ -32,7 +32,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Run the daemon: the download engine and its HTTP API (127.0.0.1:16889).
+    /// Run the daemon: the download engine and its HTTP API (127.0.0.1:24068).
     Serve(ServeArgs),
     /// Open the web UI in your browser, signed in (`ottie serve` must be running).
     Open(DaemonArgs),

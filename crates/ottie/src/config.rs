@@ -10,7 +10,7 @@ use clap::Args;
 use directories::BaseDirs;
 use serde::Deserialize;
 
-pub const DEFAULT_PORT: u16 = 16889;
+pub const DEFAULT_PORT: u16 = 24068;
 pub const CONFIG_FILE: &str = "config.toml";
 pub const DATABASE_FILE: &str = "ottie.db";
 
@@ -33,7 +33,7 @@ pub struct DaemonArgs {
     /// Address to listen on; 0.0.0.0 opens the API to other computers [default: 127.0.0.1]
     #[arg(long, env = "OTTIE_ADDRESS")]
     pub address: Option<IpAddr>,
-    /// Port to listen on [default: 16889]
+    /// Port to listen on [default: 24068]
     #[arg(long, env = "OTTIE_PORT")]
     pub port: Option<u16>,
 }
@@ -87,7 +87,7 @@ impl FileConfig {
     }
 }
 
-/// Flag or variable, else config file, else 127.0.0.1:16889.
+/// Flag or variable, else config file, else 127.0.0.1:24068.
 pub fn listen_addr(address: Option<IpAddr>, port: Option<u16>, file: &FileConfig) -> SocketAddr {
     let ip = address
         .or(file.address)
@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn defaults_to_this_computer_only() {
         let addr = listen_addr(None, None, &FileConfig::default());
-        assert_eq!(addr.to_string(), "127.0.0.1:16889");
+        assert_eq!(addr.to_string(), "127.0.0.1:24068");
     }
 
     #[test]
@@ -132,8 +132,8 @@ mod tests {
 
     #[test]
     fn the_ui_link_points_at_this_computer() {
-        let any = "0.0.0.0:16889".parse().unwrap();
-        assert_eq!(ui_url(any, "abc"), "http://127.0.0.1:16889/#token=abc");
+        let any = "0.0.0.0:24068".parse().unwrap();
+        assert_eq!(ui_url(any, "abc"), "http://127.0.0.1:24068/#token=abc");
         let v6 = "[::]:9".parse().unwrap();
         assert_eq!(ui_url(v6, "abc"), "http://[::1]:9/#token=abc");
         let lan = "192.168.1.5:9".parse().unwrap();

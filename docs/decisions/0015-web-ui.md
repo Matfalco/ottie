@@ -14,7 +14,7 @@ Accepted 2026-10-12.
 - UI files need no token; only `/api` does. Hashed files under `_app/immutable/` are cached for a year; `index.html` is never cached.
 
 **Signing in:**
-- `ottie serve` prints `http://127.0.0.1:16889/#token=…` when stdout is a terminal.
+- `ottie serve` prints `http://127.0.0.1:24068/#token=…` when stdout is a terminal.
 - `ottie open` opens the browser on it. It goes through a private redirect page in the config folder, so the token never appears on a browser's command line, where other users could see it in the process list.
 - The UI reads the fragment, removes it from the address bar and history, and keeps the token in `localStorage`.
 - Without a token, a login page asks for it (`ottie token`). A 401 signs out.

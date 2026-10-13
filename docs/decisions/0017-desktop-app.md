@@ -2,7 +2,7 @@
 
 Accepted 2026-10-12.
 
-**The window shows the daemon's own page.** It opens `http://127.0.0.1:16889/#token=…`, signed in like `ottie open`.
+**The window shows the daemon's own page.** It opens `http://127.0.0.1:24068/#token=…`, signed in like `ottie open`.
 - Why not a copy of the UI inside the app: the UI and the daemon can never be on different versions, and the daemon needs no CORS and the UI no "daemon address" setting.
 - The page gets no access to Tauri: no capabilities are declared, and nothing is granted to the daemon's origin. (Since 0019, the page may control its own window, for the title bar it draws. Nothing else.) Features like the tray and notifications will run on the Rust side, and anything the page needs later (a folder picker) is granted to it explicitly.
 - The window only navigates within the daemon's origin. A link elsewhere must not turn it into a browser.

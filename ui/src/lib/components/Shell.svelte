@@ -9,7 +9,7 @@
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
 	import { confirmation, targets, type Action } from '#lib/bulk.js';
 	import { provideApp } from '#lib/context.js';
-	import { parseFilter, showsNewJobs } from '#lib/filters.js';
+	import { parseFilters, showsNewJobs } from '#lib/filters.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale, isLocale, locales, setLocale } from '#lib/paraglide/runtime.js';
 	import { Session } from '#lib/session.svelte.js';
@@ -79,8 +79,8 @@
 		const added = await session.add(job);
 		// On a Downloads view that would hide it, show everything instead.
 		const downloads = resolve('/downloads');
-		const filter = parseFilter(page.url.searchParams.get('status'));
-		if (added && page.url.pathname === downloads && !showsNewJobs(filter)) {
+		const filters = parseFilters(page.url.searchParams);
+		if (added && page.url.pathname === downloads && !showsNewJobs(filters)) {
 			await goto(downloads, { replace: true, reset: false });
 		}
 		return added;

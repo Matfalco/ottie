@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { useApp } from '#lib/context.js';
-	import { countByFilter, filterName, filterQuery, type Filter } from '#lib/filters.js';
+	import {
+		GROUPS,
+		filtersQuery,
+		groupFilters,
+		groupName,
+		groupOf,
+		type Group
+	} from '#lib/filters.js';
 	import { formatCount, formatSpeed } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import AddCard from './AddCard.svelte';
@@ -15,9 +22,15 @@
 	const LATEST = 5;
 	/** How many waiting downloads "Up next" lists. */
 	const NEXT = 3;
-	const TILES: Filter[] = ['active', 'queued', 'stopped', 'completed'];
+	/** The Downloads page's four groups, in the mockup's order. */
+	const TILES: Group[] = ['running', 'waiting', 'attention', 'finished'];
+	const link = (group: Group) => downloads + filtersQuery(groupFilters(group));
 
-	let counts = $derived(countByFilter(session.list));
+	let counts = $derived(
+		Object.fromEntries(
+			GROUPS.map((group) => [group, session.list.filter((job) => groupOf(job) === group).length])
+		) as Record<Group, number>
+	);
 	let attention = $derived(
 		session.list.filter((job) => job.state === 'failed' || job.state === 'retrying')
 	);
@@ -38,10 +51,10 @@
 	<AddCard />
 
 	<div class="tiles">
-		{#each TILES as filter (filter)}
-			<a class="card tile {filter}" href={downloads + filterQuery(filter)}>
-				<span class="label"><span class="dot" aria-hidden="true"></span>{filterName(filter)}</span>
-				<span class="value">{formatCount(counts[filter])}</span>
+		{#each TILES as group (group)}
+			<a class="card tile {group}" href={link(group)}>
+				<span class="label"><span class="dot" aria-hidden="true"></span>{groupName(group)}</span>
+				<span class="value">{formatCount(counts[group])}</span>
 			</a>
 		{/each}
 	</div>
@@ -62,7 +75,7 @@
 			<header>
 				<h2 id="dash-running">{m.dash_running()}</h2>
 				{#if running.length > 0 || next.length > 0}
-					<a href={downloads + filterQuery('active')}>{m.dash_see_all()}</a>
+					<a href={link('running')}>{m.dash_see_all()}</a>
 				{/if}
 			</header>
 			<RunningList {running} {next} rates={session.rates} now={session.now} />
@@ -75,7 +88,7 @@
 				<h2 id="dash-attention">{m.dash_attention()}</h2>
 				{#if attention.length > 0}
 					<span class="badge">{formatCount(attention.length)}</span>
-					<a href={downloads + filterQuery('stopped')}>{m.dash_see_all()}</a>
+					<a href={link('attention')}>{m.dash_see_all()}</a>
 				{/if}
 			</header>
 			{#if attention.length > 0}
@@ -93,7 +106,7 @@
 			<header>
 				<h2 id="dash-finished">{m.dash_finished()}</h2>
 				{#if latest.length > 0}
-					<a href={downloads + filterQuery('completed')}>{m.dash_see_all()}</a>
+					<a href={link('finished')}>{m.dash_see_all()}</a>
 				{/if}
 			</header>
 			{#if latest.length > 0}
@@ -158,15 +171,19 @@
 		background: var(--quiet);
 	}
 
-	.active .dot {
+	.running .dot {
 		background: var(--progress);
 	}
 
-	.stopped .dot {
-		background: var(--warn);
+	.attention .dot {
+		background: var(--danger);
 	}
 
-	.completed .dot {
+	.attention .value {
+		color: var(--danger);
+	}
+
+	.finished .dot {
 		background: var(--ok);
 	}
 

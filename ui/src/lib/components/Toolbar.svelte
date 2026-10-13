@@ -24,9 +24,28 @@
 		categories: Category[];
 		/** Moves the selected downloads to that category. */
 		onMove: (category: number) => void;
+		/** Downloads shown, of `total`. */
+		shown: number;
+		total: number;
+		/** How many filters narrow the list. */
+		active: number;
+		/** Whether "Filters and sorting" is open. */
+		open: boolean;
+		onToggle: () => void;
 	}
 
-	let { selected, finished, onRun, categories, onMove }: Props = $props();
+	let {
+		selected,
+		finished,
+		onRun,
+		categories,
+		onMove,
+		shown,
+		total,
+		active,
+		open,
+		onToggle
+	}: Props = $props();
 
 	const BUTTONS: { action: Action; icon: Component; label: () => string }[] = [
 		{ action: 'resume', icon: Play, label: m.resume },
@@ -67,9 +86,28 @@
 			<span>{m.clear_finished()}</span>
 		</button>
 	{/if}
-	<button class="filters" disabled title={m.coming_later()}>
+	{#if shown < total}
+		<span class="shown">
+			{m.filters_shown({ shown: formatCount(shown), total: formatCount(total) })}
+		</span>
+	{/if}
+	<button
+		class="filters"
+		class:open
+		aria-expanded={open}
+		aria-label={active > 0 ? m.filters_sorting_on({ count: formatCount(active) }) : undefined}
+		onclick={onToggle}
+	>
 		<Funnel size={14} aria-hidden="true" />
 		<span>{m.filters_sorting()}</span>
+		{#if active > 0}
+			<span class="badge" aria-hidden="true">{formatCount(active)}</span>
+		{/if}
+		{#if open}
+			<ChevronUp size={14} aria-hidden="true" />
+		{:else}
+			<ChevronDown size={14} aria-hidden="true" />
+		{/if}
 	</button>
 </div>
 
@@ -124,13 +162,38 @@
 		color: var(--muted);
 	}
 
+	.shown {
+		margin-right: 0.4rem;
+		color: var(--faint);
+		font-size: 0.85em;
+		white-space: nowrap;
+	}
+
 	.filters {
 		border-color: var(--border);
+		font-weight: 500;
+	}
+
+	.filters.open,
+	.filters.open:hover:not(:disabled) {
+		border-color: transparent;
+		background: var(--selected);
+	}
+
+	.badge {
+		min-width: 1.15rem;
+		padding: 0 0.3rem;
+		border-radius: 999px;
+		background: var(--accent);
+		color: var(--on-accent);
+		font-size: 0.75em;
+		line-height: 1.15rem;
+		text-align: center;
 	}
 
 	/* Narrow: icons only (each button keeps its name for screen readers). */
 	@container page (max-width: 56rem) {
-		button:not(.clear) span {
+		button:not(.clear) span:not(.badge) {
 			display: none;
 		}
 	}

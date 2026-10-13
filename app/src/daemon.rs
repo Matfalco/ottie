@@ -24,7 +24,7 @@ const KEPT_LINES: usize = 20;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub struct Connection {
-    /// The web UI, signed in: `http://127.0.0.1:16889/#token=…`.
+    /// The web UI, signed in: `http://127.0.0.1:24068/#token=…`.
     pub link: Url,
     /// `None` when a daemon was already running: not ours to stop.
     pub started: Option<Started>,
@@ -202,10 +202,10 @@ mod tests {
     #[test]
     fn the_reason_is_the_last_error_line() {
         let failed = failure_status();
-        let log = "INFO starting\nottie: first\nottie: can't listen on 127.0.0.1:16889\nmore";
+        let log = "INFO starting\nottie: first\nottie: can't listen on 127.0.0.1:24068\nmore";
         assert_eq!(
             reason(log.lines(), failed),
-            "can't listen on 127.0.0.1:16889"
+            "can't listen on 127.0.0.1:24068"
         );
         assert!(reason("INFO only logs".lines(), failed).starts_with("Ottie stopped ("));
     }

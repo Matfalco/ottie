@@ -4,7 +4,7 @@
 
 Ottie is a cross-platform download manager, built as a modern replacement for [uGet](https://ugetdm.com/), which is no longer maintained.
 
-> **Status: early development.** The download engine works (pause/resume, multi-connection downloads, speed limits, categories, retries) and `ottie serve` runs it as a daemon with an HTTP API on 127.0.0.1:16889. A web UI and the desktop app come next; there's nothing to use day to day yet.
+> **Status: early development.** The download engine works (pause/resume, multi-connection downloads, speed limits, categories, retries) and `ottie serve` runs it as a daemon with an HTTP API on 127.0.0.1:24068. A web UI and the desktop app come next; there's nothing to use day to day yet.
 
 ## Try it
 
