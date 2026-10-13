@@ -7,6 +7,6 @@ Accepted 2026-10-13.
 - **Moving to a category stays `POST /jobs/{id}/category`.** It does more than set a field: it marks the category as the user's choice and may also move the download to that category's folder.
 - Later fields (a new name, another folder before the download starts) can join the same body.
 
-**In the UI:** a panel under the Downloads list shows the one selected download (mockup G). It has the main action for its state, progress and a few numbers, its category, its folder, its own speed limit and its priority. A download's limit remembers its last value per device, apart from the total limit's, so setting one never changes the other. "Play while downloading", "Show in folder" and the file map are shown disabled until they work (`docs/decisions/0021`).
+**In the UI:** a panel under the Downloads list shows the one selected download (mockup G). It has the main action for its state, progress and a few numbers, its category, its folder, its own speed limit and its priority. A download's limit remembers its last value per device, apart from the total limit's, so setting one never changes the other. "Play while downloading" and "Show in folder" are shown disabled until they work (`docs/decisions/0021`). The file map works since slice 5d (`docs/decisions/0025`).
 
 **Alternatives:** one `POST` route per property, like `/category`. More routes, and two saves and two events when both change; `0022` turned down the same for settings (Mathieu's choice).

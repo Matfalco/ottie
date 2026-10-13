@@ -38,7 +38,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             &throttle,
             &cancel,
             |event| match event {
-                Event::Progress { downloaded, total } => {
+                Event::Progress {
+                    downloaded, total, ..
+                } => {
                     if last_print.elapsed() >= Duration::from_millis(200) {
                         last_print = Instant::now();
                         print_progress(downloaded, total);

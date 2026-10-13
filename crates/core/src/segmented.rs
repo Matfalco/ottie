@@ -100,6 +100,15 @@ impl Part {
         self.end() - self.pos()
     }
 
+    /// What has arrived, flushed or not: for showing progress, never for saving.
+    fn received(&self) -> Segment {
+        Segment {
+            start: self.start,
+            end: self.end(),
+            done: self.pos() - self.start,
+        }
+    }
+
     fn segment(&self) -> Segment {
         let end = self.end();
         let durable = self.shared.durable.load(SeqCst).min(end);
@@ -194,7 +203,11 @@ pub(crate) async fn run(
                 let now = written(&parts);
                 if now != last_progress {
                     last_progress = now;
-                    on_event(Event::Progress { downloaded: now, total: Some(total) });
+                    on_event(Event::Progress {
+                        downloaded: now,
+                        total: Some(total),
+                        segments: parts.iter().map(Part::received).collect(),
+                    });
                 }
                 if last_checkpoint.0.elapsed() >= FLUSH_INTERVAL {
                     let current = segments(&parts);

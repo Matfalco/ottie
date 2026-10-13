@@ -131,7 +131,8 @@ async fn downloads_whole_file() {
         events.last(),
         Some(&Event::Progress {
             downloaded: SIZE as u64,
-            total: Some(SIZE as u64)
+            total: Some(SIZE as u64),
+            segments: Vec::new(),
         })
     );
 }

@@ -9,6 +9,7 @@
 	import { categoryName } from '#lib/categories.js';
 	import { PRIORITIES, facts, isPlayable, primaryAction, priorityName } from '#lib/details.js';
 	import { explainProblem } from '#lib/explain.js';
+	import { connections, fileMap } from '#lib/filemap.js';
 	import { statusName, statusOf } from '#lib/filters.js';
 	import { displayName, formatPercent } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -36,13 +37,14 @@
 	let { job, categories, speed, now, maxRetries, open, onToggle, onRun, onMove, onChange }: Props =
 		$props();
 
-	/** How many squares the file map has (it comes in a later version). */
+	/** How many squares the file map has: two rows of 24. */
 	const BLOCKS = 48;
 
 	let name = $derived(displayName(job));
 	let status = $derived(statusOf(job));
 	let primary = $derived(primaryAction(job));
 	let done = $derived(fraction(job));
+	let map = $derived(fileMap(job, BLOCKS, job.state === 'downloading'));
 	let problem = $derived(
 		job.state === 'failed' || job.state === 'retrying'
 			? explainProblem(job.problem, job.error)
@@ -61,7 +63,7 @@
 	}
 </script>
 
-<section class="details" aria-label={m.det_label()}>
+<section class="details {job.state}" aria-label={m.det_label()}>
 	<div class="top">
 		<div class="title">
 			<h2 title={name}>{name}</h2>
@@ -123,13 +125,26 @@
 			<div class="column">
 				<div class="map-head">
 					<span>{m.det_file_map()}</span>
-					<span class="faint">{m.coming_later()}</span>
+					<span class="mono">{connections(job)}</span>
 				</div>
-				<div class="blocks" aria-hidden="true">
-					{#each { length: BLOCKS }, index (index)}
-						<span></span>
-					{/each}
-				</div>
+				{#if map}
+					<div
+						class="blocks"
+						role="img"
+						aria-label={m.det_map_label({ percent: formatPercent(done ?? 0) })}
+					>
+						{#each map as block, index (index)}
+							<span class={block}></span>
+						{/each}
+					</div>
+					<div class="legend" aria-hidden="true">
+						<span><span class="key done"></span>{m.det_map_done()}</span>
+						<span><span class="key arriving"></span>{m.det_map_arriving()}</span>
+						<span><span class="key"></span>{m.det_map_left()}</span>
+					</div>
+				{:else}
+					<p class="faint">{m.det_map_unknown()}</p>
+				{/if}
 			</div>
 
 			<div class="settings">
@@ -379,18 +394,76 @@
 		color: var(--faint);
 	}
 
-	/* Empty until the daemon reports which ranges arrived (slice 5d). */
+	.mono {
+		font-family: var(--mono);
+		font-size: 0.8rem;
+	}
+
 	.blocks {
 		display: grid;
 		grid-template-columns: repeat(24, minmax(0, 1fr));
 		gap: 2px;
-		opacity: 0.6;
 	}
 
-	.blocks span {
+	.blocks span,
+	.key {
 		height: 0.7rem;
 		border-radius: 1px;
 		background: var(--track);
+	}
+
+	/* Received blocks take the bar's colour for the state. */
+	.blocks .done,
+	.blocks .partial,
+	.key.done {
+		background: var(--progress);
+	}
+
+	.blocks .partial {
+		opacity: 0.45;
+	}
+
+	.blocks .arriving,
+	.key.arriving {
+		background: var(--arriving);
+	}
+
+	.completed .blocks .done {
+		background: var(--ok);
+	}
+
+	.paused .blocks span:not(.left),
+	.queued .blocks span:not(.left),
+	.cancelled .blocks span:not(.left) {
+		background: var(--quiet);
+	}
+
+	.failed .blocks span:not(.left) {
+		background: var(--danger);
+	}
+
+	.legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem 0.9rem;
+		color: var(--faint);
+		font-size: 0.8rem;
+	}
+
+	.legend > span {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.key {
+		display: inline-block;
+		width: 0.55rem;
+		height: 0.55rem;
+	}
+
+	p.faint {
+		margin: 0;
 	}
 
 	.settings {

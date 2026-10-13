@@ -426,6 +426,7 @@ async fn stream_body(
         on_event(Event::Progress {
             downloaded: dl.downloaded,
             total: dl.total,
+            segments: Vec::new(),
         });
         // Over the speed limit: wait before reading more (a pause still wins).
         tokio::select! {

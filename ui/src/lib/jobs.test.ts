@@ -6,8 +6,12 @@ describe('applyEvent', () => {
 	it('upserts changed jobs and updates progress', () => {
 		const jobs: Jobs = {};
 		expect(applyEvent(jobs, { type: 'changed', job: job() })).toBe(false);
-		applyEvent(jobs, { type: 'progress', id: job().id, downloaded: 500, total: 1000 });
-		expect(jobs[job().id]).toMatchObject({ downloaded: 500, total: 1000 });
+		const ranges = [
+			{ start: 0, end: 500, done: 300 },
+			{ start: 500, end: 1000, done: 200 }
+		];
+		applyEvent(jobs, { type: 'progress', id: job().id, downloaded: 500, total: 1000, ranges });
+		expect(jobs[job().id]).toMatchObject({ downloaded: 500, total: 1000, ranges });
 		applyEvent(jobs, { type: 'changed', job: job({ state: 'completed' }) });
 		expect(jobs[job().id].state).toBe('completed');
 	});
@@ -20,7 +24,7 @@ describe('applyEvent', () => {
 
 	it('ignores progress for unknown jobs and asks for a resync when told', () => {
 		const jobs: Jobs = {};
-		applyEvent(jobs, { type: 'progress', id: 'nope', downloaded: 1, total: null });
+		applyEvent(jobs, { type: 'progress', id: 'nope', downloaded: 1, total: null, ranges: [] });
 		expect(jobs).toEqual({});
 		expect(applyEvent(jobs, { type: 'resync' })).toBe(true);
 	});

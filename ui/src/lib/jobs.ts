@@ -27,6 +27,7 @@ export function applyEvent(jobs: Jobs, event: ApiEvent): boolean {
 			if (job) {
 				job.downloaded = event.downloaded;
 				job.total = event.total;
+				job.ranges = event.ranges;
 			}
 			return false;
 		}

@@ -298,5 +298,12 @@
 	"priority_low": "Low",
 	"priority_normal": "Normal",
 	"priority_high": "High",
-	"priority_urgent": "Urgent"
+	"priority_urgent": "Urgent",
+	"det_ranges": "{count} ranges",
+	"det_one_connection": "One connection",
+	"det_map_label": "File map: {percent} received",
+	"det_map_done": "Received",
+	"det_map_arriving": "Arriving",
+	"det_map_left": "Left",
+	"det_map_unknown": "Shown once the size is known."
 }

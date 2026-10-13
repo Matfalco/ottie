@@ -131,12 +131,13 @@ pub enum Event {
     Progress {
         downloaded: u64,
         total: Option<u64>,
+        /// Multi-connection only: each range with what has arrived so far
+        /// (maybe not flushed yet, so never saved). Empty for one connection.
+        segments: Vec<Segment>,
     },
     /// Multi-connection only: the ranges as now flushed to disk. Safe to save;
     /// a resume from these never trusts bytes that aren't really there.
-    Checkpoint {
-        segments: Vec<Segment>,
-    },
+    Checkpoint { segments: Vec<Segment> },
     /// The bytes already on disk were thrown away and the download started over.
     Restarted(RestartReason),
 }

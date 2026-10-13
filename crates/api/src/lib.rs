@@ -28,9 +28,9 @@ use tokio_util::sync::CancellationToken;
 
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
 pub use types::{
-    AddJob, Added, AddedCategory, ApiError, Appearance, AppearanceMode, BuiltIn, Category,
-    CategoryBody, Event, Job, JobChange, JobState, MatchLink, Matched, MoveJob, Palette, Priority,
-    Problem, Reason, Settings, SettingsChange,
+    AddJob, Added, AddedCategory, ApiError, Appearance, AppearanceMode, BuiltIn, ByteRange,
+    Category, CategoryBody, Event, Job, JobChange, JobState, MatchLink, Matched, MoveJob, Palette,
+    Priority, Problem, Reason, Settings, SettingsChange,
 };
 pub use ui::UiSource;
 

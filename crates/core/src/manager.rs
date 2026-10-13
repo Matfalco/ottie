@@ -492,6 +492,7 @@ impl Job {
             category: self.category,
             retries: self.retries,
             retry_at: self.retry_at.map(|(_, at)| at),
+            segments: dl.segments.clone(),
         }
     }
 }
@@ -680,7 +681,11 @@ impl<B: Backend> Actor<B> {
                 self.save(id);
                 self.emit_changed(id);
             }
-            Event::Progress { downloaded, total } => {
+            Event::Progress {
+                downloaded,
+                total,
+                segments,
+            } => {
                 job.download.downloaded = downloaded;
                 job.download.total = total;
                 // It works again: a later failure gets every retry anew.
@@ -698,6 +703,7 @@ impl<B: Backend> Actor<B> {
                     id,
                     downloaded,
                     total,
+                    segments,
                 });
             }
             // Saved with the next progress save; only flushed ranges are reported.

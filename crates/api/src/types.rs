@@ -46,6 +46,34 @@ pub struct Job {
     /// While `retrying`: when, in milliseconds since 1970 (UTC).
     #[ts(type = "number | null")]
     pub retry_at: Option<u64>,
+    /// Downloads over several connections: each connection's range, as last
+    /// saved (`progress` events bring them live). Empty for one connection.
+    pub ranges: Vec<ByteRange>,
+}
+
+/// A part of the file that one connection fetches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ByteRange {
+    #[ts(type = "number")]
+    pub start: u64,
+    /// Exclusive.
+    #[ts(type = "number")]
+    pub end: u64,
+    /// Bytes from `start` that have arrived.
+    #[ts(type = "number")]
+    pub done: u64,
+}
+
+impl From<ottie_core::Segment> for ByteRange {
+    fn from(segment: ottie_core::Segment) -> Self {
+        ByteRange {
+            start: segment.start,
+            end: segment.end,
+            done: segment.done,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -459,6 +487,9 @@ pub enum Event {
         downloaded: u64,
         #[ts(type = "number | null")]
         total: Option<u64>,
+        /// Several connections: each one's range, with what has arrived so
+        /// far. Empty for one connection.
+        ranges: Vec<ByteRange>,
     },
     /// A job was removed (`DELETE /jobs/{id}`): drop it.
     Removed { id: String },
@@ -494,6 +525,7 @@ impl From<JobSnapshot> for Job {
                 .retry_at
                 .and_then(|at| at.duration_since(UNIX_EPOCH).ok())
                 .map(|since| u64::try_from(since.as_millis()).unwrap_or(u64::MAX)),
+            ranges: job.segments.into_iter().map(ByteRange::from).collect(),
         }
     }
 }
@@ -643,5 +675,36 @@ impl From<ottie_core::Priority> for Priority {
             P::High => Priority::High,
             P::Urgent => Priority::Urgent,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ByteRange, Event};
+
+    #[test]
+    fn progress_carries_each_connections_range() {
+        let range = ByteRange::from(ottie_core::Segment {
+            start: 100,
+            end: 300,
+            done: 50,
+        });
+        let event = Event::Progress {
+            id: "2026.10.13-09.00.00-1".into(),
+            downloaded: 50,
+            total: Some(300),
+            ranges: vec![range],
+        };
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "type": "progress",
+                "id": "2026.10.13-09.00.00-1",
+                "downloaded": 50,
+                "total": 300,
+                "ranges": [{ "start": 100, "end": 300, "done": 50 }],
+            })
+        );
     }
 }

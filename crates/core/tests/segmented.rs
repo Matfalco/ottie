@@ -264,3 +264,40 @@ async fn one_connection_when_splitting_is_unsafe_or_pointless() {
     s.assert_complete(s.run(&mut dl, None, || {}).await.0.unwrap(), &s.data);
     assert_eq!(s.server.requests().len(), 1);
 }
+
+#[tokio::test]
+async fn progress_shows_each_range_as_it_fills() {
+    let s = setup(SIZE, 2).await;
+    let mut dl = s.download();
+    let (result, events) = s.run(&mut dl, None, || {}).await;
+    s.assert_complete(result.unwrap(), &s.data);
+
+    let mut with_ranges = 0;
+    for event in &events {
+        let Event::Progress {
+            downloaded,
+            segments,
+            ..
+        } = event
+        else {
+            continue;
+        };
+        if segments.is_empty() {
+            continue;
+        }
+        with_ranges += 1;
+        // What the ranges say has arrived is what the download counts…
+        let received: u64 = segments.iter().map(|segment| segment.done).sum();
+        assert_eq!(received, *downloaded);
+        // …and, side by side, they cover the whole file once.
+        let mut sorted = segments.clone();
+        sorted.sort_by_key(|segment| segment.start);
+        assert_eq!(sorted[0].start, 0);
+        for pair in sorted.windows(2) {
+            assert_eq!(pair[0].end, pair[1].start);
+        }
+        assert_eq!(sorted.last().unwrap().end, SIZE as u64);
+        assert!(sorted.iter().all(|s| s.done <= s.end - s.start));
+    }
+    assert!(with_ranges > 0, "progress came with the ranges");
+}

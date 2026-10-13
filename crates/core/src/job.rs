@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use reqwest::Url;
 
 use crate::category::{Category, CategoryId};
-use crate::download::RestartReason;
+use crate::download::{RestartReason, Segment};
 use crate::id::JobId;
 use crate::problem::Problem;
 use crate::settings::Settings;
@@ -127,6 +127,9 @@ pub struct JobSnapshot {
     pub retries: u32,
     /// When it will try again, while `Retrying`.
     pub retry_at: Option<SystemTime>,
+    /// Multi-connection: the ranges as last saved (flushed to disk). Empty
+    /// for one connection, or before the first response.
+    pub segments: Vec<Segment>,
 }
 
 /// Broadcast to every subscriber of the manager.
@@ -140,6 +143,9 @@ pub enum JobEvent {
         id: JobId,
         downloaded: u64,
         total: Option<u64>,
+        /// Multi-connection: each range with what has arrived so far.
+        /// Empty for one connection.
+        segments: Vec<Segment>,
     },
     /// The job was removed. Clients drop it.
     Removed(JobId),

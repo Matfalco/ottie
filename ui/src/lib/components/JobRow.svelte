@@ -4,6 +4,7 @@
 	import Play from '@lucide/svelte/icons/play';
 	import Trash from '@lucide/svelte/icons/trash';
 	import type { Action } from '#lib/bulk.js';
+	import { barParts } from '#lib/filemap.js';
 	import { displayName, formatAdded, formatBytes, formatPercent } from '#lib/format.js';
 	import { addedAt } from '#lib/jobs.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -27,6 +28,8 @@
 
 	let name = $derived(displayName(job));
 	let done = $derived(fraction(job));
+	// Several connections: one piece of the bar each.
+	let parts = $derived(barParts(job));
 	let moving = $derived(motion(job, speed, now));
 	let added = $derived(addedAt(job.id));
 	let size = $derived(
@@ -78,13 +81,22 @@
 			<div
 				class="bar"
 				class:unknown={done === null && job.state === 'downloading'}
+				class:split={parts !== null}
 				role="progressbar"
 				aria-label={m.progress_label({ name })}
 				aria-valuemin={0}
 				aria-valuemax={100}
 				aria-valuenow={done === null ? undefined : Math.floor(done * 100)}
 			>
-				<div class="fill" style:width={`${(done ?? 0) * 100}%`}></div>
+				{#if parts}
+					{#each parts as part, index (index)}
+						<div class="piece" style:flex={`${part.share} 1 0`}>
+							<div class="fill" style:width={`${part.fill * 100}%`}></div>
+						</div>
+					{/each}
+				{:else}
+					<div class="fill" style:width={`${(done ?? 0) * 100}%`}></div>
+				{/if}
 			</div>
 			<span class="percent">{done === null ? '' : formatPercent(done)}</span>
 		</div>
@@ -223,6 +235,24 @@
 		border-radius: 3px;
 		background: var(--progress);
 		transition: width 0.25s linear;
+	}
+
+	/* One piece per connection, with a gap between them. */
+	.bar.split {
+		display: flex;
+		gap: 2px;
+		background: none;
+	}
+
+	.piece {
+		min-width: 2px;
+		overflow: hidden;
+		border-radius: 2px;
+		background: var(--track);
+	}
+
+	.piece .fill {
+		border-radius: 0;
 	}
 
 	.completed .fill {

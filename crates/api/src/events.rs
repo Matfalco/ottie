@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::AppState;
 use crate::auth::EVENTS_PROTOCOL;
-use crate::types::{Category, Event, Job, Settings};
+use crate::types::{ByteRange, Category, Event, Job, Settings};
 
 pub(crate) async fn subscribe(State(state): State<AppState>, ws: WebSocketUpgrade) -> Response {
     // Subscribe now rather than after the upgrade, so a client that fetches
@@ -45,10 +45,12 @@ async fn forward(
                 id,
                 downloaded,
                 total,
+                segments,
             }) => Event::Progress {
                 id: id.to_string(),
                 downloaded,
                 total,
+                ranges: segments.into_iter().map(ByteRange::from).collect(),
             },
             Ok(JobEvent::Removed(id)) => Event::Removed { id: id.to_string() },
             Ok(JobEvent::CategoryChanged(category)) => Event::CategoryChanged {

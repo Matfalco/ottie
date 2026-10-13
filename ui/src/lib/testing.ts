@@ -21,6 +21,7 @@ export function job(overrides: Partial<Job> = {}): Job {
 		category: 1,
 		retries: 0,
 		retryAt: null,
+		ranges: [],
 		...overrides
 	};
 }
