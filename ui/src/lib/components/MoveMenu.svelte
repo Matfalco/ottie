@@ -93,7 +93,7 @@
 		overflow: auto;
 		list-style: none;
 		border: 1px solid var(--border);
-		border-radius: 10px;
+		border-radius: var(--radius-m);
 		background: var(--surface);
 		box-shadow: var(--shadow);
 	}
@@ -101,7 +101,7 @@
 	ul button {
 		width: 100%;
 		height: 2.1rem;
-		border-radius: 6px;
+		border-radius: var(--radius-s);
 		text-align: left;
 	}
 

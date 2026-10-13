@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import type { Category } from '@ottie/api-types/Category';
 	import type { CategoryBody } from '@ottie/api-types/CategoryBody';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
@@ -28,7 +27,6 @@
 	/** Other has only a name and limits: its downloads chose their folder. */
 	// svelte-ignore state_referenced_locally
 	const other = category?.builtIn === 'other';
-	let dialog: HTMLDialogElement;
 
 	// The form starts from the category; it's a copy, edited freely.
 	// svelte-ignore state_referenced_locally
@@ -45,8 +43,6 @@
 	let folderTouched = $state(start !== null);
 	let saving = $state(false);
 	let problem: string | null = $state(null);
-
-	onMount(() => dialog.showModal());
 
 	function rename(event: Event & { currentTarget: HTMLInputElement }) {
 		name = event.currentTarget.value;
@@ -80,17 +76,19 @@
 	}
 </script>
 
-<dialog
-	bind:this={dialog}
+<!-- Opens in the list, in place of the category's row (or at the top for a
+     new one). Escape closes it without saving (the fields keep the keys). -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<form
+	onsubmit={submit}
+	onkeydown={(event) => event.key === 'Escape' && onClose()}
 	aria-labelledby="category-editor-title"
-	oncancel={(event) => {
-		event.preventDefault();
-		onClose();
-	}}
 >
-	<form onsubmit={submit}>
-		<h2 id="category-editor-title">{category ? categoryName(category) : m.cat_new()}</h2>
+	<h2 id="category-editor-title">
+		{category ? m.cat_editing({ name: categoryName(category) }) : m.cat_new()}
+	</h2>
 
+	<div class="fields">
 		<label>
 			<span>{m.cat_name()}</span>
 			<!-- svelte-ignore a11y_autofocus -->
@@ -111,14 +109,14 @@
 				</span>
 			</label>
 
-			<label>
+			<label class="wide">
 				<span>{m.cat_extensions()}</span>
 				<input bind:value={extensions} spellcheck="false" autocapitalize="off" />
 				<small>{m.cat_extensions_hint()}</small>
 			</label>
 		{/if}
 
-		<div class="pair">
+		<div class="pair wide">
 			<label>
 				<span>{m.cat_speed()}</span>
 				<span class="row">
@@ -136,41 +134,41 @@
 				<small>{m.cat_running_hint()}</small>
 			</label>
 		</div>
+	</div>
 
-		{#if problem}
-			<p class="problem" role="alert">{problem}</p>
-		{/if}
+	{#if problem}
+		<p class="problem" role="alert">{problem}</p>
+	{/if}
 
-		<div class="buttons">
-			<button type="button" onclick={onClose}>{m.cat_cancel()}</button>
-			<button class="primary" disabled={saving}>{m.cat_save()}</button>
-		</div>
-	</form>
-</dialog>
+	<div class="buttons">
+		<button type="button" onclick={onClose}>{m.cat_cancel()}</button>
+		<button class="primary" disabled={saving}>{m.cat_save()}</button>
+	</div>
+</form>
 
 <style>
-	dialog {
-		width: min(32rem, calc(100vw - 2rem));
-		padding: 1.25rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--surface);
-		color: var(--text);
-		box-shadow: var(--shadow);
-	}
-
-	dialog::backdrop {
-		background: var(--backdrop);
-	}
-
 	form {
 		display: grid;
 		gap: 0.9rem;
+		padding: 1rem 1.25rem 1.1rem;
+		background: var(--well);
+	}
+
+	/* Two columns when there's room: name and folder, extensions across,
+	   then the limits. */
+	.fields {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+		gap: 0.9rem 1.25rem;
+	}
+
+	.wide {
+		grid-column: 1 / -1;
 	}
 
 	h2 {
-		margin: 0 0 0.2rem;
-		font-size: 1.1rem;
+		margin: 0;
+		font-size: 1rem;
 	}
 
 	label {
@@ -206,7 +204,7 @@
 		flex: none;
 		padding: 0 0.4rem;
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: var(--radius-s);
 		background: var(--surface);
 		color: var(--text);
 		font: inherit;

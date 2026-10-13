@@ -1,11 +1,16 @@
 <script lang="ts">
+	import '@fontsource-variable/outfit';
+	import '@fontsource/dm-mono/400.css';
+	import '@fontsource/dm-mono/500.css';
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { replaceState } from '$app/navigation';
+	import { appearance } from '#lib/appearance.svelte.js';
 	import icon from '#lib/assets/ottie.svg';
 	import Login from '#lib/components/Login.svelte';
 	import Shell from '#lib/components/Shell.svelte';
 	import { getLocale } from '#lib/paraglide/runtime.js';
+	import { themeFor } from '#lib/theme.js';
 	import { forgetToken, loadToken, saveToken, tokenFromFragment } from '#lib/token.js';
 	import type { LayoutProps } from './$types';
 
@@ -16,6 +21,21 @@
 	// For screen readers, spell checking and hyphenation. (Changing the
 	// language reloads the page, so this runs again.)
 	document.documentElement.lang = getLocale();
+
+	// The theme, set before anything is drawn, then kept up to date with the
+	// user's choice and the system's dark mode.
+	const darkSystem = matchMedia('(prefers-color-scheme: dark)');
+	let systemDark = $state(darkSystem.matches);
+	document.documentElement.dataset.theme = themeFor(appearance, darkSystem.matches);
+	$effect(() => {
+		document.documentElement.dataset.theme = themeFor(appearance, systemDark);
+	});
+
+	onMount(() => {
+		const follow = (event: MediaQueryListEvent) => (systemDark = event.matches);
+		darkSystem.addEventListener('change', follow);
+		return () => darkSystem.removeEventListener('change', follow);
+	});
 
 	onMount(() => {
 		const fromLink = tokenFromFragment(location.hash);

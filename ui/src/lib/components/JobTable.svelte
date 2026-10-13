@@ -83,9 +83,9 @@
 		z-index: 1;
 		height: 2.2rem;
 		padding: 0 0.5rem;
-		background: var(--bg);
+		background: var(--surface);
 		border-bottom: 1px solid var(--border);
-		color: var(--muted);
+		color: var(--faint);
 		font-size: 0.8rem;
 		font-weight: 600;
 		text-align: left;

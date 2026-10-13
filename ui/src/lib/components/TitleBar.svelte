@@ -5,7 +5,7 @@
 	import WindowControls from './WindowControls.svelte';
 
 	interface Props {
-		/** What goes in the middle (the add bar). */
+		/** What goes after the logo (the tabs and the speed). */
 		children?: Snippet;
 	}
 
@@ -30,12 +30,12 @@
 
 <style>
 	header {
-		display: grid;
-		grid-template-columns: var(--nav-width) minmax(0, 1fr) auto;
+		display: flex;
 		align-items: center;
+		gap: 1.1rem;
 		height: 3rem;
-		background: var(--chrome);
-		border-bottom: 1px solid var(--border);
+		padding-left: 0.9rem;
+		background: var(--bg);
 		user-select: none;
 	}
 
@@ -44,7 +44,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		height: 100%;
-		padding: 0 1rem;
+		font-size: 1.05rem;
 		font-weight: 600;
 		cursor: default;
 	}
@@ -55,48 +55,16 @@
 
 	.middle {
 		display: flex;
+		flex: 1;
 		align-items: center;
+		gap: 1rem;
+		min-width: 0;
 		height: 100%;
-		padding: 0 0.75rem 0 0;
+		padding-right: 0.75rem;
 	}
 
-	/* Medium widths: the logo alone, above the menu's icons. */
-	@media (max-width: 56rem) and (min-width: 40.01rem) {
-		.brand {
-			justify-content: center;
-			padding: 0;
-		}
-
-		.brand span {
-			display: none;
-		}
-
-		.middle {
-			padding-left: 0.75rem;
-		}
-	}
-
-	/* Narrow: the add bar gets a row of its own under the logo. */
-	@media (max-width: 40rem) {
-		header {
-			grid-template-columns: 1fr auto;
-			grid-template-areas: 'brand controls' 'middle middle';
-			height: auto;
-		}
-
-		.brand {
-			grid-area: brand;
-			height: 2.75rem;
-		}
-
-		.middle {
-			grid-area: middle;
-			padding: 0 0.75rem 0.6rem;
-		}
-
-		header :global(.window-controls) {
-			grid-area: controls;
-			align-self: start;
-		}
+	/* The desktop window's buttons sit right at the edge. */
+	.desktop .middle {
+		padding-right: 0.25rem;
 	}
 </style>

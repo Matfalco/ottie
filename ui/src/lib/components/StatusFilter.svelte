@@ -34,8 +34,7 @@
 <style>
 	.filter {
 		display: flex;
-		gap: 0.3rem;
-		padding: 0.6rem 0.75rem 0;
+		gap: 0.35rem;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
@@ -45,8 +44,8 @@
 		flex: none;
 		align-items: center;
 		gap: 0.45rem;
-		height: 1.9rem;
-		padding: 0 0.75rem;
+		height: 1.85rem;
+		padding: 0 0.8rem;
 		border: 1px solid var(--border);
 		border-radius: 999px;
 		color: var(--muted);
@@ -61,14 +60,15 @@
 
 	a.current {
 		border-color: transparent;
-		background: var(--selected);
-		color: var(--text);
+		background: var(--accent);
+		color: var(--on-accent);
 		font-weight: 600;
 	}
 
 	.count {
-		font-size: 0.85em;
+		font-family: var(--mono);
+		font-size: 0.8em;
 		font-weight: 400;
-		color: var(--muted);
+		opacity: 0.8;
 	}
 </style>

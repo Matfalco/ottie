@@ -199,7 +199,6 @@
 		display: flex;
 		gap: 0.4rem;
 		width: 100%;
-		max-width: 46rem;
 	}
 
 	.field {
@@ -211,8 +210,8 @@
 		height: 2.1rem;
 		padding: 0 0.7rem;
 		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--surface);
+		border-radius: var(--radius-s);
+		background: var(--input);
 		color: var(--muted);
 	}
 
@@ -248,7 +247,7 @@
 		gap: 0.9rem;
 		padding: 0.9rem;
 		border: 1px solid var(--border);
-		border-radius: 10px;
+		border-radius: var(--radius-m);
 		background: var(--surface);
 		box-shadow: var(--shadow);
 		user-select: text;

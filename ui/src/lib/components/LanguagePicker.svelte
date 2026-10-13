@@ -2,6 +2,13 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale, isLocale, locales, setLocale, type Locale } from '#lib/paraglide/runtime.js';
 
+	interface Props {
+		/** For a `<label for>` outside. */
+		id?: string;
+	}
+
+	let { id }: Props = $props();
+
 	/** Each language in its own words. */
 	const NAMES: Record<Locale, string> = { en: 'English', fr: 'Français' };
 
@@ -14,7 +21,7 @@
 	}
 </script>
 
-<select value={getLocale()} onchange={change} aria-label={m.language()}>
+<select {id} value={getLocale()} onchange={change} aria-label={id ? undefined : m.language()}>
 	{#each locales as locale (locale)}
 		<option value={locale} lang={locale}>{NAMES[locale]}</option>
 	{/each}
@@ -22,12 +29,7 @@
 
 <style>
 	select {
-		padding: 0.25rem 0.4rem;
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		background: var(--surface);
-		color: var(--muted);
-		font: inherit;
-		font-size: 0.85em;
+		min-width: 10rem;
+		padding: 0.35rem 0.6rem;
 	}
 </style>

@@ -176,6 +176,12 @@ importers:
 
   ui:
     dependencies:
+      '@fontsource-variable/outfit':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/dm-mono':
+        specifier: 5.3.0
+        version: 5.3.0
       '@lucide/svelte':
         specifier: 1.48.0
         version: 1.48.0(svelte@5.57.2)
@@ -307,6 +313,12 @@ packages:
 
   '@emnapi/wasi-threads@1.2.2':
     resolution: {integrity: sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA==}
+
+  '@fontsource-variable/outfit@5.3.0':
+    resolution: {integrity: sha512-fPb5XnYK0k7SbR++HEmm4+ZqDszmLKQ+sPRUr8oQ/KNC0vy6r6hazJFe8iYozv4cqlHbvJ/JECkJWrfDodUMVQ==}
+
+  '@fontsource/dm-mono@5.3.0':
+    resolution: {integrity: sha512-OINjI8C1S/wpchhQxl7njZdMn4+hnDCpQ4YtvvOpKNARo+0J8O1x1IcrChxNjHOhfVv1by8C/FQoy3hXK+C1Ug==}
 
   '@inlang/paraglide-js@2.27.0':
     resolution: {integrity: sha512-KAAwRbg/h3oi2D4nB0cUCKG2ntOLpcSOmwwjm+SL2a316NhdypXWGeElJenCwK2piPz7vQTn7yOYOwCjqIEP5g==}
@@ -1287,6 +1299,10 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
+
+  '@fontsource-variable/outfit@5.3.0': {}
+
+  '@fontsource/dm-mono@5.3.0': {}
 
   '@inlang/paraglide-js@2.27.0(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.5)(jiti@2.7.0))':
     dependencies:

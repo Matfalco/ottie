@@ -4,125 +4,138 @@
 	import { countByFilter, filterName, filterQuery, type Filter } from '#lib/filters.js';
 	import { formatCount, formatSpeed } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import AddCard from './AddCard.svelte';
 	import JobSummary from './JobSummary.svelte';
+	import RunningList from './RunningList.svelte';
 	import SpeedChart from './SpeedChart.svelte';
 
 	const { session, run } = useApp();
 	const downloads = resolve('/downloads');
 	/** How many finished downloads the dashboard lists. */
 	const LATEST = 5;
+	/** How many waiting downloads "Up next" lists. */
+	const NEXT = 3;
 	const TILES: Filter[] = ['active', 'queued', 'stopped', 'completed'];
 
 	let counts = $derived(countByFilter(session.list));
 	let attention = $derived(
 		session.list.filter((job) => job.state === 'failed' || job.state === 'retrying')
 	);
-	// The list is newest first, so these are the most recently added.
+	// The list is newest first: the queue serves the oldest first.
+	let running = $derived(session.list.filter((job) => job.state === 'downloading'));
+	let next = $derived(
+		session.list
+			.filter((job) => job.state === 'queued')
+			.reverse()
+			.slice(0, NEXT)
+	);
 	let latest = $derived(session.list.filter((job) => job.state === 'completed').slice(0, LATEST));
 	let speed = $derived(session.history.at(-1) ?? 0);
+	let peak = $derived(Math.max(0, ...session.history));
 </script>
 
 <div class="dashboard">
-	<section class="card speed">
-		<h2>{m.dash_speed()}</h2>
-		<p class="hero">{formatSpeed(speed)}</p>
-		<SpeedChart history={session.history} />
-	</section>
+	<AddCard />
 
 	<div class="tiles">
 		{#each TILES as filter (filter)}
 			<a class="card tile {filter}" href={downloads + filterQuery(filter)}>
+				<span class="label"><span class="dot" aria-hidden="true"></span>{filterName(filter)}</span>
 				<span class="value">{formatCount(counts[filter])}</span>
-				<span class="label">{filterName(filter)}</span>
 			</a>
 		{/each}
 	</div>
 
-	<section class="card">
-		<header>
-			<h2>{m.dash_attention()}</h2>
-			{#if attention.length > 0}
-				<a href={downloads + filterQuery('stopped')}>{m.dash_see_all()}</a>
-			{/if}
-		</header>
-		{#if attention.length > 0}
-			<ul>
-				{#each attention as job (job.id)}
-					<JobSummary {job} now={session.now} onRun={(action) => run(action, [job])} />
-				{/each}
-			</ul>
-		{:else}
-			<p class="none">{m.dash_attention_none()}</p>
-		{/if}
-	</section>
+	<div class="row">
+		<section class="card speed" aria-labelledby="dash-speed">
+			<header>
+				<h2 id="dash-speed">{m.dash_speed()}</h2>
+				<span class="faint">{m.dash_last_minutes()}</span>
+				<span class="numbers">
+					{m.dash_now_peak({ now: formatSpeed(speed), peak: formatSpeed(peak) })}
+				</span>
+			</header>
+			<SpeedChart history={session.history} />
+		</section>
 
-	<section class="card">
-		<header>
-			<h2>{m.dash_finished()}</h2>
-			{#if latest.length > 0}
-				<a href={downloads + filterQuery('completed')}>{m.dash_see_all()}</a>
+		<section class="card now" aria-labelledby="dash-running">
+			<header>
+				<h2 id="dash-running">{m.dash_running()}</h2>
+				{#if running.length > 0 || next.length > 0}
+					<a href={downloads + filterQuery('active')}>{m.dash_see_all()}</a>
+				{/if}
+			</header>
+			<RunningList {running} {next} rates={session.rates} now={session.now} />
+		</section>
+	</div>
+
+	<div class="lists">
+		<section class="card" aria-labelledby="dash-attention">
+			<header>
+				<h2 id="dash-attention">{m.dash_attention()}</h2>
+				{#if attention.length > 0}
+					<span class="badge">{formatCount(attention.length)}</span>
+					<a href={downloads + filterQuery('stopped')}>{m.dash_see_all()}</a>
+				{/if}
+			</header>
+			{#if attention.length > 0}
+				<ul>
+					{#each attention as job (job.id)}
+						<JobSummary {job} now={session.now} onRun={(action) => run(action, [job])} />
+					{/each}
+				</ul>
+			{:else}
+				<p class="none">{m.dash_attention_none()}</p>
 			{/if}
-		</header>
-		{#if latest.length > 0}
-			<ul>
-				{#each latest as job (job.id)}
-					<JobSummary {job} now={session.now} />
-				{/each}
-			</ul>
-		{:else}
-			<p class="none">{m.dash_finished_none()}</p>
-		{/if}
-	</section>
+		</section>
+
+		<section class="card" aria-labelledby="dash-finished">
+			<header>
+				<h2 id="dash-finished">{m.dash_finished()}</h2>
+				{#if latest.length > 0}
+					<a href={downloads + filterQuery('completed')}>{m.dash_see_all()}</a>
+				{/if}
+			</header>
+			{#if latest.length > 0}
+				<ul>
+					{#each latest as job (job.id)}
+						<JobSummary {job} now={session.now} />
+					{/each}
+				</ul>
+			{:else}
+				<p class="none">{m.dash_finished_none()}</p>
+			{/if}
+		</section>
+	</div>
 </div>
 
 <style>
+	/* Uses the whole width of the window; cards wrap as it narrows. */
 	.dashboard {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		align-content: start;
-		gap: 1rem;
-		width: 100%;
-		max-width: 72rem;
-		padding: 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 0.25rem 1rem 1rem;
 		overflow: auto;
 	}
 
 	.card {
-		padding: 1rem 1.1rem;
+		min-width: 0;
+		padding: 1rem 1.15rem;
 		border: 1px solid var(--border);
-		border-radius: 12px;
+		border-radius: var(--radius-l);
 		background: var(--surface);
-	}
-
-	.speed,
-	.tiles {
-		grid-column: 1 / -1;
-	}
-
-	h2 {
-		margin: 0;
-		color: var(--muted);
-		font-size: 0.85rem;
-		font-weight: 600;
-	}
-
-	/* The one big number on the page. */
-	.hero {
-		margin: 0.2rem 0 0.75rem;
-		font-size: 3rem;
-		font-weight: 600;
-		line-height: 1.1;
 	}
 
 	.tiles {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 1rem;
+		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+		gap: 0.75rem;
 	}
 
 	.tile {
 		display: grid;
-		gap: 0.1rem;
+		gap: 0.15rem;
 		color: var(--text);
 		text-decoration: none;
 	}
@@ -131,31 +144,109 @@
 		border-color: var(--muted);
 	}
 
-	.value {
-		font-size: 1.75rem;
-		font-weight: 600;
+	.label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--muted);
 	}
 
-	.label {
-		color: var(--muted);
-		font-size: 0.9em;
+	.dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background: var(--quiet);
+	}
+
+	.active .dot {
+		background: var(--progress);
+	}
+
+	.stopped .dot {
+		background: var(--warn);
+	}
+
+	.completed .dot {
+		background: var(--ok);
+	}
+
+	.value {
+		font-size: 2rem;
+		font-weight: 600;
+		line-height: 1.15;
+	}
+
+	/* The graph takes what "Downloading now" leaves; below about 52rem they stack. */
+	.row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+	}
+
+	.speed {
+		flex: 999 1 30rem;
+	}
+
+	.now {
+		flex: 1 1 20rem;
+	}
+
+	.lists {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+		gap: 0.75rem;
 	}
 
 	header {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: baseline;
-		justify-content: space-between;
-		margin-bottom: 0.4rem;
+		gap: 0.4rem 0.75rem;
+		margin-bottom: 0.75rem;
+	}
+
+	h2 {
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 600;
+	}
+
+	.faint {
+		color: var(--faint);
+		font-size: 0.9em;
+	}
+
+	.numbers {
+		margin-left: auto;
+		color: var(--muted);
+		font-size: 0.85rem;
+	}
+
+	/* Room above the graph for its top label. */
+	.speed header {
+		margin-bottom: 1.6rem;
 	}
 
 	header a {
+		margin-left: auto;
 		color: var(--accent);
 		font-size: 0.85rem;
+		font-weight: 500;
 		text-decoration: none;
 	}
 
 	header a:hover {
 		text-decoration: underline;
+	}
+
+	.badge {
+		padding: 0 0.5rem;
+		border-radius: 999px;
+		background: var(--danger-bg);
+		color: var(--danger);
+		font-size: 0.8rem;
+		font-weight: 600;
+		line-height: 1.3rem;
 	}
 
 	ul {
@@ -165,32 +256,23 @@
 	}
 
 	.none {
-		margin: 0.75rem 0 0.25rem;
+		margin: 0.25rem 0;
 		color: var(--muted);
-	}
-
-	@media (max-width: 56rem) {
-		.dashboard {
-			grid-template-columns: minmax(0, 1fr);
-		}
-
-		.tiles {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
 	}
 
 	@media (max-width: 40rem) {
 		.dashboard {
-			padding: 0.75rem;
-			gap: 0.75rem;
+			padding: 0.25rem 0.5rem 0.75rem;
+			gap: 0.5rem;
 		}
 
 		.tiles {
-			gap: 0.75rem;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.5rem;
 		}
 
-		.hero {
-			font-size: 2.5rem;
+		.lists {
+			grid-template-columns: minmax(0, 1fr);
 		}
 	}
 </style>

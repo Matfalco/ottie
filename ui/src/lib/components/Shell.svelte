@@ -10,10 +10,10 @@
 	import { parseFilter, showsNewJobs } from '#lib/filters.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { Session } from '#lib/session.svelte.js';
-	import AddBar from './AddBar.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import NavMenu from './NavMenu.svelte';
 	import Setup from './Setup.svelte';
+	import SpeedChip from './SpeedChip.svelte';
 	import TitleBar from './TitleBar.svelte';
 
 	interface Props {
@@ -39,7 +39,7 @@
 	/** The first start: the setup page replaces the app until it's done. */
 	let settingUp = $derived(session.settings?.setupDone === false);
 
-	provideApp({ session, run, ask });
+	provideApp({ session, run, ask, add });
 
 	onMount(() => {
 		session.start();
@@ -89,31 +89,25 @@
 <div class="app">
 	<TitleBar>
 		{#if !settingUp}
-			<AddBar
-				categories={session.categories}
-				categoryList={session.categoryList}
-				onMatch={(url, folder) => session.match(url, folder)}
-				onAdd={add}
-			/>
+			<NavMenu jobs={session.list} />
 		{/if}
+		<span class="end">
+			<SpeedChip speed={session.history.at(-1) ?? 0} connection={session.connection} />
+		</span>
 	</TitleBar>
 
 	{#if settingUp}
 		<Setup />
 	{:else}
-		<div class="body">
-			<NavMenu connection={session.connection} jobs={session.list} />
-
-			<main>
-				{#if session.error}
-					<div class="error" role="alert">
-						<span>{session.error}</span>
-						<button onclick={() => (session.error = null)} aria-label={m.dismiss()}>✕</button>
-					</div>
-				{/if}
-				{@render children()}
-			</main>
-		</div>
+		<main>
+			{#if session.error}
+				<div class="error" role="alert">
+					<span>{session.error}</span>
+					<button onclick={() => (session.error = null)} aria-label={m.dismiss()}>✕</button>
+				</div>
+			{/if}
+			{@render children()}
+		</main>
 	{/if}
 </div>
 
@@ -129,16 +123,16 @@
 	/* The app fills the window; each page scrolls inside `main`. */
 	.app {
 		display: grid;
+		/* minmax(0, …): wide content scrolls or shrinks rather than widening the page. */
+		grid-template-columns: minmax(0, 1fr);
 		grid-template-rows: auto minmax(0, 1fr);
 		height: 100vh;
 		height: 100dvh;
 	}
 
-	.body {
-		display: grid;
-		/* minmax(0, …): wide content scrolls or shrinks rather than widening the page. */
-		grid-template-columns: var(--nav-width) minmax(0, 1fr);
-		min-height: 0;
+	/* Pushes the speed to the right of the title bar. */
+	.end {
+		margin-left: auto;
 	}
 
 	main {
@@ -146,8 +140,7 @@
 		flex-direction: column;
 		min-width: 0;
 		min-height: 0;
-		background: var(--bg);
-		/* Pages adapt to the room left beside the menu, not to the window:
+		/* Pages adapt to the room they get, not to the window:
 		   `@container page (…)` in their styles. */
 		container: page / inline-size;
 	}
@@ -158,7 +151,7 @@
 		gap: 1rem;
 		margin: 0.75rem 0.75rem 0;
 		padding: 0.6rem 0.9rem;
-		border-radius: 8px;
+		border-radius: var(--radius-s);
 		background: var(--danger-bg);
 		color: var(--danger);
 	}
@@ -170,15 +163,10 @@
 		color: inherit;
 	}
 
-	/* Phones: the menu moves to a bar at the bottom. */
+	/* Phones: room for the tab bar along the bottom. */
 	@media (max-width: 40rem) {
-		.body {
-			grid-template-columns: minmax(0, 1fr);
-			grid-template-rows: minmax(0, 1fr) auto;
-		}
-
 		main {
-			grid-row: 1;
+			padding-bottom: 3.7rem;
 		}
 	}
 </style>

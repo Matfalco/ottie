@@ -64,7 +64,7 @@
 	}
 
 	img {
-		border-radius: 16px;
+		border-radius: var(--radius-l);
 	}
 
 	h1 {

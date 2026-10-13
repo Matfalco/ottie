@@ -3,7 +3,10 @@
 	import type { Category } from '@ottie/api-types/Category';
 	import type { Job } from '@ottie/api-types/Job';
 	import Ban from '@lucide/svelte/icons/ban';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import Eraser from '@lucide/svelte/icons/eraser';
+	import Funnel from '@lucide/svelte/icons/funnel';
 	import Pause from '@lucide/svelte/icons/pause';
 	import Play from '@lucide/svelte/icons/play';
 	import Trash from '@lucide/svelte/icons/trash';
@@ -46,15 +49,28 @@
 		</button>
 	{/each}
 	<MoveMenu {categories} disabled={selected.length === 0} {onMove} />
+	<span class="separator" aria-hidden="true"></span>
+	<!-- Not in the daemon yet (docs/decisions/0021): shown, but disabled. -->
+	<button disabled aria-label={m.queue_up()} title={m.coming_later()}>
+		<ChevronUp size={15} aria-hidden="true" />
+	</button>
+	<button disabled aria-label={m.queue_down()} title={m.coming_later()}>
+		<ChevronDown size={15} aria-hidden="true" />
+	</button>
 	{#if selected.length > 0}
 		<span class="count">{m.selected_count({ count: formatCount(selected.length) })}</span>
 	{/if}
+	<span class="spacer"></span>
 	{#if finished.length > 0}
 		<button class="clear" onclick={() => onRun('remove', finished)}>
 			<Eraser size={15} aria-hidden="true" />
 			<span>{m.clear_finished()}</span>
 		</button>
 	{/if}
+	<button class="filters" disabled title={m.coming_later()}>
+		<Funnel size={14} aria-hidden="true" />
+		<span>{m.filters_sorting()}</span>
+	</button>
 </div>
 
 <style>
@@ -63,9 +79,6 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.25rem;
-		min-height: 2.75rem;
-		padding: 0.35rem 0.75rem;
-		border-bottom: 1px solid var(--border);
 	}
 
 	button {
@@ -95,9 +108,24 @@
 		white-space: nowrap;
 	}
 
+	.separator {
+		width: 1px;
+		height: 1.1rem;
+		margin: 0 0.3rem;
+		background: var(--border);
+	}
+
+	/* Pushes "Clear finished" and the filters to the right. */
+	.spacer {
+		flex: 1;
+	}
+
 	.clear {
-		margin-left: auto;
 		color: var(--muted);
+	}
+
+	.filters {
+		border-color: var(--border);
 	}
 
 	/* Narrow: icons only (each button keeps its name for screen readers). */

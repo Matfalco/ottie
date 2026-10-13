@@ -85,7 +85,7 @@
 
 	.plot {
 		position: relative;
-		height: 120px;
+		height: 11rem;
 		touch-action: pan-y;
 	}
 
@@ -147,7 +147,7 @@
 		margin-left: 0.5rem;
 		padding: 0.35rem 0.55rem;
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: var(--radius-s);
 		background: var(--surface);
 		box-shadow: var(--shadow);
 		font-size: 0.85rem;

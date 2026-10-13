@@ -12,6 +12,27 @@ export type Categories = Record<number, Category>;
 /** The built-in category: it always exists and can't be removed. */
 export const GENERAL = 1;
 
+/** How many tile colours the themes define (`--hue-1` to `--hue-6`). */
+const HUES = 6;
+
+/** The colour of a category's tile, as a CSS value: General takes the
+ * accent, Other the faint text colour, the others one of the themes'
+ * category colours, picked by ID (so it never changes). */
+export function categoryHue(category: Category): string {
+	if (category.builtIn === 'general') {
+		return 'var(--accent)';
+	}
+	if (category.builtIn === 'other') {
+		return 'var(--faint)';
+	}
+	return `var(--hue-${(category.id % HUES) + 1})`;
+}
+
+/** The extensions a row shows, and how many it leaves out. */
+export function someExtensions(extensions: string[], room: number): [string[], number] {
+	return [extensions.slice(0, room), Math.max(0, extensions.length - room)];
+}
+
 /** Applies a category event; other events are left to `jobs.ts`. */
 export function applyCategoryEvent(categories: Categories, event: ApiEvent): void {
 	if (event.type === 'categoryChanged') {

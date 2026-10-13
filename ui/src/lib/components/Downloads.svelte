@@ -5,6 +5,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { NOTHING, keepShown, selectAll, type Selection } from '#lib/selection.js';
 	import { isFinished } from '#lib/status.js';
+	import AddCard from './AddCard.svelte';
 	import JobTable from './JobTable.svelte';
 	import StatusFilter from './StatusFilter.svelte';
 	import Toolbar from './Toolbar.svelte';
@@ -47,40 +48,81 @@
 
 <svelte:window onkeydown={keydown} />
 
-<StatusFilter {filter} {counts} />
-<Toolbar
-	{selected}
-	{finished}
-	onRun={run}
-	categories={session.categoryList}
-	onMove={(category) =>
-		session.move(
-			selected.map((job) => job.id),
-			category
-		)}
-/>
+<div class="add"><AddCard /></div>
 
-{#if session.list.length === 0 && session.connection === 'live'}
-	<p class="empty">{m.empty()}</p>
-{:else if shown.length === 0 && session.connection === 'live'}
-	<p class="empty">{m.empty_filter()}</p>
-{:else}
-	<JobTable
-		jobs={shown}
-		selection={current}
-		categories={session.categories}
-		rates={session.rates}
-		now={session.now}
-		onSelect={(chosen) => (selection = chosen)}
-		onRun={run}
-	/>
-{/if}
+<section class="pane" aria-label={m.nav_downloads()}>
+	<div class="head">
+		<Toolbar
+			{selected}
+			{finished}
+			onRun={run}
+			categories={session.categoryList}
+			onMove={(category) =>
+				session.move(
+					selected.map((job) => job.id),
+					category
+				)}
+		/>
+		<StatusFilter {filter} {counts} />
+	</div>
+
+	{#if session.list.length === 0 && session.connection === 'live'}
+		<p class="empty">{m.empty()}</p>
+	{:else if shown.length === 0 && session.connection === 'live'}
+		<p class="empty">{m.empty_filter()}</p>
+	{:else}
+		<JobTable
+			jobs={shown}
+			selection={current}
+			categories={session.categories}
+			rates={session.rates}
+			now={session.now}
+			onSelect={(chosen) => (selection = chosen)}
+			onRun={run}
+		/>
+	{/if}
+</section>
 
 <style>
+	.add {
+		padding: 0.25rem 1rem 0.75rem;
+	}
+
+	/* The quick actions, the filters and the list, on one card that fills
+	   the rest of the page; the list scrolls inside it. */
+	.pane {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+		margin: 0 1rem 1rem;
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		background: var(--surface);
+	}
+
+	.head {
+		display: grid;
+		gap: 0.5rem;
+		padding: 0.6rem 0.75rem 0.75rem;
+		border-bottom: 1px solid var(--border);
+	}
+
 	.empty {
-		margin-top: 4rem;
+		margin: 4rem 0;
 		padding: 0 1rem;
 		text-align: center;
 		color: var(--muted);
+	}
+
+	@media (max-width: 40rem) {
+		.add {
+			padding: 0.25rem 0.5rem 0.5rem;
+		}
+
+		.pane {
+			margin: 0 0.5rem 0.5rem;
+		}
 	}
 </style>

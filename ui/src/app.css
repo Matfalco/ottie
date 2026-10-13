@@ -1,65 +1,176 @@
-/* Colours from the Ottie icon, for light and dark mode. Components use the
+/* The four themes (docs/decisions/0021): Seafoam (light) and Lagoon (dark)
+   are the sea pair, Pearl (light) and Slate (dark) the neutral one. The page
+   picks one by setting `data-theme` on <html>; any element can set it too, to
+   show another theme inside (the previews in Settings). Components use the
    variables, never the raw colours. */
-:root {
-	--teal: #0e5a6b;
-	--teal-light: #2b8a99;
-	--amber: #ffc247;
-
-	--bg: #faf6f0;
-	/* The title bar and the sidebar: a shade apart from the list. */
-	--chrome: #f3ece2;
+:root,
+[data-theme='seafoam'] {
+	color-scheme: light;
+	--bg: #e6f2ee;
 	--surface: #ffffff;
-	--text: #1f1712;
-	--muted: #6b5d52;
-	--border: #e4d9cc;
+	/* A shade off the surface: open filter panels, inputs. */
+	--well: #f1f8f5;
+	--input: #f4f9f7;
+	--text: #10302c;
+	--muted: #45645f;
+	/* Captions and column headers: lighter than muted, still readable. */
+	--faint: #55736d;
+	--border: #d1e3dd;
 	/* Between rows: lighter than other borders. */
-	--border-soft: #efe7dc;
-	--accent: var(--teal);
+	--border-soft: #e3eeea;
+	--accent: #0b7d79;
 	--on-accent: #ffffff;
-	--progress: var(--teal-light);
-	--track: #ece3d8;
-	--selected: #dcecee;
-	--hover: rgb(31 23 18 / 5%);
-	--danger: #b3261e;
+	--progress: #0b7d79;
+	--track: #d9eae5;
+	--selected: #c9ece3;
+	--hover: rgb(16 48 44 / 6%);
+	--danger: #c2362b;
+	--danger-strong: #c2362b;
+	--danger-bg: #fde8e5;
+	--warn: #9a5800;
+	--warn-bg: #fdecc8;
+	--ok: #2f7a46;
+	--ok-bg: #dcf0e2;
+	/* Bars of downloads that aren't moving (queued, paused). */
+	--quiet: #9db5af;
+	--focus: #0b7d79;
+	--shadow: 0 10px 28px rgb(16 48 44 / 14%);
+	--backdrop: rgb(16 48 44 / 30%);
+	/* Categories' colours (their tiles), picked by ID. */
+	--hue-1: #b4501c;
+	--hue-2: #6b3fa0;
+	--hue-3: #1e4f91;
+	--hue-4: #8a6510;
+	--hue-5: #a0346b;
+	--hue-6: #2f7a46;
+}
+
+[data-theme='lagoon'] {
+	color-scheme: dark;
+	--bg: #071f24;
+	--surface: #0c2a30;
+	--well: #092429;
+	--input: #06191d;
+	--text: #e6f4f1;
+	--muted: #a9cbc8;
+	--faint: #88b0ad;
+	--border: #1f4a53;
+	--border-soft: #14373e;
+	--accent: #ffc247;
+	--on-accent: #1f1712;
+	--progress: #ffc247;
+	--track: #1d454d;
+	--selected: #145360;
+	--hover: rgb(230 244 241 / 6%);
+	--danger: #ff8f80;
 	--danger-strong: #b3261e;
-	--danger-bg: #fbe9e7;
-	--focus: var(--amber);
+	--danger-bg: #3a1c1c;
+	--warn: #ffb36b;
+	--warn-bg: #3a2b12;
+	--ok: #8fd6a6;
+	--ok-bg: #133a2a;
+	--quiet: #5d8a90;
+	--focus: #7fe0d0;
+	--shadow: 0 10px 28px rgb(0 0 0 / 40%);
+	--backdrop: rgb(0 0 0 / 55%);
+	--hue-1: #e8915a;
+	--hue-2: #b49ae0;
+	--hue-3: #7fa8e6;
+	--hue-4: #d9b45a;
+	--hue-5: #e58cb8;
+	--hue-6: #8fd6a6;
+}
+
+[data-theme='pearl'] {
+	color-scheme: light;
+	--bg: #f2f3f5;
+	--surface: #ffffff;
+	--well: #f7f8f9;
+	--input: #f6f7f8;
+	--text: #17191c;
+	--muted: #50555c;
+	--faint: #5f646b;
+	--border: #e0e3e6;
+	--border-soft: #eceef0;
+	--accent: #0b7d79;
+	--on-accent: #ffffff;
+	--progress: #0b7d79;
+	--track: #e4e7ea;
+	--selected: #d9f0ed;
+	--hover: rgb(23 25 28 / 5%);
+	--danger: #c2362b;
+	--danger-strong: #c2362b;
+	--danger-bg: #fde8e5;
+	--warn: #9a5800;
+	--warn-bg: #fdecc8;
+	--ok: #2f7a46;
+	--ok-bg: #dcf0e2;
+	--quiet: #a2a7ad;
+	--focus: #0b7d79;
+	--shadow: 0 10px 28px rgb(23 25 28 / 12%);
+	--backdrop: rgb(23 25 28 / 30%);
+	/* Categories' colours (their tiles), picked by ID. */
+	--hue-1: #b4501c;
+	--hue-2: #6b3fa0;
+	--hue-3: #1e4f91;
+	--hue-4: #8a6510;
+	--hue-5: #a0346b;
+	--hue-6: #2f7a46;
+}
+
+[data-theme='slate'] {
+	color-scheme: dark;
+	--bg: #141516;
+	--surface: #1c1d1f;
+	--well: #18191b;
+	--input: #111213;
+	--text: #ececec;
+	--muted: #b4b6ba;
+	--faint: #94979c;
+	--border: #303236;
+	--border-soft: #26272a;
+	--accent: #4fd1c5;
+	--on-accent: #0b1b1a;
+	--progress: #4fd1c5;
+	--track: #303236;
+	--selected: #263a39;
+	--hover: rgb(236 236 236 / 6%);
+	--danger: #ff8f80;
+	--danger-strong: #b3261e;
+	--danger-bg: #3a1d1b;
+	--warn: #ffb36b;
+	--warn-bg: #3a2b14;
+	--ok: #8fd6a6;
+	--ok-bg: #1c3326;
+	--quiet: #6a6d72;
+	--focus: #ffc247;
+	--shadow: 0 10px 28px rgb(0 0 0 / 40%);
+	--backdrop: rgb(0 0 0 / 55%);
+	--hue-1: #e8915a;
+	--hue-2: #b49ae0;
+	--hue-3: #7fa8e6;
+	--hue-4: #d9b45a;
+	--hue-5: #e58cb8;
+	--hue-6: #8fd6a6;
+}
+
+/* The same in every theme. */
+:root {
+	--font: 'Outfit Variable', system-ui, sans-serif;
+	--mono: 'DM Mono', ui-monospace, monospace;
+	/* Buttons and fields; panels and menus; cards. */
+	--radius-s: 8px;
+	--radius-m: 12px;
+	--radius-l: 18px;
 	/* The window's close button, as Windows draws it. */
 	--close-hover: #c42b1c;
 	--on-close: #ffffff;
-	--shadow: 0 8px 24px rgb(31 23 18 / 14%);
-	--backdrop: rgb(31 23 18 / 30%);
-
-	/* The left menu, and the title bar's logo column above it. */
-	--nav-width: 13rem;
 }
 
-/* Medium widths: the menu shows icons only. */
-@media (max-width: 56rem) {
-	:root {
-		--nav-width: 3.5rem;
-	}
-}
-
+/* Before the script has picked a theme: no white flash for dark systems. */
 @media (prefers-color-scheme: dark) {
-	:root {
-		--bg: #10171a;
-		--chrome: #0c1214;
-		--surface: #182226;
-		--text: #eee7de;
-		--muted: #a59887;
-		--border: #2b3a3f;
-		--border-soft: #1c272b;
-		--accent: var(--teal-light);
-		--progress: var(--teal-light);
-		--track: #26343a;
-		--selected: #1c3a41;
-		--hover: rgb(238 231 222 / 6%);
-		--danger: #f2b8b5;
-		--danger-strong: #b3261e;
-		--danger-bg: #3b1e1c;
-		--shadow: 0 8px 24px rgb(0 0 0 / 45%);
-		--backdrop: rgb(0 0 0 / 50%);
+	:root:not([data-theme]) {
+		--bg: #071f24;
 	}
 }
 
@@ -72,15 +183,15 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font:
-		15px/1.45 system-ui,
-		-apple-system,
-		'Segoe UI',
-		Roboto,
+		14px/1.45 var(--font),
 		sans-serif;
+	/* Digits of equal width, so changing numbers don't jiggle. */
+	font-variant-numeric: tabular-nums;
 }
 
 button,
-input {
+input,
+select {
 	font: inherit;
 	color: inherit;
 }
@@ -88,7 +199,7 @@ input {
 button {
 	padding: 0.4rem 0.85rem;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-s);
 	background: var(--surface);
 	cursor: pointer;
 }
@@ -101,6 +212,7 @@ button.primary {
 	background: var(--accent);
 	border-color: transparent;
 	color: var(--on-accent);
+	font-weight: 600;
 }
 
 button:disabled {
@@ -108,11 +220,12 @@ button:disabled {
 	cursor: default;
 }
 
-input {
+input,
+select {
 	padding: 0.45rem 0.7rem;
 	border: 1px solid var(--border);
-	border-radius: 8px;
-	background: var(--surface);
+	border-radius: var(--radius-s);
+	background: var(--input);
 }
 
 :focus-visible {

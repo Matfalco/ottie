@@ -1,16 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import {
 	applyCategoryEvent,
+	categoryHue,
 	categoryName,
 	describeLimits,
 	fieldToLimit,
 	limitToField,
 	parseExtensions,
+	someExtensions,
 	sorted,
 	suggestFolder,
 	type Categories
 } from './categories';
 import { category, plain } from './testing';
+
+describe('category tiles', () => {
+	it('give the built-in ones their own colour and the others one by ID', () => {
+		expect(categoryHue(category())).toBe('var(--accent)');
+		expect(categoryHue(category({ id: 2, builtIn: 'other' }))).toBe('var(--faint)');
+		expect(categoryHue(category({ id: 3 }))).toBe('var(--hue-4)');
+		expect(categoryHue(category({ id: 9 }))).toBe('var(--hue-4)');
+		expect(categoryHue(category({ id: 6 }))).toBe('var(--hue-1)');
+	});
+
+	it('show a few extensions and count the rest', () => {
+		expect(someExtensions(['mp4', 'mkv'], 6)).toEqual([['mp4', 'mkv'], 0]);
+		expect(someExtensions(['a', 'b', 'c', 'd'], 2)).toEqual([['a', 'b'], 2]);
+	});
+});
 
 describe('categories', () => {
 	it('follow events, General first then by name, Other last', () => {

@@ -212,7 +212,7 @@
 		margin: 0;
 		padding: 0;
 		border: 1px solid var(--border);
-		border-radius: 12px;
+		border-radius: var(--radius-l);
 		background: var(--surface);
 		list-style: none;
 	}
