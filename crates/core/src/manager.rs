@@ -12,7 +12,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use crate::backend::Backend;
-use crate::category::{self, Category, CategoryId, CategorySettings};
+use crate::category::{self, Category, CategoryId, CategorySettings, Matched};
 use crate::download::{Download, Event, Outcome, Placement};
 use crate::error::Error;
 use crate::filename;
@@ -187,6 +187,13 @@ impl Manager {
         self.request(|reply| Command::Categories { reply }).await
     }
 
+    /// The category a job for `url` would get if added without one, by the
+    /// extension in the URL. The real file name, once the server answers,
+    /// may still move it (unless the user chose the category).
+    pub async fn match_category(&self, url: Url) -> Result<Matched, Error> {
+        self.request(|reply| Command::Match { url, reply }).await
+    }
+
     pub async fn add_category(&self, settings: CategorySettings) -> Result<CategoryId, Error> {
         self.request(|reply| Command::AddCategory { settings, reply })
             .await
@@ -293,6 +300,10 @@ enum Command {
     },
     Categories {
         reply: Reply<Vec<Category>>,
+    },
+    Match {
+        url: Url,
+        reply: Reply<Matched>,
     },
     AddCategory {
         settings: CategorySettings,
@@ -556,6 +567,12 @@ impl<B: Backend> Actor<B> {
             }
             Command::Categories { reply } => {
                 let _ = reply.send(Ok(self.categories()));
+            }
+            Command::Match { url, reply } => {
+                let _ = reply.send(Ok(Matched {
+                    category: self.match_category(&url),
+                    extension: category::url_extension(&url),
+                }));
             }
             Command::AddCategory { settings, reply } => {
                 let _ = reply.send(self.add_category(settings));

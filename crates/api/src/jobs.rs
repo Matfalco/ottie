@@ -1,16 +1,15 @@
-//! `/jobs`: list, add, pause, resume, cancel, remove.
-
-use std::path::PathBuf;
+//! `/jobs`: list, add, pause, resume, cancel, remove, change category.
 
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use ottie_core::{CategoryId, JobId, NewJob, Url};
+use ottie_core::{CategoryId, JobId, NewJob};
 
 use crate::AppState;
+use crate::categories::{absolute_folder, parse_url};
 use crate::error::Failure;
-use crate::types::{AddJob, Added, Job, Reason};
+use crate::types::{AddJob, Added, Job, MoveJob};
 
 /// `GET /jobs`: every job, oldest first.
 pub(crate) async fn list(State(state): State<AppState>) -> Result<Json<Vec<Job>>, Failure> {
@@ -24,25 +23,9 @@ pub(crate) async fn add(
     body: Result<Json<AddJob>, JsonRejection>,
 ) -> Result<(StatusCode, Json<Added>), Failure> {
     let Json(body) = body?;
-    let url = Url::parse(&body.url).map_err(|_| {
-        Failure::new(
-            StatusCode::BAD_REQUEST,
-            Reason::InvalidUrl,
-            "`url` is not a URL",
-        )
-    })?;
-    let mut job = NewJob::new(url);
+    let mut job = NewJob::new(parse_url(&body.url)?);
     if let Some(dir) = body.dest_dir {
-        let dir = PathBuf::from(dir);
-        // Relative to what? The daemon's working folder means nothing to a client.
-        if !dir.is_absolute() {
-            return Err(Failure::new(
-                StatusCode::BAD_REQUEST,
-                Reason::RelativeFolder,
-                "`destDir` must be an absolute path",
-            ));
-        }
-        job = job.in_dir(dir);
+        job = job.in_dir(absolute_folder(dir)?);
     }
     if let Some(category) = body.category {
         job = job.in_category(CategoryId(category));
@@ -86,5 +69,21 @@ pub(crate) async fn remove(
     Path(id): Path<String>,
 ) -> Result<StatusCode, Failure> {
     state.manager.remove(id.parse::<JobId>()?).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /jobs/{id}/category`: moves the job to another category, as the
+/// user's choice (never re-matched). If nothing has been downloaded yet, it
+/// will also be saved in that category's folder.
+pub(crate) async fn set_category(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    body: Result<Json<MoveJob>, JsonRejection>,
+) -> Result<StatusCode, Failure> {
+    let Json(body) = body?;
+    state
+        .manager
+        .set_category(id.parse::<JobId>()?, CategoryId(body.category))
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }

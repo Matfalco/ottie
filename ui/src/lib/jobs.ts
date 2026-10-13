@@ -33,6 +33,10 @@ export function applyEvent(jobs: Jobs, event: ApiEvent): boolean {
 		case 'removed':
 			delete jobs[event.id];
 			return false;
+		// Moved jobs get their own `changed` events.
+		case 'categoryChanged':
+		case 'categoryRemoved':
+			return false;
 		case 'resync':
 			return true;
 	}

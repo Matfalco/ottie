@@ -4,6 +4,10 @@
 
 import type { AddJob } from '@ottie/api-types/AddJob';
 import type { Added } from '@ottie/api-types/Added';
+import type { AddedCategory } from '@ottie/api-types/AddedCategory';
+import type { Category } from '@ottie/api-types/Category';
+import type { CategoryBody } from '@ottie/api-types/CategoryBody';
+import type { Matched } from '@ottie/api-types/Matched';
 import type { ApiError } from '@ottie/api-types/ApiError';
 import type { Job } from '@ottie/api-types/Job';
 
@@ -56,6 +60,34 @@ export class Api {
 	/** Takes the job off the list (stopping it first if it runs). */
 	remove(id: string): Promise<void> {
 		return this.request('DELETE', `/jobs/${encodeURIComponent(id)}`);
+	}
+
+	/** Moves the job to another category, as the user's choice. */
+	setCategory(id: string, category: number): Promise<void> {
+		return this.request('POST', `/jobs/${encodeURIComponent(id)}/category`, { category });
+	}
+
+	listCategories(): Promise<Category[]> {
+		return this.request('GET', '/categories');
+	}
+
+	addCategory(category: CategoryBody): Promise<AddedCategory> {
+		return this.request('POST', '/categories', category);
+	}
+
+	/** Replaces every setting of the category. */
+	updateCategory(id: number, category: CategoryBody): Promise<void> {
+		return this.request('PUT', `/categories/${id}`, category);
+	}
+
+	/** Its downloads move to General first. */
+	removeCategory(id: number): Promise<void> {
+		return this.request('DELETE', `/categories/${id}`);
+	}
+
+	/** The category a download of `url` would get. */
+	matchCategory(url: string): Promise<Matched> {
+		return this.request('POST', '/categories/match', { url });
 	}
 
 	/** Opens the live events stream. */

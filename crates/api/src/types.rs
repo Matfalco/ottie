@@ -6,6 +6,7 @@
 //! Byte counts and times are `u64` in Rust but plain `number`s in
 //! TypeScript (JSON has no bigger integers); they stay far below 2^53.
 
+use std::path::Path;
 use std::time::UNIX_EPOCH;
 
 use ottie_core::JobSnapshot;
@@ -93,6 +94,78 @@ pub struct AddJob {
 #[ts(export)]
 pub struct Added {
     pub id: String,
+}
+
+/// A category: where its downloads go and which files it takes. As listed
+/// by `GET /categories` and sent in `categoryChanged` events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Category {
+    /// General is 1; it always exists and can't be removed.
+    pub id: u32,
+    pub name: String,
+    /// Where its downloads are saved; null: each download must name a folder.
+    pub folder: Option<String>,
+    /// Lowercase, without the dot. Each belongs to one category at most.
+    pub extensions: Vec<String>,
+    /// Bytes per second for all its downloads together; 0 = none.
+    #[ts(type = "number")]
+    pub speed_limit: u64,
+    /// How many of its downloads may run at once; 0 = no cap of its own.
+    pub max_concurrent: u32,
+}
+
+/// Body of `POST /categories` and `PUT /categories/{id}`: every setting (a
+/// PUT replaces them all).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct CategoryBody {
+    pub name: String,
+    /// An absolute folder, or null.
+    pub folder: Option<String>,
+    /// With or without the dot, any case: `.MKV` and `mkv` are the same.
+    pub extensions: Vec<String>,
+    #[ts(type = "number")]
+    pub speed_limit: u64,
+    pub max_concurrent: u32,
+}
+
+/// Answer to `POST /categories`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AddedCategory {
+    pub id: u32,
+}
+
+/// Body of `POST /categories/match`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct MatchLink {
+    pub url: String,
+}
+
+/// Answer to `POST /categories/match`: the category a download of that link
+/// would get. The server's real file name may still move it, unless the user
+/// picks the category.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Matched {
+    pub category: u32,
+    /// The extension the link suggests, if any.
+    pub extension: Option<String>,
+}
+
+/// Body of `POST /jobs/{id}/category`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct MoveJob {
+    pub category: u32,
 }
 
 /// Why a job failed or is retrying. Clients translate it by `code` and
@@ -232,6 +305,11 @@ pub enum Event {
     },
     /// A job was removed (`DELETE /jobs/{id}`): drop it.
     Removed { id: String },
+    /// A category was added or changed: insert-or-replace by `id`.
+    CategoryChanged { category: Category },
+    /// A category was removed; its jobs were moved to General first (and a
+    /// `changed` event was sent for each).
+    CategoryRemoved { id: u32 },
     /// Events were missed (the client was too slow): fetch `GET /jobs` again.
     Resync,
 }
@@ -259,6 +337,25 @@ impl From<JobSnapshot> for Job {
                 .map(|since| u64::try_from(since.as_millis()).unwrap_or(u64::MAX)),
         }
     }
+}
+
+impl From<ottie_core::Category> for Category {
+    fn from(category: ottie_core::Category) -> Self {
+        let settings = category.settings;
+        Category {
+            id: category.id.0,
+            name: settings.name,
+            folder: settings.folder.as_deref().map(path_text),
+            extensions: settings.extensions,
+            speed_limit: settings.speed_limit,
+            max_concurrent: u32::try_from(settings.max_concurrent).unwrap_or(u32::MAX),
+        }
+    }
+}
+
+/// Category folders are checked to be UTF-8 when set, so nothing is lost.
+fn path_text(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
 }
 
 /// Spelled out, so engine changes can't silently change the API.

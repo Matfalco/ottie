@@ -16,9 +16,11 @@ use crate::daemon::Started;
 
 const WINDOW: &str = "main";
 
-/// What the page may do to its window: it draws its own title bar
-/// (docs/decisions/0019). Only these, and only for the daemon's pages.
-const TITLE_BAR_PERMISSIONS: [&str; 8] = [
+/// What the page may do in the app: control its window, since it draws its
+/// own title bar (docs/decisions/0019), and open the system folder picker,
+/// which only hands back the path the user chose. Only these, and only for
+/// the daemon's pages.
+const PAGE_PERMISSIONS: [&str; 9] = [
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
@@ -29,6 +31,8 @@ const TITLE_BAR_PERMISSIONS: [&str; 8] = [
     // To hear when the window is resized (maximize or restore button).
     "core:event:allow-listen",
     "core:event:allow-unlisten",
+    // "Browse…" next to a category's folder.
+    "dialog:allow-open",
 ];
 
 /// The daemon this app started, if it did: stopped when the app quits.
@@ -75,15 +79,15 @@ async fn start(app: &AppHandle) -> anyhow::Result<()> {
 
 fn open_window(app: &AppHandle, link: Url) -> tauri::Result<()> {
     let daemon = link.origin();
-    let title_bar = TITLE_BAR_PERMISSIONS.into_iter().fold(
-        CapabilityBuilder::new("title-bar")
+    let page = PAGE_PERMISSIONS.into_iter().fold(
+        CapabilityBuilder::new("page")
             // The daemon's address is only known now, hence a runtime capability.
             .remote(daemon.ascii_serialization())
             .local(false)
             .window(WINDOW),
         CapabilityBuilder::permission,
     );
-    app.add_capability(title_bar)?;
+    app.add_capability(page)?;
     WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::External(link))
         .title("Ottie")
         // No system title bar: the page draws its own.

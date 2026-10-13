@@ -14,6 +14,8 @@
 	interface Props {
 		job: Job;
 		selected: boolean;
+		/** The name of its category. */
+		category: string;
 		/** Bytes per second right now; 0 if unknown. */
 		speed: number;
 		now: number;
@@ -21,7 +23,7 @@
 		onRun: (action: Action) => void;
 	}
 
-	let { job, selected, speed, now, onClick, onRun }: Props = $props();
+	let { job, selected, category, speed, now, onClick, onRun }: Props = $props();
 
 	let name = $derived(displayName(job));
 	let done = $derived(fraction(job));
@@ -93,6 +95,7 @@
 		<td class="speed">{moving.speed}</td>
 		<td class="left">{moving.left}</td>
 	{/if}
+	<td class="category" title={category}>{category}</td>
 	<td class="added">{added ? formatAdded(added, new Date(now)) : ''}</td>
 	<td class="actions">
 		{#if canPause(job)}
@@ -192,7 +195,8 @@
 		text-align: right;
 	}
 
-	.status {
+	.status,
+	.category {
 		color: var(--muted);
 	}
 
@@ -293,13 +297,20 @@
 		}
 	}
 
-	@media (max-width: 64rem) {
+	/* Less room beside the menu: fewer columns. */
+	@container page (max-width: 60rem) {
+		.category {
+			display: none;
+		}
+	}
+
+	@container page (max-width: 52rem) {
 		.added {
 			display: none;
 		}
 	}
 
-	@media (max-width: 52rem) {
+	@container page (max-width: 42rem) {
 		.size {
 			display: none;
 		}
@@ -352,6 +363,7 @@
 		}
 
 		.percent,
+		.category,
 		.status,
 		.speed,
 		.left {

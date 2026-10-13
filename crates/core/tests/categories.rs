@@ -316,3 +316,22 @@ async fn a_chosen_category_is_not_rematched() {
     assert_eq!(s.job(id).await.category, CategoryId::GENERAL);
     assert!(s.folder("mine").join("film.mkv").is_file());
 }
+
+#[tokio::test]
+async fn a_link_can_be_matched_without_adding_it() {
+    let s = setup(0).await;
+    let videos = s.videos(0).await;
+    let matched = s.manager.match_category(s.url("Film.MKV")).await.unwrap();
+    assert_eq!(matched.category, videos);
+    assert_eq!(matched.extension.as_deref(), Some("mkv"));
+
+    let other = s.manager.match_category(s.url("notes.txt")).await.unwrap();
+    assert_eq!(other.category, CategoryId::GENERAL);
+    assert_eq!(other.extension.as_deref(), Some("txt"));
+    let bare = s.manager.match_category(s.url("README")).await.unwrap();
+    assert_eq!(bare.extension, None);
+    assert!(
+        s.manager.list().await.unwrap().is_empty(),
+        "nothing was added"
+    );
+}

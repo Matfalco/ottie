@@ -35,7 +35,7 @@
 	const session = new Session(token, onUnauthorized);
 	let question: Question | null = $state(null);
 
-	provideApp({ session, run });
+	provideApp({ session, run, ask });
 
 	onMount(() => {
 		session.start();
@@ -129,8 +129,12 @@
 	main {
 		display: flex;
 		flex-direction: column;
+		min-width: 0;
 		min-height: 0;
 		background: var(--bg);
+		/* Pages adapt to the room left beside the menu, not to the window:
+		   `@container page (…)` in their styles. */
+		container: page / inline-size;
 	}
 
 	.error {

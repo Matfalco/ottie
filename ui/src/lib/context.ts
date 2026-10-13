@@ -12,6 +12,8 @@ export interface App {
 	/** Does `action` to the jobs it applies to; asks first if that would
 	 * delete downloaded data. */
 	run: (action: Action, jobs: Job[]) => Promise<void>;
+	/** Shows `message` in the confirmation dialog; true if the user goes ahead. */
+	ask: (message: string, confirmLabel: string) => Promise<boolean>;
 }
 
 /** `useApp()` in any page or component inside the shell. */

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
+	import type { Category } from '@ottie/api-types/Category';
 	import type { Job } from '@ottie/api-types/Job';
 	import Ban from '@lucide/svelte/icons/ban';
 	import Eraser from '@lucide/svelte/icons/eraser';
@@ -9,6 +10,7 @@
 	import { targets, type Action } from '#lib/bulk.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import MoveMenu from './MoveMenu.svelte';
 
 	interface Props {
 		/** The selected downloads. */
@@ -16,9 +18,12 @@
 		/** Finished downloads in the view, for "Clear finished". */
 		finished: Job[];
 		onRun: (action: Action, jobs: Job[]) => void;
+		categories: Category[];
+		/** Moves the selected downloads to that category. */
+		onMove: (category: number) => void;
 	}
 
-	let { selected, finished, onRun }: Props = $props();
+	let { selected, finished, onRun, categories, onMove }: Props = $props();
 
 	const BUTTONS: { action: Action; icon: Component; label: () => string }[] = [
 		{ action: 'resume', icon: Play, label: m.resume },
@@ -40,6 +45,7 @@
 			<span>{label()}</span>
 		</button>
 	{/each}
+	<MoveMenu {categories} disabled={selected.length === 0} {onMove} />
 	{#if selected.length > 0}
 		<span class="count">{m.selected_count({ count: formatCount(selected.length) })}</span>
 	{/if}
@@ -54,6 +60,7 @@
 <style>
 	.toolbar {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.25rem;
 		min-height: 2.75rem;
@@ -94,7 +101,7 @@
 	}
 
 	/* Narrow: icons only (each button keeps its name for screen readers). */
-	@media (max-width: 52rem) {
+	@container page (max-width: 56rem) {
 		button:not(.clear) span {
 			display: none;
 		}

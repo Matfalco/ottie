@@ -10,8 +10,8 @@ use axum::body::{Body, Bytes};
 use axum::routing::get;
 use futures_util::StreamExt;
 use ottie_api::{
-    AddJob, Added, ApiError, EVENTS_PROTOCOL, Event, Job, JobState, Problem, Reason,
-    TOKEN_PROTOCOL_PREFIX, Token, UiSource,
+    AddJob, Added, AddedCategory, ApiError, Category, CategoryBody, EVENTS_PROTOCOL, Event, Job,
+    JobState, Matched, Problem, Reason, TOKEN_PROTOCOL_PREFIX, Token, UiSource,
 };
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
@@ -457,5 +457,122 @@ async fn without_a_ui_build_the_page_says_how_to_make_one() {
             .await
             .unwrap()
             .contains("pnpm --filter ui build")
+    );
+}
+
+#[tokio::test]
+async fn categories_are_listed_added_matched_changed_and_removed() {
+    let d = start().await;
+    let offered = format!("{EVENTS_PROTOCOL}, {TOKEN_PROTOCOL_PREFIX}{TOKEN}");
+    let (mut events, _) = d.events(&offered).await.unwrap();
+    let list = || async {
+        let response = d.get("/categories").send().await.unwrap();
+        response.json::<Vec<Category>>().await.unwrap()
+    };
+    assert_eq!(list().await[0].name, "General");
+
+    let folder = d.dir.path().join("videos").to_string_lossy().into_owned();
+    let videos = CategoryBody {
+        name: "Videos".into(),
+        folder: Some(folder.clone()),
+        extensions: vec![".MKV".into(), "mp4".into()],
+        speed_limit: 0,
+        max_concurrent: 2,
+    };
+    let added = d.post("/categories").json(&videos).send().await.unwrap();
+    assert_eq!(added.status(), StatusCode::CREATED);
+    let id = added.json::<AddedCategory>().await.unwrap().id;
+    let listed = list().await;
+    assert_eq!(listed[1].extensions, ["mkv", "mp4"]);
+    assert_eq!(listed[1].folder.as_deref(), Some(folder.as_str()));
+    // Subscribers hear about it.
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            let Some(Ok(Message::Text(text))) = events.next().await else {
+                continue;
+            };
+            if let Event::CategoryChanged { category } = serde_json::from_str(&text).unwrap() {
+                assert_eq!(category.id, id);
+                return;
+            }
+        }
+    })
+    .await
+    .expect("no categoryChanged event");
+
+    let link = serde_json::json!({ "url": format!("{}/Film.MKV?token=x", d.files) });
+    let matched: Matched = d
+        .post("/categories/match")
+        .json(&link)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        (matched.category, matched.extension.as_deref()),
+        (id, Some("mkv"))
+    );
+
+    let taken = CategoryBody {
+        name: "Films".into(),
+        extensions: vec!["mkv".into()],
+        ..videos.clone()
+    };
+    let (status, refused) =
+        error_of(d.post("/categories").json(&taken).send().await.unwrap()).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(matches!(refused.reason, Reason::ExtensionTaken { .. }));
+    let relative = CategoryBody {
+        name: "Films".into(),
+        folder: Some("films".into()),
+        extensions: vec![],
+        ..videos.clone()
+    };
+    let (status, refused) =
+        error_of(d.post("/categories").json(&relative).send().await.unwrap()).await;
+    assert_eq!(
+        (status, refused.reason),
+        (StatusCode::BAD_REQUEST, Reason::RelativeFolder)
+    );
+
+    let renamed = CategoryBody {
+        name: "Movies".into(),
+        ..videos
+    };
+    let changed = d
+        .client
+        .put(d.url(&format!("/categories/{id}")))
+        .bearer_auth(TOKEN);
+    assert_eq!(
+        changed.json(&renamed).send().await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(list().await[1].name, "Movies");
+
+    // A download can be moved in, and goes back to General when its category goes.
+    let job = d.add("file.bin").await;
+    let moved = d
+        .post(&format!("/jobs/{job}/category"))
+        .json(&serde_json::json!({ "category": id }));
+    assert_eq!(moved.send().await.unwrap().status(), StatusCode::NO_CONTENT);
+    assert_eq!(d.job(&job).await.category, id);
+    let removed = d
+        .client
+        .delete(d.url(&format!("/categories/{id}")))
+        .bearer_auth(TOKEN);
+    assert_eq!(
+        removed.send().await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(d.job(&job).await.category, 1);
+    assert_eq!(list().await.len(), 1);
+
+    let general = d.client.delete(d.url("/categories/1")).bearer_auth(TOKEN);
+    let (status, refused) = error_of(general.send().await.unwrap()).await;
+    assert_eq!(
+        (status, refused.reason),
+        (StatusCode::CONFLICT, Reason::CannotRemoveGeneral)
     );
 }

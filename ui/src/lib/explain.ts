@@ -90,6 +90,21 @@ export function explainRefusal(
 			return m.reason_invalid_transition({}, options);
 		case 'stopping':
 			return m.reason_stopping({}, options);
+		case 'categoryNotFound':
+			return m.reason_category_not_found({}, options);
+		case 'invalidCategoryName':
+			return m.reason_invalid_category_name({}, options);
+		case 'invalidExtension':
+			return m.reason_invalid_extension({ extension: body.extension }, options);
+		case 'categoryNameTaken':
+			return m.reason_category_name_taken({ name: body.name }, options);
+		case 'extensionTaken':
+			return m.reason_extension_taken(
+				{ extension: body.extension, category: body.category },
+				options
+			);
+		case 'cannotRemoveGeneral':
+			return m.reason_cannot_remove_general({}, options);
 		default:
 			// Codes for screens this UI doesn't have yet, internal errors, and
 			// codes from a newer daemon.

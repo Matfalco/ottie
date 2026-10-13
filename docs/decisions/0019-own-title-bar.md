@@ -7,7 +7,7 @@ Accepted 2026-10-13.
 - In a browser the same row shows without window buttons. The page tells the two apart with `isTauri()` from `@tauri-apps/api`.
 - The sign-in page has the row too, otherwise the window couldn't be moved or closed there.
 
-**What the page may do:** 0017 gave the page no access to Tauri at all. It now gets exactly what the title bar needs, and nothing more: minimize, toggle maximize, close, "is it maximized", start dragging, the double-click maximize, and listening to window events (to swap the maximize and restore icons). The app grants this at runtime (`add_capability`) because the daemon's address is only known once it answers. The grant covers that origin only and the main window only. Downloads still go only through the HTTP API.
+**What the page may do:** 0017 gave the page no access to Tauri at all. It now gets exactly what the title bar needs, and nothing more: minimize, toggle maximize, close, "is it maximized", start dragging, the double-click maximize, and listening to window events (to swap the maximize and restore icons). Since 4d it may also open the system folder picker (`dialog:allow-open`), for "Browse…" next to a category's folder; that only hands back the path the user chose. The app grants this at runtime (`add_capability`) because the daemon's address is only known once it answers. The grant covers that origin only and the main window only. Downloads still go only through the HTTP API.
 
 **Alternatives:**
 - `tauri-plugin-decorum` keeps the real Windows buttons over our row, so hovering over maximize still shows Windows 11's snap-layout menu. Rejected: a third-party plugin, and more fragile. Dragging to the screen edges and Win+Z still snap.

@@ -22,11 +22,13 @@ Accepted 2026-10-12.
 **API shape (v1, under `/api/v1`):**
 - `GET /jobs` lists every job; `POST /jobs` adds one (`{url, destDir?, category?}` → 201 `{id}`); `POST /jobs/{id}/pause|resume|cancel` → 204; `DELETE /jobs/{id}` → 204 removes it (`docs/decisions/0018`).
 - `destDir` must be absolute.
-- `GET /events` is a WebSocket of `{"type": "changed", job}`, `{"type": "progress", id, downloaded, total}`, `{"type": "removed", id}` and `{"type": "resync"}` (events were missed: fetch the list again). Clients connect first, then fetch `GET /jobs`, then apply events in order.
+- `GET /events` is a WebSocket of `{"type": "changed", job}`, `{"type": "progress", id, downloaded, total}`, `{"type": "removed", id}`, `{"type": "categoryChanged", category}`, `{"type": "categoryRemoved", id}` and `{"type": "resync"}` (events were missed: fetch the list again). Clients connect first, then fetch `GET /jobs`, then apply events in order.
 - Errors are `{"error": "…"}`: 400 bad input, 401 no token, 404 unknown job, 409 not possible in this state, 422 missing fields, 503 stopping.
 - JSON is camelCase. IDs are strings. Byte counts and times (Unix milliseconds) are numbers.
 - The API has its own types (`crates/api/src/types.rs`), converted from the engine's, so engine changes don't break clients. ts-rs writes them to `shared/api-types/` on `cargo test -p ottie-api`.
-- Categories, limits, priorities, settings and streaming get their endpoints with their UI slices.
+- Categories (slice 4d): `GET /categories`; `POST /categories` (`{name, folder, extensions, speedLimit, maxConcurrent}` → 201 `{id}`); `PUT /categories/{id}` (the same body: it replaces every setting); `DELETE /categories/{id}` (its jobs move to General first, and a `changed` event goes out for each); `POST /jobs/{id}/category` (`{category}`, the user's choice, never re-matched). Folders must be absolute.
+- `POST /categories/match` (`{url}` → `{category, extension}`): where a link would go if added without a category, so a client can show it before adding. It's a POST rather than `GET ?url=`, so links, which may carry tokens, never sit in an address or a log. The daemon stays the only place that knows the matching rule.
+- Limits, priorities, settings and streaming get their endpoints with their UI slices.
 
 **Crates:** `ottie-api` (axum, ts-rs) and the `ottie` binary (clap for the command line, `directories` for the OS folders, `toml` for the config file, `getrandom` for the token, `tracing-subscriber` for logs on stderr, filtered by `OTTIE_LOG`). `ottie-core` and `ottie-api` are now published with `ottie`.
 

@@ -11,6 +11,7 @@
 //! can't set headers there), as the WebSocket protocol `ottie.token.<token>`.
 
 mod auth;
+mod categories;
 mod error;
 mod events;
 mod jobs;
@@ -20,12 +21,15 @@ mod ui;
 use axum::Router;
 use axum::http::{Method, Uri};
 use axum::middleware;
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use ottie_core::Manager;
 use tokio_util::sync::CancellationToken;
 
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
-pub use types::{AddJob, Added, ApiError, Event, Job, JobState, Priority, Problem, Reason};
+pub use types::{
+    AddJob, Added, AddedCategory, ApiError, Category, CategoryBody, Event, Job, JobState,
+    MatchLink, Matched, MoveJob, Priority, Problem, Reason,
+};
 pub use ui::UiSource;
 
 /// Shared by every request handler.
@@ -51,6 +55,13 @@ pub fn router(manager: Manager, token: Token, shutdown: CancellationToken, ui: U
         .route("/jobs/{id}/pause", post(jobs::pause))
         .route("/jobs/{id}/resume", post(jobs::resume))
         .route("/jobs/{id}/cancel", post(jobs::cancel))
+        .route("/jobs/{id}/category", post(jobs::set_category))
+        .route("/categories", get(categories::list).post(categories::add))
+        .route("/categories/match", post(categories::matching))
+        .route(
+            "/categories/{id}",
+            put(categories::update).delete(categories::remove),
+        )
         .route("/events", get(events::subscribe))
         .fallback(not_found)
         // Also covers the fallback, so unknown paths don't reveal what exists.

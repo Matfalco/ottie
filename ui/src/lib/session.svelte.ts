@@ -1,9 +1,11 @@
 // What the downloads page shows, kept live: the job list from `GET /jobs`,
 // updated by the events WebSocket, which reconnects on its own.
 
+import type { CategoryBody } from '@ottie/api-types/CategoryBody';
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
 import { Api, ApiFailure, Unauthorized } from './api';
 import type { Action } from './bulk';
+import { applyCategoryEvent, sorted, type Categories } from './categories';
 import { explainRefusal } from './explain';
 import { m } from './paraglide/messages.js';
 import { applyEvent, newestFirst, nextRate, type Jobs, type Rate } from './jobs';
@@ -26,6 +28,9 @@ export class Session {
 	 * few minutes), for the dashboard's graph. */
 	history: number[] = $state.raw([]);
 	list = $derived(newestFirst(this.jobs));
+	categories: Categories = $state({});
+	/** General first, then by name. */
+	categoryList = $derived(sorted(this.categories));
 
 	private readonly api: Api;
 	private socket: WebSocket | null = null;
@@ -72,6 +77,26 @@ export class Session {
 		await Promise.all(ids.map((id) => this.attempt(() => request(id))));
 	}
 
+	/** Moves the jobs to `category`, as the user's choice. */
+	async move(ids: string[], category: number): Promise<void> {
+		await Promise.all(ids.map((id) => this.attempt(() => this.api.setCategory(id, category))));
+	}
+
+	/** Adds a category (`id` null) or replaces one's settings. Resolves to
+	 * null when saved, else to why not (in the page's language). */
+	async saveCategory(id: number | null, body: CategoryBody): Promise<string | null> {
+		try {
+			await (id === null ? this.api.addCategory(body) : this.api.updateCategory(id, body));
+			return null;
+		} catch (error) {
+			return this.why(error);
+		}
+	}
+
+	removeCategory(id: number): Promise<boolean> {
+		return this.attempt(() => this.api.removeCategory(id));
+	}
+
 	/** Runs a request; on failure shows why and returns false. */
 	private async attempt(request: () => Promise<unknown>): Promise<boolean> {
 		try {
@@ -85,15 +110,24 @@ export class Session {
 	}
 
 	private fail(error: unknown): void {
+		const why = this.why(error);
+		if (why !== null) {
+			this.error = why;
+		}
+	}
+
+	/** What went wrong, for the page; null after signing out (a refused token). */
+	private why(error: unknown): string | null {
 		if (error instanceof Unauthorized) {
 			this.stop();
 			this.onUnauthorized();
-		} else if (error instanceof ApiFailure) {
-			this.error = explainRefusal(error.body, error.message);
-		} else {
-			// fetch() failed: the daemon is stopped or unreachable.
-			this.error = m.connection_offline();
+			return null;
 		}
+		if (error instanceof ApiFailure) {
+			return explainRefusal(error.body, error.message);
+		}
+		// fetch() failed: the daemon is stopped or unreachable.
+		return m.connection_offline();
 	}
 
 	private connect(): void {
@@ -141,6 +175,7 @@ export class Session {
 		} else if (event.type === 'removed') {
 			delete this.rates[event.id];
 		}
+		applyCategoryEvent(this.categories, event);
 		if (applyEvent(this.jobs, event)) {
 			void this.resync();
 		}
@@ -154,8 +189,12 @@ export class Session {
 		}
 		this.pending = [];
 		try {
-			const jobs = await this.api.listJobs();
+			const [jobs, categories] = await Promise.all([
+				this.api.listJobs(),
+				this.api.listCategories()
+			]);
 			this.jobs = Object.fromEntries(jobs.map((job) => [job.id, job]));
+			this.categories = Object.fromEntries(categories.map((category) => [category.id, category]));
 			this.connection = 'live';
 		} catch (error) {
 			this.fail(error);

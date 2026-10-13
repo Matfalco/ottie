@@ -48,7 +48,17 @@
 <svelte:window onkeydown={keydown} />
 
 <StatusFilter {filter} {counts} />
-<Toolbar {selected} {finished} onRun={run} />
+<Toolbar
+	{selected}
+	{finished}
+	onRun={run}
+	categories={session.categoryList}
+	onMove={(category) =>
+		session.move(
+			selected.map((job) => job.id),
+			category
+		)}
+/>
 
 {#if session.list.length === 0 && session.connection === 'live'}
 	<p class="empty">{m.empty()}</p>
@@ -58,6 +68,7 @@
 	<JobTable
 		jobs={shown}
 		selection={current}
+		categories={session.categories}
 		rates={session.rates}
 		now={session.now}
 		onSelect={(chosen) => (selection = chosen)}

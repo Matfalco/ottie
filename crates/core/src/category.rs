@@ -87,6 +87,15 @@ pub struct Category {
     pub settings: CategorySettings,
 }
 
+/// Where a link would go if added without a category, and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Matched {
+    pub category: CategoryId,
+    /// The extension the URL suggests, if any. `None`, or one no category
+    /// lists, means General.
+    pub extension: Option<String>,
+}
+
 /// The extension of the file name `url` suggests, lowercase, if it has one.
 pub(crate) fn url_extension(url: &Url) -> Option<String> {
     filename::extension(&filename::from_url(url))

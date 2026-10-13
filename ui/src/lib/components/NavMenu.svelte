@@ -3,6 +3,7 @@
 	import type { Job } from '@ottie/api-types/Job';
 	import Download from '@lucide/svelte/icons/download';
 	import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
+	import Tags from '@lucide/svelte/icons/tags';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { matches } from '#lib/filters.js';
@@ -27,10 +28,11 @@
 		badge?: () => number;
 	}
 
-	// Categories and Settings join when their pages exist.
+	// Settings joins when its page exists.
 	const ENTRIES: Entry[] = [
 		{ href: resolve('/'), label: m.nav_dashboard, icon: LayoutDashboard },
-		{ href: resolve('/downloads'), label: m.nav_downloads, icon: Download, badge: () => active }
+		{ href: resolve('/downloads'), label: m.nav_downloads, icon: Download, badge: () => active },
+		{ href: resolve('/categories'), label: m.nav_categories, icon: Tags }
 	];
 </script>
 

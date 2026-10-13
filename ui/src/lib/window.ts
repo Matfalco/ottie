@@ -1,9 +1,11 @@
-// The desktop app's window, when the page runs inside it. The app hides the
+// The desktop app around the page, when it runs inside it. The app hides the
 // system title bar (docs/decisions/0019), so the page draws its own and needs
-// the window's buttons. In a browser there's no window to control.
+// the window's buttons; it can also open the system folder picker. In a
+// browser there's neither.
 
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { open } from '@tauri-apps/plugin-dialog';
 
 export interface AppWindow {
 	minimize(): Promise<void>;
@@ -45,4 +47,16 @@ export function appWindow(): AppWindow | null {
 			};
 		}
 	};
+}
+
+/** Whether the system folder picker is there (only in the desktop app). */
+export function canPickFolder(): boolean {
+	return isTauri();
+}
+
+/** Asks for a folder with the system picker; null if cancelled. Only valid
+ * for a daemon on this computer, which the desktop app always uses so far. */
+export async function pickFolder(start?: string): Promise<string | null> {
+	const chosen = await open({ directory: true, defaultPath: start || undefined });
+	return typeof chosen === 'string' ? chosen : null;
 }
