@@ -6,7 +6,8 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use ottie_core::{
-    Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob, Problem, Store,
+    Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob, Problem,
+    SettingsChange, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -351,4 +352,27 @@ async fn removing_a_running_job_frees_its_slot() {
     s.manager.remove(first).await.unwrap();
     let done = s.wait_for(second, JobState::Completed).await;
     s.assert_file(&done);
+}
+
+#[tokio::test]
+async fn changed_settings_are_announced_once() {
+    let mut s = setup(1, 0).await;
+    let change = SettingsChange {
+        max_concurrent: Some(4),
+        global_limit: Some(1_000_000),
+        ..SettingsChange::default()
+    };
+    let settings = s.manager.change_settings(change.clone()).await.unwrap();
+    assert_eq!(
+        (settings.max_concurrent, settings.global_limit),
+        (4, 1_000_000)
+    );
+    match s.events.try_recv() {
+        Ok(JobEvent::SettingsChanged(announced)) => assert_eq!(announced, settings),
+        other => panic!("expected the new settings, got {other:?}"),
+    }
+
+    // Nothing new: nothing to announce.
+    s.manager.change_settings(change).await.unwrap();
+    assert!(s.events.try_recv().is_err());
 }

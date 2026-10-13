@@ -10,6 +10,8 @@ import type { Session } from './session.svelte';
 
 export interface App {
 	session: Session;
+	/** The API token this page signed in with. */
+	token: string;
 	/** Does `action` to the jobs it applies to; asks first if that would
 	 * delete downloaded data. */
 	run: (action: Action, jobs: Job[]) => Promise<void>;

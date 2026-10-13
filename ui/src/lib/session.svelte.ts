@@ -5,6 +5,7 @@ import type { AddJob } from '@ottie/api-types/AddJob';
 import type { CategoryBody } from '@ottie/api-types/CategoryBody';
 import type { Matched } from '@ottie/api-types/Matched';
 import type { Settings } from '@ottie/api-types/Settings';
+import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
 import { Api, ApiFailure, Unauthorized } from './api';
 import type { Action } from './bulk';
@@ -110,6 +111,18 @@ export class Session {
 
 	removeCategory(id: number): Promise<boolean> {
 		return this.attempt(() => this.api.removeCategory(id));
+	}
+
+	/** Changes the daemon's settings; every page (here and on other devices)
+	 * hears of it through the `settingsChanged` event. Resolves to null
+	 * once done, else to why not. */
+	async changeSettings(change: SettingsChange): Promise<string | null> {
+		try {
+			await this.api.changeSettings(change);
+			return null;
+		} catch (error) {
+			return this.why(error);
+		}
 	}
 
 	/** Ends the first-start setup: General's folder (if it changed), then the
@@ -219,6 +232,8 @@ export class Session {
 			this.rates[event.id] = nextRate(this.rates[event.id], event.downloaded, Date.now());
 		} else if (event.type === 'removed') {
 			delete this.rates[event.id];
+		} else if (event.type === 'settingsChanged') {
+			this.settings = event.settings;
 		}
 		applyCategoryEvent(this.categories, event);
 		if (applyEvent(this.jobs, event)) {

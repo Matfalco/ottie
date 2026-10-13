@@ -4,8 +4,6 @@ import {
 	categoryHue,
 	categoryName,
 	describeLimits,
-	fieldToLimit,
-	limitToField,
 	parseExtensions,
 	someExtensions,
 	sorted,
@@ -56,15 +54,6 @@ describe('categories', () => {
 	it('read extensions however they are separated', () => {
 		expect(parseExtensions(' mp4, .MKV;webm  avi ')).toEqual(['mp4', '.MKV', 'webm', 'avi']);
 		expect(parseExtensions('  ')).toEqual([]);
-	});
-
-	it('show limits in kB/s or MB/s, and read them back', () => {
-		expect(limitToField(0)).toEqual({ value: '', unit: 'MB' });
-		expect(limitToField(1.5 * 1024 * 1024)).toEqual({ value: '1.5', unit: 'MB' });
-		expect(limitToField(300 * 1024)).toEqual({ value: '300', unit: 'kB' });
-		expect(fieldToLimit('1,5', 'MB')).toBe(1.5 * 1024 * 1024);
-		expect(fieldToLimit('', 'kB')).toBe(0);
-		expect(fieldToLimit('-3', 'kB')).toBe(0);
 	});
 
 	it('describe their limits in each language', () => {

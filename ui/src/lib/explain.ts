@@ -3,7 +3,7 @@
 
 import type { ApiError } from '@ottie/api-types/ApiError';
 import type { Problem } from '@ottie/api-types/Problem';
-import { formatBytes, formatDuration } from './format';
+import { formatBytes, formatCount, formatDuration } from './format';
 import { m } from './paraglide/messages.js';
 import { getLocale, type Locale } from './paraglide/runtime.js';
 
@@ -105,9 +105,34 @@ export function explainRefusal(
 			);
 		case 'cannotRemoveBuiltIn':
 			return m.reason_cannot_remove_built_in({ category: body.category }, options);
+		case 'outOfRange':
+			return outOfRange(body.setting, body.min, body.max, locale);
+		case 'invalidLanguage':
+			return m.reason_invalid_language({ language: body.language }, options);
 		default:
 			// Codes for screens this UI doesn't have yet, internal errors, and
 			// codes from a newer daemon.
 			return body.error;
 	}
+}
+
+/** The settings the daemon checks, by their field names. */
+const SETTING_NAMES: Record<string, typeof m.set_max_concurrent> = {
+	maxConcurrent: m.set_max_concurrent,
+	maxRetries: m.set_max_retries,
+	retriesBeforeYield: m.set_yield
+};
+
+function outOfRange(setting: string, min: number, max: number, locale: Locale): string {
+	const options = { locale };
+	if (setting === 'firstRetryWaitMs') {
+		const [from, to] = [min, max].map((ms) => formatCount(ms / 1000, locale));
+		return m.reason_out_of_range_seconds(
+			{ setting: m.set_first_wait({}, options), min: from, max: to },
+			options
+		);
+	}
+	const name = SETTING_NAMES[setting]?.({}, options) ?? setting;
+	const [from, to] = [min, max].map((value) => formatCount(value, locale));
+	return m.reason_out_of_range({ setting: name, min: from, max: to }, options);
 }

@@ -7,7 +7,7 @@
 //! TypeScript (JSON has no bigger integers); they stay far below 2^53.
 
 use std::path::Path;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 
 use ottie_core::JobSnapshot;
 use serde::{Deserialize, Serialize};
@@ -190,7 +190,8 @@ pub struct MoveJob {
     pub category: u32,
 }
 
-/// What applies to the whole daemon, as `GET /settings` answers it.
+/// What applies to the whole daemon, as `GET /settings` answers it and
+/// `settingsChanged` events send it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -198,9 +199,32 @@ pub struct Settings {
     /// The first-start setup (starter categories) was done or skipped;
     /// until then, front ends offer it.
     pub setup_done: bool,
+    /// How many downloads run at once; the others wait. At least 1.
+    pub max_concurrent: u32,
+    /// Bytes per second for all downloads together; 0 = no limit.
+    #[ts(type = "number")]
+    pub global_limit: u64,
+    /// A download that keeps failing with errors that may go away (a dropped
+    /// connection, a busy server) fails after this many retries in a row.
+    /// 0 = never retry.
+    pub max_retries: u32,
+    /// Retries a download makes before letting a waiting one go first.
+    pub retries_before_yield: u32,
+    /// Wait before the first retry, in milliseconds; each next one waits
+    /// twice as long, up to a minute.
+    #[ts(type = "number")]
+    pub first_retry_wait_ms: u64,
+    /// The look shared by the devices that choose to follow it; null until
+    /// one shares its own.
+    pub appearance: Option<Appearance>,
+    /// The language those devices show, as a tag like `en` or `pt-BR`; null
+    /// until one shares its own. A device without it keeps its own.
+    pub language: Option<String>,
 }
 
-/// Body of `PATCH /settings`: only the fields given change.
+/// Body of `PATCH /settings`: only the fields given change, all at once.
+/// A value out of its range (see `crates/api/src/settings.rs`) refuses the
+/// whole change with `outOfRange`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -208,6 +232,57 @@ pub struct SettingsChange {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub setup_done: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub max_concurrent: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub global_limit: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub max_retries: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub retries_before_yield: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub first_retry_wait_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub appearance: Option<Appearance>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub language: Option<String>,
+}
+
+/// How the front ends look: light, dark or as the system says, and which
+/// pair of themes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Appearance {
+    pub mode: AppearanceMode,
+    pub palette: Palette,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum AppearanceMode {
+    System,
+    Light,
+    Dark,
+}
+
+/// A light theme and a dark one that go together.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum Palette {
+    /// Seafoam and Lagoon.
+    Sea,
+    /// Pearl and Slate.
+    Neutral,
 }
 
 /// Why a job failed or is retrying. Clients translate it by `code` and
@@ -321,6 +396,19 @@ pub enum Reason {
     CannotRemoveBuiltIn {
         category: String,
     },
+    /// A setting must be from `min` to `max`; `setting` is its field name
+    /// (`maxConcurrent`…).
+    OutOfRange {
+        setting: String,
+        #[ts(type = "number")]
+        min: u64,
+        #[ts(type = "number")]
+        max: u64,
+    },
+    /// Not a language tag like `en` or `pt-BR`.
+    InvalidLanguage {
+        language: String,
+    },
     /// The daemon is shutting down.
     Stopping,
     /// A bug or an unexpected failure; `error` has the details.
@@ -355,6 +443,8 @@ pub enum Event {
     /// A category was removed; its jobs were moved to General first (and a
     /// `changed` event was sent for each).
     CategoryRemoved { id: u32 },
+    /// The settings changed (from any client): all of them, as now.
+    SettingsChanged { settings: Settings },
     /// Events were missed (the client was too slow): fetch `GET /jobs` again.
     Resync,
 }
@@ -386,8 +476,67 @@ impl From<JobSnapshot> for Job {
 
 impl From<ottie_core::Settings> for Settings {
     fn from(settings: ottie_core::Settings) -> Self {
+        let retry = settings.retry;
         Settings {
             setup_done: settings.setup_done,
+            max_concurrent: u32::try_from(settings.max_concurrent).unwrap_or(u32::MAX),
+            global_limit: settings.global_limit,
+            max_retries: retry.max_retries,
+            retries_before_yield: retry.retries_before_yield,
+            first_retry_wait_ms: u64::try_from(retry.first_wait.as_millis()).unwrap_or(u64::MAX),
+            appearance: settings.appearance.map(Appearance::from),
+            language: settings.language,
+        }
+    }
+}
+
+impl From<SettingsChange> for ottie_core::SettingsChange {
+    fn from(change: SettingsChange) -> Self {
+        ottie_core::SettingsChange {
+            global_limit: change.global_limit,
+            max_concurrent: change
+                .max_concurrent
+                .map(|max| usize::try_from(max).unwrap_or(usize::MAX)),
+            max_retries: change.max_retries,
+            retries_before_yield: change.retries_before_yield,
+            first_retry_wait: change.first_retry_wait_ms.map(Duration::from_millis),
+            setup_done: change.setup_done,
+            appearance: change.appearance.map(ottie_core::Appearance::from),
+            language: change.language,
+        }
+    }
+}
+
+impl From<ottie_core::Appearance> for Appearance {
+    fn from(appearance: ottie_core::Appearance) -> Self {
+        use ottie_core::{AppearanceMode as M, Palette as P};
+        Appearance {
+            mode: match appearance.mode {
+                M::System => AppearanceMode::System,
+                M::Light => AppearanceMode::Light,
+                M::Dark => AppearanceMode::Dark,
+            },
+            palette: match appearance.palette {
+                P::Sea => Palette::Sea,
+                P::Neutral => Palette::Neutral,
+            },
+        }
+    }
+}
+
+impl From<Appearance> for ottie_core::Appearance {
+    fn from(appearance: Appearance) -> Self {
+        use ottie_core::{AppearanceMode as M, Palette as P};
+        ottie_core::Appearance {
+            mode: match appearance.mode {
+                AppearanceMode::System => M::System,
+                AppearanceMode::Light => M::Light,
+                AppearanceMode::Dark => M::Dark,
+            },
+            palette: match appearance.palette {
+                Palette::Sea => P::Sea,
+                Palette::Neutral => P::Neutral,
+            },
         }
     }
 }

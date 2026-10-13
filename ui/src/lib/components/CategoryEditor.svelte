@@ -2,15 +2,15 @@
 	import type { Category } from '@ottie/api-types/Category';
 	import type { CategoryBody } from '@ottie/api-types/CategoryBody';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
+	import { categoryName, parseExtensions, suggestFolder } from '#lib/categories.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import {
-		categoryName,
+		SPEED_UNITS,
 		fieldToLimit,
 		limitToField,
-		parseExtensions,
-		suggestFolder,
+		unitLabel,
 		type SpeedUnit
-	} from '#lib/categories.js';
-	import { m } from '#lib/paraglide/messages.js';
+	} from '#lib/settings.js';
 	import { canPickFolder, pickFolder } from '#lib/window.js';
 
 	interface Props {
@@ -66,7 +66,7 @@
 			name,
 			folder: other ? null : folder.trim() || null,
 			extensions: other ? [] : parseExtensions(extensions),
-			speedLimit: fieldToLimit(speed, unit),
+			speedLimit: fieldToLimit(speed, unit) ?? 0,
 			maxConcurrent: Math.max(0, Math.floor(Number(running) || 0))
 		});
 		saving = false;
@@ -122,8 +122,9 @@
 				<span class="row">
 					<input bind:value={speed} inputmode="decimal" />
 					<select bind:value={unit} aria-label={m.cat_speed()}>
-						<option value="kB">kB/s</option>
-						<option value="MB">MB/s</option>
+						{#each SPEED_UNITS as option (option)}
+							<option value={option}>{unitLabel(option)}</option>
+						{/each}
 					</select>
 				</span>
 				<small>{m.cat_speed_hint()}</small>

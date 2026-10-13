@@ -11,6 +11,12 @@ export function tokenFromFragment(hash: string): string | null {
 	return match ? match[1] : null;
 }
 
+/** The address that opens this page signed in, as `ottie link` prints it:
+ * the page's own address, with the token after `#`. */
+export function signInLink(origin: string, token: string): string {
+	return `${origin}/#token=${token}`;
+}
+
 export function loadToken(): string | null {
 	try {
 		return localStorage.getItem(KEY);

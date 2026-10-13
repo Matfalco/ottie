@@ -17,6 +17,7 @@ use crate::error::Error;
 use crate::id::JobId;
 use crate::job::{JobState, Priority};
 use crate::problem::Problem;
+use crate::settings::{Appearance, AppearanceMode, Palette, RetryPolicy, Settings};
 
 /// Each entry upgrades the schema by one version (`PRAGMA user_version`).
 /// Never edit an entry once released; append a new one.
@@ -148,6 +149,14 @@ const MIGRATIONS: &[&str] = &[
                     THEN 'Other folders' ELSE 'Other' END,
                'other'
         FROM categories;",
+    // 9: the appearance and language shared by the devices that follow them;
+    // NULL until one shares its own. Languages are tags like `en` or `pt-BR`.
+    "ALTER TABLE settings ADD COLUMN appearance_mode TEXT
+        CHECK (appearance_mode IN ('system', 'light', 'dark'));
+     ALTER TABLE settings ADD COLUMN appearance_palette TEXT
+        CHECK (appearance_palette IN ('sea', 'neutral'));
+     ALTER TABLE settings ADD COLUMN language TEXT
+        CHECK (length(language) BETWEEN 2 AND 35 AND language NOT GLOB '*[^A-Za-z0-9-]*');",
 ];
 
 /// Everything saved about one job.
@@ -175,56 +184,6 @@ pub(crate) struct Loaded {
     pub categories: Vec<Category>,
     /// The highest job ID handed out, whether or not that job still exists.
     pub last_id: Option<JobId>,
-}
-
-/// Settings that apply to the whole manager. Stored as the single row of the
-/// `settings` table; the defaults here match the table's.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Settings {
-    /// Bytes per second for all downloads together; 0 = unlimited.
-    pub global_limit: u64,
-    /// How many jobs may download at once. At least 1.
-    pub max_concurrent: usize,
-    pub retry: RetryPolicy,
-    /// The user has been through the first-start setup (or skipped it), so
-    /// front ends shouldn't offer it again.
-    pub setup_done: bool,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            global_limit: 0,
-            max_concurrent: 3,
-            retry: RetryPolicy::default(),
-            setup_done: false,
-        }
-    }
-}
-
-/// What happens when a download fails with an error that may go away (a
-/// dropped connection, a busy server). See docs/decisions/0013.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RetryPolicy {
-    /// Retries after the attempts since bytes last arrived; then the job
-    /// fails. 0 = never retry.
-    pub max_retries: u32,
-    /// Retries a job makes in its download slot before giving way to a job
-    /// that is waiting for one.
-    pub retries_before_yield: u32,
-    /// Wait before the first retry. Each next one waits twice as long, up to
-    /// a minute (or this wait, if longer); a server's `Retry-After` can ask for more.
-    pub first_wait: Duration,
-}
-
-impl Default for RetryPolicy {
-    fn default() -> Self {
-        Self {
-            max_retries: 10,
-            retries_before_yield: 3,
-            first_wait: Duration::from_secs(2),
-        }
-    }
 }
 
 /// Handle to the database thread. The thread stops when this is dropped.
@@ -655,10 +614,19 @@ fn problem_from_row(row: &Row) -> rusqlite::Result<Option<Problem>> {
 fn load_settings(conn: &Connection) -> Result<Settings, Error> {
     Ok(conn.query_row(
         "SELECT global_limit, max_concurrent, max_retries, retries_before_yield, retry_wait_ms,
-                setup_done
+                setup_done, appearance_mode, appearance_palette, language
          FROM settings WHERE id = 1",
         [],
         |row| {
+            let mode: Option<String> = row.get(6)?;
+            let palette: Option<String> = row.get(7)?;
+            // The CHECKs allow only known names; a half-set pair counts as unset.
+            let appearance = match (mode.as_deref(), palette.as_deref()) {
+                (Some(mode), Some(palette)) => AppearanceMode::parse(mode)
+                    .zip(Palette::parse(palette))
+                    .map(|(mode, palette)| Appearance { mode, palette }),
+                _ => None,
+            };
             Ok(Settings {
                 global_limit: row.get(0)?,
                 max_concurrent: row.get(1)?,
@@ -668,6 +636,8 @@ fn load_settings(conn: &Connection) -> Result<Settings, Error> {
                     first_wait: Duration::from_millis(row.get(4)?),
                 },
                 setup_done: row.get(5)?,
+                appearance,
+                language: row.get(8)?,
             })
         },
     )?)
@@ -678,7 +648,8 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
     let wait_ms = u64::try_from(retry.first_wait.as_millis()).unwrap_or(u64::MAX);
     conn.execute(
         "UPDATE settings SET global_limit = ?1, max_concurrent = ?2, max_retries = ?3,
-                retries_before_yield = ?4, retry_wait_ms = ?5, setup_done = ?6
+                retries_before_yield = ?4, retry_wait_ms = ?5, setup_done = ?6,
+                appearance_mode = ?7, appearance_palette = ?8, language = ?9
          WHERE id = 1",
         params![
             settings.global_limit,
@@ -687,6 +658,9 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
             retry.retries_before_yield,
             wait_ms,
             settings.setup_done,
+            settings.appearance.map(|a| a.mode.as_str()),
+            settings.appearance.map(|a| a.palette.as_str()),
+            settings.language,
         ],
     )?;
     Ok(())
@@ -985,6 +959,11 @@ mod tests {
                 first_wait: Duration::from_millis(250),
             },
             setup_done: true,
+            appearance: Some(Appearance {
+                mode: AppearanceMode::Light,
+                palette: Palette::Neutral,
+            }),
+            language: Some("pt-BR".into()),
         };
         store.save_settings(changed.clone());
         assert_eq!(store.load().await.unwrap().settings, changed);

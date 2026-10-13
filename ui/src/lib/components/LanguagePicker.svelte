@@ -5,9 +5,11 @@
 	interface Props {
 		/** For a `<label for>` outside. */
 		id?: string;
+		/** Switches to the language chosen; by default, on this device only. */
+		onChoose?: (locale: Locale) => void;
 	}
 
-	let { id }: Props = $props();
+	let { id, onChoose = (locale) => setLocale(locale) }: Props = $props();
 
 	/** Each language in its own words. */
 	const NAMES: Record<Locale, string> = { en: 'English', fr: 'Français' };
@@ -16,7 +18,7 @@
 		const chosen = event.currentTarget.value;
 		if (isLocale(chosen)) {
 			// Remembered by this browser; the page reloads in that language.
-			setLocale(chosen);
+			onChoose(chosen);
 		}
 	}
 </script>

@@ -7,6 +7,7 @@ use crate::category::{Category, CategoryId};
 use crate::download::RestartReason;
 use crate::id::JobId;
 use crate::problem::Problem;
+use crate::settings::Settings;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobState {
@@ -139,6 +140,8 @@ pub enum JobEvent {
     CategoryChanged(Category),
     /// A category was removed; its jobs were moved to General first.
     CategoryRemoved(CategoryId),
+    /// The settings changed; here they are, all of them.
+    SettingsChanged(Settings),
 }
 
 #[cfg(test)]

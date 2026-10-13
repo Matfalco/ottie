@@ -6,8 +6,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ottie_core::{
-    CategoryId, CategorySettings, Error, HttpBackend, HttpConfig, JobId, JobSnapshot, JobState,
-    Manager, NewJob, PART_SUFFIX, Priority, RetryPolicy, Settings, Store,
+    Appearance, AppearanceMode, CategoryId, CategorySettings, Error, HttpBackend, HttpConfig,
+    JobId, JobSnapshot, JobState, Manager, NewJob, PART_SUFFIX, Palette, Priority, RetryPolicy,
+    Settings, SettingsChange, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -241,7 +242,17 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         first_wait: Duration::from_millis(1500),
     };
     manager.set_retry_policy(retry).await.unwrap();
-    manager.set_setup_done(true).await.unwrap();
+    let appearance = Appearance {
+        mode: AppearanceMode::Dark,
+        palette: Palette::Neutral,
+    };
+    let change = SettingsChange {
+        setup_done: Some(true),
+        appearance: Some(appearance),
+        language: Some("fr".into()),
+        ..SettingsChange::default()
+    };
+    manager.change_settings(change).await.unwrap();
     let id = s.add(&manager).await;
     manager.pause(id).await.unwrap();
     manager.set_priority(id, Priority::High).await.unwrap();
@@ -254,6 +265,8 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         max_concurrent: 2,
         retry,
         setup_done: true,
+        appearance: Some(appearance),
+        language: Some("fr".into()),
     };
     assert_eq!(manager.settings().await.unwrap(), expected);
     let job = &manager.list().await.unwrap()[0];

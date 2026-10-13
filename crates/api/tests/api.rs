@@ -10,9 +10,9 @@ use axum::body::{Body, Bytes};
 use axum::routing::get;
 use futures_util::StreamExt;
 use ottie_api::{
-    AddJob, Added, AddedCategory, ApiError, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL,
-    Event, Job, JobState, Matched, Problem, Reason, Settings, SettingsChange,
-    TOKEN_PROTOCOL_PREFIX, Token, UiSource,
+    AddJob, Added, AddedCategory, ApiError, Appearance, AppearanceMode, BuiltIn, Category,
+    CategoryBody, EVENTS_PROTOCOL, Event, Job, JobState, Matched, Palette, Problem, Reason,
+    Settings, SettingsChange, TOKEN_PROTOCOL_PREFIX, Token, UiSource,
 };
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
@@ -464,29 +464,99 @@ async fn without_a_ui_build_the_page_says_how_to_make_one() {
 #[tokio::test]
 async fn settings_are_read_and_changed() {
     let d = start().await;
+    let offered = format!("{EVENTS_PROTOCOL}, {TOKEN_PROTOCOL_PREFIX}{TOKEN}");
+    let (mut events, _) = d.events(&offered).await.unwrap();
     let settings = || async {
         let response = d.get("/settings").send().await.unwrap();
         response.json::<Settings>().await.unwrap()
     };
-    assert!(
-        !settings().await.setup_done,
-        "a new daemon offers the setup"
-    );
+    let defaults = Settings {
+        setup_done: false,
+        max_concurrent: 3,
+        global_limit: 0,
+        max_retries: 10,
+        retries_before_yield: 3,
+        first_retry_wait_ms: 2000,
+        appearance: None,
+        language: None,
+    };
+    assert_eq!(settings().await, defaults, "a new daemon offers the setup");
 
-    let patch = |change: SettingsChange| {
+    let patch = |change: serde_json::Value| {
         let request = d.client.patch(d.url("/settings")).bearer_auth(TOKEN);
         request.json(&change).send()
     };
-    let response = patch(SettingsChange {
-        setup_done: Some(true),
+    let change = serde_json::json!({
+        "setupDone": true,
+        "maxConcurrent": 5,
+        "globalLimit": 4_000_000,
+        "firstRetryWaitMs": 500,
+        "appearance": { "mode": "dark", "palette": "neutral" },
+        "language": "fr",
+    });
+    let response = patch(change).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let changed = Settings {
+        setup_done: true,
+        max_concurrent: 5,
+        global_limit: 4_000_000,
+        first_retry_wait_ms: 500,
+        appearance: Some(Appearance {
+            mode: AppearanceMode::Dark,
+            palette: Palette::Neutral,
+        }),
+        language: Some("fr".into()),
+        ..defaults
+    };
+    assert_eq!(settings().await, changed);
+    // Every client hears of it, in one event.
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            let Some(Ok(Message::Text(text))) = events.next().await else {
+                continue;
+            };
+            if let Event::SettingsChanged { settings } = serde_json::from_str(&text).unwrap() {
+                assert_eq!(settings, changed);
+                return;
+            }
+        }
     })
     .await
-    .unwrap();
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
-    assert!(settings().await.setup_done);
+    .expect("no settingsChanged event");
+
     // Fields left out stay as they are.
-    patch(SettingsChange::default()).await.unwrap();
-    assert!(settings().await.setup_done);
+    patch(serde_json::to_value(SettingsChange::default()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(settings().await, changed);
+
+    // Unknown values are refused, and nothing changes.
+    let wrong = serde_json::json!({ "maxConcurrent": 1, "appearance": { "mode": "teal", "palette": "sea" } });
+    let response = patch(wrong).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = response.json::<ApiError>().await.unwrap();
+    assert_eq!(body.reason, Reason::InvalidBody);
+    assert_eq!(settings().await, changed);
+
+    // So are values out of their range, and odd languages.
+    let refused = |change: serde_json::Value| async {
+        let response = patch(change).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        response.json::<ApiError>().await.unwrap().reason
+    };
+    let too_many = serde_json::json!({ "maxRetries": 2, "maxConcurrent": 0 });
+    let out_of_range = Reason::OutOfRange {
+        setting: "maxConcurrent".into(),
+        min: 1,
+        max: 50,
+    };
+    assert_eq!(refused(too_many).await, out_of_range);
+    let odd = serde_json::json!({ "language": "../fr" });
+    let invalid = Reason::InvalidLanguage {
+        language: "../fr".into(),
+    };
+    assert_eq!(refused(odd).await, invalid);
+    assert_eq!(settings().await, changed);
 }
 
 #[tokio::test]

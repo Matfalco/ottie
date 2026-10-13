@@ -1,12 +1,13 @@
 // The appearance chosen on this device, shared by the layout (which applies
-// it) and the Settings page (which changes it).
+// it), the shell (which follows the shared one) and the Settings page (which
+// changes it).
 
-import { loadAppearance, saveAppearance, type Appearance } from './theme';
+import { loadAppearance, saveAppearance, type DeviceAppearance } from './theme';
 
 /** Change it only through `setAppearance`, so the choice is remembered. */
-export const appearance: Appearance = $state(loadAppearance());
+export const appearance: DeviceAppearance = $state(loadAppearance());
 
-export function setAppearance(change: Partial<Appearance>): void {
+export function setAppearance(change: Partial<DeviceAppearance>): void {
 	Object.assign(appearance, change);
 	saveAppearance(appearance);
 }

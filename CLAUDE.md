@@ -66,6 +66,7 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/category.rs    CategoryId (General = 1), CategorySettings, extension matching
   src/backend.rs     Backend trait, HttpBackend
   src/store.rs       SQLite on its own thread: schema migrations, save/load jobs and settings
+  src/settings.rs    Settings, RetryPolicy, Appearance, language; SettingsChange (applied all at once)
   src/throttle.rs    speed limits: per-job token buckets, refill task, priority-weighted sharing, category caps
   src/http.rs        HTTP transfer: first request, single-connection stream, resume, restart rules, stall timeout
   src/segmented.rs   multi-connection transfer: coordinator, connection tasks, dynamic splitting
@@ -80,9 +81,11 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
   src/types.rs       wire types (camelCase JSON) + ts-rs export, From<engine types>
   src/jobs.rs        GET/POST /jobs, POST /jobs/{id}/pause|resume|cancel|category, DELETE /jobs/{id}
   src/categories.rs  GET/POST /categories, PUT/DELETE /categories/{id}, POST /categories/match
-  src/settings.rs    GET/PATCH /settings (setupDone so far)
+  src/settings.rs    GET/PATCH /settings: max concurrent, global limit, retry policy, shared
+                     appearance + language, setupDone; the ranges people may choose (its tests
+                     write them to shared/api-types/Ranges.ts)
   src/events.rs      GET /events WebSocket: changed / progress / removed / categoryChanged /
-                     categoryRemoved / resync
+                     categoryRemoved / settingsChanged / resync
   src/error.rs       engine Error → status + {"error": "…"}
   src/ui.rs          the web UI: rust-embed of ui-dist/ (from disk in debug), --ui-dir, SPA fallback
   ui-dist/           built UI (git-ignored, but packaged for crates.io)
@@ -110,17 +113,22 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
   src/lib/context.ts what every page shares (session, run): Svelte createContext
   src/lib/jobs.ts, categories.ts, status.ts, filters.ts, selection.ts, bulk.ts, filetypes.ts, speed.ts,
                      format.ts, token.ts, adding.ts (the add step), setup.ts (starter categories),
-                     theme.ts (light/dark/system + palette → theme, saved per device)
+                     theme.ts (light/dark/system + palette → theme, saved per device),
+                     settings.ts (settings fields: kB/MB/GB per second, seconds, ranges; last limit
+                     per device), sync.ts (following the shared look + language)
                      plain logic, unit-tested (*.test.ts, Vitest)
-  src/lib/appearance.svelte.ts  the appearance chosen on this device (state shared by layout + Settings)
+  src/lib/appearance.svelte.ts  the appearance chosen on this device (state shared by layout, shell
+                     (follows the shared one, docs/decisions/0022) and Settings)
   src/lib/window.ts  the desktop app: its window (minimize/maximize/close) and the folder picker
   src/lib/explain.ts   daemon codes (Problem, Reason) → the page's language; English fallback
   src/lib/testing.ts   test helpers (sample job)
-  src/lib/components/  Shell (TitleBar with NavMenu tabs + SpeedChip, page, dialog; Setup on first start),
+  src/lib/components/  Shell (TitleBar with NavMenu tabs + SpeedChip (limit popup: LimitControl), page,
+                       dialog; Setup on first start),
                        Dashboard (AddCard, tiles, SpeedChart, RunningList, JobSummary),
                        Downloads (AddCard, then one pane: Toolbar + MoveMenu, StatusFilter, JobTable + JobRow),
                        CategoriesPage (LinkTester, rows, CategoryEditor inline in place of a row),
-                       SettingsPage (section list; appearance, language: LanguagePicker),
+                       SettingsPage (section list; appearance + sync, language: LanguagePicker; downloads;
+                       retries; connection + sign-in link), Switch, NumberField, LimitControl,
                        TitleBar (+ WindowControls), AddCard (AddBar: link, then category + folder step),
                        FileIcon, ConfirmDialog, Login
   messages/{en,fr}.json  every UI text, per language (Paraglide); project.inlang/ its settings
@@ -128,7 +136,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
   vite.config.ts     SvelteKit + adapter-static → ../crates/api/ui-dist; Paraglide; dev proxy /api → daemon
 extension/         WebExtension (Chrome + Firefox)
 shared/api-types/  TypeScript types generated from Rust (ts-rs, by `cargo test -p ottie-api`;
-                   output folder set in .cargo/config.toml). Never edit by hand.  [exists]
+                   output folder set in .cargo/config.toml), plus Ranges.ts (settings' ranges).
+                   Never edit by hand.  [exists]
 docs/decisions/    one short file per accepted decision (NNNN-title.md)       [exists]
 res/icons/         the drawn Ottie icons (app, tray), PNG + SVG               [exists]
 ```
@@ -184,7 +193,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 - **Queue order:** highest priority first, then oldest. Urgent waits for a free slot (no preemption).
 - **Retries** (`docs/decisions/0013`): only `Error::is_retryable()` errors (network, drop, stall, 5xx, 408, 429). A retrying job keeps its slot for `retries_before_yield` retries, then gives way if a queued job is waiting (queues behind every job that never gave way); fails after `max_retries`. Waits double from `first_wait` up to 60 s; `Retry-After` (seconds) can ask for up to 10 min. The count resets when bytes arrive or on a manual resume. Stalls: `tokio::time::timeout` around each network wait (`HttpConfig::stall_timeout`), never reqwest's `read_timeout` (it would fire while our throttle waits).
 - **Failures are `Problem`s** (`docs/decisions/0016`), never bare strings: a kind plus details, saved in the `problem_*` columns. Add a kind = a migration (CHECK list), a `Display` wording, an API `Problem` variant and UI messages.
-- **Settings** live in the single-row `settings` table and are saved on change; `Manager::start(backend, store)` loads them.
+- **Settings** live in the single-row `settings` table; `Manager::start(backend, store)` loads them. They change through `Manager::change_settings` (several at once): one save and one `JobEvent::SettingsChanged` per change, none if nothing changed (`docs/decisions/0022`).
 - **Categories** (`docs/decisions/0011`, `0020`): every job has one. Two built-ins can't be removed: General (ID 1: unmatched extensions, default folder) and Other (folders of no category; no folder or extensions of its own; ID in `Actor::other`). `add(NewJob)` uses the caller's category, else, if the caller gave a folder, the category whose folder it is (preferring the extension's), else Other; both are fixed (`category_chosen`, never re-matched). Without either: the category owning the URL's extension, else General. Each extension belongs to one category at most. The job's folder is copied at add (caller's, else the category's, else `NoFolder`). Removing a category moves its jobs to General first (saved before the row is deleted). A category's `max_concurrent` caps its running jobs under the global cap. At the first response, an auto-matched job is re-matched by its real name; its folder follows (via `Placement`, before the file is created) only if it was in its category's folder (`docs/decisions/0012`). Migrations run with foreign keys off and check them before committing. The daemon never creates starter categories itself; the UI's first-start setup offers them (`docs/decisions/0020`).
 - **Persistence** (`docs/decisions/0008`): SQLite holds jobs, and later categories, settings and per-segment progress. `STRICT` tables, numbered migrations in `store.rs` (never edit a released one). Saves happen on add, on every state change (inside `transition`), on `Event::Started` (file name + validator known) and progress at most every 2 s. **From 2c: flush file data before saving the progress that covers it.** On load, running jobs become Queued and `downloaded` is reset from the `.part.ottie` length.
 - **Shutdown keeps running jobs running** in the database (it doesn't mark them Paused), so the next start continues them; user-paused jobs stay paused.
@@ -224,7 +233,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 ## Working with Mathieu
 
-- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations, atomics, `JoinSet`, child cancellation tokens, `Mutex`, lifetimes (`Env<'a>`), `Drop`, newtypes + associated consts (`CategoryId::GENERAL`), builder methods (`NewJob::new(url).in_dir(..)`), struct update syntax (`..CategorySettings::named(..)`), iterator chains (`map`/`flat_map`/`collect`), `move` closures, `Option::take`, match guards (`pattern if condition =>`), derive macros with attributes (clap's `#[derive(Parser)]`, `#[arg(...)]`), axum extractors (handler arguments filled from the request), `#[cfg(...)]` conditional compilation. Also explained: Paraglide message functions (`m.key({ params })`), JSON imports, `as unknown as` in tests, Svelte components and runes (`$state`, `$derived`, `$props`), TypeScript basics (types, interfaces, unions, `import type`), classes with private fields, promises/`async` in JS, `Promise.all`, TS utility types (`Record`, `Exclude`), `Option` ordering (`None` < `Some`), CSS `minmax(0, 1fr)`, Svelte snippets (`children` + `{@render}`), `$state.raw`, `bind:this`, `<dialog>` + `showModal()`, Tauri capabilities (runtime, remote origin), SvelteKit routes and layouts, `page` from `$app/state`, `resolve` / `goto`, `createContext`, `{#key}`, CSS container queries (`container: page / inline-size`), `Option::transpose`. Also explained: Tauri (a native window around the system's WebView), sidecar processes and their stdin/stdout pipes, `#![cfg_attr(...)]`, turbofish (`app.state::<Owned>()`), `PoisonError`. Also explained: CSS variables redefined per `[data-theme]` attribute, `matchMedia` change listeners, shared `$state` exported from a `.svelte.ts` module. Still to come: Svelte stores/context if needed, Tauri commands, etc.
+- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations, atomics, `JoinSet`, child cancellation tokens, `Mutex`, lifetimes (`Env<'a>`), `Drop`, newtypes + associated consts (`CategoryId::GENERAL`), builder methods (`NewJob::new(url).in_dir(..)`), struct update syntax (`..CategorySettings::named(..)`), iterator chains (`map`/`flat_map`/`collect`), `move` closures, `Option::take`, match guards (`pattern if condition =>`), derive macros with attributes (clap's `#[derive(Parser)]`, `#[arg(...)]`), axum extractors (handler arguments filled from the request), `#[cfg(...)]` conditional compilation. Also explained: Paraglide message functions (`m.key({ params })`), JSON imports, `as unknown as` in tests, Svelte components and runes (`$state`, `$derived`, `$props`), TypeScript basics (types, interfaces, unions, `import type`), classes with private fields, promises/`async` in JS, `Promise.all`, TS utility types (`Record`, `Exclude`), `Option` ordering (`None` < `Some`), CSS `minmax(0, 1fr)`, Svelte snippets (`children` + `{@render}`), `$state.raw`, `bind:this`, `<dialog>` + `showModal()`, Tauri capabilities (runtime, remote origin), SvelteKit routes and layouts, `page` from `$app/state`, `resolve` / `goto`, `createContext`, `{#key}`, CSS container queries (`container: page / inline-size`), `Option::transpose`. Also explained: Tauri (a native window around the system's WebView), sidecar processes and their stdin/stdout pipes, `#![cfg_attr(...)]`, turbofish (`app.state::<Owned>()`), `PoisonError`. Also explained: CSS variables redefined per `[data-theme]` attribute, `matchMedia` change listeners, shared `$state` exported from a `.svelte.ts` module, `$effect` + `untrack`, destructuring a struct so every field must be handled, `Option::zip`, `if let … && …` chains, `RangeInclusive` (`1..=50`). Still to come: Svelte stores/context if needed, Tauri commands, etc.
 - For decisions that are hard to reverse (data model, API shape, crate choices, architecture), present 2–3 options with trade-offs and let him choose. For small implementation details, decide and say what you chose.
 - Work in small vertical slices that run end to end. Don't scaffold code ahead of need.
 - Show the diff and wait for a go-ahead before committing.
@@ -235,7 +244,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 1. ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~ Done.
 2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ → ~~2b SQLite persistence~~ → ~~2c multi-connection~~ (streaming mode comes with the stream endpoint) → ~~2d speed limits + priorities~~ → ~~2e categories~~ → ~~2f `Content-Disposition` filenames + category re-match~~ → ~~2g retry with backoff~~.
 3. Usable app, early: ~~3a minimal `ottie serve` (jobs API + events WebSocket, token, folders)~~ → ~~3b first web UI (SvelteKit SPA built into the binary; list, add, pause/resume/cancel; token link + login page; `ottie open`)~~ → ~~3b2 translations (en, fr; Paraglide) + error codes from the daemon~~ → ~~3c first desktop app (Tauri window on the same UI, starts the daemon as a sidecar, Ottie icons from `res/icons/`)~~.
-4. Then features grow through API, UI and desktop app together, one slice each: ~~4a list layout (sidebar views, remove, clear finished)~~ → ~~4b table list with selection + toolbar, own title bar~~ → ~~4c left menu (Dashboard, Downloads), status filter in Downloads, dashboard~~ → ~~4d categories (API, Categories page, folder picker, Category column, move to category)~~ → ~~4e category step when adding + first-start setup with editable starter categories~~ → the redesign from the mockups (`docs/decisions/0021`): ~~5a look (four themes, tabs in the title bar, add card, the four tabs laid out as in the mockups, Settings with appearance + language)~~ → 5b settings (API + page: max concurrent, global limit with the title-bar chip, retry policy, appearance sync) → 5c Downloads pane (quick-filter pills + expandable filters and sorting, group by status, detail panel with per-download speed limit + priority) → 5d per-connection progress + file map → saved views (stored in the daemon) → the `/jobs/{id}/stream` endpoint (play while downloading), queue reorder, tray, notifications, autostart.
+4. Then features grow through API, UI and desktop app together, one slice each: ~~4a list layout (sidebar views, remove, clear finished)~~ → ~~4b table list with selection + toolbar, own title bar~~ → ~~4c left menu (Dashboard, Downloads), status filter in Downloads, dashboard~~ → ~~4d categories (API, Categories page, folder picker, Category column, move to category)~~ → ~~4e category step when adding + first-start setup with editable starter categories~~ → the redesign from the mockups (`docs/decisions/0021`): ~~5a look (four themes, tabs in the title bar, add card, the four tabs laid out as in the mockups, Settings with appearance + language)~~ → ~~5b settings (API + page: max concurrent, global limit with the title-bar chip, retry policy, appearance sync)~~ → 5c Downloads pane (quick-filter pills + expandable filters and sorting, group by status, detail panel with per-download speed limit + priority) → 5d per-connection progress + file map → saved views (stored in the daemon) → the `/jobs/{id}/stream` endpoint (play while downloading), queue reorder, tray, notifications, autostart.
 5. Browser extension.
 6. Tauri Android: embedded core, background downloads, share-sheet intake.
 7. Later: scheduler, clipboard monitoring, uGet import, aria2 / yt-dlp backends.

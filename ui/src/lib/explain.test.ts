@@ -41,4 +41,16 @@ describe('explainRefusal', () => {
 		expect(explainRefusal(internal, '', 'fr')).toBe('database error: disk I/O');
 		expect(explainRefusal(null, 'The daemon answered 502.', 'fr')).toBe('The daemon answered 502.');
 	});
+
+	it('names the setting out of range, with its range', () => {
+		const say = (setting: string, min: number, max: number, locale: 'en' | 'fr') => {
+			const body: ApiError = { error: '…', code: 'outOfRange', setting, min, max };
+			return plain(explainRefusal(body, '', locale));
+		};
+		expect(say('maxConcurrent', 1, 50, 'en')).toBe('Downloads at once must be from 1 to 50.');
+		expect(say('firstRetryWaitMs', 500, 3_600_000, 'fr')).toBe(
+			'Première attente : de 0,5 à 3 600 secondes.'
+		);
+		expect(say('somethingNew', 0, 9, 'en')).toBe('somethingNew must be from 0 to 9.');
+	});
 });

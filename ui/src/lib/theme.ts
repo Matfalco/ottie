@@ -1,19 +1,29 @@
 // How the page looks on this device: light, dark or whatever the system
-// uses, and which pair of themes. Remembered by this browser
-// (docs/decisions/0021).
+// uses, and which pair of themes. Remembered by this browser; a device can
+// also follow the look the daemon shares with every device that wants it
+// (docs/decisions/0021, 0022).
 
-export type Mode = 'system' | 'light' | 'dark';
-export type Palette = 'sea' | 'neutral';
+import type { Appearance } from '@ottie/api-types/Appearance';
+import type { AppearanceMode } from '@ottie/api-types/AppearanceMode';
+import type { Palette } from '@ottie/api-types/Palette';
+
+export type { Appearance, Palette };
+export type Mode = AppearanceMode;
 export type Theme = 'seafoam' | 'lagoon' | 'pearl' | 'slate';
 
-export interface Appearance {
-	mode: Mode;
-	palette: Palette;
+/** The look on this device, and whether it follows the shared look and
+ * language (yes unless switched off). */
+export interface DeviceAppearance extends Appearance {
+	synced: boolean;
 }
 
 export const MODES: Mode[] = ['system', 'light', 'dark'];
 export const PALETTES: Palette[] = ['sea', 'neutral'];
-export const DEFAULT_APPEARANCE: Appearance = { mode: 'system', palette: 'sea' };
+export const DEFAULT_APPEARANCE: DeviceAppearance = {
+	mode: 'system',
+	palette: 'sea',
+	synced: true
+};
 
 /** Each palette's light and dark theme. */
 export const THEMES: Record<Palette, { light: Theme; dark: Theme }> = {
@@ -36,8 +46,17 @@ export function previewFor(mode: Mode, palette: Palette): [Theme, Theme] {
 	return mode === 'system' ? [light, dark] : mode === 'light' ? [light, light] : [dark, dark];
 }
 
+/** Just the look, as the daemon shares it. */
+export function lookOf({ mode, palette }: Appearance): Appearance {
+	return { mode, palette };
+}
+
+export function sameLook(a: Appearance, b: Appearance): boolean {
+	return a.mode === b.mode && a.palette === b.palette;
+}
+
 /** A stored appearance; what's missing or unknown falls back to the default. */
-export function parseAppearance(text: string | null): Appearance {
+export function parseAppearance(text: string | null): DeviceAppearance {
 	let stored: unknown = null;
 	try {
 		stored = text === null ? null : JSON.parse(text);
@@ -47,21 +66,23 @@ export function parseAppearance(text: string | null): Appearance {
 	const fields = typeof stored === 'object' && stored !== null ? stored : {};
 	const mode = 'mode' in fields ? fields.mode : undefined;
 	const palette = 'palette' in fields ? fields.palette : undefined;
+	const synced = 'synced' in fields ? fields.synced : undefined;
 	return {
 		mode: MODES.find((known) => known === mode) ?? DEFAULT_APPEARANCE.mode,
-		palette: PALETTES.find((known) => known === palette) ?? DEFAULT_APPEARANCE.palette
+		palette: PALETTES.find((known) => known === palette) ?? DEFAULT_APPEARANCE.palette,
+		synced: synced !== false
 	};
 }
 
-export function loadAppearance(): Appearance {
+export function loadAppearance(): DeviceAppearance {
 	try {
 		return parseAppearance(localStorage.getItem(KEY));
 	} catch {
-		return DEFAULT_APPEARANCE; // Storage blocked.
+		return { ...DEFAULT_APPEARANCE }; // Storage blocked.
 	}
 }
 
-export function saveAppearance(appearance: Appearance): void {
+export function saveAppearance(appearance: DeviceAppearance): void {
 	try {
 		localStorage.setItem(KEY, JSON.stringify(appearance));
 	} catch {

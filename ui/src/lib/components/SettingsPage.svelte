@@ -1,8 +1,31 @@
 <script lang="ts">
+	import type { SettingsChange } from '@ottie/api-types/SettingsChange';
+	import Copy from '@lucide/svelte/icons/copy';
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
+	import { useApp } from '#lib/context.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { MODES, PALETTES, THEMES, previewFor, type Mode, type Palette } from '#lib/theme.js';
+	import { setLocale, type Locale } from '#lib/paraglide/runtime.js';
+	import { RANGES, parseSeconds, parseWhole, toField } from '#lib/settings.js';
+	import {
+		MODES,
+		PALETTES,
+		THEMES,
+		lookOf,
+		previewFor,
+		type DeviceAppearance,
+		type Mode,
+		type Palette
+	} from '#lib/theme.js';
+	import { signInLink } from '#lib/token.js';
 	import LanguagePicker from './LanguagePicker.svelte';
+	import LimitControl from './LimitControl.svelte';
+	import NumberField from './NumberField.svelte';
+	import Switch from './Switch.svelte';
+
+	const { session, token } = useApp();
+	/** The daemon's settings; null until it has answered. */
+	const settings = $derived(session.settings);
+	const link = signInLink(location.origin, token);
 
 	const MODE_NAMES: Record<Mode, () => string> = {
 		system: m.set_mode_system,
@@ -18,13 +41,20 @@
 	/** The sections, top to bottom, for the list on the left. */
 	const SECTIONS: { id: string; label: () => string }[] = [
 		{ id: 'set-appearance', label: m.set_appearance },
-		{ id: 'set-language', label: m.language }
+		{ id: 'set-downloads', label: m.set_downloads },
+		{ id: 'set-retries', label: m.set_retries },
+		{ id: 'set-connection', label: m.set_connection }
 	];
 
 	let page: HTMLElement;
 	/** The section being read: the last one whose top has scrolled past
 	 * the top of the page, or the last one once at the bottom. */
 	let current = $state(SECTIONS[0].id);
+	/** Why the last change wasn't saved. */
+	let problem: string | null = $state(null);
+	let copied = $state(false);
+	/** The clipboard refused: the link is shown to copy by hand. */
+	let showLink = $state(false);
 
 	function scrolled() {
 		const top = page.getBoundingClientRect().top;
@@ -43,6 +73,45 @@
 		event.preventDefault();
 		document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 		current = id;
+	}
+
+	async function save(change: SettingsChange): Promise<boolean> {
+		problem = await session.changeSettings(change);
+		return problem === null;
+	}
+
+	/** Changes the look here, and for every device that follows it. */
+	function choose(change: Partial<DeviceAppearance>) {
+		setAppearance(change);
+		if (appearance.synced) {
+			void save({ appearance: lookOf(appearance) });
+		}
+	}
+
+	/** A language for this page, and for every device that follows. */
+	async function chooseLanguage(locale: Locale) {
+		if (appearance.synced && !(await save({ language: locale }))) {
+			return;
+		}
+		setLocale(locale); // Reloads the page in that language.
+	}
+
+	function step(by: number) {
+		if (settings) {
+			const { min, max } = RANGES.maxConcurrent;
+			const next = Math.min(max, Math.max(min, settings.maxConcurrent + by));
+			void save({ maxConcurrent: next });
+		}
+	}
+
+	async function copy() {
+		try {
+			await navigator.clipboard.writeText(link);
+			copied = true;
+			setTimeout(() => (copied = false), 2000);
+		} catch {
+			showLink = true; // Not allowed here (a plain-http remote page).
+		}
 	}
 </script>
 
@@ -63,10 +132,30 @@
 	<div class="sections">
 		<h1>{m.set_title()}</h1>
 
+		{#if problem}
+			<div class="problem" role="alert">
+				<span>{problem}</span>
+				<button onclick={() => (problem = null)} aria-label={m.dismiss()}>✕</button>
+			</div>
+		{/if}
+
 		<section id="set-appearance" class="card" aria-labelledby="appearance">
-			<header>
-				<h2 id="appearance">{m.set_appearance()}</h2>
-				<p class="hint">{m.set_appearance_hint()}</p>
+			<header class="with-switch">
+				<span class="names">
+					<h2 id="appearance">{m.set_appearance()}</h2>
+					<span class="hint">{appearance.synced ? m.set_sync_hint() : m.set_appearance_hint()}</span
+					>
+				</span>
+				<!-- Following the shared look and language: the shell takes them
+				     on, or shares this device's while none are shared. -->
+				<label class="sync">
+					<span>{m.set_sync()}</span>
+					<Switch
+						on={appearance.synced}
+						label={m.set_sync()}
+						onChange={(synced) => setAppearance({ synced })}
+					/>
+				</label>
 			</header>
 
 			<fieldset>
@@ -91,7 +180,7 @@
 									type="radio"
 									name="mode"
 									checked={appearance.mode === mode}
-									onchange={() => setAppearance({ mode })}
+									onchange={() => choose({ mode })}
 								/>
 								{MODE_NAMES[mode]()}
 							</span>
@@ -109,7 +198,7 @@
 								type="radio"
 								name="palette"
 								checked={appearance.palette === palette}
-								onchange={() => setAppearance({ palette })}
+								onchange={() => choose({ palette })}
 							/>
 							<span class="names">
 								<span>{PALETTE_NAMES[palette].name()}</span>
@@ -123,19 +212,145 @@
 					{/each}
 				</div>
 			</fieldset>
-		</section>
 
-		<section id="set-language" class="card" aria-labelledby="language-title">
-			<header>
-				<h2 id="language-title">{m.language()}</h2>
-			</header>
 			<div class="setting">
 				<label for="language" class="names">
 					<span>{m.set_language_choice()}</span>
 					<span class="hint">{m.set_language_hint()}</span>
 				</label>
-				<LanguagePicker id="language" />
+				<LanguagePicker id="language" onChoose={(locale) => void chooseLanguage(locale)} />
 			</div>
+		</section>
+
+		<section id="set-downloads" class="card" aria-labelledby="downloads-title">
+			<header>
+				<h2 id="downloads-title">{m.set_downloads()}</h2>
+			</header>
+			{#if settings}
+				<div class="setting">
+					<span class="names">
+						<span>{m.set_max_concurrent()}</span>
+						<span class="hint">{m.set_max_concurrent_hint()}</span>
+					</span>
+					<span class="stepper" role="group" aria-label={m.set_max_concurrent()}>
+						<button
+							aria-label={m.set_fewer()}
+							disabled={settings.maxConcurrent <= RANGES.maxConcurrent.min}
+							onclick={() => step(-1)}>−</button
+						>
+						<NumberField
+							value={settings.maxConcurrent}
+							label={m.set_max_concurrent()}
+							parse={(text) => parseWhole(text, RANGES.maxConcurrent)}
+							onChange={(maxConcurrent) => save({ maxConcurrent })}
+						/>
+						<button
+							aria-label={m.set_more()}
+							disabled={settings.maxConcurrent >= RANGES.maxConcurrent.max}
+							onclick={() => step(1)}>+</button
+						>
+					</span>
+				</div>
+				<div class="setting">
+					<span class="names">
+						<span>{m.limit_total()}</span>
+						<span class="hint">{m.limit_total_hint()}</span>
+					</span>
+					<LimitControl
+						limit={settings.globalLimit}
+						onChange={(globalLimit) => save({ globalLimit })}
+					/>
+				</div>
+			{:else}
+				<p class="waiting">{m.connection_connecting()}</p>
+			{/if}
+		</section>
+
+		<section id="set-retries" class="card" aria-labelledby="retries-title">
+			<header>
+				<h2 id="retries-title">{m.set_retries()}</h2>
+				<p class="hint">{m.set_retries_hint()}</p>
+			</header>
+			{#if settings}
+				<div class="setting">
+					<span class="names">
+						<span>{m.set_max_retries()}</span>
+						<span class="hint">{m.set_max_retries_hint()}</span>
+					</span>
+					<NumberField
+						value={settings.maxRetries}
+						label={m.set_max_retries()}
+						unit=""
+						parse={(text) => parseWhole(text, RANGES.maxRetries)}
+						onChange={(maxRetries) => save({ maxRetries })}
+					/>
+				</div>
+				<div class="setting">
+					<span class="names">
+						<span>{m.set_first_wait()}</span>
+						<span class="hint">{m.set_first_wait_hint()}</span>
+					</span>
+					<NumberField
+						value={settings.firstRetryWaitMs}
+						label={m.set_first_wait()}
+						unit={m.unit_seconds()}
+						parse={(text) => parseSeconds(text, RANGES.firstRetryWaitMs)}
+						show={(ms) => toField(ms / 1000)}
+						onChange={(firstRetryWaitMs) => save({ firstRetryWaitMs })}
+					/>
+				</div>
+				<div class="setting">
+					<span class="names">
+						<span>{m.set_yield()}</span>
+						<span class="hint">{m.set_yield_hint()}</span>
+					</span>
+					<NumberField
+						value={settings.retriesBeforeYield}
+						label={m.set_yield()}
+						unit=""
+						parse={(text) => parseWhole(text, RANGES.retriesBeforeYield)}
+						onChange={(retriesBeforeYield) => save({ retriesBeforeYield })}
+					/>
+				</div>
+			{:else}
+				<p class="waiting">{m.connection_connecting()}</p>
+			{/if}
+		</section>
+
+		<section id="set-connection" class="card" aria-labelledby="connection-title">
+			<header>
+				<h2 id="connection-title">{m.set_connection()}</h2>
+			</header>
+			<div class="setting">
+				<span class="names">
+					<span>{m.set_daemon()}</span>
+					<span class="status {session.connection}">
+						<span class="dot" aria-hidden="true"></span>
+						{#if session.connection === 'live'}
+							{m.set_connected_to({ address: location.host })}
+						{:else if session.connection === 'connecting'}
+							{m.connection_connecting()}
+						{:else}
+							{m.connection_offline()}
+						{/if}
+					</span>
+				</span>
+				<button class="copy" onclick={copy}>
+					<Copy size={15} aria-hidden="true" />
+					{copied ? m.set_link_copied() : m.set_copy_link()}
+				</button>
+			</div>
+			{#if showLink}
+				<div class="link">
+					<input
+						readonly
+						value={link}
+						aria-label={m.set_link_label()}
+						onfocus={(event) => event.currentTarget.select()}
+					/>
+				</div>
+			{/if}
+			<p class="hint below">{m.set_link_hint()}</p>
 		</section>
 	</div>
 </div>
@@ -192,6 +407,23 @@
 		font-weight: 600;
 	}
 
+	.problem {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.6rem 0.9rem;
+		border-radius: var(--radius-s);
+		background: var(--danger-bg);
+		color: var(--danger);
+	}
+
+	.problem button {
+		padding: 0 0.4rem;
+		border: none;
+		background: none;
+		color: inherit;
+	}
+
 	.card {
 		border: 1px solid var(--border);
 		border-radius: var(--radius-l);
@@ -200,6 +432,24 @@
 
 	header {
 		padding: 1rem 1.25rem 0.25rem;
+	}
+
+	/* The card's title and hint, and a switch for all of it on the right. */
+	header.with-switch {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 1rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--border-soft);
+	}
+
+	.sync {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		font-weight: 500;
+		cursor: pointer;
 	}
 
 	h2 {
@@ -219,10 +469,6 @@
 		padding: 0.75rem 1.25rem 1rem;
 		border: none;
 		border-bottom: 1px solid var(--border-soft);
-	}
-
-	fieldset:last-child {
-		border-bottom: none;
 	}
 
 	legend {
@@ -320,7 +566,7 @@
 
 	.names {
 		display: grid;
-		flex: 1;
+		flex: 1 1 16rem;
 		font-weight: 500;
 	}
 
@@ -342,16 +588,106 @@
 		background: linear-gradient(to bottom, var(--bg) 60%, var(--accent) 60%);
 	}
 
+	/* One setting per row: its name and hint, then the control. */
 	.setting {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 1rem;
-		padding: 0.9rem 1.25rem 1.1rem;
+		gap: 0.75rem 1rem;
+		padding: 0.8rem 1.25rem;
+		border-top: 1px solid var(--border-soft);
 	}
 
-	.setting label {
-		flex: 1 1 16rem;
+	header + .setting,
+	fieldset + .setting {
+		border-top: none;
+	}
+
+	.waiting {
+		margin: 0;
+		padding: 0.5rem 1.25rem 1.1rem;
+		color: var(--faint);
+	}
+
+	/* Fewer, the number, more: one control. */
+	.stepper {
+		display: flex;
+		align-items: center;
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-s);
+	}
+
+	.stepper button {
+		width: 2.1rem;
+		height: 2.1rem;
+		padding: 0;
+		border: none;
+		border-radius: 0;
+		background: var(--input);
+		font-size: 1rem;
+	}
+
+	.stepper button:hover:not(:disabled) {
+		background: var(--hover);
+	}
+
+	.stepper :global(.field input) {
+		width: 3rem;
+		border-width: 0 1px;
+		border-radius: 0;
+		background: var(--surface);
+		text-align: center;
+	}
+
+	.status {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		color: var(--muted);
+		font-size: 0.85rem;
+		font-weight: 400;
+	}
+
+	.dot {
+		flex: none;
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background: var(--quiet);
+	}
+
+	.live .dot {
+		background: var(--ok);
+	}
+
+	.offline {
+		color: var(--danger);
+	}
+
+	.offline .dot {
+		background: var(--danger);
+	}
+
+	.copy {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		font-weight: 500;
+	}
+
+	.link {
+		padding: 0 1.25rem 0.5rem;
+	}
+
+	.link input {
+		width: 100%;
+		font-family: var(--mono);
+		font-size: 0.8rem;
+	}
+
+	.hint.below {
+		padding: 0 1.25rem 1.1rem;
 	}
 
 	/* Phones: no list, the sections alone. */

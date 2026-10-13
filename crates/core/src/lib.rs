@@ -15,6 +15,7 @@ mod job;
 mod manager;
 mod problem;
 mod segmented;
+mod settings;
 mod store;
 mod throttle;
 
@@ -28,7 +29,8 @@ pub use id::JobId;
 pub use job::{JobEvent, JobSnapshot, JobState, NewJob, Priority};
 pub use manager::Manager;
 pub use problem::Problem;
-pub use store::{RetryPolicy, Settings, Store};
+pub use settings::{Appearance, AppearanceMode, Palette, RetryPolicy, Settings, SettingsChange};
+pub use store::Store;
 pub use throttle::Throttle;
 
 /// The URL type every download uses, so clients don't need `reqwest` themselves.

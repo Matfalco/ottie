@@ -1,15 +1,19 @@
 <script lang="ts">
-	import { onMount, type Snippet } from 'svelte';
+	import { onMount, untrack, type Snippet } from 'svelte';
 	import type { AddJob } from '@ottie/api-types/AddJob';
 	import type { Job } from '@ottie/api-types/Job';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import type { Settings } from '@ottie/api-types/Settings';
+	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
 	import { confirmation, targets, type Action } from '#lib/bulk.js';
 	import { provideApp } from '#lib/context.js';
 	import { parseFilter, showsNewJobs } from '#lib/filters.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { getLocale, isLocale, locales, setLocale } from '#lib/paraglide/runtime.js';
 	import { Session } from '#lib/session.svelte.js';
+	import { syncSteps } from '#lib/sync.js';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import NavMenu from './NavMenu.svelte';
 	import Setup from './Setup.svelte';
@@ -39,7 +43,32 @@
 	/** The first start: the setup page replaces the app until it's done. */
 	let settingUp = $derived(session.settings?.setupDone === false);
 
-	provideApp({ session, run, ask, add });
+	// svelte-ignore state_referenced_locally
+	provideApp({ session, token, run, ask, add });
+
+	// A device that follows the shared look and language takes them on
+	// whenever they change, and shares its own while none are shared. (Only
+	// the settings and the choice to follow are watched: a change made here is
+	// on its way to the daemon and comes back as the shared one.)
+	$effect(() => {
+		const settings = session.settings;
+		if (settings && appearance.synced) {
+			untrack(() => void follow(settings));
+		}
+	});
+
+	async function follow(settings: Settings) {
+		const steps = syncSteps(appearance, getLocale(), settings, locales);
+		if (steps.look) {
+			setAppearance(steps.look);
+		}
+		if (steps.share) {
+			await session.changeSettings(steps.share);
+		}
+		if (steps.language && isLocale(steps.language)) {
+			setLocale(steps.language); // Reloads the page in that language.
+		}
+	}
 
 	onMount(() => {
 		session.start();
@@ -72,6 +101,14 @@
 		);
 	}
 
+	async function setLimit(bytesPerSec: number): Promise<boolean> {
+		const why = await session.changeSettings({ globalLimit: bytesPerSec });
+		if (why !== null) {
+			session.error = why;
+		}
+		return why === null;
+	}
+
 	function ask(message: string, confirmLabel: string): Promise<boolean> {
 		return new Promise((resolve) => {
 			question = {
@@ -92,7 +129,12 @@
 			<NavMenu jobs={session.list} />
 		{/if}
 		<span class="end">
-			<SpeedChip speed={session.history.at(-1) ?? 0} connection={session.connection} />
+			<SpeedChip
+				speed={session.history.at(-1) ?? 0}
+				limit={session.settings?.globalLimit ?? null}
+				connection={session.connection}
+				onLimit={setLimit}
+			/>
 		</span>
 	</TitleBar>
 

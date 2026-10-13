@@ -20,7 +20,8 @@ use crate::filename;
 use crate::id::{IdGenerator, JobId};
 use crate::job::{JobEvent, JobSnapshot, JobState, NewJob, Priority};
 use crate::problem::Problem;
-use crate::store::{JobRecord, RetryPolicy, Settings, Store};
+use crate::settings::{RetryPolicy, Settings, SettingsChange};
+use crate::store::{JobRecord, Store};
 use crate::throttle::Limiter;
 
 /// Running jobs report progress to the manager at most this often.
@@ -146,33 +147,54 @@ impl Manager {
         self.request(|reply| Command::Settings { reply }).await
     }
 
-    /// Takes effect immediately and is saved. Lowering it doesn't stop
-    /// running jobs; it only delays new ones. At least 1.
-    pub async fn set_max_concurrent(&self, max: usize) -> Result<(), Error> {
-        self.request(|reply| Command::SetMaxConcurrent { max, reply })
+    /// Changes the settings given, all at once, and answers with all of them.
+    /// Each takes effect immediately and is saved. Lowering `max_concurrent`
+    /// doesn't stop running jobs; it only delays new ones. A new retry policy
+    /// applies from the next failure.
+    pub async fn change_settings(&self, change: SettingsChange) -> Result<Settings, Error> {
+        self.request(|reply| Command::ChangeSettings { change, reply })
             .await
     }
 
-    /// Bytes per second for all downloads together; 0 = unlimited. Takes
-    /// effect immediately and is saved.
-    pub async fn set_global_limit(&self, bytes_per_sec: u64) -> Result<(), Error> {
-        self.request(|reply| Command::SetGlobalLimit {
-            bytes_per_sec,
-            reply,
+    /// How many jobs may download at once (at least 1).
+    pub async fn set_max_concurrent(&self, max: usize) -> Result<(), Error> {
+        self.change(SettingsChange {
+            max_concurrent: Some(max),
+            ..SettingsChange::default()
         })
         .await
     }
 
-    /// Takes effect for the next failure, and is saved.
-    pub async fn set_retry_policy(&self, policy: RetryPolicy) -> Result<(), Error> {
-        self.request(|reply| Command::SetRetryPolicy { policy, reply })
-            .await
+    /// Bytes per second for all downloads together; 0 = unlimited.
+    pub async fn set_global_limit(&self, bytes_per_sec: u64) -> Result<(), Error> {
+        self.change(SettingsChange {
+            global_limit: Some(bytes_per_sec),
+            ..SettingsChange::default()
+        })
+        .await
     }
 
-    /// Records whether the first-start setup was done (or skipped). Saved.
+    pub async fn set_retry_policy(&self, policy: RetryPolicy) -> Result<(), Error> {
+        self.change(SettingsChange {
+            max_retries: Some(policy.max_retries),
+            retries_before_yield: Some(policy.retries_before_yield),
+            first_retry_wait: Some(policy.first_wait),
+            ..SettingsChange::default()
+        })
+        .await
+    }
+
+    /// Records whether the first-start setup was done (or skipped).
     pub async fn set_setup_done(&self, done: bool) -> Result<(), Error> {
-        self.request(|reply| Command::SetSetupDone { done, reply })
-            .await
+        self.change(SettingsChange {
+            setup_done: Some(done),
+            ..SettingsChange::default()
+        })
+        .await
+    }
+
+    async fn change(&self, change: SettingsChange) -> Result<(), Error> {
+        self.change_settings(change).await.map(drop)
     }
 
     /// One job's own limit in bytes per second; 0 = none (the global limit
@@ -301,21 +323,9 @@ enum Command {
     Settings {
         reply: Reply<Settings>,
     },
-    SetMaxConcurrent {
-        max: usize,
-        reply: Reply<()>,
-    },
-    SetGlobalLimit {
-        bytes_per_sec: u64,
-        reply: Reply<()>,
-    },
-    SetRetryPolicy {
-        policy: RetryPolicy,
-        reply: Reply<()>,
-    },
-    SetSetupDone {
-        done: bool,
-        reply: Reply<()>,
+    ChangeSettings {
+        change: SettingsChange,
+        reply: Reply<Settings>,
     },
     SetSpeedLimit {
         id: JobId,
@@ -560,32 +570,8 @@ impl<B: Backend> Actor<B> {
             Command::Settings { reply } => {
                 let _ = reply.send(Ok(self.settings.clone()));
             }
-            Command::SetMaxConcurrent { max, reply } => {
-                self.settings.max_concurrent = max.max(1);
-                self.store.save_settings(self.settings.clone());
-                self.schedule();
-                let _ = reply.send(Ok(()));
-            }
-            Command::SetGlobalLimit {
-                bytes_per_sec,
-                reply,
-            } => {
-                self.settings.global_limit = bytes_per_sec;
-                self.store.save_settings(self.settings.clone());
-                self.limiter.set_global(bytes_per_sec);
-                let _ = reply.send(Ok(()));
-            }
-            Command::SetRetryPolicy { policy, reply } => {
-                self.settings.retry = policy;
-                self.store.save_settings(self.settings.clone());
-                // Jobs past the new number of in-slot retries may now give way.
-                self.schedule();
-                let _ = reply.send(Ok(()));
-            }
-            Command::SetSetupDone { done, reply } => {
-                self.settings.setup_done = done;
-                self.store.save_settings(self.settings.clone());
-                let _ = reply.send(Ok(()));
+            Command::ChangeSettings { change, reply } => {
+                let _ = reply.send(Ok(self.change_settings(change)));
             }
             Command::SetSpeedLimit {
                 id,
@@ -1042,6 +1028,25 @@ impl<B: Backend> Actor<B> {
         }
         self.schedule();
         Ok(())
+    }
+
+    /// Applies `change`; if anything changed, saves the settings, puts them
+    /// to use and tells the subscribers.
+    fn change_settings(&mut self, change: SettingsChange) -> Settings {
+        let before = self.settings.clone();
+        self.settings.apply(change);
+        if self.settings != before {
+            self.store.save_settings(self.settings.clone());
+            if self.settings.global_limit != before.global_limit {
+                self.limiter.set_global(self.settings.global_limit);
+            }
+            // More slots, or retrying jobs that may now give way.
+            self.schedule();
+            let _ = self
+                .events
+                .send(JobEvent::SettingsChanged(self.settings.clone()));
+        }
+        self.settings.clone()
     }
 
     fn list(&self) -> Vec<JobSnapshot> {

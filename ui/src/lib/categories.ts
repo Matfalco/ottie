@@ -69,25 +69,6 @@ export function parseExtensions(text: string): string[] {
 	return text.split(/[\s,;]+/).filter(Boolean);
 }
 
-export type SpeedUnit = 'kB' | 'MB';
-const UNIT_BYTES: Record<SpeedUnit, number> = { kB: 1024, MB: 1024 * 1024 };
-
-/** A limit in bytes per second as the editor shows it (0 = none → empty). */
-export function limitToField(bytesPerSec: number): { value: string; unit: SpeedUnit } {
-	if (bytesPerSec === 0) {
-		return { value: '', unit: 'MB' };
-	}
-	const unit: SpeedUnit = bytesPerSec >= UNIT_BYTES.MB ? 'MB' : 'kB';
-	const value = Math.round((bytesPerSec / UNIT_BYTES[unit]) * 100) / 100;
-	return { value: String(value), unit };
-}
-
-/** Back to bytes per second; empty, zero or nonsense means no limit. */
-export function fieldToLimit(value: string, unit: SpeedUnit): number {
-	const number = Number(value.replace(',', '.'));
-	return Number.isFinite(number) && number > 0 ? Math.round(number * UNIT_BYTES[unit]) : 0;
-}
-
 /** "Up to 2 at once · 1.0 MB/s at most", or what isn't limited. */
 export function describeLimits(category: Category, locale: Locale = getLocale()): string {
 	const options = { locale };
