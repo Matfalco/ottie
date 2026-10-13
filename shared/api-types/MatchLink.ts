@@ -3,4 +3,9 @@
 /**
  * Body of `POST /categories/match`.
  */
-export type MatchLink = { url: string, };
+export type MatchLink = { url: string, 
+/**
+ * The folder it would be saved in, if not its category's: then the
+ * folder decides the category.
+ */
+destDir?: string, };

@@ -3,10 +3,15 @@
 /**
  * Answer to `POST /categories/match`: the category a download of that link
  * would get. The server's real file name may still move it, unless the user
- * picks the category.
+ * picks the category or a folder.
  */
 export type Matched = { category: number, 
 /**
  * The extension the link suggests, if any.
  */
-extension: string | null, };
+extension: string | null, 
+/**
+ * The folder decided: it's this category's folder, or (Other) the
+ * folder of none.
+ */
+byFolder: boolean, };

@@ -54,16 +54,19 @@ pub(crate) async fn remove(
 }
 
 /// `POST /categories/match`: the category a link would get if added without
-/// one. A POST, so links (which may carry tokens) never sit in an address.
+/// one (in that folder, if `destDir` is given). A POST, so links (which may carry tokens) never sit in an address.
 pub(crate) async fn matching(
     State(state): State<AppState>,
     body: Result<Json<MatchLink>, JsonRejection>,
 ) -> Result<Json<Matched>, Failure> {
     let Json(body) = body?;
-    let matched = state.manager.match_category(parse_url(&body.url)?).await?;
+    let url = parse_url(&body.url)?;
+    let dest_dir = body.dest_dir.map(absolute_folder).transpose()?;
+    let matched = state.manager.match_category(url, dest_dir).await?;
     Ok(Json(Matched {
         category: matched.category.0,
         extension: matched.extension,
+        by_folder: matched.by_folder,
     }))
 }
 

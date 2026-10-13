@@ -25,6 +25,9 @@
 	}
 
 	let { category, generalFolder, onSave, onClose }: Props = $props();
+	/** Other has only a name and limits: its downloads chose their folder. */
+	// svelte-ignore state_referenced_locally
+	const other = category?.builtIn === 'other';
 	let dialog: HTMLDialogElement;
 
 	// The form starts from the category; it's a copy, edited freely.
@@ -65,8 +68,8 @@
 		saving = true;
 		problem = await onSave({
 			name,
-			folder: folder.trim() || null,
-			extensions: parseExtensions(extensions),
+			folder: other ? null : folder.trim() || null,
+			extensions: other ? [] : parseExtensions(extensions),
 			speedLimit: fieldToLimit(speed, unit),
 			maxConcurrent: Math.max(0, Math.floor(Number(running) || 0))
 		});
@@ -94,24 +97,26 @@
 			<input value={name} oninput={rename} required autofocus />
 		</label>
 
-		<label>
-			<span>{m.cat_folder()}</span>
-			<span class="row">
-				<input bind:value={folder} oninput={() => (folderTouched = true)} />
-				{#if canPickFolder()}
-					<button type="button" onclick={browse}>
-						<FolderOpen size={15} aria-hidden="true" />
-						{m.cat_browse()}
-					</button>
-				{/if}
-			</span>
-		</label>
+		{#if !other}
+			<label>
+				<span>{m.cat_folder()}</span>
+				<span class="row">
+					<input bind:value={folder} oninput={() => (folderTouched = true)} />
+					{#if canPickFolder()}
+						<button type="button" onclick={browse}>
+							<FolderOpen size={15} aria-hidden="true" />
+							{m.cat_browse()}
+						</button>
+					{/if}
+				</span>
+			</label>
 
-		<label>
-			<span>{m.cat_extensions()}</span>
-			<input bind:value={extensions} spellcheck="false" autocapitalize="off" />
-			<small>{m.cat_extensions_hint()}</small>
-		</label>
+			<label>
+				<span>{m.cat_extensions()}</span>
+				<input bind:value={extensions} spellcheck="false" autocapitalize="off" />
+				<small>{m.cat_extensions_hint()}</small>
+			</label>
+		{/if}
 
 		<div class="pair">
 			<label>

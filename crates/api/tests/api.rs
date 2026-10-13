@@ -10,8 +10,9 @@ use axum::body::{Body, Bytes};
 use axum::routing::get;
 use futures_util::StreamExt;
 use ottie_api::{
-    AddJob, Added, AddedCategory, ApiError, Category, CategoryBody, EVENTS_PROTOCOL, Event, Job,
-    JobState, Matched, Problem, Reason, TOKEN_PROTOCOL_PREFIX, Token, UiSource,
+    AddJob, Added, AddedCategory, ApiError, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL,
+    Event, Job, JobState, Matched, Problem, Reason, Settings, SettingsChange,
+    TOKEN_PROTOCOL_PREFIX, Token, UiSource,
 };
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
@@ -461,6 +462,34 @@ async fn without_a_ui_build_the_page_says_how_to_make_one() {
 }
 
 #[tokio::test]
+async fn settings_are_read_and_changed() {
+    let d = start().await;
+    let settings = || async {
+        let response = d.get("/settings").send().await.unwrap();
+        response.json::<Settings>().await.unwrap()
+    };
+    assert!(
+        !settings().await.setup_done,
+        "a new daemon offers the setup"
+    );
+
+    let patch = |change: SettingsChange| {
+        let request = d.client.patch(d.url("/settings")).bearer_auth(TOKEN);
+        request.json(&change).send()
+    };
+    let response = patch(SettingsChange {
+        setup_done: Some(true),
+    })
+    .await
+    .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert!(settings().await.setup_done);
+    // Fields left out stay as they are.
+    patch(SettingsChange::default()).await.unwrap();
+    assert!(settings().await.setup_done);
+}
+
+#[tokio::test]
 async fn categories_are_listed_added_matched_changed_and_removed() {
     let d = start().await;
     let offered = format!("{EVENTS_PROTOCOL}, {TOKEN_PROTOCOL_PREFIX}{TOKEN}");
@@ -469,7 +498,8 @@ async fn categories_are_listed_added_matched_changed_and_removed() {
         let response = d.get("/categories").send().await.unwrap();
         response.json::<Vec<Category>>().await.unwrap()
     };
-    assert_eq!(list().await[0].name, "General");
+    let built_in: Vec<_> = list().await.iter().map(|c| c.built_in).collect();
+    assert_eq!(built_in, [Some(BuiltIn::General), Some(BuiltIn::Other)]);
 
     let folder = d.dir.path().join("videos").to_string_lossy().into_owned();
     let videos = CategoryBody {
@@ -483,8 +513,9 @@ async fn categories_are_listed_added_matched_changed_and_removed() {
     assert_eq!(added.status(), StatusCode::CREATED);
     let id = added.json::<AddedCategory>().await.unwrap().id;
     let listed = list().await;
-    assert_eq!(listed[1].extensions, ["mkv", "mp4"]);
-    assert_eq!(listed[1].folder.as_deref(), Some(folder.as_str()));
+    assert_eq!(listed[2].extensions, ["mkv", "mp4"]);
+    assert_eq!(listed[2].folder.as_deref(), Some(folder.as_str()));
+    assert_eq!(listed[2].built_in, None);
     // Subscribers hear about it.
     tokio::time::timeout(TIMEOUT, async {
         loop {
@@ -514,6 +545,24 @@ async fn categories_are_listed_added_matched_changed_and_removed() {
         (matched.category, matched.extension.as_deref()),
         (id, Some("mkv"))
     );
+    // A folder of no category: Other (ID 2 on a new database).
+    let elsewhere = d
+        .dir
+        .path()
+        .join("elsewhere")
+        .to_string_lossy()
+        .into_owned();
+    let link = serde_json::json!({ "url": format!("{}/Film.MKV", d.files), "destDir": elsewhere });
+    let matched: Matched = d
+        .post("/categories/match")
+        .json(&link)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!((matched.category, matched.by_folder), (2, true));
 
     let taken = CategoryBody {
         name: "Films".into(),
@@ -549,7 +598,7 @@ async fn categories_are_listed_added_matched_changed_and_removed() {
         changed.json(&renamed).send().await.unwrap().status(),
         StatusCode::NO_CONTENT
     );
-    assert_eq!(list().await[1].name, "Movies");
+    assert_eq!(list().await[2].name, "Movies");
 
     // A download can be moved in, and goes back to General when its category goes.
     let job = d.add("file.bin").await;
@@ -567,12 +616,16 @@ async fn categories_are_listed_added_matched_changed_and_removed() {
         StatusCode::NO_CONTENT
     );
     assert_eq!(d.job(&job).await.category, 1);
-    assert_eq!(list().await.len(), 1);
+    assert_eq!(list().await.len(), 2);
 
     let general = d.client.delete(d.url("/categories/1")).bearer_auth(TOKEN);
     let (status, refused) = error_of(general.send().await.unwrap()).await;
+    let category = "General".into();
     assert_eq!(
         (status, refused.reason),
-        (StatusCode::CONFLICT, Reason::CannotRemoveGeneral)
+        (
+            StatusCode::CONFLICT,
+            Reason::CannotRemoveBuiltIn { category }
+        )
     );
 }

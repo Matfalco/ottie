@@ -1,6 +1,6 @@
 # 0011: Categories, with a built-in General category
 
-Accepted 2026-10-12.
+Accepted 2026-10-12. Amended by `docs/decisions/0020`: a second built-in category, Other, and a folder given without a category decides the category.
 
 **What a category is:** a name (unique, ignoring case), an optional folder, a list of file extensions, a speed limit and a cap on running jobs (`max_concurrent`, 0 = none of its own). Categories live in the `categories` table, their extensions in `category_extensions`.
 

@@ -3,7 +3,10 @@
 
 export type FileKind = 'video' | 'audio' | 'image' | 'archive' | 'document' | 'program' | 'other';
 
-const EXTENSIONS: Record<Exclude<FileKind, 'other'>, string[]> = {
+/** The kinds with a list of extensions. */
+export type KnownKind = Exclude<FileKind, 'other'>;
+
+export const EXTENSIONS: Record<KnownKind, string[]> = {
 	video: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'm4v', 'wmv', 'flv', 'mpg', 'mpeg', 'ts', '3gp'],
 	audio: ['mp3', 'flac', 'ogg', 'opus', 'm4a', 'aac', 'wav', 'wma', 'aiff'],
 	image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'tif', 'tiff', 'heic', 'avif'],

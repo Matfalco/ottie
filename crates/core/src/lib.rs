@@ -19,7 +19,7 @@ mod store;
 mod throttle;
 
 pub use backend::{Backend, HttpBackend};
-pub use category::{Category, CategoryId, CategorySettings, Matched};
+pub use category::{BuiltIn, Category, CategoryId, CategorySettings, Matched};
 pub use download::{Download, Event, Outcome, Placement, RestartReason, Segment, Validator};
 pub use error::Error;
 pub use filename::PART_SUFFIX;

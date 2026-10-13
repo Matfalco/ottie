@@ -2,7 +2,7 @@
 //! running jobs, shared by every job in them. See docs/decisions/0011.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use reqwest::Url;
 
@@ -18,6 +18,18 @@ impl CategoryId {
     /// The built-in category: it can't be removed, jobs that match no other
     /// category go there, and jobs of a removed category move there.
     pub const GENERAL: CategoryId = CategoryId(1);
+}
+
+/// The categories Ottie itself needs; they can't be removed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltIn {
+    /// ID 1. Jobs that match no extension go there, and its folder is the
+    /// default download folder.
+    General,
+    /// Jobs saved in a folder that belongs to no category. It has no folder
+    /// and no extensions of its own. Its ID is 2 on new databases, the next
+    /// free one on older ones.
+    Other,
 }
 
 impl fmt::Display for CategoryId {
@@ -85,6 +97,8 @@ impl CategorySettings {
 pub struct Category {
     pub id: CategoryId,
     pub settings: CategorySettings,
+    /// `None` for the user's own categories.
+    pub built_in: Option<BuiltIn>,
 }
 
 /// Where a link would go if added without a category, and why.
@@ -94,6 +108,27 @@ pub struct Matched {
     /// The extension the URL suggests, if any. `None`, or one no category
     /// lists, means General.
     pub extension: Option<String>,
+    /// The folder given decided: it's this category's folder, or (Other)
+    /// the folder of none.
+    pub by_folder: bool,
+}
+
+/// Whether `a` and `b` name the same folder, ignoring a trailing separator
+/// (and case on Windows, whose file names ignore it).
+pub(crate) fn same_folder(a: &Path, b: &Path) -> bool {
+    let parts = |path: &Path| -> Vec<String> {
+        path.components()
+            .map(|part| {
+                let text = part.as_os_str().to_string_lossy();
+                if cfg!(windows) {
+                    text.to_lowercase()
+                } else {
+                    text.into_owned()
+                }
+            })
+            .collect()
+    };
+    parts(a) == parts(b)
 }
 
 /// The extension of the file name `url` suggests, lowercase, if it has one.
@@ -126,6 +161,20 @@ mod tests {
             };
             assert!(settings.normalized().is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn folders_compare_by_their_parts() {
+        assert!(same_folder(
+            Path::new("/dl/videos/"),
+            Path::new("/dl/videos")
+        ));
+        assert!(!same_folder(Path::new("/dl/videos"), Path::new("/dl")));
+        #[cfg(windows)]
+        assert!(same_folder(
+            Path::new(r"D:\Downloads\"),
+            Path::new("d:/downloads")
+        ));
     }
 
     #[test]

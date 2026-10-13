@@ -81,6 +81,8 @@ impl NewJob {
         }
     }
 
+    /// Without [`NewJob::in_category`], the folder also decides the category:
+    /// the one whose folder it is, else the built-in Other.
     pub fn in_dir(mut self, dest_dir: impl Into<PathBuf>) -> Self {
         self.dest_dir = Some(dest_dir.into());
         self

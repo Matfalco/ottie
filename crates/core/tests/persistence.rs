@@ -241,6 +241,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         first_wait: Duration::from_millis(1500),
     };
     manager.set_retry_policy(retry).await.unwrap();
+    manager.set_setup_done(true).await.unwrap();
     let id = s.add(&manager).await;
     manager.pause(id).await.unwrap();
     manager.set_priority(id, Priority::High).await.unwrap();
@@ -252,6 +253,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         global_limit: 5_000_000,
         max_concurrent: 2,
         retry,
+        setup_done: true,
     };
     assert_eq!(manager.settings().await.unwrap(), expected);
     let job = &manager.list().await.unwrap()[0];
@@ -283,7 +285,11 @@ async fn categories_and_job_categories_survive_a_restart() {
     manager.remove_category(id).await.unwrap();
     manager.shutdown().await.unwrap();
     let manager = s.launch().await;
-    assert_eq!(manager.categories().await.unwrap().len(), 1);
+    assert_eq!(
+        manager.categories().await.unwrap().len(),
+        2,
+        "General and Other"
+    );
     assert_eq!(
         manager.list().await.unwrap()[0].category,
         CategoryId::GENERAL

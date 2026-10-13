@@ -102,7 +102,7 @@ pub struct Added {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Category {
-    /// General is 1; it always exists and can't be removed.
+    /// General is 1.
     pub id: u32,
     pub name: String,
     /// Where its downloads are saved; null: each download must name a folder.
@@ -114,6 +114,20 @@ pub struct Category {
     pub speed_limit: u64,
     /// How many of its downloads may run at once; 0 = no cap of its own.
     pub max_concurrent: u32,
+    /// Null for the user's own categories.
+    pub built_in: Option<BuiltIn>,
+}
+
+/// The categories Ottie itself needs; they can't be removed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum BuiltIn {
+    /// Downloads that match no extension; its folder is the default one.
+    General,
+    /// Downloads saved in a folder of no category. It never has a folder or
+    /// extensions (they are ignored when it's changed).
+    Other,
 }
 
 /// Body of `POST /categories` and `PUT /categories/{id}`: every setting (a
@@ -146,11 +160,16 @@ pub struct AddedCategory {
 #[ts(export)]
 pub struct MatchLink {
     pub url: String,
+    /// The folder it would be saved in, if not its category's: then the
+    /// folder decides the category.
+    #[serde(default)]
+    #[ts(optional)]
+    pub dest_dir: Option<String>,
 }
 
 /// Answer to `POST /categories/match`: the category a download of that link
 /// would get. The server's real file name may still move it, unless the user
-/// picks the category.
+/// picks the category or a folder.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -158,6 +177,9 @@ pub struct Matched {
     pub category: u32,
     /// The extension the link suggests, if any.
     pub extension: Option<String>,
+    /// The folder decided: it's this category's folder, or (Other) the
+    /// folder of none.
+    pub by_folder: bool,
 }
 
 /// Body of `POST /jobs/{id}/category`.
@@ -166,6 +188,26 @@ pub struct Matched {
 #[ts(export)]
 pub struct MoveJob {
     pub category: u32,
+}
+
+/// What applies to the whole daemon, as `GET /settings` answers it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Settings {
+    /// The first-start setup (starter categories) was done or skipped;
+    /// until then, front ends offer it.
+    pub setup_done: bool,
+}
+
+/// Body of `PATCH /settings`: only the fields given change.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SettingsChange {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub setup_done: Option<bool>,
 }
 
 /// Why a job failed or is retrying. Clients translate it by `code` and
@@ -275,7 +317,10 @@ pub enum Reason {
         extension: String,
         category: String,
     },
-    CannotRemoveGeneral,
+    /// General and Other can't be removed.
+    CannotRemoveBuiltIn {
+        category: String,
+    },
     /// The daemon is shutting down.
     Stopping,
     /// A bug or an unexpected failure; `error` has the details.
@@ -339,6 +384,14 @@ impl From<JobSnapshot> for Job {
     }
 }
 
+impl From<ottie_core::Settings> for Settings {
+    fn from(settings: ottie_core::Settings) -> Self {
+        Settings {
+            setup_done: settings.setup_done,
+        }
+    }
+}
+
 impl From<ottie_core::Category> for Category {
     fn from(category: ottie_core::Category) -> Self {
         let settings = category.settings;
@@ -349,6 +402,10 @@ impl From<ottie_core::Category> for Category {
             extensions: settings.extensions,
             speed_limit: settings.speed_limit,
             max_concurrent: u32::try_from(settings.max_concurrent).unwrap_or(u32::MAX),
+            built_in: category.built_in.map(|built_in| match built_in {
+                ottie_core::BuiltIn::General => BuiltIn::General,
+                ottie_core::BuiltIn::Other => BuiltIn::Other,
+            }),
         }
     }
 }

@@ -1,4 +1,3 @@
-import type { Category } from '@ottie/api-types/Category';
 import { describe, expect, it } from 'vitest';
 import {
 	applyCategoryEvent,
@@ -11,23 +10,14 @@ import {
 	suggestFolder,
 	type Categories
 } from './categories';
-import { plain } from './testing';
-
-function category(overrides: Partial<Category> = {}): Category {
-	return {
-		id: 1,
-		name: 'General',
-		folder: '/downloads',
-		extensions: [],
-		speedLimit: 0,
-		maxConcurrent: 0,
-		...overrides
-	};
-}
+import { category, plain } from './testing';
 
 describe('categories', () => {
-	it('follow events, General first then by name', () => {
-		const categories: Categories = { 1: category() };
+	it('follow events, General first then by name, Other last', () => {
+		const categories: Categories = {
+			1: category(),
+			9: category({ id: 9, name: 'Other', builtIn: 'other' })
+		};
 		applyCategoryEvent(categories, {
 			type: 'categoryChanged',
 			category: category({ id: 3, name: 'Zips' })
@@ -36,9 +26,14 @@ describe('categories', () => {
 			type: 'categoryChanged',
 			category: category({ id: 2, name: 'Music' })
 		});
-		expect(sorted(categories, 'en').map((c) => c.name)).toEqual(['General', 'Music', 'Zips']);
+		expect(sorted(categories, 'en').map((c) => c.name)).toEqual([
+			'General',
+			'Music',
+			'Zips',
+			'Other'
+		]);
 		applyCategoryEvent(categories, { type: 'categoryRemoved', id: 3 });
-		expect(Object.keys(categories)).toEqual(['1', '2']);
+		expect(Object.keys(categories)).toEqual(['1', '2', '9']);
 	});
 
 	it('read extensions however they are separated', () => {
@@ -74,5 +69,8 @@ describe('categories', () => {
 		expect(categoryName(category(), 'fr')).toBe('Général');
 		expect(categoryName(category({ name: 'Misc' }), 'fr')).toBe('Misc');
 		expect(categoryName(category({ id: 2, name: 'General' }), 'fr')).toBe('General');
+		const other = category({ id: 2, name: 'Other', builtIn: 'other' });
+		expect(categoryName(other, 'fr')).toBe('Autres');
+		expect(categoryName({ ...other, name: 'Elsewhere' }, 'fr')).toBe('Elsewhere');
 	});
 });

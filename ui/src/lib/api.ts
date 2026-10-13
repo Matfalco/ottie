@@ -7,9 +7,12 @@ import type { Added } from '@ottie/api-types/Added';
 import type { AddedCategory } from '@ottie/api-types/AddedCategory';
 import type { Category } from '@ottie/api-types/Category';
 import type { CategoryBody } from '@ottie/api-types/CategoryBody';
+import type { MatchLink } from '@ottie/api-types/MatchLink';
 import type { Matched } from '@ottie/api-types/Matched';
 import type { ApiError } from '@ottie/api-types/ApiError';
 import type { Job } from '@ottie/api-types/Job';
+import type { Settings } from '@ottie/api-types/Settings';
+import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 
 const BASE = '/api/v1';
 /** The protocol of the events WebSocket; the token rides along as a second one. */
@@ -85,9 +88,19 @@ export class Api {
 		return this.request('DELETE', `/categories/${id}`);
 	}
 
-	/** The category a download of `url` would get. */
-	matchCategory(url: string): Promise<Matched> {
-		return this.request('POST', '/categories/match', { url });
+	/** The category a download of `url` would get (saved in `destDir`, if given). */
+	matchCategory(url: string, destDir?: string): Promise<Matched> {
+		const link: MatchLink = { url, destDir };
+		return this.request('POST', '/categories/match', link);
+	}
+
+	getSettings(): Promise<Settings> {
+		return this.request('GET', '/settings');
+	}
+
+	/** Changes only the fields given. */
+	changeSettings(change: SettingsChange): Promise<void> {
+		return this.request('PATCH', '/settings', change);
 	}
 
 	/** Opens the live events stream. */

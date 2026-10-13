@@ -70,7 +70,12 @@ impl From<Error> for Failure {
                     category: category.clone(),
                 },
             ),
-            Error::CannotRemoveGeneral => (S::CONFLICT, Reason::CannotRemoveGeneral),
+            Error::CannotRemoveBuiltIn(category) => (
+                S::CONFLICT,
+                Reason::CannotRemoveBuiltIn {
+                    category: category.clone(),
+                },
+            ),
             Error::UnsupportedScheme(scheme) => (
                 S::BAD_REQUEST,
                 Reason::UnsupportedScheme {

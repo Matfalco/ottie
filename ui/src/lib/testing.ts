@@ -1,5 +1,6 @@
 // Shared by the unit tests.
 
+import type { Category } from '@ottie/api-types/Category';
 import type { Job } from '@ottie/api-types/Job';
 
 /** A queued job with nothing known yet; override what a test needs. */
@@ -20,6 +21,21 @@ export function job(overrides: Partial<Job> = {}): Job {
 		category: 1,
 		retries: 0,
 		retryAt: null,
+		...overrides
+	};
+}
+
+/** General with a folder and no limits; override what a test needs (with
+ * another ID, it's one of the user's own). */
+export function category(overrides: Partial<Category> = {}): Category {
+	return {
+		id: 1,
+		name: 'General',
+		folder: '/downloads',
+		extensions: [],
+		speedLimit: 0,
+		maxConcurrent: 0,
+		builtIn: (overrides.id ?? 1) === 1 ? 'general' : null,
 		...overrides
 	};
 }

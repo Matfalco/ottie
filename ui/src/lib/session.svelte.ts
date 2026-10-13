@@ -1,11 +1,14 @@
 // What the downloads page shows, kept live: the job list from `GET /jobs`,
 // updated by the events WebSocket, which reconnects on its own.
 
+import type { AddJob } from '@ottie/api-types/AddJob';
 import type { CategoryBody } from '@ottie/api-types/CategoryBody';
+import type { Matched } from '@ottie/api-types/Matched';
+import type { Settings } from '@ottie/api-types/Settings';
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
 import { Api, ApiFailure, Unauthorized } from './api';
 import type { Action } from './bulk';
-import { applyCategoryEvent, sorted, type Categories } from './categories';
+import { GENERAL, applyCategoryEvent, sorted, type Categories } from './categories';
 import { explainRefusal } from './explain';
 import { m } from './paraglide/messages.js';
 import { applyEvent, newestFirst, nextRate, type Jobs, type Rate } from './jobs';
@@ -31,6 +34,8 @@ export class Session {
 	categories: Categories = $state({});
 	/** General first, then by name. */
 	categoryList = $derived(sorted(this.categories));
+	/** Null until the daemon has answered. */
+	settings: Settings | null = $state(null);
 
 	private readonly api: Api;
 	private socket: WebSocket | null = null;
@@ -62,8 +67,18 @@ export class Session {
 		this.timers.forEach((timer) => clearTimeout(timer));
 	}
 
-	async add(url: string, destDir?: string): Promise<boolean> {
-		return this.attempt(() => this.api.addJob({ url, destDir }));
+	async add(job: AddJob): Promise<boolean> {
+		return this.attempt(() => this.api.addJob(job));
+	}
+
+	/** The category a download of `url` (saved in `destDir`, if given)
+	 * would get; null if the daemon can't tell (adding it will say why). */
+	async match(url: string, destDir?: string): Promise<Matched | null> {
+		try {
+			return await this.api.matchCategory(url, destDir);
+		} catch {
+			return null;
+		}
 	}
 
 	/** Does it to every job in `ids` at once; any failure shows on the page. */
@@ -95,6 +110,36 @@ export class Session {
 
 	removeCategory(id: number): Promise<boolean> {
 		return this.attempt(() => this.api.removeCategory(id));
+	}
+
+	/** Ends the first-start setup: General's folder (if it changed), then the
+	 * categories, in order. Resolves to null once done, else to why not; what
+	 * was created stays, and trying again skips it. */
+	async finishSetup(downloads: string | null, bodies: CategoryBody[]): Promise<string | null> {
+		const general = this.categories[GENERAL];
+		if (general && downloads !== null && downloads !== general.folder) {
+			const { name, extensions, speedLimit, maxConcurrent } = general;
+			const body = { name, folder: downloads, extensions, speedLimit, maxConcurrent };
+			const why = await this.saveCategory(GENERAL, body);
+			if (why !== null) {
+				return why;
+			}
+		}
+		for (const body of bodies) {
+			const why = await this.saveCategory(null, body);
+			if (why !== null) {
+				return why;
+			}
+		}
+		try {
+			await this.api.changeSettings({ setupDone: true });
+			if (this.settings) {
+				this.settings.setupDone = true;
+			}
+			return null;
+		} catch (error) {
+			return this.why(error);
+		}
 	}
 
 	/** Runs a request; on failure shows why and returns false. */
@@ -189,12 +234,14 @@ export class Session {
 		}
 		this.pending = [];
 		try {
-			const [jobs, categories] = await Promise.all([
+			const [jobs, categories, settings] = await Promise.all([
 				this.api.listJobs(),
-				this.api.listCategories()
+				this.api.listCategories(),
+				this.api.getSettings()
 			]);
 			this.jobs = Object.fromEntries(jobs.map((job) => [job.id, job]));
 			this.categories = Object.fromEntries(categories.map((category) => [category.id, category]));
+			this.settings = settings;
 			this.connection = 'live';
 		} catch (error) {
 			this.fail(error);

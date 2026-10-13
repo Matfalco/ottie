@@ -123,7 +123,9 @@ async fn a_job_limit_slows_that_job() {
 #[tokio::test]
 async fn a_category_limit_slows_its_jobs_together() {
     let s = setup().await;
+    // Its folder is the one `add` names, so the jobs land in it.
     let videos = CategorySettings {
+        folder: Some(s.dir.path().to_path_buf()),
         extensions: vec!["mkv".into()],
         speed_limit: 128 * KIB,
         ..CategorySettings::named("Videos")

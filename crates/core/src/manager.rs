@@ -4,6 +4,7 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, HashMap};
 use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -12,7 +13,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use crate::backend::Backend;
-use crate::category::{self, Category, CategoryId, CategorySettings, Matched};
+use crate::category::{self, BuiltIn, Category, CategoryId, CategorySettings, Matched};
 use crate::download::{Download, Event, Outcome, Placement};
 use crate::error::Error;
 use crate::filename;
@@ -61,6 +62,12 @@ impl Manager {
         let settings = loaded.settings;
         let limiter = Limiter::new(settings.global_limit);
         let mut categories = BTreeMap::new();
+        // The database always has it (migration 8); General would do otherwise.
+        let other = loaded
+            .categories
+            .iter()
+            .find(|c| c.built_in == Some(BuiltIn::Other))
+            .map_or(CategoryId::GENERAL, |c| c.id);
         for category in loaded.categories {
             limiter.set_category_limit(category.id, category.settings.speed_limit);
             categories.insert(category.id, category.settings);
@@ -77,6 +84,7 @@ impl Manager {
             ids: IdGenerator::after(jobs.keys().next_back().copied().max(loaded.last_id)),
             jobs,
             categories,
+            other,
             yields: 0,
             events: events.clone(),
             internal,
@@ -161,6 +169,12 @@ impl Manager {
             .await
     }
 
+    /// Records whether the first-start setup was done (or skipped). Saved.
+    pub async fn set_setup_done(&self, done: bool) -> Result<(), Error> {
+        self.request(|reply| Command::SetSetupDone { done, reply })
+            .await
+    }
+
     /// One job's own limit in bytes per second; 0 = none (the global limit
     /// still applies). Takes effect immediately, even while it runs.
     pub async fn set_speed_limit(&self, id: JobId, bytes_per_sec: u64) -> Result<(), Error> {
@@ -182,16 +196,27 @@ impl Manager {
         .await
     }
 
-    /// Every category, by ID. General (ID 1) is always first.
+    /// Every category, by ID. General (ID 1) is always first; Other is
+    /// always there too.
     pub async fn categories(&self) -> Result<Vec<Category>, Error> {
         self.request(|reply| Command::Categories { reply }).await
     }
 
-    /// The category a job for `url` would get if added without one, by the
-    /// extension in the URL. The real file name, once the server answers,
-    /// may still move it (unless the user chose the category).
-    pub async fn match_category(&self, url: Url) -> Result<Matched, Error> {
-        self.request(|reply| Command::Match { url, reply }).await
+    /// The category a job for `url` would get if added without one: by the
+    /// folder, if one is given (see [`NewJob::in_dir`]), else by the extension
+    /// in the URL. The real file name, once the server answers, may still
+    /// move a job matched by extension.
+    pub async fn match_category(
+        &self,
+        url: Url,
+        dest_dir: Option<PathBuf>,
+    ) -> Result<Matched, Error> {
+        self.request(|reply| Command::Match {
+            url,
+            dest_dir,
+            reply,
+        })
+        .await
     }
 
     pub async fn add_category(&self, settings: CategorySettings) -> Result<CategoryId, Error> {
@@ -288,6 +313,10 @@ enum Command {
         policy: RetryPolicy,
         reply: Reply<()>,
     },
+    SetSetupDone {
+        done: bool,
+        reply: Reply<()>,
+    },
     SetSpeedLimit {
         id: JobId,
         bytes_per_sec: u64,
@@ -303,6 +332,7 @@ enum Command {
     },
     Match {
         url: Url,
+        dest_dir: Option<PathBuf>,
         reply: Reply<Matched>,
     },
     AddCategory {
@@ -377,7 +407,8 @@ struct Job {
     /// Bytes per second; 0 = no limit of its own.
     speed_limit: u64,
     category: CategoryId,
-    /// The user picked the category, rather than it being matched by extension.
+    /// The user picked the category (or a folder, which decided it), rather
+    /// than it being matched by extension; it is never re-matched.
     category_chosen: bool,
     /// Failed attempts since bytes last arrived (not saved).
     retries: u32,
@@ -468,8 +499,10 @@ struct Actor<B> {
     limiter: Limiter,
     /// Sorted by ID, which means by creation time.
     jobs: BTreeMap<JobId, Job>,
-    /// Always holds General. Saved whenever one changes.
+    /// Always holds General and Other. Saved whenever one changes.
     categories: BTreeMap<CategoryId, CategorySettings>,
+    /// The ID of the built-in Other category.
+    other: CategoryId,
     /// How many times a retrying job has given way (see `Job::gave_way`).
     yields: u64,
     ids: IdGenerator,
@@ -549,6 +582,11 @@ impl<B: Backend> Actor<B> {
                 self.schedule();
                 let _ = reply.send(Ok(()));
             }
+            Command::SetSetupDone { done, reply } => {
+                self.settings.setup_done = done;
+                self.store.save_settings(self.settings.clone());
+                let _ = reply.send(Ok(()));
+            }
             Command::SetSpeedLimit {
                 id,
                 bytes_per_sec,
@@ -568,10 +606,19 @@ impl<B: Backend> Actor<B> {
             Command::Categories { reply } => {
                 let _ = reply.send(Ok(self.categories()));
             }
-            Command::Match { url, reply } => {
+            Command::Match {
+                url,
+                dest_dir,
+                reply,
+            } => {
+                let (category, by_folder) = match &dest_dir {
+                    Some(dir) => (self.category_of_folder(&url, dir), true),
+                    None => (self.match_category(&url), false),
+                };
                 let _ = reply.send(Ok(Matched {
-                    category: self.match_category(&url),
+                    category,
                     extension: category::url_extension(&url),
+                    by_folder,
                 }));
             }
             Command::AddCategory { settings, reply } => {
@@ -689,9 +736,12 @@ impl<B: Backend> Actor<B> {
         if self.shutdown.is_some() {
             return Err(Error::ManagerStopped);
         }
-        let category = match new.category {
-            Some(category) => category,
-            None => self.match_category(&new.url),
+        // Fixed (never re-matched) when the user picked the category, or a
+        // folder, which then decides it.
+        let (category, fixed) = match (new.category, &new.dest_dir) {
+            (Some(category), _) => (category, true),
+            (None, Some(dir)) => (self.category_of_folder(&new.url, dir), true),
+            (None, None) => (self.match_category(&new.url), false),
         };
         let settings = self.category(category)?;
         let dest_dir = match new.dest_dir {
@@ -715,7 +765,7 @@ impl<B: Backend> Actor<B> {
                 priority: Priority::default(),
                 speed_limit: 0,
                 category,
-                category_chosen: new.category.is_some(),
+                category_chosen: fixed,
                 retries: 0,
                 retry_at: None,
                 gave_way: 0,
@@ -744,6 +794,36 @@ impl<B: Backend> Actor<B> {
         category::url_extension(url)
             .and_then(|ext| owner_of(&self.categories, &ext))
             .unwrap_or(CategoryId::GENERAL)
+    }
+
+    /// The category whose folder `dir` is: the one the extension matches if
+    /// its folder is `dir`, else the first with that folder, else Other.
+    fn category_of_folder(&self, url: &Url, dir: &Path) -> CategoryId {
+        let in_dir = |id: &CategoryId| {
+            self.categories
+                .get(id)
+                .and_then(|c| c.folder.as_deref())
+                .is_some_and(|folder| category::same_folder(folder, dir))
+        };
+        let by_extension = self.match_category(url);
+        if in_dir(&by_extension) {
+            return by_extension;
+        }
+        self.categories
+            .keys()
+            .find(|id| in_dir(id))
+            .copied()
+            .unwrap_or(self.other)
+    }
+
+    fn built_in(&self, id: CategoryId) -> Option<BuiltIn> {
+        if id == CategoryId::GENERAL {
+            Some(BuiltIn::General)
+        } else if id == self.other {
+            Some(BuiltIn::Other)
+        } else {
+            None
+        }
     }
 
     /// For a job's first run, if its category was matched automatically and
@@ -787,6 +867,7 @@ impl<B: Backend> Actor<B> {
             .map(|(&id, settings)| Category {
                 id,
                 settings: settings.clone(),
+                built_in: self.built_in(id),
             })
             .collect()
     }
@@ -832,8 +913,17 @@ impl<B: Backend> Actor<B> {
         Ok(id)
     }
 
-    fn update_category(&mut self, id: CategoryId, settings: CategorySettings) -> Result<(), Error> {
+    fn update_category(
+        &mut self,
+        id: CategoryId,
+        mut settings: CategorySettings,
+    ) -> Result<(), Error> {
         self.category(id)?;
+        if id == self.other {
+            // Its jobs are the ones saved outside every category's folder.
+            settings.folder = None;
+            settings.extensions.clear();
+        }
         let settings = self.check_category(settings, Some(id))?;
         self.limiter.set_category_limit(id, settings.speed_limit);
         self.categories.insert(id, settings);
@@ -844,10 +934,10 @@ impl<B: Backend> Actor<B> {
     }
 
     fn remove_category(&mut self, id: CategoryId) -> Result<(), Error> {
-        if id == CategoryId::GENERAL {
-            return Err(Error::CannotRemoveGeneral);
+        let settings = self.category(id)?;
+        if self.built_in(id).is_some() {
+            return Err(Error::CannotRemoveBuiltIn(settings.name.clone()));
         }
-        self.category(id)?;
         let members: Vec<JobId> = self
             .jobs
             .iter()
@@ -898,6 +988,7 @@ impl<B: Backend> Actor<B> {
         let category = Category {
             id,
             settings: settings.clone(),
+            built_in: self.built_in(id),
         };
         self.store.save_category(category.clone());
         // Fails only when nobody is subscribed.

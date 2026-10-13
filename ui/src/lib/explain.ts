@@ -103,8 +103,8 @@ export function explainRefusal(
 				{ extension: body.extension, category: body.category },
 				options
 			);
-		case 'cannotRemoveGeneral':
-			return m.reason_cannot_remove_general({}, options);
+		case 'cannotRemoveBuiltIn':
+			return m.reason_cannot_remove_built_in({ category: body.category }, options);
 		default:
 			// Codes for screens this UI doesn't have yet, internal errors, and
 			// codes from a newer daemon.

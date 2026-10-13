@@ -15,6 +15,7 @@ mod categories;
 mod error;
 mod events;
 mod jobs;
+mod settings;
 mod types;
 mod ui;
 
@@ -27,8 +28,8 @@ use tokio_util::sync::CancellationToken;
 
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
 pub use types::{
-    AddJob, Added, AddedCategory, ApiError, Category, CategoryBody, Event, Job, JobState,
-    MatchLink, Matched, MoveJob, Priority, Problem, Reason,
+    AddJob, Added, AddedCategory, ApiError, BuiltIn, Category, CategoryBody, Event, Job, JobState,
+    MatchLink, Matched, MoveJob, Priority, Problem, Reason, Settings, SettingsChange,
 };
 pub use ui::UiSource;
 
@@ -62,6 +63,7 @@ pub fn router(manager: Manager, token: Token, shutdown: CancellationToken, ui: U
             "/categories/{id}",
             put(categories::update).delete(categories::remove),
         )
+        .route("/settings", get(settings::get).patch(settings::change))
         .route("/events", get(events::subscribe))
         .fallback(not_found)
         // Also covers the fallback, so unknown paths don't reveal what exists.

@@ -11,7 +11,7 @@ use reqwest::Url;
 use rusqlite::{Connection, Row, params};
 use tokio::sync::oneshot;
 
-use crate::category::{Category, CategoryId, CategorySettings};
+use crate::category::{BuiltIn, Category, CategoryId, CategorySettings};
 use crate::download::{Download, Segment, Validator};
 use crate::error::Error;
 use crate::id::JobId;
@@ -131,6 +131,23 @@ const MIGRATIONS: &[&str] = &[
         CHECK (last_id_secs >= 0);
      ALTER TABLE settings ADD COLUMN last_id_seq INTEGER NOT NULL DEFAULT 0
         CHECK (last_id_seq >= 0);",
+    // 8: whether the first-start setup (starter categories) was done or
+    // skipped; a database that already has categories of its own counts as
+    // set up. And the built-in Other category, for downloads saved in a folder
+    // of no category: ID 2 on a new database, the next free one otherwise
+    // (renamed if the user already has an "Other").
+    "ALTER TABLE settings ADD COLUMN setup_done INTEGER NOT NULL DEFAULT 0
+        CHECK (setup_done IN (0, 1));
+     UPDATE settings SET setup_done = 1 WHERE (SELECT COUNT(*) FROM categories) > 1;
+     ALTER TABLE categories ADD COLUMN built_in TEXT CHECK (built_in IN ('general', 'other'));
+     CREATE UNIQUE INDEX categories_built_in ON categories (built_in);
+     UPDATE categories SET built_in = 'general' WHERE id = 1;
+     INSERT INTO categories (id, name, built_in)
+        SELECT MAX(id) + 1,
+               CASE WHEN EXISTS (SELECT 1 FROM categories WHERE name = 'Other')
+                    THEN 'Other folders' ELSE 'Other' END,
+               'other'
+        FROM categories;",
 ];
 
 /// Everything saved about one job.
@@ -143,7 +160,8 @@ pub(crate) struct JobRecord {
     pub priority: Priority,
     pub speed_limit: u64,
     pub category: CategoryId,
-    /// The user picked the category, rather than it being matched by extension.
+    /// The user picked the category (or a folder, which decided it), rather
+    /// than it being matched by extension; it is never re-matched.
     pub category_chosen: bool,
 }
 
@@ -168,6 +186,9 @@ pub struct Settings {
     /// How many jobs may download at once. At least 1.
     pub max_concurrent: usize,
     pub retry: RetryPolicy,
+    /// The user has been through the first-start setup (or skipped it), so
+    /// front ends shouldn't offer it again.
+    pub setup_done: bool,
 }
 
 impl Default for Settings {
@@ -176,6 +197,7 @@ impl Default for Settings {
             global_limit: 0,
             max_concurrent: 3,
             retry: RetryPolicy::default(),
+            setup_done: false,
         }
     }
 }
@@ -632,7 +654,8 @@ fn problem_from_row(row: &Row) -> rusqlite::Result<Option<Problem>> {
 
 fn load_settings(conn: &Connection) -> Result<Settings, Error> {
     Ok(conn.query_row(
-        "SELECT global_limit, max_concurrent, max_retries, retries_before_yield, retry_wait_ms
+        "SELECT global_limit, max_concurrent, max_retries, retries_before_yield, retry_wait_ms,
+                setup_done
          FROM settings WHERE id = 1",
         [],
         |row| {
@@ -644,6 +667,7 @@ fn load_settings(conn: &Connection) -> Result<Settings, Error> {
                     retries_before_yield: row.get(3)?,
                     first_wait: Duration::from_millis(row.get(4)?),
                 },
+                setup_done: row.get(5)?,
             })
         },
     )?)
@@ -654,7 +678,7 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
     let wait_ms = u64::try_from(retry.first_wait.as_millis()).unwrap_or(u64::MAX);
     conn.execute(
         "UPDATE settings SET global_limit = ?1, max_concurrent = ?2, max_retries = ?3,
-                retries_before_yield = ?4, retry_wait_ms = ?5
+                retries_before_yield = ?4, retry_wait_ms = ?5, setup_done = ?6
          WHERE id = 1",
         params![
             settings.global_limit,
@@ -662,6 +686,7 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
             retry.max_retries,
             retry.retries_before_yield,
             wait_ms,
+            settings.setup_done,
         ],
     )?;
     Ok(())
@@ -669,7 +694,8 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
 
 fn load_categories(conn: &Connection) -> Result<Vec<Category>, Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, folder, speed_limit, max_concurrent FROM categories ORDER BY id",
+        "SELECT id, name, folder, speed_limit, max_concurrent, built_in
+         FROM categories ORDER BY id",
     )?;
     let mut categories: BTreeMap<CategoryId, Category> = stmt
         .query_map([], |row| {
@@ -681,7 +707,19 @@ fn load_categories(conn: &Connection) -> Result<Vec<Category>, Error> {
                 speed_limit: row.get(3)?,
                 max_concurrent: row.get(4)?,
             };
-            Ok((id, Category { id, settings }))
+            let built_in = match row.get::<_, Option<String>>(5)?.as_deref() {
+                Some("general") => Some(BuiltIn::General),
+                Some("other") => Some(BuiltIn::Other),
+                _ => None,
+            };
+            Ok((
+                id,
+                Category {
+                    id,
+                    settings,
+                    built_in,
+                },
+            ))
         })?
         .collect::<rusqlite::Result<_>>()?;
     let mut stmt =
@@ -946,6 +984,7 @@ mod tests {
                 retries_before_yield: 0,
                 first_wait: Duration::from_millis(250),
             },
+            setup_done: true,
         };
         store.save_settings(changed.clone());
         assert_eq!(store.load().await.unwrap().settings, changed);
@@ -953,7 +992,7 @@ mod tests {
 
     fn videos() -> Category {
         Category {
-            id: CategoryId(2),
+            id: CategoryId(3),
             settings: CategorySettings {
                 folder: Some(PathBuf::from("/downloads/videos")),
                 extensions: vec!["mkv".into(), "mp4".into()],
@@ -961,17 +1000,24 @@ mod tests {
                 max_concurrent: 2,
                 ..CategorySettings::named("Videos")
             },
+            built_in: None,
         }
     }
 
     #[tokio::test]
-    async fn general_exists_from_the_start() {
+    async fn general_and_other_exist_from_the_start() {
         let store = Store::open_in_memory().await.unwrap();
         let general = Category {
             id: CategoryId::GENERAL,
             settings: CategorySettings::named("General"),
+            built_in: Some(BuiltIn::General),
         };
-        assert_eq!(store.load().await.unwrap().categories, [general]);
+        let other = Category {
+            id: CategoryId(2),
+            settings: CategorySettings::named("Other"),
+            built_in: Some(BuiltIn::Other),
+        };
+        assert_eq!(store.load().await.unwrap().categories, [general, other]);
     }
 
     #[tokio::test]
@@ -979,20 +1025,20 @@ mod tests {
         let store = Store::open_in_memory().await.unwrap();
         let mut videos = videos();
         store.save_category(videos.clone());
-        assert_eq!(store.load().await.unwrap().categories[1], videos);
+        assert_eq!(store.load().await.unwrap().categories[2], videos);
 
         videos.settings.extensions = vec!["webm".into()];
         videos.settings.folder = None;
         store.save_category(videos.clone());
-        assert_eq!(store.load().await.unwrap().categories[1], videos);
+        assert_eq!(store.load().await.unwrap().categories[2], videos);
 
         store.remove_category(videos.id);
-        assert_eq!(store.load().await.unwrap().categories.len(), 1);
+        assert_eq!(store.load().await.unwrap().categories.len(), 2);
         // Its extension went with it, so another category can take it.
         let mut films = videos;
         films.settings.name = "Films".into();
         store.save_category(films.clone());
-        assert_eq!(store.load().await.unwrap().categories[1], films);
+        assert_eq!(store.load().await.unwrap().categories[2], films);
     }
 
     #[tokio::test]
@@ -1053,6 +1099,36 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM segments", [], |r| r.get(0))
             .unwrap();
         assert_eq!(left, 0, "deleting a job deletes its segments");
+    }
+
+    #[test]
+    fn older_databases_get_other_and_count_as_set_up_if_they_have_categories() {
+        for (extra_category, expected) in [(false, false), (true, true)] {
+            let mut conn = Connection::open_in_memory().unwrap();
+            for (i, sql) in MIGRATIONS[..7].iter().enumerate() {
+                conn.execute_batch(sql).unwrap();
+                conn.pragma_update(None, "user_version", i + 1).unwrap();
+            }
+            if extra_category {
+                conn.execute("INSERT INTO categories (id, name) VALUES (2, 'other')", [])
+                    .unwrap();
+            }
+            prepare(&mut conn).unwrap();
+            assert_eq!(load_settings(&conn).unwrap().setup_done, expected);
+            let categories = load_categories(&conn).unwrap();
+            let other = categories.last().unwrap();
+            assert_eq!(other.built_in, Some(BuiltIn::Other));
+            // The user's own "other" keeps its name and ID.
+            let (id, name) = if extra_category {
+                (3, "Other folders")
+            } else {
+                (2, "Other")
+            };
+            assert_eq!(
+                (other.id, other.settings.name.as_str()),
+                (CategoryId(id), name)
+            );
+        }
     }
 
     #[test]

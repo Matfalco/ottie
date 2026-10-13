@@ -21,19 +21,26 @@ export function applyCategoryEvent(categories: Categories, event: ApiEvent): voi
 	}
 }
 
-/** General first, then by name. */
+const rank = (category: Category) =>
+	category.builtIn === 'general' ? 0 : category.builtIn === 'other' ? 2 : 1;
+
+/** General first, then by name, then Other. */
 export function sorted(categories: Categories, locale: Locale = getLocale()): Category[] {
-	return Object.values(categories).sort((a, b) =>
-		a.id === GENERAL ? -1 : b.id === GENERAL ? 1 : a.name.localeCompare(b.name, locale)
+	return Object.values(categories).sort(
+		(a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, locale)
 	);
 }
 
-/** The name to show. The daemon calls the built-in category "General"; that
- * is shown in the page's language, unless the user renamed it. */
+/** The name to show. The daemon names its built-in categories "General"
+ * and "Other"; they're shown in the page's language, unless renamed. */
 export function categoryName(category: Category, locale: Locale = getLocale()): string {
-	return category.id === GENERAL && category.name === 'General'
-		? m.cat_general({}, { locale })
-		: category.name;
+	if (category.builtIn === 'general' && category.name === 'General') {
+		return m.cat_general({}, { locale });
+	}
+	if (category.builtIn === 'other' && category.name === 'Other') {
+		return m.cat_other({}, { locale });
+	}
+	return category.name;
 }
 
 /** "mp4, .MKV webm" → ["mp4", ".MKV", "webm"]; the daemon normalizes the rest. */

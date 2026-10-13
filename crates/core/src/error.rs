@@ -83,8 +83,8 @@ pub enum Error {
     #[error("no more category IDs are available")]
     TooManyCategories,
 
-    #[error("the General category can't be removed")]
-    CannotRemoveGeneral,
+    #[error("the built-in category `{0}` can't be removed")]
+    CannotRemoveBuiltIn(String),
 
     #[error("no folder given, and category `{0}` has none")]
     NoFolder(String),

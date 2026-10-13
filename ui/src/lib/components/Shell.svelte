@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, type Snippet } from 'svelte';
+	import type { AddJob } from '@ottie/api-types/AddJob';
 	import type { Job } from '@ottie/api-types/Job';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -12,6 +13,7 @@
 	import AddBar from './AddBar.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import NavMenu from './NavMenu.svelte';
+	import Setup from './Setup.svelte';
 	import TitleBar from './TitleBar.svelte';
 
 	interface Props {
@@ -34,6 +36,8 @@
 	// svelte-ignore state_referenced_locally
 	const session = new Session(token, onUnauthorized);
 	let question: Question | null = $state(null);
+	/** The first start: the setup page replaces the app until it's done. */
+	let settingUp = $derived(session.settings?.setupDone === false);
 
 	provideApp({ session, run, ask });
 
@@ -42,8 +46,8 @@
 		return () => session.stop();
 	});
 
-	async function add(url: string, destDir?: string): Promise<boolean> {
-		const added = await session.add(url, destDir);
+	async function add(job: AddJob): Promise<boolean> {
+		const added = await session.add(job);
 		// On a Downloads view that would hide it, show everything instead.
 		const downloads = resolve('/downloads');
 		const filter = parseFilter(page.url.searchParams.get('status'));
@@ -84,22 +88,33 @@
 
 <div class="app">
 	<TitleBar>
-		<AddBar onAdd={add} />
+		{#if !settingUp}
+			<AddBar
+				categories={session.categories}
+				categoryList={session.categoryList}
+				onMatch={(url, folder) => session.match(url, folder)}
+				onAdd={add}
+			/>
+		{/if}
 	</TitleBar>
 
-	<div class="body">
-		<NavMenu connection={session.connection} jobs={session.list} />
+	{#if settingUp}
+		<Setup />
+	{:else}
+		<div class="body">
+			<NavMenu connection={session.connection} jobs={session.list} />
 
-		<main>
-			{#if session.error}
-				<div class="error" role="alert">
-					<span>{session.error}</span>
-					<button onclick={() => (session.error = null)} aria-label={m.dismiss()}>✕</button>
-				</div>
-			{/if}
-			{@render children()}
-		</main>
-	</div>
+			<main>
+				{#if session.error}
+					<div class="error" role="alert">
+						<span>{session.error}</span>
+						<button onclick={() => (session.error = null)} aria-label={m.dismiss()}>✕</button>
+					</div>
+				{/if}
+				{@render children()}
+			</main>
+		</div>
+	{/if}
 </div>
 
 {#if question}

@@ -47,7 +47,7 @@
 			<li class="card">
 				<div class="top">
 					<h2>{categoryName(category)}</h2>
-					{#if category.id === GENERAL}
+					{#if category.builtIn === 'general'}
 						<span class="badge">{m.cat_default()}</span>
 					{/if}
 					<span class="actions">
@@ -58,7 +58,7 @@
 						>
 							<Pencil size={15} />
 						</button>
-						{#if category.id !== GENERAL}
+						{#if category.builtIn === null}
 							<button
 								onclick={() => remove(category)}
 								aria-label={m.cat_remove_label({ name: categoryName(category) })}
@@ -70,12 +70,18 @@
 					</span>
 				</div>
 
-				<p class="folder" title={category.folder ?? undefined}>
-					<Folder size={14} aria-hidden="true" />
-					<span>{category.folder ?? m.cat_no_folder()}</span>
-				</p>
+				{#if category.builtIn === 'other'}
+					<p class="muted">{m.cat_other_folder()}</p>
+				{:else}
+					<p class="folder" title={category.folder ?? undefined}>
+						<Folder size={14} aria-hidden="true" />
+						<span>{category.folder ?? m.cat_no_folder()}</span>
+					</p>
+				{/if}
 
-				{#if category.extensions.length > 0}
+				{#if category.builtIn === 'other'}
+					<!-- Neither a folder nor extensions: its downloads chose their folder. -->
+				{:else if category.extensions.length > 0}
 					<p class="extensions">
 						{#each category.extensions as extension (extension)}
 							<span class="chip">{extension}</span>

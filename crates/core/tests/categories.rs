@@ -8,8 +8,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ottie_core::{
-    CategoryId, CategorySettings, Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState,
-    Manager, NewJob, Store,
+    BuiltIn, CategoryId, CategorySettings, Error, HttpBackend, JobEvent, JobId, JobSnapshot,
+    JobState, Manager, NewJob, Store,
 };
 use reqwest::Url;
 use support::{TestServer, test_data};
@@ -89,12 +89,15 @@ impl Setup {
 }
 
 #[tokio::test]
-async fn general_is_always_there() {
+async fn general_and_other_are_always_there() {
     let s = setup(0).await;
     let categories = s.manager.categories().await.unwrap();
-    assert_eq!(categories.len(), 1);
+    assert_eq!(categories.len(), 2);
     assert_eq!(categories[0].id, CategoryId::GENERAL);
     assert_eq!(categories[0].settings.name, "General");
+    assert_eq!(categories[0].built_in, Some(BuiltIn::General));
+    assert_eq!(categories[1].settings.name, "Other");
+    assert_eq!(categories[1].built_in, Some(BuiltIn::Other));
 }
 
 #[tokio::test]
@@ -170,12 +173,19 @@ async fn names_and_extensions_belong_to_one_category() {
     assert!(matches!(same_ext, Err(Error::ExtensionTaken { .. })));
 
     // Editing a category may keep its own name and extensions.
-    let mut edited = s.manager.categories().await.unwrap()[1].settings.clone();
+    let categories = s.manager.categories().await.unwrap();
+    let mut edited = categories
+        .into_iter()
+        .find(|c| c.id == videos)
+        .unwrap()
+        .settings;
     edited.speed_limit = 1000;
     s.manager.update_category(videos, edited).await.unwrap();
 
-    let removed = s.manager.remove_category(CategoryId::GENERAL).await;
-    assert!(matches!(removed, Err(Error::CannotRemoveGeneral)));
+    for built_in in [CategoryId::GENERAL, other_category(&s).await] {
+        let removed = s.manager.remove_category(built_in).await;
+        assert!(matches!(removed, Err(Error::CannotRemoveBuiltIn(_))));
+    }
     let missing = s.manager.update_category(CategoryId(99), films).await;
     assert!(matches!(missing, Err(Error::CategoryNotFound(_))));
 }
@@ -191,7 +201,7 @@ async fn removing_a_category_moves_its_jobs_to_general() {
     let job = s.job(id).await;
     assert_eq!(job.category, CategoryId::GENERAL);
     assert_eq!(job.dest_dir, s.folder("videos"), "files don't move");
-    assert_eq!(s.manager.categories().await.unwrap().len(), 1);
+    assert_eq!(s.manager.categories().await.unwrap().len(), 2);
     // The running job carries on.
     s.wait_for_all(&[id], JobState::Completed).await;
 }
@@ -289,17 +299,32 @@ async fn the_real_name_rematches_an_auto_picked_category() {
 }
 
 #[tokio::test]
-async fn a_chosen_folder_stays_when_the_category_is_rematched() {
+async fn a_chosen_folder_decides_the_category() {
     let mut s = setup(0).await;
     let videos = s.videos(0).await;
+    let other = other_category(&s).await;
+    // A folder of no category: Other, even once the real name says .mkv.
     let url = named_by_server(&s, "film.mkv");
-    let job = NewJob::new(url).in_dir(s.folder("mine"));
-    let id = s.manager.add(job).await.unwrap();
-    s.wait_for_all(&[id], JobState::Completed).await;
+    let mine = s.manager.add(NewJob::new(url).in_dir(s.folder("mine")));
+    let mine = mine.await.unwrap();
+    // Videos' folder: Videos, whatever the file type.
+    let data = NewJob::new(s.url("data.bin")).in_dir(s.folder("videos"));
+    let data = s.manager.add(data).await.unwrap();
+    s.wait_for_all(&[mine, data], JobState::Completed).await;
 
-    let job = s.job(id).await;
-    assert_eq!(job.category, videos, "limits follow the real file type");
+    let mine = s.job(mine).await;
+    assert_eq!(mine.category, other);
     assert!(s.folder("mine").join("film.mkv").is_file());
+    assert_eq!(s.job(data).await.category, videos);
+}
+
+/// The built-in category for folders of no category.
+async fn other_category(s: &Setup) -> CategoryId {
+    let categories = s.manager.categories().await.unwrap();
+    let other = categories
+        .iter()
+        .find(|c| c.built_in == Some(BuiltIn::Other));
+    other.unwrap().id
 }
 
 #[tokio::test]
@@ -321,15 +346,30 @@ async fn a_chosen_category_is_not_rematched() {
 async fn a_link_can_be_matched_without_adding_it() {
     let s = setup(0).await;
     let videos = s.videos(0).await;
-    let matched = s.manager.match_category(s.url("Film.MKV")).await.unwrap();
+    let matched = s.manager.match_category(s.url("Film.MKV"), None).await;
+    let matched = matched.unwrap();
     assert_eq!(matched.category, videos);
     assert_eq!(matched.extension.as_deref(), Some("mkv"));
+    assert!(!matched.by_folder);
 
-    let other = s.manager.match_category(s.url("notes.txt")).await.unwrap();
-    assert_eq!(other.category, CategoryId::GENERAL);
-    assert_eq!(other.extension.as_deref(), Some("txt"));
-    let bare = s.manager.match_category(s.url("README")).await.unwrap();
-    assert_eq!(bare.extension, None);
+    let general = s.manager.match_category(s.url("notes.txt"), None).await;
+    let general = general.unwrap();
+    assert_eq!(general.category, CategoryId::GENERAL);
+    assert_eq!(general.extension.as_deref(), Some("txt"));
+    let bare = s.manager.match_category(s.url("README"), None).await;
+    assert_eq!(bare.unwrap().extension, None);
+
+    let elsewhere = Some(s.folder("elsewhere"));
+    let other = s.manager.match_category(s.url("Film.MKV"), elsewhere).await;
+    let other = other.unwrap();
+    assert_eq!(other.category, other_category(&s).await);
+    assert!(other.by_folder);
+    let in_videos = Some(s.folder("videos").join(""));
+    let in_videos = s
+        .manager
+        .match_category(s.url("notes.txt"), in_videos)
+        .await;
+    assert_eq!(in_videos.unwrap().category, videos);
     assert!(
         s.manager.list().await.unwrap().is_empty(),
         "nothing was added"
