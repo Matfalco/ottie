@@ -109,6 +109,18 @@ export function explainRefusal(
 			return outOfRange(body.setting, body.min, body.max, locale);
 		case 'invalidLanguage':
 			return m.reason_invalid_language({ language: body.language }, options);
+		case 'jobMoving':
+			return m.reason_job_moving({}, options);
+		case 'cannotMoveWhileRunning':
+			return m.reason_cannot_move_while_running({}, options);
+		case 'moveFailed':
+			return m.reason_move_failed({ detail: body.detail }, options);
+		case 'viewNotFound':
+			return m.reason_view_not_found({}, options);
+		case 'invalidViewName':
+			return m.reason_invalid_view_name({}, options);
+		case 'viewNameTaken':
+			return m.reason_view_name_taken({ name: body.name }, options);
 		default:
 			// Codes for screens this UI doesn't have yet, internal errors, and
 			// codes from a newer daemon.

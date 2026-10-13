@@ -22,6 +22,7 @@ export function job(overrides: Partial<Job> = {}): Job {
 		retries: 0,
 		retryAt: null,
 		ranges: [],
+		moving: false,
 		...overrides
 	};
 }

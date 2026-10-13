@@ -8,6 +8,7 @@ import type { Matched } from '@ottie/api-types/Matched';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
+import type { ViewBody } from '@ottie/api-types/ViewBody';
 import { Api, ApiFailure, Unauthorized } from './api';
 import type { Action } from './bulk';
 import { GENERAL, applyCategoryEvent, sorted, type Categories } from './categories';
@@ -15,6 +16,7 @@ import { explainRefusal } from './explain';
 import { m } from './paraglide/messages.js';
 import { applyEvent, newestFirst, nextRate, type Jobs, type Rate } from './jobs';
 import { addSample, totalSpeed } from './speed';
+import { applyViewEvent, sortedViews, type Views } from './views';
 
 export type Connection = 'connecting' | 'live' | 'offline';
 
@@ -38,6 +40,9 @@ export class Session {
 	categoryList = $derived(sorted(this.categories));
 	/** Null until the daemon has answered. */
 	settings: Settings | null = $state(null);
+	views: Views = $state({});
+	/** Oldest first. */
+	viewList = $derived(sortedViews(this.views));
 
 	private readonly api: Api;
 	private socket: WebSocket | null = null;
@@ -124,6 +129,22 @@ export class Session {
 
 	removeCategory(id: number): Promise<boolean> {
 		return this.attempt(() => this.api.removeCategory(id));
+	}
+
+	/** Saves a new view (`id` null) or replaces one; every page hears of it
+	 * through a `viewChanged` event. Resolves to null once saved, else to
+	 * why not. */
+	async saveView(id: number | null, body: ViewBody): Promise<string | null> {
+		try {
+			await (id === null ? this.api.addView(body) : this.api.updateView(id, body));
+			return null;
+		} catch (error) {
+			return this.why(error);
+		}
+	}
+
+	removeView(id: number): Promise<boolean> {
+		return this.attempt(() => this.api.removeView(id));
 	}
 
 	/** Changes the daemon's settings; every page (here and on other devices)
@@ -249,6 +270,7 @@ export class Session {
 			this.settings = event.settings;
 		}
 		applyCategoryEvent(this.categories, event);
+		applyViewEvent(this.views, event);
 		if (applyEvent(this.jobs, event)) {
 			void this.resync();
 		}
@@ -262,14 +284,16 @@ export class Session {
 		}
 		this.pending = [];
 		try {
-			const [jobs, categories, settings] = await Promise.all([
+			const [jobs, categories, settings, views] = await Promise.all([
 				this.api.listJobs(),
 				this.api.listCategories(),
-				this.api.getSettings()
+				this.api.getSettings(),
+				this.api.listViews()
 			]);
 			this.jobs = Object.fromEntries(jobs.map((job) => [job.id, job]));
 			this.categories = Object.fromEntries(categories.map((category) => [category.id, category]));
 			this.settings = settings;
+			this.views = Object.fromEntries(views.map((view) => [view.id, view]));
 			this.connection = 'live';
 		} catch (error) {
 			this.fail(error);

@@ -375,3 +375,133 @@ async fn a_link_can_be_matched_without_adding_it() {
         "nothing was added"
     );
 }
+
+/// Waits until some bytes of `id` have arrived.
+async fn wait_for_bytes(s: &mut Setup, id: JobId) {
+    let events = &mut s.events;
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            if let JobEvent::Progress {
+                id: got,
+                downloaded,
+                ..
+            } = events.recv().await.unwrap()
+                && got == id
+                && downloaded > 0
+            {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("no bytes arrived");
+}
+
+#[tokio::test]
+async fn moving_a_paused_job_moves_its_part_file() {
+    let mut s = setup(30).await;
+    let videos = s.videos(0).await;
+    let id = NewJob::new(s.url("data.bin")).in_dir(s.folder("misc"));
+    let id = s.manager.add(id).await.unwrap();
+    wait_for_bytes(&mut s, id).await;
+    s.manager.pause(id).await.unwrap();
+    assert!(s.folder("misc").join("data.bin.part.ottie").is_file());
+
+    s.manager.set_category(id, videos).await.unwrap();
+    let job = s.job(id).await;
+    assert_eq!(
+        (job.category, job.dest_dir.clone()),
+        (videos, s.folder("videos"))
+    );
+    assert!(!job.moving);
+    assert!(!s.folder("misc").join("data.bin.part.ottie").exists());
+    let part = s.folder("videos").join("data.bin.part.ottie");
+    assert_eq!(std::fs::metadata(&part).unwrap().len(), job.downloaded);
+
+    s.manager.resume(id).await.unwrap();
+    s.wait_for_all(&[id], JobState::Completed).await;
+    let file = std::fs::read(s.folder("videos").join("data.bin")).unwrap();
+    assert_eq!(file, test_data(SIZE, 4));
+}
+
+#[tokio::test]
+async fn a_running_job_moves_and_carries_on_in_its_slot() {
+    let mut s = setup(30).await;
+    let videos = s.videos(0).await;
+    s.manager.set_max_concurrent(1).await.unwrap();
+    let first = NewJob::new(s.url("a.bin")).in_dir(s.folder("misc"));
+    let first = s.manager.add(first).await.unwrap();
+    let waiting = NewJob::new(s.url("b.bin")).in_dir(s.folder("misc"));
+    let waiting = s.manager.add(waiting).await.unwrap();
+    wait_for_bytes(&mut s, first).await;
+
+    s.manager.set_category(first, videos).await.unwrap();
+    let job = s.job(first).await;
+    assert_eq!(job.dest_dir, s.folder("videos"));
+    assert!(job.state.is_running(), "{:?}", job.state);
+    // It kept its slot.
+    assert_eq!(s.job(waiting).await.state, JobState::Queued);
+    assert!(!s.folder("misc").join("a.bin.part.ottie").exists());
+
+    s.wait_for_all(&[first, waiting], JobState::Completed).await;
+    let file = std::fs::read(s.folder("videos").join("a.bin")).unwrap();
+    assert_eq!(file, test_data(SIZE, 4));
+    assert!(s.folder("misc").join("b.bin").is_file());
+}
+
+#[tokio::test]
+async fn a_finished_file_moves_and_takes_a_free_name() {
+    let mut s = setup(0).await;
+    let videos = s.videos(0).await;
+    let id = NewJob::new(s.url("c.bin")).in_dir(s.folder("misc"));
+    let id = s.manager.add(id).await.unwrap();
+    s.wait_for_all(&[id], JobState::Completed).await;
+    std::fs::create_dir_all(s.folder("videos")).unwrap();
+    std::fs::write(s.folder("videos").join("c.bin"), b"someone else's").unwrap();
+
+    s.manager.set_category(id, videos).await.unwrap();
+    let job = s.job(id).await;
+    assert_eq!(job.file_name.as_deref(), Some("c (1).bin"));
+    assert_eq!(job.state, JobState::Completed);
+    let file = std::fs::read(s.folder("videos").join("c (1).bin")).unwrap();
+    assert_eq!(file, test_data(SIZE, 4));
+    assert!(!s.folder("misc").join("c.bin").exists());
+}
+
+#[tokio::test]
+async fn a_category_without_a_folder_leaves_the_file_where_it_is() {
+    let mut s = setup(0).await;
+    let docs = s
+        .manager
+        .add_category(CategorySettings::named("Docs"))
+        .await
+        .unwrap();
+    let id = NewJob::new(s.url("d.bin")).in_dir(s.folder("misc"));
+    let id = s.manager.add(id).await.unwrap();
+    s.wait_for_all(&[id], JobState::Completed).await;
+
+    s.manager.set_category(id, docs).await.unwrap();
+    let job = s.job(id).await;
+    assert_eq!((job.category, job.dest_dir), (docs, s.folder("misc")));
+    assert!(s.folder("misc").join("d.bin").is_file());
+}
+
+#[tokio::test]
+async fn a_download_that_cannot_resume_moves_only_once_stopped() {
+    let mut s = setup(30).await;
+    s.server.configure(|b| b.ranges = false);
+    let videos = s.videos(0).await;
+    let id = NewJob::new(s.url("e.bin")).in_dir(s.folder("misc"));
+    let id = s.manager.add(id).await.unwrap();
+    wait_for_bytes(&mut s, id).await;
+
+    let refused = s.manager.set_category(id, videos).await;
+    assert!(matches!(refused, Err(Error::CannotMoveWhileRunning(_))));
+    let job = s.job(id).await;
+    assert_eq!(job.dest_dir, s.folder("misc"));
+    assert_ne!(job.category, videos);
+
+    s.wait_for_all(&[id], JobState::Completed).await;
+    s.manager.set_category(id, videos).await.unwrap();
+    assert!(s.folder("videos").join("e.bin").is_file());
+}

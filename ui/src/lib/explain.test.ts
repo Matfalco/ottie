@@ -42,6 +42,21 @@ describe('explainRefusal', () => {
 		expect(explainRefusal(null, 'The daemon answered 502.', 'fr')).toBe('The daemon answered 502.');
 	});
 
+	it('says why a view can’t be saved', () => {
+		const taken: ApiError = { error: '…', code: 'viewNameTaken', name: 'ISOs' };
+		expect(plain(explainRefusal(taken, '', 'en'))).toBe('There’s already a view named “ISOs”.');
+		expect(plain(explainRefusal(taken, '', 'fr'))).toBe('Il existe déjà une vue nommée « ISOs ».');
+	});
+
+	it('says why a file couldn’t move', () => {
+		const failed: ApiError = { error: '…', code: 'moveFailed', detail: 'disk full' };
+		expect(explainRefusal(failed, '', 'en')).toBe('The file couldn’t be moved (disk full).');
+		const running: ApiError = { error: '…', code: 'cannotMoveWhileRunning' };
+		expect(plain(explainRefusal(running, '', 'fr'))).toBe(
+			'Ce téléchargement ne peut pas reprendre : il ne pourra changer de dossier qu’une fois terminé.'
+		);
+	});
+
 	it('names the setting out of range, with its range', () => {
 		const say = (setting: string, min: number, max: number, locale: 'en' | 'fr') => {
 			const body: ApiError = { error: '…', code: 'outOfRange', setting, min, max };

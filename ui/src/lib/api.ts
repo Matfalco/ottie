@@ -14,6 +14,9 @@ import type { Job } from '@ottie/api-types/Job';
 import type { JobChange } from '@ottie/api-types/JobChange';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
+import type { AddedView } from '@ottie/api-types/AddedView';
+import type { View } from '@ottie/api-types/View';
+import type { ViewBody } from '@ottie/api-types/ViewBody';
 
 const BASE = '/api/v1';
 /** The protocol of the events WebSocket; the token rides along as a second one. */
@@ -107,6 +110,23 @@ export class Api {
 	/** Changes only the fields given. */
 	changeSettings(change: SettingsChange): Promise<void> {
 		return this.request('PATCH', '/settings', change);
+	}
+
+	listViews(): Promise<View[]> {
+		return this.request('GET', '/views');
+	}
+
+	addView(view: ViewBody): Promise<AddedView> {
+		return this.request('POST', '/views', view);
+	}
+
+	/** Replaces the view, name included. */
+	updateView(id: number, view: ViewBody): Promise<void> {
+		return this.request('PUT', `/views/${id}`, view);
+	}
+
+	removeView(id: number): Promise<void> {
+		return this.request('DELETE', `/views/${id}`);
 	}
 
 	/** Opens the live events stream. */

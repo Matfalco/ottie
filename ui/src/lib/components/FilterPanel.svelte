@@ -34,10 +34,13 @@
 		categories: Category[];
 		onFilters: (filters: Filters) => void;
 		onArrange: (arrangement: Arrangement) => void;
+		/** Asks for a name to save what's shown as a view. */
+		onSaveView: () => void;
 		onClose: () => void;
 	}
 
-	let { filters, arrangement, jobs, categories, onFilters, onArrange, onClose }: Props = $props();
+	let { filters, arrangement, jobs, categories, onFilters, onArrange, onSaveView, onClose }: Props =
+		$props();
 
 	// Typed here and sent on each key, but not read back from the address
 	// while typing: a slow round trip would otherwise undo the last letters.
@@ -167,8 +170,7 @@
 	<div class="footer">
 		<button class="plain" onclick={reset}>{m.fl_reset()}</button>
 		<span class="hint">{m.fl_views_hint()}</span>
-		<!-- Saved views come later (docs/decisions/0021): shown, but disabled. -->
-		<button disabled title={m.coming_later()}>{m.fl_save_view()}</button>
+		<button onclick={onSaveView}>{m.fl_save_view()}</button>
 		<button class="primary" onclick={onClose}>{m.fl_done()}</button>
 	</div>
 </div>

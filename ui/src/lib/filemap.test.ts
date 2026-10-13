@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { barParts, connections, fileMap, received } from './filemap';
+import { barParts, connections, received, strip } from './filemap';
 import { job } from './testing';
 
 const split = job({
@@ -35,22 +35,19 @@ describe('file map', () => {
 		expect(barParts(job({ state: 'downloading', total: 100, downloaded: 10 }))).toBeNull();
 	});
 
-	it('cuts the file into blocks', () => {
-		// 8 blocks of 50 bytes: 0–100 arrived, 200–250 arrived, writing at 100 and 250.
-		expect(fileMap(split, 8, true)).toEqual([
-			'done',
-			'done',
-			'arriving',
-			'left',
-			'done',
-			'arriving',
-			'arriving',
-			'left'
+	it('places each range on the bar', () => {
+		expect(strip(split, true)).toEqual([
+			{ start: 0, end: 0.5, reached: 0.25, writing: true },
+			{ start: 0.5, end: 0.75, reached: 0.625, writing: true },
+			{ start: 0.75, end: 1, reached: 0.75, writing: true }
 		]);
-		// Not running: nothing is arriving; a part-filled block says so.
-		const paused = fileMap({ ...split, state: 'paused' }, 4, false);
-		expect(paused).toEqual(['done', 'left', 'partial', 'left']);
-		expect(fileMap(job({ total: null }), 8, true)).toBeNull();
+		// Not running: nothing is being written.
+		const paused = strip({ ...split, state: 'paused' }, false);
+		expect(paused?.map((part) => part.writing)).toEqual([false, false, false]);
+		// A finished range isn't being written either.
+		const ended = job({ ...split, ranges: [{ start: 0, end: 400, done: 400 }] });
+		expect(strip(ended, true)).toEqual([{ start: 0, end: 1, reached: 1, writing: false }]);
+		expect(strip(job({ total: null }), true)).toBeNull();
 	});
 
 	it('says how many connections', () => {

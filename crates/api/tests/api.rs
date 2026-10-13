@@ -10,9 +10,10 @@ use axum::body::{Body, Bytes};
 use axum::routing::get;
 use futures_util::StreamExt;
 use ottie_api::{
-    AddJob, Added, AddedCategory, ApiError, Appearance, AppearanceMode, BuiltIn, Category,
-    CategoryBody, EVENTS_PROTOCOL, Event, Job, JobState, Matched, Palette, Priority, Problem,
-    Reason, Settings, SettingsChange, TOKEN_PROTOCOL_PREFIX, Token, UiSource,
+    AddJob, Added, AddedCategory, AddedView, AddedWithin, ApiError, Appearance, AppearanceMode,
+    Arrangement, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL, Event, Job, JobState, Matched,
+    Palette, Priority, Problem, Reason, Settings, SettingsChange, SortDirection, SortKey,
+    TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
 };
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
@@ -726,13 +727,18 @@ async fn categories_are_listed_added_matched_changed_and_removed() {
     );
     assert_eq!(list().await[2].name, "Movies");
 
-    // A download can be moved in, and goes back to General when its category goes.
+    // A download can be moved in, its file with it, and goes back to General
+    // (its file staying put) when its category goes.
     let job = d.add("file.bin").await;
+    d.wait_until(&job, JobState::Completed).await;
     let moved = d
         .post(&format!("/jobs/{job}/category"))
         .json(&serde_json::json!({ "category": id }));
     assert_eq!(moved.send().await.unwrap().status(), StatusCode::NO_CONTENT);
-    assert_eq!(d.job(&job).await.category, id);
+    let listed = d.job(&job).await;
+    assert_eq!((listed.category, listed.dest_dir), (id, folder.clone()));
+    assert!(!listed.moving);
+    assert!(Path::new(&folder).join("file.bin").is_file());
     let removed = d
         .client
         .delete(d.url(&format!("/categories/{id}")))
@@ -741,7 +747,8 @@ async fn categories_are_listed_added_matched_changed_and_removed() {
         removed.send().await.unwrap().status(),
         StatusCode::NO_CONTENT
     );
-    assert_eq!(d.job(&job).await.category, 1);
+    let listed = d.job(&job).await;
+    assert_eq!((listed.category, listed.dest_dir), (1, folder));
     assert_eq!(list().await.len(), 2);
 
     let general = d.client.delete(d.url("/categories/1")).bearer_auth(TOKEN);
@@ -753,5 +760,123 @@ async fn categories_are_listed_added_matched_changed_and_removed() {
             StatusCode::CONFLICT,
             Reason::CannotRemoveBuiltIn { category }
         )
+    );
+}
+
+#[tokio::test]
+async fn views_are_listed_added_changed_and_removed() {
+    let d = start().await;
+    let offered = format!("{EVENTS_PROTOCOL}, {TOKEN_PROTOCOL_PREFIX}{TOKEN}");
+    let (mut events, _) = d.events(&offered).await.unwrap();
+    let list = || async {
+        let response = d.get("/views").send().await.unwrap();
+        response.json::<Vec<View>>().await.unwrap()
+    };
+    assert_eq!(list().await, []);
+
+    // Sent the way the UI writes it.
+    let body = serde_json::json!({
+        "name": "Trouble",
+        "filters": {
+            "states": ["failed", "retrying", "connecting"],
+            "categories": null,
+            "nameContains": " iso ",
+            "added": "week",
+        },
+        "arrangement": { "sort": "size", "direction": "asc", "grouped": false },
+    });
+    let added = d.post("/views").json(&body).send().await.unwrap();
+    assert_eq!(added.status(), StatusCode::CREATED);
+    let id = added.json::<AddedView>().await.unwrap().id;
+    let expected = View {
+        id,
+        name: "Trouble".into(),
+        filters: ViewFilters {
+            states: Some(vec![
+                JobState::Downloading,
+                JobState::Retrying,
+                JobState::Failed,
+            ]),
+            categories: None,
+            name_contains: "iso".into(),
+            added: AddedWithin::Week,
+        },
+        arrangement: Arrangement {
+            sort: SortKey::Size,
+            direction: SortDirection::Ascending,
+            grouped: false,
+        },
+    };
+    assert_eq!(list().await, std::slice::from_ref(&expected));
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            let Some(Ok(Message::Text(text))) = events.next().await else {
+                continue;
+            };
+            if let Event::ViewChanged { view } = serde_json::from_str(&text).unwrap() {
+                assert_eq!(view, expected);
+                return;
+            }
+        }
+    })
+    .await
+    .expect("no viewChanged event");
+
+    let taken = ViewBody {
+        name: "TROUBLE".into(),
+        filters: expected.filters.clone(),
+        arrangement: expected.arrangement,
+    };
+    let (status, refused) = error_of(d.post("/views").json(&taken).send().await.unwrap()).await;
+    let name = "TROUBLE".into();
+    assert_eq!(
+        (status, refused.reason),
+        (StatusCode::CONFLICT, Reason::ViewNameTaken { name })
+    );
+    let nowhere = ViewBody {
+        name: "Nowhere".into(),
+        filters: ViewFilters {
+            categories: Some(vec![99]),
+            ..expected.filters.clone()
+        },
+        ..taken.clone()
+    };
+    let (status, refused) = error_of(d.post("/views").json(&nowhere).send().await.unwrap()).await;
+    assert_eq!(
+        (status, refused.reason),
+        (StatusCode::NOT_FOUND, Reason::CategoryNotFound { id: 99 })
+    );
+
+    let renamed = ViewBody {
+        name: "Problems".into(),
+        ..taken
+    };
+    let changed = d
+        .client
+        .put(d.url(&format!("/views/{id}")))
+        .bearer_auth(TOKEN);
+    assert_eq!(
+        changed.json(&renamed).send().await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(list().await[0].name, "Problems");
+
+    let removed = d
+        .client
+        .delete(d.url(&format!("/views/{id}")))
+        .bearer_auth(TOKEN);
+    assert_eq!(
+        removed.send().await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(list().await, []);
+    let again = d
+        .client
+        .delete(d.url(&format!("/views/{id}")))
+        .bearer_auth(TOKEN);
+    let (status, refused) = error_of(again.send().await.unwrap()).await;
+    assert_eq!(
+        (status, refused.reason),
+        (StatusCode::NOT_FOUND, Reason::ViewNotFound { id })
     );
 }

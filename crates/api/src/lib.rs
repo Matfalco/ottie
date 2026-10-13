@@ -18,6 +18,7 @@ mod jobs;
 mod settings;
 mod types;
 mod ui;
+mod views;
 
 use axum::Router;
 use axum::http::{Method, Uri};
@@ -28,9 +29,10 @@ use tokio_util::sync::CancellationToken;
 
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
 pub use types::{
-    AddJob, Added, AddedCategory, ApiError, Appearance, AppearanceMode, BuiltIn, ByteRange,
-    Category, CategoryBody, Event, Job, JobChange, JobState, MatchLink, Matched, MoveJob, Palette,
-    Priority, Problem, Reason, Settings, SettingsChange,
+    AddJob, Added, AddedCategory, AddedView, AddedWithin, ApiError, Appearance, AppearanceMode,
+    Arrangement, BuiltIn, ByteRange, Category, CategoryBody, Event, Job, JobChange, JobState,
+    MatchLink, Matched, MoveJob, Palette, Priority, Problem, Reason, Settings, SettingsChange,
+    SortDirection, SortKey, View, ViewBody, ViewFilters,
 };
 pub use ui::UiSource;
 
@@ -65,6 +67,8 @@ pub fn router(manager: Manager, token: Token, shutdown: CancellationToken, ui: U
             put(categories::update).delete(categories::remove),
         )
         .route("/settings", get(settings::get).patch(settings::change))
+        .route("/views", get(views::list).post(views::add))
+        .route("/views/{id}", put(views::update).delete(views::remove))
         .route("/events", get(events::subscribe))
         .fallback(not_found)
         // Also covers the fallback, so unknown paths don't reveal what exists.

@@ -18,6 +18,7 @@ mod segmented;
 mod settings;
 mod store;
 mod throttle;
+mod view;
 
 pub use backend::{Backend, HttpBackend};
 pub use category::{BuiltIn, Category, CategoryId, CategorySettings, Matched};
@@ -32,6 +33,7 @@ pub use problem::Problem;
 pub use settings::{Appearance, AppearanceMode, Palette, RetryPolicy, Settings, SettingsChange};
 pub use store::Store;
 pub use throttle::Throttle;
+pub use view::{AddedWithin, SortDirection, SortKey, View, ViewId, ViewSettings};
 
 /// The URL type every download uses, so clients don't need `reqwest` themselves.
 pub use reqwest::Url;

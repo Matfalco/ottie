@@ -97,6 +97,19 @@ impl From<Error> for Failure {
                     extension: extension.clone(),
                 },
             ),
+            Error::JobMoving(id) => (S::CONFLICT, Reason::JobMoving { id: id.to_string() }),
+            Error::CannotMoveWhileRunning(_) => (S::CONFLICT, Reason::CannotMoveWhileRunning),
+            Error::MoveFailed(err) => (
+                S::INTERNAL_SERVER_ERROR,
+                Reason::MoveFailed {
+                    detail: err.to_string(),
+                },
+            ),
+            Error::ViewNotFound(id) => (S::NOT_FOUND, Reason::ViewNotFound { id: id.0 }),
+            Error::InvalidViewName => (S::BAD_REQUEST, Reason::InvalidViewName),
+            Error::ViewNameTaken(name) => {
+                (S::CONFLICT, Reason::ViewNameTaken { name: name.clone() })
+            }
             Error::ManagerStopped => (S::SERVICE_UNAVAILABLE, Reason::Stopping),
             _ => {
                 // Engine messages never contain URLs or credentials.

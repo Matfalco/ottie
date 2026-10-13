@@ -70,6 +70,15 @@ group('progress and buttons', () => {
 		expect(canCancel(job({ state: 'completed' }))).toBe(false);
 		expect(canCancel(job({ state: 'paused' }))).toBe(true);
 	});
+
+	it('offers nothing while the file moves, and says so', () => {
+		const moving = job({ state: 'downloading', moving: true });
+		expect([canPause(moving), canResume(moving), canCancel(moving)]).toEqual([false, false, false]);
+		expect(describe(moving, MB, 0, 'en')).toBe('Moving to its new folder…');
+		expect(motion(moving, MB, 0, 'fr')).toEqual({
+			status: 'Déplacement vers son nouveau dossier…'
+		});
+	});
 });
 
 group('removing', () => {

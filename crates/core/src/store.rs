@@ -18,6 +18,7 @@ use crate::id::JobId;
 use crate::job::{JobState, Priority};
 use crate::problem::Problem;
 use crate::settings::{Appearance, AppearanceMode, Palette, RetryPolicy, Settings};
+use crate::view::{AddedWithin, SortDirection, SortKey, View, ViewId, ViewSettings};
 
 /// Each entry upgrades the schema by one version (`PRAGMA user_version`).
 /// Never edit an entry once released; append a new one.
@@ -157,6 +158,30 @@ const MIGRATIONS: &[&str] = &[
         CHECK (appearance_palette IN ('sea', 'neutral'));
      ALTER TABLE settings ADD COLUMN language TEXT
         CHECK (length(language) BETWEEN 2 AND 35 AND language NOT GLOB '*[^A-Za-z0-9-]*');",
+    // 10: saved views. A list that is "any" (`any_state`, `any_category`)
+    // has no rows; an empty one shows nothing.
+    "CREATE TABLE views (
+        id            INTEGER PRIMARY KEY CHECK (id >= 1),
+        name          TEXT    NOT NULL COLLATE NOCASE UNIQUE CHECK (name <> ''),
+        any_state     INTEGER NOT NULL CHECK (any_state IN (0, 1)),
+        any_category  INTEGER NOT NULL CHECK (any_category IN (0, 1)),
+        name_contains TEXT    NOT NULL DEFAULT '',
+        added         TEXT    NOT NULL CHECK (added IN ('any', 'today', 'week')),
+        sort          TEXT    NOT NULL CHECK (sort IN ('added', 'name', 'size', 'progress')),
+        direction     TEXT    NOT NULL CHECK (direction IN ('asc', 'desc')),
+        grouped       INTEGER NOT NULL CHECK (grouped IN (0, 1))
+     ) STRICT;
+     CREATE TABLE view_states (
+        view_id INTEGER NOT NULL REFERENCES views (id) ON DELETE CASCADE,
+        state   TEXT    NOT NULL CHECK (state IN ('queued', 'downloading', 'paused',
+                                                  'completed', 'failed', 'cancelled', 'retrying')),
+        PRIMARY KEY (view_id, state)
+     ) STRICT;
+     CREATE TABLE view_categories (
+        view_id     INTEGER NOT NULL REFERENCES views (id) ON DELETE CASCADE,
+        category_id INTEGER NOT NULL REFERENCES categories (id) ON DELETE CASCADE,
+        PRIMARY KEY (view_id, category_id)
+     ) STRICT;",
 ];
 
 /// Everything saved about one job.
@@ -184,6 +209,8 @@ pub(crate) struct Loaded {
     pub categories: Vec<Category>,
     /// The highest job ID handed out, whether or not that job still exists.
     pub last_id: Option<JobId>,
+    /// By ID.
+    pub views: Vec<View>,
 }
 
 /// Handle to the database thread. The thread stops when this is dropped.
@@ -197,6 +224,8 @@ enum Op {
     SaveSettings(Settings),
     SaveCategory(Category),
     RemoveCategory(CategoryId),
+    SaveView(View),
+    RemoveView(ViewId),
     RemoveJob { id: JobId, last_id: JobId },
     Flush(oneshot::Sender<()>),
 }
@@ -276,6 +305,20 @@ impl Store {
         }
     }
 
+    /// Queued like `save`. Replaces the view's lists too.
+    pub(crate) fn save_view(&self, view: View) {
+        if self.ops.send(Op::SaveView(view)).is_err() {
+            tracing::error!("database thread has stopped; view not saved");
+        }
+    }
+
+    /// Queued like `save`.
+    pub(crate) fn remove_view(&self, id: ViewId) {
+        if self.ops.send(Op::RemoveView(id)).is_err() {
+            tracing::error!("database thread has stopped; view not removed");
+        }
+    }
+
     /// Queued like `save`. Deletes the job and its segments, and records
     /// `last_id`, the highest ID handed out, so it's never handed out again.
     pub(crate) fn remove_job(&self, id: JobId, last_id: JobId) {
@@ -318,6 +361,16 @@ fn serve(mut conn: Connection, requests: std_mpsc::Receiver<Op>) {
             Op::RemoveCategory(id) => {
                 if let Err(err) = conn.execute("DELETE FROM categories WHERE id = ?1", [id.0]) {
                     tracing::error!(%id, error = %err, "could not remove category");
+                }
+            }
+            Op::SaveView(view) => {
+                if let Err(err) = save_view(&mut conn, &view) {
+                    tracing::error!(id = %view.id, error = %err, "could not save view");
+                }
+            }
+            Op::RemoveView(id) => {
+                if let Err(err) = conn.execute("DELETE FROM views WHERE id = ?1", [id.0]) {
+                    tracing::error!(%id, error = %err, "could not remove view");
                 }
             }
             Op::RemoveJob { id, last_id } => {
@@ -466,6 +519,7 @@ fn load_all(conn: &Connection) -> Result<Loaded, Error> {
         settings: load_settings(conn)?,
         categories: load_categories(conn)?,
         last_id: load_last_id(conn)?,
+        views: load_views(conn)?,
     })
 }
 
@@ -748,6 +802,110 @@ fn save_category(conn: &mut Connection, category: &Category) -> Result<(), Error
     Ok(())
 }
 
+fn load_views(conn: &Connection) -> Result<Vec<View>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, any_state, any_category, name_contains, added, sort, direction, grouped
+         FROM views ORDER BY id",
+    )?;
+    let mut views: BTreeMap<ViewId, ViewSettings> = stmt
+        .query_map([], |row| {
+            let any_state: bool = row.get(2)?;
+            let any_category: bool = row.get(3)?;
+            // The CHECKs allow only known names; the defaults stand in otherwise.
+            let added: String = row.get(5)?;
+            let sort: String = row.get(6)?;
+            let direction: String = row.get(7)?;
+            let settings = ViewSettings {
+                name: row.get(1)?,
+                states: (!any_state).then(Vec::new), // filled in below
+                categories: (!any_category).then(Vec::new),
+                name_contains: row.get(4)?,
+                added: AddedWithin::parse(&added).unwrap_or_default(),
+                sort: SortKey::parse(&sort).unwrap_or_default(),
+                direction: SortDirection::parse(&direction).unwrap_or_default(),
+                grouped: row.get(8)?,
+            };
+            Ok((ViewId(row.get(0)?), settings))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut stmt = conn.prepare("SELECT view_id, state FROM view_states")?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let state: String = row.get(1)?;
+        if let Some(states) = views
+            .get_mut(&ViewId(row.get(0)?))
+            .and_then(|view| view.states.as_mut())
+            && let Some(state) = parse_state(&state)
+        {
+            states.push(state);
+        }
+    }
+    let mut stmt = conn.prepare("SELECT view_id, category_id FROM view_categories")?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        if let Some(categories) = views
+            .get_mut(&ViewId(row.get(0)?))
+            .and_then(|view| view.categories.as_mut())
+        {
+            categories.push(CategoryId(row.get(1)?));
+        }
+    }
+    views
+        .into_iter()
+        .map(|(id, settings)| {
+            // Rows come in no particular order; this puts the lists in theirs.
+            let settings = settings.normalized()?;
+            Ok(View { id, settings })
+        })
+        .collect()
+}
+
+/// Upserts the view and replaces its lists, in one transaction.
+fn save_view(conn: &mut Connection, view: &View) -> Result<(), Error> {
+    let settings = &view.settings;
+    let id = view.id.0;
+    let tx = conn.transaction()?;
+    tx.prepare_cached(
+        "INSERT INTO views (id, name, any_state, any_category, name_contains, added, sort,
+                            direction, grouped)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+         ON CONFLICT (id) DO UPDATE SET
+             name = excluded.name, any_state = excluded.any_state,
+             any_category = excluded.any_category, name_contains = excluded.name_contains,
+             added = excluded.added, sort = excluded.sort, direction = excluded.direction,
+             grouped = excluded.grouped",
+    )?
+    .execute(params![
+        id,
+        settings.name,
+        settings.states.is_none(),
+        settings.categories.is_none(),
+        settings.name_contains,
+        settings.added.as_str(),
+        settings.sort.as_str(),
+        settings.direction.as_str(),
+        settings.grouped,
+    ])?;
+    tx.prepare_cached("DELETE FROM view_states WHERE view_id = ?1")?
+        .execute([id])?;
+    tx.prepare_cached("DELETE FROM view_categories WHERE view_id = ?1")?
+        .execute([id])?;
+    {
+        let mut insert =
+            tx.prepare_cached("INSERT INTO view_states (view_id, state) VALUES (?1, ?2)")?;
+        for &state in settings.states.iter().flatten() {
+            insert.execute(params![id, state_name(state)])?;
+        }
+        let mut insert = tx
+            .prepare_cached("INSERT INTO view_categories (view_id, category_id) VALUES (?1, ?2)")?;
+        for category in settings.categories.iter().flatten() {
+            insert.execute(params![id, category.0])?;
+        }
+    }
+    tx.commit()?;
+    Ok(())
+}
+
 fn priority_name(priority: Priority) -> &'static str {
     match priority {
         Priority::Low => "low",
@@ -1018,6 +1176,44 @@ mod tests {
         films.settings.name = "Films".into();
         store.save_category(films.clone());
         assert_eq!(store.load().await.unwrap().categories[2], films);
+    }
+
+    #[tokio::test]
+    async fn views_are_saved_replaced_and_removed() {
+        let store = Store::open_in_memory().await.unwrap();
+        store.save_category(videos());
+        let mut view = View {
+            id: ViewId(1),
+            settings: ViewSettings {
+                states: Some(vec![JobState::Downloading, JobState::Failed]),
+                categories: Some(vec![CategoryId::GENERAL, videos().id]),
+                name_contains: "iso".into(),
+                added: AddedWithin::Week,
+                sort: SortKey::Size,
+                direction: SortDirection::Ascending,
+                grouped: false,
+                ..ViewSettings::named("Big ISOs")
+            },
+        };
+        store.save_view(view.clone());
+        let everything = View {
+            id: ViewId(2),
+            settings: ViewSettings::named("Everything"),
+        };
+        store.save_view(everything.clone());
+        assert_eq!(
+            store.load().await.unwrap().views,
+            [view.clone(), everything]
+        );
+
+        // An empty list is not the same as any.
+        view.settings.states = Some(Vec::new());
+        view.settings.categories = None;
+        store.save_view(view.clone());
+        assert_eq!(store.load().await.unwrap().views[0], view);
+
+        store.remove_view(ViewId(2));
+        assert_eq!(store.load().await.unwrap().views, [view]);
     }
 
     #[tokio::test]

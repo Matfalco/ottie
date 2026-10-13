@@ -171,6 +171,28 @@ async fn pause_and_resume_is_byte_identical() {
 }
 
 #[tokio::test]
+async fn a_paused_download_resumes_after_its_file_moved() {
+    // What moving a download to another category's folder does.
+    let s = setup(SIZE, 2).await;
+    let mut dl = s.download();
+    let (result, _) = s.run(&mut dl, Some(SIZE as u64 / 3), || {}).await;
+    assert_eq!(result.unwrap(), Outcome::Paused);
+    let elsewhere = s.dir.path().join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let name = format!("big.bin{PART_SUFFIX}");
+    std::fs::rename(s.dir.path().join(&name), elsewhere.join(&name)).unwrap();
+    dl.dest_dir = elsewhere.clone();
+
+    let (result, events) = s.run(&mut dl, None, || {}).await;
+    let Outcome::Completed { path } = result.unwrap() else {
+        panic!("not completed");
+    };
+    assert_eq!(path, elsewhere.join("big.bin"));
+    assert!(std::fs::read(&path).unwrap() == s.data, "content differs");
+    assert!(restarts(&events).is_empty());
+}
+
+#[tokio::test]
 async fn idle_connections_take_over_a_slow_range() {
     let s = setup(SIZE, 0).await;
     // The last quarter of the file is slow; the other connections finish

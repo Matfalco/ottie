@@ -1,5 +1,5 @@
-// Where in the file the bytes have arrived: the progress bar split by
-// connection, and the file map in the detail panel.
+// Where in the file the bytes have arrived: a row's progress bar split by
+// connection, and the detail panel's bar, which maps the file.
 
 import type { ByteRange } from '@ottie/api-types/ByteRange';
 import type { Job } from '@ottie/api-types/Job';
@@ -39,37 +39,31 @@ export function barParts(job: Job): { share: number; fill: number }[] | null {
 	});
 }
 
-/** A block of the file map: all there, being written now, some there, none. */
-export type Block = 'done' | 'arriving' | 'partial' | 'left';
+/** A range on the detail panel's bar, as fractions of the file (0 to 1):
+ * where it starts and ends, and how far it has arrived. */
+export interface StripPart {
+	start: number;
+	end: number;
+	reached: number;
+	/** A connection is writing at `reached` right now. */
+	writing: boolean;
+}
 
-/** The file cut into `count` equal blocks. Where a connection is writing
- * right now (only while `running`) is "arriving". Null while the size is
- * unknown. */
-export function fileMap(job: Job, count: number, running: boolean): Block[] | null {
+/** The detail panel's bar: each range at its exact place in the file (one
+ * from the start for one connection). Unfinished ranges are being written
+ * only while `running`. Null while the size is unknown. */
+export function strip(job: Job, running: boolean): StripPart[] | null {
 	const parts = received(job);
 	const size = parts.at(-1)?.end ?? 0;
 	if (parts.length === 0 || size === 0) {
 		return null;
 	}
-	// Where each unfinished part goes on writing.
-	const fronts = parts
-		.filter((part) => part.start + part.done < part.end)
-		.map((part) => part.start + part.done);
-	return Array.from({ length: count }, (_, index) => {
-		const from = (size * index) / count;
-		const to = (size * (index + 1)) / count;
-		const covered = parts.reduce((sum, part) => {
-			const overlap = Math.min(to, part.start + part.done) - Math.max(from, part.start);
-			return sum + Math.max(0, overlap);
-		}, 0);
-		if (covered >= to - from) {
-			return 'done';
-		}
-		if (running && fronts.some((front) => front >= from && front < to)) {
-			return 'arriving';
-		}
-		return covered > 0 ? 'partial' : 'left';
-	});
+	return parts.map((part) => ({
+		start: part.start / size,
+		end: part.end / size,
+		reached: (part.start + part.done) / size,
+		writing: running && part.start + part.done < part.end
+	}));
 }
 
 /** "4 ranges" or "One connection", above the file map. */

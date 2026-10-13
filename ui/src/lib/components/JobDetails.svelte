@@ -9,7 +9,7 @@
 	import { categoryName } from '#lib/categories.js';
 	import { PRIORITIES, facts, isPlayable, primaryAction, priorityName } from '#lib/details.js';
 	import { explainProblem } from '#lib/explain.js';
-	import { connections, fileMap } from '#lib/filemap.js';
+	import { connections, strip } from '#lib/filemap.js';
 	import { statusName, statusOf } from '#lib/filters.js';
 	import { displayName, formatPercent } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -37,14 +37,12 @@
 	let { job, categories, speed, now, maxRetries, open, onToggle, onRun, onMove, onChange }: Props =
 		$props();
 
-	/** How many squares the file map has: two rows of 24. */
-	const BLOCKS = 48;
-
 	let name = $derived(displayName(job));
 	let status = $derived(statusOf(job));
 	let primary = $derived(primaryAction(job));
 	let done = $derived(fraction(job));
-	let map = $derived(fileMap(job, BLOCKS, job.state === 'downloading'));
+	// The bar maps the file: each range at its place, once the size is known.
+	let parts = $derived(strip(job, job.state === 'downloading'));
 	let problem = $derived(
 		job.state === 'failed' || job.state === 'retrying'
 			? explainProblem(job.problem, job.error)
@@ -54,6 +52,10 @@
 	let choices = $derived(
 		categories.filter((category) => category.builtIn !== 'other' || category.id === job.category)
 	);
+
+	function percent(fraction: number): string {
+		return `${fraction * 100}%`;
+	}
 
 	function moved(event: Event & { currentTarget: HTMLSelectElement }) {
 		const id = Number(event.currentTarget.value);
@@ -106,8 +108,46 @@
 					<span>{amount(job)}</span>
 					<span class="muted">{done === null ? '' : formatPercent(done)}</span>
 				</div>
-				<div class="bar {job.state}" aria-hidden="true">
-					<div class="fill" style:width={`${(done ?? 0) * 100}%`}></div>
+				<div
+					class="bar"
+					role="img"
+					aria-label={m.det_map_label({ percent: formatPercent(done ?? 0) })}
+				>
+					{#if parts}
+						{#each parts as part (part.start)}
+							<span
+								class="range"
+								class:writing={part.writing}
+								style:left={percent(part.start)}
+								style:width={percent(part.end - part.start)}
+							>
+								<span
+									class="fill"
+									style:width={percent(
+										part.end > part.start
+											? (part.reached - part.start) / (part.end - part.start)
+											: 1
+									)}
+								></span>
+							</span>
+						{/each}
+					{:else}
+						<span class="range" style:width="100%">
+							<span class="fill" style:width={percent(done ?? 0)}></span>
+						</span>
+					{/if}
+				</div>
+				<div class="map-foot">
+					<span class="mono">{connections(job)}</span>
+					{#if parts && parts.length > 1}
+						<div class="legend" aria-hidden="true">
+							<span><span class="key done"></span>{m.det_map_done()}</span>
+							{#if job.state === 'downloading'}
+								<span><span class="key arriving"></span>{m.det_map_arriving()}</span>
+							{/if}
+							<span><span class="key"></span>{m.det_map_left()}</span>
+						</div>
+					{/if}
 				</div>
 				{#if problem}
 					<p class="problem">{problem}</p>
@@ -120,31 +160,6 @@
 						</div>
 					{/each}
 				</dl>
-			</div>
-
-			<div class="column">
-				<div class="map-head">
-					<span>{m.det_file_map()}</span>
-					<span class="mono">{connections(job)}</span>
-				</div>
-				{#if map}
-					<div
-						class="blocks"
-						role="img"
-						aria-label={m.det_map_label({ percent: formatPercent(done ?? 0) })}
-					>
-						{#each map as block, index (index)}
-							<span class={block}></span>
-						{/each}
-					</div>
-					<div class="legend" aria-hidden="true">
-						<span><span class="key done"></span>{m.det_map_done()}</span>
-						<span><span class="key arriving"></span>{m.det_map_arriving()}</span>
-						<span><span class="key"></span>{m.det_map_left()}</span>
-					</div>
-				{:else}
-					<p class="faint">{m.det_map_unknown()}</p>
-				{/if}
 			</div>
 
 			<div class="settings">
@@ -321,22 +336,52 @@
 		color: var(--muted);
 	}
 
-	.faint {
-		color: var(--faint);
-		font-size: 0.85em;
-	}
-
+	/* The bar maps the file: each range sits at its place, split from the
+	   next by a hairline in the panel's colour. */
 	.bar {
-		height: 0.5rem;
+		position: relative;
+		height: 0.85rem;
 		overflow: hidden;
 		border-radius: 4px;
 		background: var(--track);
 	}
 
+	.range {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		overflow: hidden;
+	}
+
+	.range + .range {
+		border-left: 1px solid var(--well);
+	}
+
 	.fill {
+		position: relative;
+		display: block;
 		height: 100%;
 		background: var(--progress);
 		transition: width 0.25s linear;
+	}
+
+	/* Where a connection is writing right now. */
+	.writing .fill::after {
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		width: 2px;
+		background: var(--arriving);
+		content: '';
+	}
+
+	.map-foot {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 0.3rem 0.9rem;
+		color: var(--faint);
 	}
 
 	.completed .fill {
@@ -387,59 +432,9 @@
 		white-space: nowrap;
 	}
 
-	.map-head {
-		display: flex;
-		justify-content: space-between;
-		gap: 0.5rem;
-		color: var(--faint);
-	}
-
 	.mono {
 		font-family: var(--mono);
 		font-size: 0.8rem;
-	}
-
-	.blocks {
-		display: grid;
-		grid-template-columns: repeat(24, minmax(0, 1fr));
-		gap: 2px;
-	}
-
-	.blocks span,
-	.key {
-		height: 0.7rem;
-		border-radius: 1px;
-		background: var(--track);
-	}
-
-	/* Received blocks take the bar's colour for the state. */
-	.blocks .done,
-	.blocks .partial,
-	.key.done {
-		background: var(--progress);
-	}
-
-	.blocks .partial {
-		opacity: 0.45;
-	}
-
-	.blocks .arriving,
-	.key.arriving {
-		background: var(--arriving);
-	}
-
-	.completed .blocks .done {
-		background: var(--ok);
-	}
-
-	.paused .blocks span:not(.left),
-	.queued .blocks span:not(.left),
-	.cancelled .blocks span:not(.left) {
-		background: var(--quiet);
-	}
-
-	.failed .blocks span:not(.left) {
-		background: var(--danger);
 	}
 
 	.legend {
@@ -460,10 +455,31 @@
 		display: inline-block;
 		width: 0.55rem;
 		height: 0.55rem;
+		border-radius: 1px;
+		background: var(--track);
 	}
 
-	p.faint {
-		margin: 0;
+	/* Received takes the bar's colour for the state. */
+	.key.done {
+		background: var(--progress);
+	}
+
+	.paused .key.done,
+	.queued .key.done,
+	.cancelled .key.done {
+		background: var(--quiet);
+	}
+
+	.retrying .key.done {
+		background: var(--warn);
+	}
+
+	.failed .key.done {
+		background: var(--danger);
+	}
+
+	.key.arriving {
+		background: var(--arriving);
 	}
 
 	.settings {

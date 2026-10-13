@@ -91,8 +91,10 @@ pub(crate) async fn change(
 }
 
 /// `POST /jobs/{id}/category`: moves the job to another category, as the
-/// user's choice (never re-matched). If nothing has been downloaded yet, it
-/// will also be saved in that category's folder.
+/// user's choice (never re-matched), and its file to that category's folder
+/// (docs/decisions/0028). A running job stops, moves and carries on. Answers
+/// once the file has moved, which between drives takes as long as a copy.
+/// A category without a folder leaves the file where it is.
 pub(crate) async fn set_category(
     State(state): State<AppState>,
     Path(id): Path<String>,

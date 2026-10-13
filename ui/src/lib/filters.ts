@@ -3,6 +3,7 @@
 // Dashboard's tiles can open a filtered list; the quick filters above the
 // list; and the four status groups.
 
+import type { AddedWithin } from '@ottie/api-types/AddedWithin';
 import type { Category } from '@ottie/api-types/Category';
 import type { Job } from '@ottie/api-types/Job';
 import type { JobState } from '@ottie/api-types/JobState';
@@ -36,7 +37,7 @@ export function isActive(job: Job): boolean {
 	return ['connecting', 'downloading', 'retrying'].includes(job.state);
 }
 
-export type Added = 'any' | 'today' | 'week';
+export type Added = AddedWithin;
 export const ADDED: Added[] = ['any', 'today', 'week'];
 
 export interface Filters {

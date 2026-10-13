@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::AppState;
 use crate::auth::EVENTS_PROTOCOL;
-use crate::types::{ByteRange, Category, Event, Job, Settings};
+use crate::types::{ByteRange, Category, Event, Job, Settings, View};
 
 pub(crate) async fn subscribe(State(state): State<AppState>, ws: WebSocketUpgrade) -> Response {
     // Subscribe now rather than after the upgrade, so a client that fetches
@@ -60,6 +60,10 @@ async fn forward(
             Ok(JobEvent::SettingsChanged(settings)) => Event::SettingsChanged {
                 settings: Settings::from(settings),
             },
+            Ok(JobEvent::ViewChanged(view)) => Event::ViewChanged {
+                view: View::from(view),
+            },
+            Ok(JobEvent::ViewRemoved(id)) => Event::ViewRemoved { id: id.0 },
             // Not part of the API yet (restarts).
             Ok(_) => continue,
             Err(RecvError::Lagged(_)) => Event::Resync,

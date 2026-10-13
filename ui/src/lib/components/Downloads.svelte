@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { JobChange } from '@ottie/api-types/JobChange';
+	import type { View } from '@ottie/api-types/View';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -25,12 +26,15 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { NOTHING, keepShown, selectAll, type Selection } from '#lib/selection.js';
 	import { isFinished } from '#lib/status.js';
+	import { viewBody } from '#lib/views.js';
 	import AddCard from './AddCard.svelte';
+	import ConfirmDialog from './ConfirmDialog.svelte';
 	import FilterPanel from './FilterPanel.svelte';
 	import JobDetails from './JobDetails.svelte';
 	import JobTable from './JobTable.svelte';
 	import QuickFilters from './QuickFilters.svelte';
 	import Toolbar from './Toolbar.svelte';
+	import ViewDialog from './ViewDialog.svelte';
 
 	const { session, run } = useApp();
 	const downloads = resolve('/downloads');
@@ -45,6 +49,9 @@
 	let resets = $state(0);
 	// Replaced as a whole on every change, never edited in place.
 	let selection: Selection = $state.raw(NOTHING);
+	/** The view being named: a new one (null) or one to rename. */
+	let naming: { view: View | null } | null = $state(null);
+	let deleting: View | null = $state(null);
 
 	let today = $derived(new Date(session.now));
 	let shown = $derived(session.list.filter((job) => matches(job, filters, today)));
@@ -86,6 +93,19 @@
 	function setArrangement(next: Arrangement) {
 		arrangement = next;
 		saveArrangement(next);
+	}
+
+	/** Saves what's shown as a new view, or renames one (keeping what it shows). */
+	async function saveView(view: View | null, name: string): Promise<string | null> {
+		if (view !== null) {
+			const { filters, arrangement } = view;
+			return session.saveView(view.id, { name: name.trim(), filters, arrangement });
+		}
+		const why = await session.saveView(null, viewBody(name, filters, arrangement));
+		if (why === null) {
+			open = false; // Back to the pills, where the new one shows.
+		}
+		return why;
 	}
 
 	/** File-manager keys: Ctrl+A, Escape, Delete. Not while typing or while
@@ -141,11 +161,22 @@
 					categories={session.categoryList}
 					onFilters={setFilters}
 					onArrange={setArrangement}
+					onSaveView={() => (naming = { view: null })}
 					onClose={() => (open = false)}
 				/>
 			{/key}
 		{:else}
-			<QuickFilters {filters} jobs={session.list} categories={used} now={today} />
+			<QuickFilters
+				{filters}
+				{arrangement}
+				jobs={session.list}
+				categories={used}
+				views={session.viewList}
+				now={today}
+				onArrange={setArrangement}
+				onRename={(view) => (naming = { view })}
+				onDelete={(view) => (deleting = view)}
+			/>
 		{/if}
 	</div>
 
@@ -192,6 +223,31 @@
 		/>
 	{/if}
 </section>
+
+{#if naming}
+	{@const view = naming.view}
+	<ViewDialog
+		title={view ? m.view_rename_title() : m.view_save_title()}
+		name={view?.name ?? ''}
+		hint={view ? undefined : m.view_save_hint()}
+		onSave={(name) => saveView(view, name)}
+		onClose={() => (naming = null)}
+	/>
+{/if}
+
+{#if deleting}
+	{@const view = deleting}
+	<ConfirmDialog
+		message={m.view_delete_confirm({ name: view.name })}
+		confirmLabel={m.view_delete_button()}
+		onAnswer={(yes) => {
+			deleting = null;
+			if (yes) {
+				void session.removeView(view.id);
+			}
+		}}
+	/>
+{/if}
 
 <style>
 	.add {

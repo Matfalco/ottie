@@ -8,6 +8,7 @@ use crate::download::{RestartReason, Segment};
 use crate::id::JobId;
 use crate::problem::Problem;
 use crate::settings::Settings;
+use crate::view::{View, ViewId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JobState {
@@ -130,6 +131,9 @@ pub struct JobSnapshot {
     /// Multi-connection: the ranges as last saved (flushed to disk). Empty
     /// for one connection, or before the first response.
     pub segments: Vec<Segment>,
+    /// Its file is moving to another category's folder. Until it's done,
+    /// the job can't be paused, resumed, cancelled, removed or moved again.
+    pub moving: bool,
 }
 
 /// Broadcast to every subscriber of the manager.
@@ -157,6 +161,10 @@ pub enum JobEvent {
     CategoryRemoved(CategoryId),
     /// The settings changed; here they are, all of them.
     SettingsChanged(Settings),
+    /// A saved view was added or changed. Clients can insert-or-replace by `id`.
+    ViewChanged(View),
+    /// A saved view was removed.
+    ViewRemoved(ViewId),
 }
 
 #[cfg(test)]

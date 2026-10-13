@@ -49,6 +49,9 @@ pub struct Job {
     /// Downloads over several connections: each connection's range, as last
     /// saved (`progress` events bring them live). Empty for one connection.
     pub ranges: Vec<ByteRange>,
+    /// Its file is moving to another category's folder. Until it's done, it
+    /// can't be paused, resumed, cancelled, removed or moved again.
+    pub moving: bool,
 }
 
 /// A part of the file that one connection fetches.
@@ -208,6 +211,95 @@ pub struct Matched {
     /// The folder decided: it's this category's folder, or (Other) the
     /// folder of none.
     pub by_folder: bool,
+}
+
+/// A saved view: a name, which downloads it shows and how they're laid out.
+/// Listed by `GET /views` and sent in `viewChanged` events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct View {
+    pub id: u32,
+    pub name: String,
+    pub filters: ViewFilters,
+    pub arrangement: Arrangement,
+}
+
+/// Which downloads a view shows: those that pass every filter.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ViewFilters {
+    /// Null: any state. An empty list shows nothing. `connecting` counts as
+    /// `downloading` (the daemon saves it so).
+    pub states: Option<Vec<JobState>>,
+    /// Category IDs; null: any category.
+    pub categories: Option<Vec<u32>>,
+    /// Part of the file name, in any case; empty: any name.
+    pub name_contains: String,
+    pub added: AddedWithin,
+}
+
+/// How recently a download was added; "today" starts at local midnight
+/// where the list is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum AddedWithin {
+    Any,
+    Today,
+    /// The past 7 days.
+    Week,
+}
+
+/// How a list of downloads is laid out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Arrangement {
+    pub sort: SortKey,
+    pub direction: SortDirection,
+    /// Grouped by status, each group sorted.
+    pub grouped: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum SortKey {
+    /// By ID, which is by creation time.
+    Added,
+    Name,
+    Size,
+    Progress,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub enum SortDirection {
+    #[serde(rename = "asc")]
+    Ascending,
+    #[serde(rename = "desc")]
+    Descending,
+}
+
+/// Body of `POST /views` and `PUT /views/{id}`: everything about the view
+/// (a PUT replaces it all).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ViewBody {
+    pub name: String,
+    pub filters: ViewFilters,
+    pub arrangement: Arrangement,
+}
+
+/// Answer to `POST /views`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AddedView {
+    pub id: u32,
 }
 
 /// Body of `PATCH /jobs/{id}`: the job's own settings to change; a field
@@ -457,6 +549,23 @@ pub enum Reason {
         #[ts(type = "number")]
         max: u64,
     },
+    /// Its file is moving; try again once it's done.
+    JobMoving {
+        id: String,
+    },
+    /// The download can't resume, so moving it now would start it over.
+    CannotMoveWhileRunning,
+    /// The file couldn't move (disk full, no permission…); `detail` says why.
+    MoveFailed {
+        detail: String,
+    },
+    ViewNotFound {
+        id: u32,
+    },
+    InvalidViewName,
+    ViewNameTaken {
+        name: String,
+    },
     /// Not a language tag like `en` or `pt-BR`.
     InvalidLanguage {
         language: String,
@@ -500,6 +609,10 @@ pub enum Event {
     CategoryRemoved { id: u32 },
     /// The settings changed (from any client): all of them, as now.
     SettingsChanged { settings: Settings },
+    /// A saved view was added or changed: insert-or-replace by `id`.
+    ViewChanged { view: View },
+    /// A saved view was removed.
+    ViewRemoved { id: u32 },
     /// Events were missed (the client was too slow): fetch `GET /jobs` again.
     Resync,
 }
@@ -526,6 +639,7 @@ impl From<JobSnapshot> for Job {
                 .and_then(|at| at.duration_since(UNIX_EPOCH).ok())
                 .map(|since| u64::try_from(since.as_millis()).unwrap_or(u64::MAX)),
             ranges: job.segments.into_iter().map(ByteRange::from).collect(),
+            moving: job.moving,
         }
     }
 }
@@ -633,6 +747,97 @@ impl From<ottie_core::Problem> for Problem {
             P::RemoteChanging => Problem::RemoteChanging,
             P::Disk { detail } => Problem::Disk { detail },
             P::Other { detail } => Problem::Other { detail },
+        }
+    }
+}
+
+impl From<ottie_core::View> for View {
+    fn from(view: ottie_core::View) -> Self {
+        use ottie_core::{AddedWithin as A, SortDirection as D, SortKey as K};
+        let settings = view.settings;
+        View {
+            id: view.id.0,
+            name: settings.name,
+            filters: ViewFilters {
+                states: settings
+                    .states
+                    .map(|states| states.into_iter().map(JobState::from).collect()),
+                categories: settings
+                    .categories
+                    .map(|ids| ids.into_iter().map(|id| id.0).collect()),
+                name_contains: settings.name_contains,
+                added: match settings.added {
+                    A::Any => AddedWithin::Any,
+                    A::Today => AddedWithin::Today,
+                    A::Week => AddedWithin::Week,
+                },
+            },
+            arrangement: Arrangement {
+                sort: match settings.sort {
+                    K::Added => SortKey::Added,
+                    K::Name => SortKey::Name,
+                    K::Size => SortKey::Size,
+                    K::Progress => SortKey::Progress,
+                },
+                direction: match settings.direction {
+                    D::Ascending => SortDirection::Ascending,
+                    D::Descending => SortDirection::Descending,
+                },
+                grouped: settings.grouped,
+            },
+        }
+    }
+}
+
+impl From<ViewBody> for ottie_core::ViewSettings {
+    fn from(body: ViewBody) -> Self {
+        use ottie_core::{AddedWithin as A, CategoryId, SortDirection as D, SortKey as K};
+        let ViewBody {
+            name,
+            filters,
+            arrangement,
+        } = body;
+        ottie_core::ViewSettings {
+            name,
+            states: filters
+                .states
+                .map(|states| states.into_iter().map(Into::into).collect()),
+            categories: filters
+                .categories
+                .map(|ids| ids.into_iter().map(CategoryId).collect()),
+            name_contains: filters.name_contains,
+            added: match filters.added {
+                AddedWithin::Any => A::Any,
+                AddedWithin::Today => A::Today,
+                AddedWithin::Week => A::Week,
+            },
+            sort: match arrangement.sort {
+                SortKey::Added => K::Added,
+                SortKey::Name => K::Name,
+                SortKey::Size => K::Size,
+                SortKey::Progress => K::Progress,
+            },
+            direction: match arrangement.direction {
+                SortDirection::Ascending => D::Ascending,
+                SortDirection::Descending => D::Descending,
+            },
+            grouped: arrangement.grouped,
+        }
+    }
+}
+
+impl From<JobState> for ottie_core::JobState {
+    fn from(state: JobState) -> Self {
+        use ottie_core::JobState as S;
+        match state {
+            JobState::Queued => S::Queued,
+            JobState::Connecting => S::Connecting,
+            JobState::Downloading => S::Downloading,
+            JobState::Paused => S::Paused,
+            JobState::Completed => S::Completed,
+            JobState::Failed => S::Failed,
+            JobState::Cancelled => S::Cancelled,
+            JobState::Retrying => S::Retrying,
         }
     }
 }

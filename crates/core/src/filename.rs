@@ -194,6 +194,59 @@ pub async fn finalize(dir: &Path, name: &str, part: &Path) -> io::Result<String>
     Err(no_free_name())
 }
 
+/// Moves a download's file from folder `from` to folder `to`, under the first
+/// free name there: the finished file (`finished`) or its `.part.ottie`.
+/// Returns its name now. If anything fails, the original stays where it was.
+/// A file that's gone (deleted by hand) has nothing to move: the name stays.
+pub async fn relocate(from: &Path, name: &str, finished: bool, to: &Path) -> io::Result<String> {
+    let source = if finished {
+        from.join(name)
+    } else {
+        from.join(part_name(name))
+    };
+    if !fs::try_exists(&source).await? {
+        return Ok(name.to_owned());
+    }
+    // The new name is reserved as a `.part.ottie`, which the file then
+    // replaces; a finished file gets its real name back at the end.
+    let (candidate, file) = reserve(to, name).await?;
+    drop(file); // Windows won't replace a file that's still open.
+    let part = to.join(part_name(&candidate));
+    if let Err(err) = move_file(&source, &part).await {
+        let _ = fs::remove_file(&part).await;
+        return Err(err);
+    }
+    if !finished {
+        return Ok(candidate);
+    }
+    match finalize(to, &candidate, &part).await {
+        Ok(name) => Ok(name),
+        Err(err) => {
+            // Put it back rather than leave it half-moved.
+            let _ = move_file(&part, &source).await;
+            Err(err)
+        }
+    }
+}
+
+/// Renames `source` to `target`, replacing it. Between drives a rename
+/// can't work, so it copies, then deletes the original.
+async fn move_file(source: &Path, target: &Path) -> io::Result<()> {
+    match fs::rename(source, target).await {
+        Err(err) if err.kind() == io::ErrorKind::CrossesDevices => {
+            copy_then_delete(source, target).await
+        }
+        other => other,
+    }
+}
+
+/// The original goes only once the copy is complete, so a failure (or a
+/// crash) halfway leaves it intact.
+async fn copy_then_delete(source: &Path, target: &Path) -> io::Result<()> {
+    fs::copy(source, target).await?;
+    fs::remove_file(source).await
+}
+
 fn no_free_name() -> io::Error {
     io::Error::new(io::ErrorKind::AlreadyExists, "no free file name")
 }
@@ -356,5 +409,61 @@ mod tests {
         assert_eq!(numbered("file.zip", 2), "file (2).zip");
         assert_eq!(numbered("README", 1), "README (1)");
         assert_eq!(numbered(".hidden", 1), ".hidden (1)");
+    }
+
+    #[tokio::test]
+    async fn an_unfinished_download_moves_its_part_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let (from, to) = (dir.path().join("a"), dir.path().join("b"));
+        std::fs::create_dir_all(&from).unwrap();
+        std::fs::write(from.join("film.mkv.part.ottie"), b"half").unwrap();
+        let name = relocate(&from, "film.mkv", false, &to).await.unwrap();
+        assert_eq!(name, "film.mkv");
+        assert_eq!(
+            std::fs::read(to.join("film.mkv.part.ottie")).unwrap(),
+            b"half"
+        );
+        assert!(!from.join("film.mkv.part.ottie").exists());
+    }
+
+    #[tokio::test]
+    async fn a_finished_file_takes_a_free_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let (from, to) = (dir.path().join("a"), dir.path().join("b"));
+        std::fs::create_dir_all(&from).unwrap();
+        std::fs::create_dir_all(&to).unwrap();
+        std::fs::write(from.join("song.mp3"), b"new").unwrap();
+        std::fs::write(to.join("song.mp3"), b"old").unwrap();
+        let name = relocate(&from, "song.mp3", true, &to).await.unwrap();
+        assert_eq!(name, "song (1).mp3");
+        assert_eq!(std::fs::read(to.join("song (1).mp3")).unwrap(), b"new");
+        assert_eq!(std::fs::read(to.join("song.mp3")).unwrap(), b"old");
+        assert!(!to.join("song (1).mp3.part.ottie").exists());
+        assert!(!from.join("song.mp3").exists());
+    }
+
+    #[tokio::test]
+    async fn a_file_deleted_by_hand_has_nothing_to_move() {
+        let dir = tempfile::tempdir().unwrap();
+        let (from, to) = (dir.path().join("a"), dir.path().join("b"));
+        let name = relocate(&from, "gone.iso", true, &to).await.unwrap();
+        assert_eq!(name, "gone.iso");
+        assert!(!to.exists());
+    }
+
+    #[tokio::test]
+    async fn between_drives_the_original_goes_after_the_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let (source, target) = (dir.path().join("x.bin"), dir.path().join("y.bin"));
+        std::fs::write(&source, b"bytes").unwrap();
+        std::fs::write(&target, b"").unwrap();
+        copy_then_delete(&source, &target).await.unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"bytes");
+        assert!(!source.exists());
+        // A failed copy leaves the original alone.
+        std::fs::write(&source, b"bytes").unwrap();
+        let nowhere = dir.path().join("missing").join("z.bin");
+        assert!(copy_then_delete(&source, &nowhere).await.is_err());
+        assert!(source.exists());
     }
 }

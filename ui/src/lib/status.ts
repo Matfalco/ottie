@@ -23,6 +23,9 @@ export function describe(
 ): string {
 	const options = { locale };
 	const why = () => explainProblem(job.problem, job.error, locale);
+	if (job.moving) {
+		return m.status_moving({}, options);
+	}
 	switch (job.state) {
 		case 'queued':
 			return job.retries > 0
@@ -74,6 +77,9 @@ export function motion(
 	locale: Locale = getLocale()
 ): Motion {
 	const options = { locale };
+	if (job.moving) {
+		return { status: m.status_moving({}, options) };
+	}
 	switch (job.state) {
 		case 'downloading': {
 			if (bytesPerSec <= 0) {
@@ -111,16 +117,18 @@ export function fraction(job: Job): number | null {
 	return Math.min(1, job.downloaded / job.total);
 }
 
+// A download whose file is moving can't be stopped or started until it's done.
+
 export function canPause(job: Job): boolean {
-	return ['queued', 'connecting', 'downloading', 'retrying'].includes(job.state);
+	return !job.moving && ['queued', 'connecting', 'downloading', 'retrying'].includes(job.state);
 }
 
 export function canResume(job: Job): boolean {
-	return job.state === 'paused' || job.state === 'failed';
+	return !job.moving && (job.state === 'paused' || job.state === 'failed');
 }
 
 export function canCancel(job: Job): boolean {
-	return !isFinished(job);
+	return !job.moving && !isFinished(job);
 }
 
 /** Nothing left to do: "Clear finished" removes these. */

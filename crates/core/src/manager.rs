@@ -23,6 +23,7 @@ use crate::problem::Problem;
 use crate::settings::{RetryPolicy, Settings, SettingsChange};
 use crate::store::{JobRecord, Store};
 use crate::throttle::Limiter;
+use crate::view::{View, ViewId, ViewSettings};
 
 /// Running jobs report progress to the manager at most this often.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
@@ -73,6 +74,11 @@ impl Manager {
             limiter.set_category_limit(category.id, category.settings.speed_limit);
             categories.insert(category.id, category.settings);
         }
+        let views = loaded
+            .views
+            .into_iter()
+            .map(|view| (view.id, view.settings))
+            .collect();
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
         let (internal, internal_rx) = mpsc::unbounded_channel();
         let (events, _) = broadcast::channel(EVENT_BUFFER);
@@ -86,6 +92,7 @@ impl Manager {
             jobs,
             categories,
             other,
+            views,
             yields: 0,
             events: events.clone(),
             internal,
@@ -287,6 +294,31 @@ impl Manager {
         .await
     }
 
+    /// Every saved view, by ID.
+    pub async fn views(&self) -> Result<Vec<View>, Error> {
+        self.request(|reply| Command::Views { reply }).await
+    }
+
+    pub async fn add_view(&self, settings: ViewSettings) -> Result<ViewId, Error> {
+        self.request(|reply| Command::AddView { settings, reply })
+            .await
+    }
+
+    /// Replaces the view's settings (its name too).
+    pub async fn update_view(&self, id: ViewId, settings: ViewSettings) -> Result<(), Error> {
+        self.request(|reply| Command::UpdateView {
+            id,
+            settings,
+            reply,
+        })
+        .await
+    }
+
+    pub async fn remove_view(&self, id: ViewId) -> Result<(), Error> {
+        self.request(|reply| Command::RemoveView { id, reply })
+            .await
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<JobEvent> {
         self.events.subscribe()
     }
@@ -366,6 +398,22 @@ enum Command {
         category: CategoryId,
         reply: Reply<()>,
     },
+    Views {
+        reply: Reply<Vec<View>>,
+    },
+    AddView {
+        settings: ViewSettings,
+        reply: Reply<ViewId>,
+    },
+    UpdateView {
+        id: ViewId,
+        settings: ViewSettings,
+        reply: Reply<()>,
+    },
+    RemoveView {
+        id: ViewId,
+        reply: Reply<()>,
+    },
     Shutdown {
         reply: Reply<()>,
     },
@@ -382,6 +430,11 @@ enum Internal {
         download: Box<Download>,
         result: Result<Outcome, Error>,
     },
+    /// A job's file has moved (or couldn't): its new folder and name.
+    Moved {
+        id: JobId,
+        result: io::Result<(PathBuf, String)>,
+    },
     /// A `Retrying` job's wait is over. `due` tells this wait from a later one.
     RetryDue {
         id: JobId,
@@ -393,6 +446,9 @@ enum Internal {
 /// cancel overrides the shutdown, cancel overrides pause, remove overrides all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Stop {
+    /// Stop to move the file to another folder, then carry on (see
+    /// `set_category`). The state stays as it is meanwhile.
+    Move,
     /// Leave the state as it is, so the next start continues the job.
     Shutdown,
     Pause,
@@ -404,7 +460,7 @@ enum Stop {
 impl Stop {
     fn target(self) -> Option<JobState> {
         match self {
-            Stop::Shutdown => None,
+            Stop::Move | Stop::Shutdown => None,
             Stop::Pause => Some(JobState::Paused),
             Stop::Cancel | Stop::Remove => Some(JobState::Cancelled),
         }
@@ -432,8 +488,20 @@ struct Job {
     gave_way: u64,
     /// Present while a task is downloading this job.
     task: Option<Task>,
+    /// Present while its category is changing and its file moving there.
+    moving: Option<Moving>,
     last_saved: Option<Instant>,
 }
+
+/// A move to another category, under way (docs/decisions/0028).
+struct Moving {
+    category: CategoryId,
+    /// The `set_category` call to answer once the file has moved.
+    reply: Reply<()>,
+}
+
+/// Where a job's file is: its folder, and its name if it has one yet.
+type Place = (PathBuf, Option<String>);
 
 impl Job {
     async fn restore(record: JobRecord) -> Job {
@@ -466,13 +534,17 @@ impl Job {
             retry_at: None,
             gave_way: 0,
             task: None,
+            moving: None,
             last_saved: None,
         }
     }
 
-    /// Running, or waiting to retry in the slot it ran in.
+    /// Running, or waiting to retry in the slot it ran in, or stopped for a
+    /// moment while its file moves.
     fn holds_slot(&self) -> bool {
-        self.task.is_some() || self.state == JobState::Retrying
+        self.task.is_some()
+            || self.state == JobState::Retrying
+            || (self.moving.is_some() && self.state.is_running())
     }
 
     fn snapshot(&self, id: JobId) -> JobSnapshot {
@@ -493,6 +565,7 @@ impl Job {
             retries: self.retries,
             retry_at: self.retry_at.map(|(_, at)| at),
             segments: dl.segments.clone(),
+            moving: self.moving.is_some(),
         }
     }
 }
@@ -517,6 +590,8 @@ struct Actor<B> {
     categories: BTreeMap<CategoryId, CategorySettings>,
     /// The ID of the built-in Other category.
     other: CategoryId,
+    /// Saved views. Saved whenever one changes.
+    views: BTreeMap<ViewId, ViewSettings>,
     /// How many times a retrying job has given way (see `Job::gave_way`).
     yields: u64,
     ids: IdGenerator,
@@ -615,8 +690,22 @@ impl<B: Backend> Actor<B> {
                 id,
                 category,
                 reply,
+            } => self.set_category(id, category, reply),
+            Command::Views { reply } => {
+                let _ = reply.send(Ok(self.views()));
+            }
+            Command::AddView { settings, reply } => {
+                let _ = reply.send(self.add_view(settings));
+            }
+            Command::UpdateView {
+                id,
+                settings,
+                reply,
             } => {
-                let _ = reply.send(self.set_category(id, category));
+                let _ = reply.send(self.update_view(id, settings));
+            }
+            Command::RemoveView { id, reply } => {
+                let _ = reply.send(self.remove_view(id));
             }
             Command::Shutdown { reply } => self.begin_shutdown(Some(reply)),
         }
@@ -630,9 +719,14 @@ impl<B: Backend> Actor<B> {
                 download,
                 result,
             } => self.on_ended(id, download, result).await,
+            Internal::Moved { id, result } => {
+                self.finish_move(id, result.map(|(dir, name)| Some((dir, Some(name)))))
+            }
             Internal::RetryDue { id, due } => {
                 let waiting = self.jobs.get(&id).is_some_and(|job| {
-                    job.state == JobState::Retrying && job.retry_at.map(|(at, _)| at) == Some(due)
+                    job.state == JobState::Retrying
+                        && job.retry_at.map(|(at, _)| at) == Some(due)
+                        && job.moving.is_none()
                 });
                 // Not if it was paused, cancelled or gave way meanwhile.
                 if waiting && self.shutdown.is_none() {
@@ -752,6 +846,7 @@ impl<B: Backend> Actor<B> {
                 retry_at: None,
                 gave_way: 0,
                 task: None,
+                moving: None,
                 last_saved: None,
             },
         );
@@ -964,6 +1059,32 @@ impl<B: Backend> Actor<B> {
             })?;
             self.limiter.set_category(job_id, CategoryId::GENERAL);
         }
+        // Views that showed it show General instead, where its jobs went.
+        // Saved first too: the database would drop it from them otherwise.
+        let showing: Vec<ViewId> = self
+            .views
+            .iter()
+            .filter(|(_, view)| {
+                view.categories
+                    .as_ref()
+                    .is_some_and(|ids| ids.contains(&id))
+            })
+            .map(|(view_id, _)| *view_id)
+            .collect();
+        for view_id in showing {
+            if let Some(ids) = self
+                .views
+                .get_mut(&view_id)
+                .and_then(|view| view.categories.as_mut())
+            {
+                for each in ids.iter_mut().filter(|each| **each == id) {
+                    *each = CategoryId::GENERAL;
+                }
+                ids.sort();
+                ids.dedup();
+            }
+            self.save_view(view_id);
+        }
         self.categories.remove(&id);
         self.limiter.set_category_limit(id, 0);
         self.store.remove_category(id);
@@ -973,22 +1094,156 @@ impl<B: Backend> Actor<B> {
         Ok(())
     }
 
-    fn set_category(&mut self, id: JobId, category: CategoryId) -> Result<(), Error> {
-        let folder = self.category(category)?.folder.clone();
+    /// Moves a job to another category, as the user's choice, and its file
+    /// to that category's folder (docs/decisions/0028). A running job stops,
+    /// its file moves, and it carries on in the same slot. Answers once the
+    /// file has moved; if it can't, the job stays in its old category.
+    fn set_category(&mut self, id: JobId, category: CategoryId, reply: Reply<()>) {
+        let refusal = if self.shutdown.is_some() {
+            Some(Error::ManagerStopped)
+        } else {
+            self.category(category).err()
+        };
+        if let Some(err) = refusal {
+            let _ = reply.send(Err(err));
+            return;
+        }
+        let folder = self
+            .categories
+            .get(&category)
+            .and_then(|c| c.folder.clone());
+        let Some(job) = self.jobs.get_mut(&id) else {
+            let _ = reply.send(Err(Error::JobNotFound(id)));
+            return;
+        };
+        if job.moving.is_some() {
+            let _ = reply.send(Err(Error::JobMoving(id)));
+            return;
+        }
+        let dl = &job.download;
+        let has_file = dl.file_name.is_some() && job.state != JobState::Cancelled;
+        // What it has would be lost if it stopped: it would start over.
+        let would_restart = has_file && !dl.resumable && dl.downloaded > 0;
+        // No folder of its own (it keeps the one it has), or already there.
+        let Some(folder) = folder.filter(|folder| !category::same_folder(folder, &dl.dest_dir))
+        else {
+            let _ = reply.send(self.assign_category(id, category, None));
+            self.schedule();
+            return;
+        };
+        if let Some(task) = &mut job.task {
+            if would_restart {
+                let _ = reply.send(Err(Error::CannotMoveWhileRunning(id)));
+                return;
+            }
+            // Running: stop it first; `on_ended` moves the file.
+            task.stop = task.stop.max(Some(Stop::Move));
+            task.cancel.cancel();
+            job.moving = Some(Moving { category, reply });
+            self.emit_changed(id);
+            return;
+        }
+        if !has_file {
+            // Nothing on disk yet: it will simply be saved there.
+            let _ = reply.send(self.assign_category(id, category, Some((folder, None))));
+            self.schedule();
+            return;
+        }
+        job.moving = Some(Moving { category, reply });
+        self.emit_changed(id);
+        self.move_file(id);
+    }
+
+    /// Moves the file of a stopped job whose category is changing, in a task
+    /// of its own (between drives it's a copy, which takes a while). With no
+    /// file, or no folder to move to, the move is done at once.
+    fn move_file(&mut self, id: JobId) {
+        let Some(job) = self.jobs.get(&id) else {
+            return;
+        };
+        let Some(moving) = &job.moving else {
+            return;
+        };
+        let folder = self
+            .categories
+            .get(&moving.category)
+            .and_then(|settings| settings.folder.clone());
+        let name = job
+            .download
+            .file_name
+            .clone()
+            .filter(|_| job.state != JobState::Cancelled);
+        let (Some(to), Some(name)) = (folder.clone(), name) else {
+            self.finish_move(id, Ok(folder.map(|dir| (dir, None))));
+            return;
+        };
+        let from = job.download.dest_dir.clone();
+        let finished = job.state == JobState::Completed;
+        let internal = self.internal.clone();
+        tokio::spawn(async move {
+            let result = filename::relocate(&from, &name, finished, &to)
+                .await
+                .map(|name| (to, name));
+            // Fails only if the manager has stopped.
+            let _ = internal.send(Internal::Moved { id, result });
+        });
+    }
+
+    /// Ends a move: the job takes its new category and place, or stays as it
+    /// was if the file couldn't move. A job that was running carries on.
+    fn finish_move(&mut self, id: JobId, result: io::Result<Option<Place>>) {
+        let Some(moving) = self.jobs.get_mut(&id).and_then(|job| job.moving.take()) else {
+            return;
+        };
+        let answer = match result {
+            Ok(place) => {
+                // Removed meanwhile: the file stays where it went, and the job
+                // goes to General like the category's other jobs.
+                let category = if self.categories.contains_key(&moving.category) {
+                    moving.category
+                } else {
+                    CategoryId::GENERAL
+                };
+                self.assign_category(id, category, place)
+            }
+            Err(err) => {
+                tracing::warn!(%id, error = %err, "could not move the file");
+                self.emit_changed(id);
+                Err(Error::MoveFailed(err))
+            }
+        };
+        let _ = moving.reply.send(answer);
+        let Some(state) = self.jobs.get(&id).map(|job| job.state) else {
+            return;
+        };
+        if self.shutdown.is_none() && state.is_running() {
+            self.spawn_task(id);
+        } else if state == JobState::Retrying {
+            // Its wait may have ended while it was moving.
+            self.retry_when_due(id);
+        }
+        self.schedule();
+    }
+
+    /// Puts the job in `category` as the user's choice, and at `place` if
+    /// given. The caller schedules (a category cap may have changed).
+    fn assign_category(
+        &mut self,
+        id: JobId,
+        category: CategoryId,
+        place: Option<Place>,
+    ) -> Result<(), Error> {
         self.change(id, |job| {
             job.category = category;
             job.category_chosen = true;
-            // Nothing on disk yet, and no task holding its own copy of the
-            // download: it can still be saved somewhere else.
-            if let Some(folder) = folder
-                && job.download.file_name.is_none()
-                && job.task.is_none()
-            {
-                job.download.dest_dir = folder;
+            if let Some((dir, name)) = place {
+                job.download.dest_dir = dir;
+                if name.is_some() {
+                    job.download.file_name = name;
+                }
             }
         })?;
         self.limiter.set_category(id, category);
-        self.schedule();
         Ok(())
     }
 
@@ -1006,11 +1261,87 @@ impl<B: Backend> Actor<B> {
         let _ = self.events.send(JobEvent::CategoryChanged(category));
     }
 
+    fn views(&self) -> Vec<View> {
+        self.views
+            .iter()
+            .map(|(&id, settings)| View {
+                id,
+                settings: settings.clone(),
+            })
+            .collect()
+    }
+
+    /// Normalizes `settings` and checks that its name isn't another view's
+    /// (`own` is the one being edited, if any) and its categories exist.
+    fn check_view(
+        &self,
+        settings: ViewSettings,
+        own: Option<ViewId>,
+    ) -> Result<ViewSettings, Error> {
+        let settings = settings.normalized()?;
+        let name = settings.name.to_lowercase();
+        if self
+            .views
+            .iter()
+            .any(|(&id, other)| Some(id) != own && other.name.to_lowercase() == name)
+        {
+            return Err(Error::ViewNameTaken(settings.name));
+        }
+        for &category in settings.categories.iter().flatten() {
+            self.category(category)?;
+        }
+        Ok(settings)
+    }
+
+    fn add_view(&mut self, settings: ViewSettings) -> Result<ViewId, Error> {
+        let settings = self.check_view(settings, None)?;
+        let last = self.views.keys().next_back().map_or(0, |id| id.0);
+        let id = ViewId(last.checked_add(1).ok_or(Error::TooManyViews)?);
+        self.views.insert(id, settings);
+        self.save_view(id);
+        Ok(id)
+    }
+
+    fn update_view(&mut self, id: ViewId, settings: ViewSettings) -> Result<(), Error> {
+        if !self.views.contains_key(&id) {
+            return Err(Error::ViewNotFound(id));
+        }
+        let settings = self.check_view(settings, Some(id))?;
+        self.views.insert(id, settings);
+        self.save_view(id);
+        Ok(())
+    }
+
+    fn remove_view(&mut self, id: ViewId) -> Result<(), Error> {
+        self.views.remove(&id).ok_or(Error::ViewNotFound(id))?;
+        self.store.remove_view(id);
+        // Fails only when nobody is subscribed.
+        let _ = self.events.send(JobEvent::ViewRemoved(id));
+        Ok(())
+    }
+
+    fn save_view(&self, id: ViewId) {
+        let Some(settings) = self.views.get(&id) else {
+            return;
+        };
+        let view = View {
+            id,
+            settings: settings.clone(),
+        };
+        self.store.save_view(view.clone());
+        // Fails only when nobody is subscribed.
+        let _ = self.events.send(JobEvent::ViewChanged(view));
+    }
+
     async fn stop(&mut self, id: JobId, stop: Stop, reply: Reply<()>) {
         let Some(job) = self.jobs.get_mut(&id) else {
             let _ = reply.send(Err(Error::JobNotFound(id)));
             return;
         };
+        if job.moving.is_some() && stop != Stop::Shutdown {
+            let _ = reply.send(Err(Error::JobMoving(id)));
+            return;
+        }
         let Some(target) = stop.target() else {
             let _ = reply.send(Ok(()));
             return;
@@ -1044,6 +1375,9 @@ impl<B: Backend> Actor<B> {
     fn resume(&mut self, id: JobId) -> Result<(), Error> {
         if self.shutdown.is_some() {
             return Err(Error::ManagerStopped);
+        }
+        if self.jobs.get(&id).is_some_and(|job| job.moving.is_some()) {
+            return Err(Error::JobMoving(id));
         }
         self.transition(id, JobState::Queued, None)?;
         // Resumed by hand: every retry is available again.
@@ -1125,7 +1459,11 @@ impl<B: Backend> Actor<B> {
     fn next_queued(&self, busy: &HashMap<CategoryId, usize>) -> Option<JobId> {
         self.jobs
             .iter()
-            .filter(|(_, job)| job.state == JobState::Queued && self.has_room(job.category, busy))
+            .filter(|(_, job)| {
+                job.state == JobState::Queued
+                    && job.moving.is_none()
+                    && self.has_room(job.category, busy)
+            })
             // `Reverse`: the smallest `gave_way` and ID win.
             .max_by_key(|(id, job)| {
                 let never_gave_way = job.gave_way == 0;
@@ -1144,7 +1482,9 @@ impl<B: Backend> Actor<B> {
         let in_slot = self.settings.retry.retries_before_yield;
         self.jobs
             .iter()
-            .filter(|(_, job)| job.state == JobState::Retrying && job.retries > in_slot)
+            .filter(|(_, job)| {
+                job.state == JobState::Retrying && job.retries > in_slot && job.moving.is_none()
+            })
             .find(|(_, job)| {
                 let mut after = busy.clone();
                 if let Some(count) = after.get_mut(&job.category) {
@@ -1169,6 +1509,11 @@ impl<B: Backend> Actor<B> {
         if !self.transition_or_log(id, JobState::Connecting, None) {
             return false;
         }
+        self.spawn_task(id)
+    }
+
+    /// Starts the task that downloads the job, in the state it's in.
+    fn spawn_task(&mut self, id: JobId) -> bool {
         let placement = self.jobs.get(&id).and_then(|job| self.placement(job));
         let Some(job) = self.jobs.get_mut(&id) else {
             return false;
@@ -1257,7 +1602,8 @@ impl<B: Backend> Actor<B> {
                     _ => {}
                 }
             }
-            // Shutting down: keep the running state so the next start continues it.
+            // Shutting down, or stopped to move its file: keep the running state
+            // (the next start continues it, or `finish_move` does).
             None => self.save(id),
         }
 
@@ -1281,6 +1627,15 @@ impl<B: Backend> Actor<B> {
             };
             let _ = reply.send(answer);
         }
+        // Stopped to move its file (or finished first): move it now, unless
+        // Ottie is shutting down.
+        if self.shutdown.is_some() {
+            if let Some(moving) = self.jobs.get_mut(&id).and_then(|job| job.moving.take()) {
+                let _ = moving.reply.send(Err(Error::ManagerStopped));
+            }
+        } else {
+            self.move_file(id);
+        }
         self.schedule();
     }
 
@@ -1294,8 +1649,11 @@ impl<B: Backend> Actor<B> {
         }
     }
 
+    /// Includes files being moved, which shutdown waits for too.
     fn any_task_running(&self) -> bool {
-        self.jobs.values().any(|job| job.task.is_some())
+        self.jobs
+            .values()
+            .any(|job| job.task.is_some() || job.moving.is_some())
     }
 
     /// The only place a job changes state. Refuses moves the state machine

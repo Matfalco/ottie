@@ -48,4 +48,9 @@ retryAt: number | null,
  * Downloads over several connections: each connection's range, as last
  * saved (`progress` events bring them live). Empty for one connection.
  */
-ranges: Array<ByteRange>, };
+ranges: Array<ByteRange>, 
+/**
+ * Its file is moving to another category's folder. Until it's done, it
+ * can't be paused, resumed, cancelled, removed or moved again.
+ */
+moving: boolean, };

@@ -6,6 +6,7 @@ use reqwest::StatusCode;
 use crate::category::CategoryId;
 use crate::id::JobId;
 use crate::job::JobState;
+use crate::view::ViewId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -88,6 +89,27 @@ pub enum Error {
 
     #[error("no folder given, and category `{0}` has none")]
     NoFolder(String),
+
+    #[error("download {0} is being moved")]
+    JobMoving(JobId),
+
+    #[error("download {0} can't resume, so it can only move to another folder once it has stopped")]
+    CannotMoveWhileRunning(JobId),
+
+    #[error("could not move the file: {0}")]
+    MoveFailed(#[source] std::io::Error),
+
+    #[error("no view with ID {0}")]
+    ViewNotFound(ViewId),
+
+    #[error("a view name can't be empty")]
+    InvalidViewName,
+
+    #[error("there is already a view named `{0}`")]
+    ViewNameTaken(String),
+
+    #[error("no more view IDs are available")]
+    TooManyViews,
 }
 
 impl Error {

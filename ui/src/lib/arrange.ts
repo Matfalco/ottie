@@ -2,24 +2,21 @@
 // Unlike the filters (in the address), it's remembered per device, so it
 // sticks between visits.
 
+import type { Arrangement } from '@ottie/api-types/Arrangement';
 import type { Job } from '@ottie/api-types/Job';
+import type { SortDirection } from '@ottie/api-types/SortDirection';
+import type { SortKey } from '@ottie/api-types/SortKey';
 import { GROUPS, groupOf, type Group } from './filters';
 import { displayName, formatCount, formatSpeed } from './format';
 import { m } from './paraglide/messages.js';
 import { getLocale, type Locale } from './paraglide/runtime.js';
 import { fraction } from './status';
 
-export type SortKey = 'added' | 'name' | 'size' | 'progress';
+// The same types as a saved view's, so a view can hold an arrangement.
+export type { Arrangement, SortKey };
+export type Direction = SortDirection;
+
 export const SORT_KEYS: SortKey[] = ['added', 'name', 'size', 'progress'];
-
-export type Direction = 'asc' | 'desc';
-
-export interface Arrangement {
-	sort: SortKey;
-	direction: Direction;
-	/** Grouped by status (`GROUPS`), each group sorted. */
-	grouped: boolean;
-}
 
 export const DEFAULT_ARRANGEMENT: Arrangement = { sort: 'added', direction: 'desc', grouped: true };
 
