@@ -31,7 +31,7 @@
 <style>
 	header {
 		display: grid;
-		grid-template-columns: 13rem minmax(0, 1fr) auto;
+		grid-template-columns: var(--nav-width) minmax(0, 1fr) auto;
 		align-items: center;
 		height: 3rem;
 		background: var(--chrome);
@@ -58,6 +58,22 @@
 		align-items: center;
 		height: 100%;
 		padding: 0 0.75rem 0 0;
+	}
+
+	/* Medium widths: the logo alone, above the menu's icons. */
+	@media (max-width: 56rem) and (min-width: 40.01rem) {
+		.brand {
+			justify-content: center;
+			padding: 0;
+		}
+
+		.brand span {
+			display: none;
+		}
+
+		.middle {
+			padding-left: 0.75rem;
+		}
 	}
 
 	/* Narrow: the add bar gets a row of its own under the logo. */

@@ -86,5 +86,17 @@
 	"window_minimize": "Réduire",
 	"window_maximize": "Agrandir",
 	"window_restore": "Restaurer",
-	"window_close": "Fermer"
+	"window_close": "Fermer",
+	"nav_label": "Sections",
+	"nav_dashboard": "Tableau de bord",
+	"nav_downloads": "Téléchargements",
+	"dash_speed": "Vitesse de téléchargement",
+	"dash_speed_chart": "Vitesse totale sur les 5 dernières minutes : {now} maintenant, {peak} au plus.",
+	"dash_ago": "il y a {time}",
+	"dash_now": "maintenant",
+	"dash_attention": "À vérifier",
+	"dash_attention_none": "Rien à signaler.",
+	"dash_finished": "Derniers terminés",
+	"dash_finished_none": "Rien de terminé pour l’instant.",
+	"dash_see_all": "Tout voir"
 }

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { countByFilter, filterName, matches, showsNewJobs } from './filters';
+import {
+	countByFilter,
+	filterName,
+	filterQuery,
+	matches,
+	parseFilter,
+	showsNewJobs
+} from './filters';
 import { job } from './testing';
 
 describe('filters', () => {
@@ -20,6 +27,14 @@ describe('filters', () => {
 			stopped: 1,
 			completed: 1
 		});
+	});
+
+	it('round-trip through the address', () => {
+		expect(parseFilter(null)).toBe('all');
+		expect(parseFilter('nonsense')).toBe('all');
+		expect(parseFilter('stopped')).toBe('stopped');
+		expect(filterQuery('stopped')).toBe('?status=stopped');
+		expect(filterQuery('all')).toBe('');
 	});
 
 	it('know where new jobs show up', () => {

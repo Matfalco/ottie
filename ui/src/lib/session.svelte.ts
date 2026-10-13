@@ -7,6 +7,7 @@ import type { Action } from './bulk';
 import { explainRefusal } from './explain';
 import { m } from './paraglide/messages.js';
 import { applyEvent, newestFirst, nextRate, type Jobs, type Rate } from './jobs';
+import { addSample, totalSpeed } from './speed';
 
 export type Connection = 'connecting' | 'live' | 'offline';
 
@@ -21,6 +22,9 @@ export class Session {
 	error: string | null = $state(null);
 	/** Updated every second, so "speed" and "retrying in" stay current. */
 	now = $state(Date.now());
+	/** Total speed, one sample per second since the page opened (the last
+	 * few minutes), for the dashboard's graph. */
+	history: number[] = $state.raw([]);
 	list = $derived(newestFirst(this.jobs));
 
 	private readonly api: Api;
@@ -40,7 +44,10 @@ export class Session {
 
 	start(): void {
 		this.connect();
-		const clock = setInterval(() => (this.now = Date.now()), 1000);
+		const clock = setInterval(() => {
+			this.now = Date.now();
+			this.history = addSample(this.history, totalSpeed(this.rates, this.now));
+		}, 1000);
 		this.timers.push(clock);
 	}
 

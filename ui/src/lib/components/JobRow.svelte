@@ -1,23 +1,15 @@
 <script lang="ts">
-	import type { Component } from 'svelte';
 	import type { Job } from '@ottie/api-types/Job';
-	import Disc from '@lucide/svelte/icons/disc-3';
-	import File from '@lucide/svelte/icons/file';
-	import FileArchive from '@lucide/svelte/icons/file-archive';
-	import FileImage from '@lucide/svelte/icons/file-image';
-	import FileMusic from '@lucide/svelte/icons/file-music';
-	import FileText from '@lucide/svelte/icons/file-text';
-	import FileVideo from '@lucide/svelte/icons/file-video-camera';
 	import Pause from '@lucide/svelte/icons/pause';
 	import Play from '@lucide/svelte/icons/play';
 	import Trash from '@lucide/svelte/icons/trash';
 	import type { Action } from '#lib/bulk.js';
-	import { fileKind, type FileKind } from '#lib/filetypes.js';
 	import { displayName, formatAdded, formatBytes, formatPercent } from '#lib/format.js';
 	import { addedAt } from '#lib/jobs.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { Keys } from '#lib/selection.js';
 	import { canPause, canResume, describe, fraction, motion } from '#lib/status.js';
+	import FileIcon from './FileIcon.svelte';
 
 	interface Props {
 		job: Job;
@@ -31,18 +23,7 @@
 
 	let { job, selected, speed, now, onClick, onRun }: Props = $props();
 
-	const ICONS: Record<FileKind, Component> = {
-		video: FileVideo,
-		audio: FileMusic,
-		image: FileImage,
-		archive: FileArchive,
-		document: FileText,
-		program: Disc,
-		other: File
-	};
-
 	let name = $derived(displayName(job));
-	let Icon = $derived(ICONS[fileKind(name)]);
 	let done = $derived(fraction(job));
 	let moving = $derived(motion(job, speed, now));
 	let added = $derived(addedAt(job.id));
@@ -82,7 +63,7 @@
 	</td>
 	<td class="name" title={job.url}>
 		<div class="cell">
-			<span class="kind"><Icon size={16} aria-hidden="true" /></span>
+			<span class="kind"><FileIcon {name} /></span>
 			<span class="text">
 				<span class="title">{name}</span>
 				<span class="line">{describe(job, speed, now)}</span>

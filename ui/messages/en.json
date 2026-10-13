@@ -86,5 +86,17 @@
 	"window_minimize": "Minimize",
 	"window_maximize": "Maximize",
 	"window_restore": "Restore",
-	"window_close": "Close"
+	"window_close": "Close",
+	"nav_label": "Sections",
+	"nav_dashboard": "Dashboard",
+	"nav_downloads": "Downloads",
+	"dash_speed": "Download speed",
+	"dash_speed_chart": "Total download speed over the last 5 minutes: {now} now, {peak} at most.",
+	"dash_ago": "{time} ago",
+	"dash_now": "now",
+	"dash_attention": "Needs attention",
+	"dash_attention_none": "Nothing wrong.",
+	"dash_finished": "Latest finished",
+	"dash_finished_none": "Nothing finished yet.",
+	"dash_see_all": "See all"
 }

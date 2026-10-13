@@ -35,6 +35,16 @@ export function countByFilter(jobs: Job[]): Record<Filter, number> {
 	return counts;
 }
 
+/** The filter named by the address's `?status=`; All when missing or unknown. */
+export function parseFilter(value: string | null): Filter {
+	return FILTERS.find((filter) => filter === value) ?? 'all';
+}
+
+/** The query that selects `filter` on the Downloads page (none for All). */
+export function filterQuery(filter: Filter): string {
+	return filter === 'all' ? '' : `?status=${filter}`;
+}
+
 /** Whether a job just added shows up in this view (it starts out queued,
  * then becomes active). */
 export function showsNewJobs(filter: Filter): boolean {

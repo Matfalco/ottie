@@ -29,6 +29,16 @@
 	--on-close: #ffffff;
 	--shadow: 0 8px 24px rgb(31 23 18 / 14%);
 	--backdrop: rgb(31 23 18 / 30%);
+
+	/* The left menu, and the title bar's logo column above it. */
+	--nav-width: 13rem;
+}
+
+/* Medium widths: the menu shows icons only. */
+@media (max-width: 56rem) {
+	:root {
+		--nav-width: 3.5rem;
+	}
 }
 
 @media (prefers-color-scheme: dark) {
