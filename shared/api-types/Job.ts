@@ -35,7 +35,12 @@ problem: Problem | null, priority: Priority,
 /**
  * Bytes per second; 0 = no limit of its own.
  */
-speedLimit: number, category: number, 
+speedLimit: number, 
+/**
+ * Streaming mode: over several connections, the file comes in order,
+ * its last 1 MiB first, so it can play while downloading.
+ */
+streaming: boolean, category: number, 
 /**
  * Failed attempts since bytes last arrived.
  */

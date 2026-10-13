@@ -321,6 +321,17 @@
 						onChange={(globalLimit) => save({ globalLimit })}
 					/>
 				</div>
+				<div class="setting">
+					<span class="names">
+						<span>{m.set_stream_media()}</span>
+						<span class="hint">{m.set_stream_media_hint()}</span>
+					</span>
+					<Switch
+						on={settings.streamMedia}
+						label={m.set_stream_media()}
+						onChange={(streamMedia) => save({ streamMedia })}
+					/>
+				</div>
 			{:else}
 				<p class="waiting">{m.connection_connecting()}</p>
 			{/if}

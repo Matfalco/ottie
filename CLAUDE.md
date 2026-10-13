@@ -66,7 +66,7 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/category.rs    CategoryId (General = 1), CategorySettings, extension matching
   src/backend.rs     Backend trait, HttpBackend
   src/store.rs       SQLite on its own thread: schema migrations, save/load jobs and settings
-  src/settings.rs    Settings, RetryPolicy, Appearance, language; SettingsChange (applied all at once)
+  src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media; SettingsChange (applied all at once)
   src/view.rs        saved views: ViewSettings (filters + sort/grouping), ViewId, normalizing
   src/throttle.rs    speed limits: per-job token buckets, refill task, priority-weighted sharing, category caps
   src/http.rs        HTTP transfer: first request, single-connection stream, resume, restart rules, stall timeout
@@ -74,7 +74,8 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/download.rs    Download state (what gets persisted), Placement, Event, Outcome
   src/problem.rs     Problem: why a job failed, as a kind + details (English via Display)
   src/stream.rs      Reader: a job's bytes at any offset, waiting until they're on disk (play links)
-  src/playback.rs    where players read each job (Playback, one head per reader), for segmented.rs
+  src/playback.rs    where players read each job (Playback, one head per reader) and whether it's in
+                     streaming mode, for segmented.rs; which extensions are media
   src/filename.rs    names from URL / Content-Disposition, sanitizing, collision-free names, .part.ottie → final rename,
                      relocate (a job's file into another folder; copy + delete between drives)
   tests/support/     in-process axum test server with fault injection
@@ -87,10 +88,10 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
   src/auth.rs        Token, Bearer / WebSocket-protocol check (constant-time)
   src/types.rs       wire types (camelCase JSON) + ts-rs export, From<engine types>
   src/jobs.rs        GET/POST /jobs, POST /jobs/{id}/pause|resume|cancel|category,
-                     PATCH /jobs/{id} (own speed limit + priority), DELETE /jobs/{id}
+                     PATCH /jobs/{id} (own speed limit, priority, streaming mode), DELETE /jobs/{id}
   src/categories.rs  GET/POST /categories, PUT/DELETE /categories/{id}, POST /categories/match
   src/settings.rs    GET/PATCH /settings: max concurrent, global limit, retry policy, shared
-                     appearance + language, setupDone; the ranges people may choose (its tests
+                     appearance + language, setupDone, streamMedia; the ranges people may choose (its tests
                      write them to shared/api-types/Ranges.ts)
   src/views.rs       GET/POST /views, PUT/DELETE /views/{id} (saved views)
   src/stream.rs      play links: POST /jobs/{id}/stream → GET /stream/{ticket}/{name} (no token, Range)
@@ -208,7 +209,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Pause/cancel of a running job** answers only once the task has really stopped and flushed. If the job completes first, it stays Completed. Cancel deletes the `.part.ottie`. Remove (`docs/decisions/0018`) works in any state: cancel unless completed, then forget the job (a completed file stays); the highest ID handed out is saved so a removed job's ID never comes back. Shutdown stops every running job, waits for them and flushes the database. Lowering `max_concurrent` never stops running jobs.
 - **Job IDs:** see `docs/decisions/0006`. IDs only ever increase; `BTreeMap<JobId, _>` order = creation order = queue order.
 - **Probe with the first request:** it asks for `bytes=0-`; a `206` proves ranges work, and that response becomes the first range. Split only with a 206, a validator, no `Accept-Ranges: none` and at least 2 × `min_split` bytes (`docs/decisions/0009`); otherwise one connection.
-- **Multi-connection** (`segmented.rs`): the coordinator owns the ranges; connections share `end`/`pos`/`durable` atomics with it. Full-size `.part.ottie` up front. Extra requests are closed ranges with `If-Range`. A changed file restarts the run from zero at most once. Idle connections take an unfinished range, else half of the busy range with the most left. Known cost: a connection whose range ends (or is split) discards what it had buffered past the end, up to ~400 KiB (hyper's read buffer fills while throttled). That's <1% on large files but ~20% on a 2 MiB one; it counts against speed limits. Possible fix later: re-request the first range closed once the size is known. While players read (`Playback`, `docs/decisions/0029`), every 200 ms each point they need next (from each head, and the last 1 MiB) gets its own range unless a connection is within `min_split` of it; a free connection takes it first, else the busy one serving no player with the most left stops where it is. Connections then also hand their bytes to the system every 200 ms (no `sync_data`: a disk sync can take seconds on Windows) and readers see those ranges through `Playback`; only synced ranges are saved.
+- **Multi-connection** (`segmented.rs`): the coordinator owns the ranges; connections share `end`/`pos`/`durable` atomics with it. Full-size `.part.ottie` up front. Extra requests are closed ranges with `If-Range`. A changed file restarts the run from zero at most once. Idle connections take an unfinished range, else half of the busy range with the most left. Known cost: a connection whose range ends (or is split) discards what it had buffered past the end, up to ~400 KiB (hyper's read buffer fills while throttled). That's <1% on large files but ~20% on a 2 MiB one; it counts against speed limits. Possible fix later: re-request the first range closed once the size is known. While players read (`Playback`, `docs/decisions/0029`), every 200 ms each point they need next (from each head, and the last 1 MiB) gets its own range unless a connection is within `min_split` of it; a free connection takes it first, else the busy one serving no player with the most left stops where it is. Connections then also hand their bytes to the system every 200 ms (no `sync_data`: a disk sync can take seconds on Windows) and readers see those ranges through `Playback`; only synced ranges are saved. **Streaming mode** (a job's `streaming`, live through `Playback`): the same as if a player read from the start, and idle connections take the next range in order, cut to a piece (~2 s of one connection at the measured speed, `HttpConfig::piece_time`, at least 4 × `min_split`); busy ranges over 4 pieces are cut to one. New jobs get it from `NewJob::streaming`, else for media extensions if `Settings::stream_media`, decided again by the real name at the first response unless `streaming_chosen`.
 - **Resume safely:** `Range` + `If-Range` with a strong ETag (weak `W/` ETags are invalid in `If-Range`), else `Last-Modified`. No validator, a 200 instead of 206, or a `Content-Range` that doesn't match → restart from zero and emit `Event::Restarted(reason)`. Never splice bytes from two versions of a file.
 - **Single connection: the `.part.ottie` length is the truth** for the resume offset (multi-connection: the flushed ranges are). Bytes in flight when a connection dies are lost, so flush on every exit path (pause, error, completion) to keep `downloaded` equal to the file length.
 - **Resume re-requests the original URL,** not the redirect target: signed CDN links expire, and `If-Range` still guards consistency.
@@ -296,10 +297,10 @@ Done: ✅ and struck through.
    - ✅ ~~5c2 detail panel with per-download speed limit + priority (`PATCH /jobs/{id}`, `docs/decisions/0024`)~~
    - ✅ ~~5d per-connection progress + file map (ranges in progress events, `docs/decisions/0025`)~~
    - ✅ ~~5e saved views (stored in the daemon, `docs/decisions/0026`), the detail bar as file map (`0027`), files move with their category (`0028`)~~
-   - 5f play while downloading (`docs/decisions/0029`):
+   - ✅ 5f play while downloading (`docs/decisions/0029`):
      - ✅ ~~5f1 play links + reader~~
      - ✅ ~~5f2 follow the player (seek, last chunk early)~~
-     - 5f3 streaming mode per download
+     - ✅ ~~5f3 streaming mode per download (on by itself for videos and music, a setting turns that off)~~
    - 5g queue reorder
    - 5h tray
    - 5i notifications

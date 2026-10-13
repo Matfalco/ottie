@@ -19,7 +19,7 @@ use crate::error::Error;
 use crate::filename;
 use crate::id::{IdGenerator, JobId};
 use crate::job::{JobChange, JobEvent, JobSnapshot, JobState, NewJob, Priority};
-use crate::playback::{Head, Playbacks};
+use crate::playback::{self, Head, Playbacks};
 use crate::problem::Problem;
 use crate::settings::{RetryPolicy, Settings, SettingsChange};
 use crate::store::{JobRecord, Store};
@@ -223,6 +223,7 @@ impl Manager {
     /// - `speed_limit`: bytes per second; 0 = none (the global and category
     ///   limits still apply).
     /// - `priority`: its share of the global limit and its place in the queue.
+    /// - `streaming`: streaming mode; once set, the file type no longer decides it.
     pub async fn change_job(&self, id: JobId, change: JobChange) -> Result<(), Error> {
         self.request(|reply| Command::ChangeJob { id, change, reply })
             .await
@@ -502,6 +503,11 @@ struct Job {
     /// The user picked the category (or a folder, which decided it), rather
     /// than it being matched by extension; it is never re-matched.
     category_chosen: bool,
+    /// Streaming mode (docs/decisions/0029).
+    streaming: bool,
+    /// The user turned streaming mode on or off, rather than the file type
+    /// deciding; it is never decided again.
+    streaming_chosen: bool,
     /// Failed attempts since bytes last arrived (not saved).
     retries: u32,
     /// While `Retrying`: when it tries again.
@@ -553,6 +559,8 @@ impl Job {
             speed_limit: record.speed_limit,
             category: record.category,
             category_chosen: record.category_chosen,
+            streaming: record.streaming,
+            streaming_chosen: record.streaming_chosen,
             retries: 0,
             retry_at: None,
             gave_way: 0,
@@ -584,6 +592,7 @@ impl Job {
             problem: self.problem.clone(),
             priority: self.priority,
             speed_limit: self.speed_limit,
+            streaming: self.streaming,
             category: self.category,
             retries: self.retries,
             retry_at: self.retry_at.map(|(_, at)| at),
@@ -780,16 +789,28 @@ impl<B: Backend> Actor<B> {
                 segments,
             } => {
                 // Named for the first time: the real name (from the server)
-                // may belong to another category than the URL suggested.
-                if job.download.file_name.is_none()
+                // may belong to another category than the URL suggested, and
+                // be a video when the URL didn't say.
+                let extension = job
+                    .download
+                    .file_name
+                    .is_none()
+                    .then(|| filename::extension(&file_name))
+                    .flatten();
+                if let Some(ext) = &extension
                     && !job.category_chosen
-                    && let Some(ext) = filename::extension(&file_name)
                 {
-                    let category = owner_of(&self.categories, &ext).unwrap_or(CategoryId::GENERAL);
+                    let category = owner_of(&self.categories, ext).unwrap_or(CategoryId::GENERAL);
                     if category != job.category {
                         job.category = category;
                         self.limiter.set_category(id, category);
                     }
+                }
+                if let Some(ext) = &extension
+                    && !job.streaming_chosen
+                {
+                    job.streaming = self.settings.stream_media && playback::is_media(ext);
+                    self.playbacks.of(id).set_streaming(job.streaming);
                 }
                 let dl = &mut job.download;
                 dl.file_name = Some(file_name);
@@ -859,6 +880,10 @@ impl<B: Backend> Actor<B> {
         if dest_dir.to_str().is_none() {
             return Err(Error::NonUtf8Path(dest_dir));
         }
+        let streaming = new.streaming.unwrap_or_else(|| {
+            self.settings.stream_media
+                && category::url_extension(&new.url).is_some_and(|ext| playback::is_media(&ext))
+        });
         let download = Download::new(new.url, dest_dir)?;
         let id = self.ids.next(unix_now());
         self.jobs.insert(
@@ -871,6 +896,8 @@ impl<B: Backend> Actor<B> {
                 speed_limit: 0,
                 category,
                 category_chosen: fixed,
+                streaming,
+                streaming_chosen: new.streaming.is_some(),
                 retries: 0,
                 retry_at: None,
                 gave_way: 0,
@@ -893,10 +920,13 @@ impl<B: Backend> Actor<B> {
         let JobChange {
             speed_limit,
             priority,
+            streaming,
         } = change;
         let speed_limit = speed_limit.filter(|&limit| limit != job.speed_limit);
         let priority = priority.filter(|&priority| priority != job.priority);
-        if speed_limit.is_none() && priority.is_none() {
+        // Chosen now, even if it stays as it was: the file type no longer decides.
+        let streaming = streaming.filter(|&on| on != job.streaming || !job.streaming_chosen);
+        if speed_limit.is_none() && priority.is_none() && streaming.is_none() {
             return Ok(());
         }
         self.change(id, |job| {
@@ -906,7 +936,15 @@ impl<B: Backend> Actor<B> {
             if let Some(priority) = priority {
                 job.priority = priority;
             }
+            if let Some(on) = streaming {
+                job.streaming = on;
+                job.streaming_chosen = true;
+            }
         })?;
+        if let Some(on) = streaming {
+            // A running download changes its order at once.
+            self.playbacks.of(id).set_streaming(on);
+        }
         if let Some(limit) = speed_limit {
             self.limiter.set_limit(id, limit);
         }
@@ -1563,6 +1601,7 @@ impl<B: Backend> Actor<B> {
             .limiter
             .register(id, job.speed_limit, job.priority, job.category);
         let playback = self.playbacks.of(id);
+        playback.set_streaming(job.streaming);
 
         tokio::spawn(async move {
             let mut last_progress: Option<Instant> = None;
@@ -1736,6 +1775,8 @@ impl<B: Backend> Actor<B> {
             speed_limit: job.speed_limit,
             category: job.category,
             category_chosen: job.category_chosen,
+            streaming: job.streaming,
+            streaming_chosen: job.streaming_chosen,
         });
     }
 

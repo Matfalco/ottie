@@ -18,6 +18,7 @@ export function job(overrides: Partial<Job> = {}): Job {
 		problem: null,
 		priority: 'normal',
 		speedLimit: 0,
+		streaming: false,
 		category: 1,
 		retries: 0,
 		retryAt: null,

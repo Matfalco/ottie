@@ -5,15 +5,24 @@
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
 	import Link from '@lucide/svelte/icons/link';
 	import Plus from '@lucide/svelte/icons/plus';
-	import { automaticLabel, defaultFolder, jobRequest, type Choice } from '#lib/adding.js';
+	import {
+		automaticLabel,
+		defaultFolder,
+		jobRequest,
+		streamsByDefault,
+		type Choice
+	} from '#lib/adding.js';
 	import { categoryName, type Categories } from '#lib/categories.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { canPickFolder, pickFolder } from '#lib/window.js';
+	import Switch from './Switch.svelte';
 
 	interface Props {
 		categories: Categories;
 		/** The same, General first then by name. */
 		categoryList: Category[];
+		/** The settings start videos and music in streaming mode. */
+		streamMedia: boolean;
 		/** The category the link would get (in that folder, if given); null
 		 * if the daemon can't tell. */
 		onMatch: (url: string, folder?: string) => Promise<Matched | null>;
@@ -26,7 +35,7 @@
 		matched: Matched | null;
 	}
 
-	let { categories, categoryList, onMatch, onAdd }: Props = $props();
+	let { categories, categoryList, streamMedia, onMatch, onAdd }: Props = $props();
 	let form: HTMLFormElement;
 	let link: HTMLInputElement;
 	let url = $state('');
@@ -34,9 +43,12 @@
 	let step = $state<Step | null>(null);
 	let choice = $state<Choice>('auto');
 	let folder = $state('');
+	/** Streaming mode as the user set it; null leaves it to the daemon. */
+	let streaming = $state<boolean | null>(null);
 	let adding = $state(false);
 
 	let fallback = $derived(step && defaultFolder(choice, step.matched, categories));
+	let streams = $derived(streaming ?? streamsByDefault(step?.matched ?? null, streamMedia));
 	/** Other isn't picked: a folder of no category puts a download there. */
 	let choices = $derived(categoryList.filter((category) => category.builtIn !== 'other'));
 	let otherName = $derived.by(() => {
@@ -54,7 +66,7 @@
 			return;
 		}
 		adding = true;
-		const added = await onAdd(jobRequest(url, choice, folder));
+		const added = await onAdd(jobRequest(url, choice, folder, streaming));
 		adding = false;
 		if (added) {
 			url = '';
@@ -67,6 +79,7 @@
 		step = { matched: null };
 		choice = 'auto';
 		folder = '';
+		streaming = null;
 		await rematch();
 	}
 
@@ -184,6 +197,14 @@
 					{/if}
 				</span>
 			</label>
+
+			<div class="streaming">
+				<Switch on={streams} label={m.add_streaming()} onChange={(on) => (streaming = on)} />
+				<span class="names">
+					<span class="legend">{m.add_streaming()}</span>
+					<small>{m.add_streaming_hint()}</small>
+				</span>
+			</div>
 
 			<div class="buttons">
 				<button type="button" onclick={close}>{m.add_cancel()}</button>
@@ -332,6 +353,17 @@
 		flex: 1 1 0;
 		width: 0;
 		min-width: 0;
+	}
+
+	.streaming {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+	}
+
+	.names {
+		display: grid;
+		gap: 0.1rem;
 	}
 
 	.buttons {

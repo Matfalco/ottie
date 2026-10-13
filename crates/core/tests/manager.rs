@@ -387,18 +387,19 @@ async fn a_job_change_is_announced_once() {
     let change = JobChange {
         speed_limit: Some(64 * 1024),
         priority: Some(Priority::Urgent),
+        streaming: Some(true),
     };
     s.manager.change_job(id, change).await.unwrap();
     match s.events.try_recv() {
         Ok(JobEvent::Changed(job)) => {
             assert_eq!(
-                (job.speed_limit, job.priority),
-                (64 * 1024, Priority::Urgent)
+                (job.speed_limit, job.priority, job.streaming),
+                (64 * 1024, Priority::Urgent, true)
             );
         }
         other => panic!("expected the changed job, got {other:?}"),
     }
-    assert!(s.events.try_recv().is_err(), "one event for both fields");
+    assert!(s.events.try_recv().is_err(), "one event for every field");
 
     // Nothing new: nothing to announce.
     s.manager.change_job(id, change).await.unwrap();
@@ -413,4 +414,48 @@ async fn a_job_change_is_announced_once() {
         s.manager.change_job(id, change).await,
         Err(Error::JobNotFound(_))
     ));
+}
+
+#[tokio::test]
+async fn videos_and_music_start_in_streaming_mode() {
+    let s = setup(0, 0).await;
+    let video = s.add("film.mp4").await;
+    let music = s.add("song.FLAC").await;
+    let archive = s.add("files.zip").await;
+    assert!(s.job(video).await.streaming);
+    assert!(s.job(music).await.streaming);
+    assert!(!s.job(archive).await.streaming);
+
+    // Asked for: whatever the file type.
+    let url = s.server.url("/files/files.zip");
+    let asked = NewJob::new(url).in_dir(s.dir.path()).streaming(true);
+    let asked = s.manager.add(asked).await.unwrap();
+    assert!(s.job(asked).await.streaming);
+
+    // Turned off in the settings: from now on, only when asked for.
+    let off = SettingsChange {
+        stream_media: Some(false),
+        ..SettingsChange::default()
+    };
+    s.manager.change_settings(off).await.unwrap();
+    let later = s.add("other.mkv").await;
+    assert!(!s.job(later).await.streaming);
+}
+
+#[tokio::test]
+async fn the_real_name_decides_streaming_mode_unless_chosen() {
+    let mut s = setup(3, 0).await;
+    let header = "attachment; filename=\"film.mkv\"";
+    s.server
+        .configure(|b| b.content_disposition = Some(header.as_bytes().to_vec()));
+    let guessed = s.add("get.php").await;
+    let url = s.server.url("/files/get.php");
+    let chosen = NewJob::new(url).in_dir(s.dir.path()).streaming(false);
+    let chosen = s.manager.add(chosen).await.unwrap();
+    assert!(!s.job(guessed).await.streaming, "from .php");
+
+    s.wait_for_all(&[guessed, chosen], JobState::Completed)
+        .await;
+    assert!(s.job(guessed).await.streaming, "from .mkv");
+    assert!(!s.job(chosen).await.streaming, "the choice stays");
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Job } from '@ottie/api-types/Job';
-import { PRIORITIES, facts, isPlayable, primaryAction, priorityName } from './details';
+import { PRIORITIES, canStream, facts, isPlayable, primaryAction, priorityName } from './details';
 import { job, plain } from './testing';
 
 const MB = 1024 * 1024;
@@ -71,6 +71,13 @@ describe('details', () => {
 		// No file yet (the URL looks like a video), or none left.
 		expect(isPlayable(job())).toBe(false);
 		expect(isPlayable(named('movie night.mkv', 'cancelled'))).toBe(false);
+	});
+
+	it('offer streaming mode until the download is over', () => {
+		expect(canStream(job())).toBe(true);
+		expect(canStream(job({ state: 'paused' }))).toBe(true);
+		expect(canStream(job({ state: 'completed' }))).toBe(false);
+		expect(canStream(job({ state: 'cancelled' }))).toBe(false);
 	});
 
 	it('name the priorities in each language', () => {

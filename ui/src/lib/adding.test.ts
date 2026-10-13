@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { automaticLabel, defaultFolder, jobRequest } from './adding';
+import { automaticLabel, defaultFolder, jobRequest, streamsByDefault } from './adding';
 import type { Categories } from './categories';
 import { category, plain } from './testing';
 
@@ -49,5 +49,19 @@ describe('adding', () => {
 			category: 3,
 			destDir: '/media'
 		});
+		expect(jobRequest('https://a.com/f', 'auto', '', false)).toEqual({
+			url: 'https://a.com/f',
+			streaming: false
+		});
+	});
+
+	it('streams videos and music by default, if the settings say so', () => {
+		const matched = (extension: string | null) => ({ category: 1, extension, byFolder: false });
+		expect(streamsByDefault(matched('MKV'), true)).toBe(true);
+		expect(streamsByDefault(matched('flac'), true)).toBe(true);
+		expect(streamsByDefault(matched('zip'), true)).toBe(false);
+		expect(streamsByDefault(matched(null), true)).toBe(false);
+		expect(streamsByDefault(null, true)).toBe(false);
+		expect(streamsByDefault(matched('mkv'), false)).toBe(false);
 	});
 });

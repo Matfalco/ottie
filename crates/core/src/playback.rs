@@ -1,7 +1,8 @@
 //! Where players are reading a download's file (docs/decisions/0029). Each
 //! [`Reader`](crate::Reader) keeps its next offset here, and a multi-connection
 //! download sends its connections there (see `segmented.rs`). In return, the
-//! download tells readers which ranges are already in the file.
+//! download tells readers which ranges are already in the file. The manager
+//! also says here whether the download is in streaming mode.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
@@ -29,6 +30,8 @@ struct Players {
     /// as written to the file, which readers can see before they're synced
     /// to disk and saved.
     written: Option<Vec<Segment>>,
+    /// Streaming mode: the file comes in order, as if a player read it.
+    streaming: bool,
 }
 
 impl Heads {
@@ -51,6 +54,19 @@ impl Playback {
             return Vec::new();
         };
         heads.lock().by_key.values().rev().copied().collect()
+    }
+
+    /// Whether the download is in streaming mode now (it can change while it runs).
+    pub(crate) fn streaming(&self) -> bool {
+        self.heads
+            .as_ref()
+            .is_some_and(|heads| heads.lock().streaming)
+    }
+
+    pub(crate) fn set_streaming(&self, on: bool) {
+        if let Some(heads) = &self.heads {
+            heads.lock().streaming = on;
+        }
     }
 
     /// Tells readers which ranges are in the file now; `None` once the run
@@ -121,6 +137,19 @@ impl Playbacks {
     }
 }
 
+/// Whether a file with this extension (lowercase, no dot) is a video or
+/// music, which start in streaming mode if the settings say so. The same
+/// list as the UI's `filetypes.ts`.
+pub(crate) fn is_media(extension: &str) -> bool {
+    const MEDIA: [&str; 21] = [
+        // Videos
+        "mp4", "mkv", "webm", "avi", "mov", "m4v", "wmv", "flv", "mpg", "mpeg", "ts", "3gp",
+        // Music
+        "mp3", "flac", "ogg", "opus", "m4a", "aac", "wav", "wma", "aiff",
+    ];
+    MEDIA.contains(&extension)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,6 +203,22 @@ mod tests {
         assert_eq!(head.written(), Some(written));
         run.show_written(None);
         assert_eq!(head.written(), None, "the saved ranges tell again");
+    }
+
+    #[test]
+    fn a_run_sees_streaming_mode_change() {
+        let playbacks = Playbacks::default();
+        let run = playbacks.of(job(1));
+        assert!(!run.streaming());
+        playbacks.of(job(1)).set_streaming(true);
+        assert!(run.streaming(), "the same entry while the run holds it");
+        assert!(!Playback::none().streaming());
+    }
+
+    #[test]
+    fn videos_and_music_are_media() {
+        assert!(is_media("mp4") && is_media("flac"));
+        assert!(!is_media("zip") && !is_media("MP4"));
     }
 
     #[test]

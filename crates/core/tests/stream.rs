@@ -5,7 +5,8 @@ mod support;
 use std::time::Duration;
 
 use ottie_core::{
-    Error, HttpBackend, HttpConfig, JobEvent, JobId, JobState, Manager, NewJob, Reader, Store,
+    Error, HttpBackend, HttpConfig, JobChange, JobEvent, JobId, JobState, Manager, NewJob, Reader,
+    Segment, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -28,9 +29,11 @@ async fn setup(size: usize, connections: usize, chunk_delay_ms: u64) -> Setup {
     let data = test_data(size, 3);
     let server = TestServer::start(data.clone()).await;
     server.configure(|b| b.chunk_delay = Some(Duration::from_millis(chunk_delay_ms)));
+    // Streaming pieces of 4 × `min_split` (256 KiB) at the speeds used here.
     let config = HttpConfig {
         connections,
         min_split: 64 * 1024,
+        piece_time: Duration::from_millis(100),
         ..HttpConfig::default()
     };
     let store = Store::open_in_memory().await.unwrap();
@@ -48,12 +51,15 @@ async fn setup(size: usize, connections: usize, chunk_delay_ms: u64) -> Setup {
 }
 
 impl Setup {
+    /// Not in streaming mode, though it's a video: connections spread out.
     async fn add(&self) -> JobId {
+        self.add_streaming(false).await
+    }
+
+    async fn add_streaming(&self, on: bool) -> JobId {
         let url = self.server.url("/files/movie.mp4");
-        self.manager
-            .add(NewJob::new(url).in_dir(self.dir.path()))
-            .await
-            .unwrap()
+        let job = NewJob::new(url).in_dir(self.dir.path()).streaming(on);
+        self.manager.add(job).await.unwrap()
     }
 
     async fn wait_for(&mut self, id: JobId, state: JobState) {
@@ -255,4 +261,103 @@ async fn following_players_keeps_the_file_intact() {
     s.wait_for(id, JobState::Completed).await;
     let file = std::fs::read(s.dir.path().join("movie.mp4")).unwrap();
     assert!(file == s.data, "the finished file differs");
+}
+
+impl Setup {
+    /// Where each range request that reached the server starts.
+    fn requested_starts(&self) -> Vec<u64> {
+        self.server
+            .requests()
+            .iter()
+            .filter_map(|r| {
+                let range = r.range.as_deref()?.strip_prefix("bytes=")?;
+                range.split('-').next()?.parse().ok()
+            })
+            .collect()
+    }
+}
+
+/// Bytes that have arrived before `tail` but past the first byte missing
+/// from the start: what a player reading from the start can't play yet.
+fn out_of_order(segments: &[Segment], tail: u64) -> u64 {
+    let mut sorted = segments.to_vec();
+    sorted.sort_by_key(|s| s.start);
+    let playable = sorted
+        .iter()
+        .find(|s| !s.is_complete())
+        .map_or(tail, |s| s.start + s.done);
+    sorted
+        .iter()
+        .map(|s| {
+            let (from, to) = (s.start.max(playable), (s.start + s.done).min(tail));
+            to.saturating_sub(from)
+        })
+        .sum()
+}
+
+#[tokio::test]
+async fn a_streaming_download_comes_in_order() {
+    // Four connections at 800 KiB/s each.
+    let size = 4 * 1024 * 1024;
+    let mut s = setup(size, 4, 20).await;
+    let id = s.add_streaming(true).await;
+    let tail = size as u64 - 1024 * 1024;
+
+    let mut most = 0;
+    let events = &mut s.events;
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            match events.recv().await.unwrap() {
+                JobEvent::Progress {
+                    id: of, segments, ..
+                } if of == id => most = most.max(out_of_order(&segments, tail)),
+                JobEvent::Changed(job) if job.id == id && job.state == JobState::Completed => {
+                    return;
+                }
+                _ => {}
+            }
+        }
+    })
+    .await
+    .expect("the download never completed");
+
+    // Spread over four ranges of 1 MiB, it would be up to 2 MiB.
+    assert!(most <= 1280 * 1024, "{most} bytes came out of order");
+    let first_few = &s.requested_starts()[..4];
+    assert!(
+        first_few.contains(&tail),
+        "the last MiB came late: {first_few:?}"
+    );
+    let file = std::fs::read(s.dir.path().join("movie.mp4")).unwrap();
+    assert!(file == s.data, "the finished file differs");
+}
+
+#[tokio::test]
+async fn switching_to_streaming_mode_brings_connections_to_the_front() {
+    // Four ranges of 2 MiB at 320 KiB/s each: about 6 s as they are.
+    let size = 8 * 1024 * 1024;
+    let s = setup(size, 4, 50).await;
+    let id = s.add().await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let on = JobChange {
+        streaming: Some(true),
+        ..JobChange::default()
+    };
+    s.manager.change_job(id, on).await.unwrap();
+    assert!(s.manager.job(id).await.unwrap().streaming);
+
+    // Each range is cut to a piece; then its connection goes on from the
+    // front, inside the first range.
+    let front = 2 * 1024 * 1024;
+    tokio::time::timeout(Duration::from_secs(4), async {
+        while !s
+            .requested_starts()
+            .iter()
+            .any(|&start| 0 < start && start < front)
+        {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("no connection came to the front");
 }

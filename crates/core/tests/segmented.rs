@@ -19,6 +19,7 @@ const CONFIG: HttpConfig = HttpConfig {
     connections: 4,
     min_split: 64 * 1024,
     stall_timeout: Duration::from_secs(60),
+    piece_time: Duration::from_secs(2),
 };
 
 struct Setup {

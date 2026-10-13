@@ -45,6 +45,9 @@ pub struct Job {
     /// Bytes per second; 0 = no limit of its own.
     #[ts(type = "number")]
     pub speed_limit: u64,
+    /// Streaming mode: over several connections, the file comes in order,
+    /// its last 1 MiB first, so it can play while downloading.
+    pub streaming: bool,
     pub category: u32,
     /// Failed attempts since bytes last arrived.
     pub retries: u32,
@@ -122,6 +125,12 @@ pub struct AddJob {
     #[serde(default)]
     #[ts(optional)]
     pub category: Option<u32>,
+    /// Streaming mode. Default: on for videos and music if the settings'
+    /// `streamMedia` is, by the link's extension, then by the file's real
+    /// name once the server answers.
+    #[serde(default)]
+    #[ts(optional)]
+    pub streaming: Option<bool>,
 }
 
 /// Answer to `POST /jobs`.
@@ -331,6 +340,10 @@ pub struct JobChange {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub priority: Option<Priority>,
+    /// Streaming mode. Once set, the file type no longer decides it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub streaming: Option<bool>,
 }
 
 impl From<JobChange> for ottie_core::JobChange {
@@ -338,6 +351,7 @@ impl From<JobChange> for ottie_core::JobChange {
         ottie_core::JobChange {
             speed_limit: change.speed_limit,
             priority: change.priority.map(Into::into),
+            streaming: change.streaming,
         }
     }
 }
@@ -374,6 +388,9 @@ pub struct Settings {
     /// twice as long, up to a minute.
     #[ts(type = "number")]
     pub first_retry_wait_ms: u64,
+    /// New video and music downloads start in streaming mode, unless the
+    /// one adding them says otherwise.
+    pub stream_media: bool,
     /// The look shared by the devices that choose to follow it; null until
     /// one shares its own.
     pub appearance: Option<Appearance>,
@@ -407,6 +424,9 @@ pub struct SettingsChange {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub first_retry_wait_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub stream_media: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub appearance: Option<Appearance>,
@@ -658,6 +678,7 @@ impl From<JobSnapshot> for Job {
             problem: job.problem.map(Problem::from),
             priority: job.priority.into(),
             speed_limit: job.speed_limit,
+            streaming: job.streaming,
             category: job.category.0,
             retries: job.retries,
             retry_at: job
@@ -680,6 +701,7 @@ impl From<ottie_core::Settings> for Settings {
             max_retries: retry.max_retries,
             retries_before_yield: retry.retries_before_yield,
             first_retry_wait_ms: u64::try_from(retry.first_wait.as_millis()).unwrap_or(u64::MAX),
+            stream_media: settings.stream_media,
             appearance: settings.appearance.map(Appearance::from),
             language: settings.language,
         }
@@ -696,6 +718,7 @@ impl From<SettingsChange> for ottie_core::SettingsChange {
             max_retries: change.max_retries,
             retries_before_yield: change.retries_before_yield,
             first_retry_wait: change.first_retry_wait_ms.map(Duration::from_millis),
+            stream_media: change.stream_media,
             setup_done: change.setup_done,
             appearance: change.appearance.map(ottie_core::Appearance::from),
             language: change.language,

@@ -35,6 +35,11 @@ pub struct HttpConfig {
     /// A server that sends nothing for this long, while we're waiting for
     /// it, counts as a dropped connection (and the download is retried).
     pub stall_timeout: Duration,
+    /// In streaming mode, each connection takes a piece of the file that
+    /// it fetches in about this long at the download's speed, and at least
+    /// 4 × `min_split` bytes. Longer means fewer requests, shorter a file
+    /// more in order.
+    pub piece_time: Duration,
 }
 
 impl Default for HttpConfig {
@@ -43,6 +48,7 @@ impl Default for HttpConfig {
             connections: 4,
             min_split: 1024 * 1024,
             stall_timeout: Duration::from_secs(60),
+            piece_time: Duration::from_secs(2),
         }
     }
 }

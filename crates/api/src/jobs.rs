@@ -51,6 +51,9 @@ pub(crate) async fn add(
     if let Some(category) = body.category {
         job = job.in_category(CategoryId(category));
     }
+    if let Some(on) = body.streaming {
+        job = job.streaming(on);
+    }
     let id = state.manager.add(job).await?;
     Ok((StatusCode::CREATED, Json(Added { id: id.to_string() })))
 }
@@ -146,8 +149,8 @@ pub(crate) async fn remove(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Changes a download's own speed limit and priority (the fields given), in
-/// any state; they take effect at once, even while it runs. Every client
+/// Changes a download's own speed limit, priority and streaming mode (the
+/// fields given), in any state; they take effect at once, even while it runs. Every client
 /// hears of it through one `changed` event, none if nothing changed.
 #[utoipa::path(
     patch,

@@ -102,6 +102,7 @@ impl Daemon {
             url: format!("{}/{file}", self.files),
             dest_dir: Some(self.dir.path().to_string_lossy().into_owned()),
             category: None,
+            streaming: None,
         }
     }
 
@@ -281,7 +282,7 @@ async fn pause_resume_and_cancel() {
 }
 
 #[tokio::test]
-async fn a_jobs_limit_and_priority_change_while_it_runs() {
+async fn a_jobs_own_settings_change_while_it_runs() {
     let d = start().await;
     let offered = format!("{EVENTS_PROTOCOL}, {TOKEN_PROTOCOL_PREFIX}{TOKEN}");
     let (mut events, _) = d.events(&offered).await.unwrap();
@@ -292,11 +293,18 @@ async fn a_jobs_limit_and_priority_change_while_it_runs() {
         request.bearer_auth(TOKEN).json(&change).send()
     };
 
-    let change = serde_json::json!({ "speedLimit": 32_768, "priority": "urgent" });
+    let change = serde_json::json!({
+        "speedLimit": 32_768,
+        "priority": "urgent",
+        "streaming": true,
+    });
     let response = patch(&id, change).await.unwrap();
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
     let job = d.job(&id).await;
-    assert_eq!((job.speed_limit, job.priority), (32_768, Priority::Urgent));
+    assert_eq!(
+        (job.speed_limit, job.priority, job.streaming),
+        (32_768, Priority::Urgent, true)
+    );
     assert_eq!(job.state, JobState::Downloading, "it keeps running");
     // Every client hears of it.
     tokio::time::timeout(TIMEOUT, async {
@@ -321,7 +329,10 @@ async fn a_jobs_limit_and_priority_change_while_it_runs() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
     let job = d.job(&id).await;
-    assert_eq!((job.speed_limit, job.priority), (0, Priority::Urgent));
+    assert_eq!(
+        (job.speed_limit, job.priority, job.streaming),
+        (0, Priority::Urgent, true)
+    );
 
     let response = patch(&id, serde_json::json!({ "priority": "asap" }))
         .await
@@ -334,6 +345,22 @@ async fn a_jobs_limit_and_priority_change_while_it_runs() {
     let missing = "2020.01.01-00.00.00-1";
     let response = patch(missing, serde_json::json!({})).await.unwrap();
     assert_eq!(error_of(response).await.0, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn videos_start_in_streaming_mode_unless_asked_otherwise() {
+    let d = start().await;
+    let video = d.add("clip.mp4").await;
+    let other = d.add("data.bin").await;
+    let asked = AddJob {
+        streaming: Some(true),
+        ..d.new_job("asked.bin")
+    };
+    let response = d.post("/jobs").json(&asked).send().await.unwrap();
+    let asked = response.json::<Added>().await.unwrap().id;
+    assert!(d.job(&video).await.streaming);
+    assert!(!d.job(&other).await.streaming);
+    assert!(d.job(&asked).await.streaming);
 }
 
 #[tokio::test]
@@ -549,6 +576,7 @@ async fn settings_are_read_and_changed() {
         max_retries: 10,
         retries_before_yield: 3,
         first_retry_wait_ms: 2000,
+        stream_media: true,
         appearance: None,
         language: None,
     };
@@ -563,6 +591,7 @@ async fn settings_are_read_and_changed() {
         "maxConcurrent": 5,
         "globalLimit": 4_000_000,
         "firstRetryWaitMs": 500,
+        "streamMedia": false,
         "appearance": { "mode": "dark", "palette": "neutral" },
         "language": "fr",
     });
@@ -573,6 +602,7 @@ async fn settings_are_read_and_changed() {
         max_concurrent: 5,
         global_limit: 4_000_000,
         first_retry_wait_ms: 500,
+        stream_media: false,
         appearance: Some(Appearance {
             mode: AppearanceMode::Dark,
             palette: Palette::Neutral,

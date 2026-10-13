@@ -140,6 +140,7 @@ vlc "http://127.0.0.1:24068/api/v1/stream/9f2c…e1/movie.mp4"
 - It expires after **12 hours unused**, and when the daemon restarts. The same download keeps the same link while it's in use.
 - `Range` requests work as usual (`206`, or `416` past the end) when the size is known. If the server never said the size, the whole file is sent as it arrives.
 - While a link is being read, a download over several connections goes where it reads (a seek included) and fetches its last 1 MiB early, where many videos keep their index.
+- A download in **streaming mode** (`"streaming": true` on the job) does that from the start, as if a player read it: its connections take the file in order, one piece each, and its last 1 MiB comes first. Set it when adding (`"streaming"` in `POST /jobs`) or later (`PATCH /jobs/{id}`). Left out when adding, it's on for videos and music if the settings' `streamMedia` is (the default), going by the link's extension, then by the file's real name once the server answers. A download over one connection already comes in order.
 - A read past what has arrived **waits** for the bytes, even while the download is queued or paused. The answer breaks off if the download fails, is cancelled or removed, or has to start over because the file changed on the server.
 
 ## Versions

@@ -11,4 +11,10 @@ destDir?: string,
 /**
  * Default: matched by the file's extension.
  */
-category?: number, };
+category?: number, 
+/**
+ * Streaming mode. Default: on for videos and music if the settings'
+ * `streamMedia` is, by the link's extension, then by the file's real
+ * name once the server answers.
+ */
+streaming?: boolean, };

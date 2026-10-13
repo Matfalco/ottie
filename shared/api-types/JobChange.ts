@@ -9,4 +9,8 @@ export type JobChange = {
 /**
  * Bytes per second; 0 = no limit of its own.
  */
-speedLimit?: number, priority?: Priority, };
+speedLimit?: number, priority?: Priority, 
+/**
+ * Streaming mode. Once set, the file type no longer decides it.
+ */
+streaming?: boolean, };

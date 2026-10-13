@@ -6,6 +6,8 @@ export type FileKind = 'video' | 'audio' | 'image' | 'archive' | 'document' | 'p
 /** The kinds with a list of extensions. */
 export type KnownKind = Exclude<FileKind, 'other'>;
 
+/** Videos and music: the daemon keeps the same list (`crates/core/src/playback.rs`)
+ * to start them in streaming mode. */
 export const EXTENSIONS: Record<KnownKind, string[]> = {
 	video: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'm4v', 'wmv', 'flv', 'mpg', 'mpeg', 'ts', '3gp'],
 	audio: ['mp3', 'flac', 'ogg', 'opus', 'm4a', 'aac', 'wav', 'wma', 'aiff'],
@@ -57,5 +59,15 @@ export function fileKind(name: string): FileKind {
 	if (dot <= 0) {
 		return 'other';
 	}
-	return KIND_OF.get(name.slice(dot + 1).toLowerCase()) ?? 'other';
+	return extensionKind(name.slice(dot + 1));
+}
+
+/** By an extension without its dot, in any case. */
+export function extensionKind(extension: string): FileKind {
+	return KIND_OF.get(extension.toLowerCase()) ?? 'other';
+}
+
+/** Videos and music: what players play. */
+export function isMedia(kind: FileKind): boolean {
+	return kind === 'video' || kind === 'audio';
 }

@@ -4,7 +4,9 @@
 //! second half of the range with the most left. See docs/decisions/0009.
 //!
 //! While players read the file (docs/decisions/0029), connections go where
-//! they read, and to the end of the file, before anything else.
+//! they read, and to the end of the file, before anything else. In streaming
+//! mode, the same happens as if a player read from the start, and the file
+//! comes in order: each connection takes the next piece after the others.
 
 use std::io::{self, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -36,6 +38,14 @@ const SHOW_INTERVAL: Duration = Duration::from_millis(200);
 /// While a player reads, this much of the end of the file comes early: many
 /// videos (MP4s especially) keep their index there.
 const TAIL: u64 = 1024 * 1024;
+/// In streaming mode, pieces are never smaller than this many `min_split`s.
+const MIN_PIECE: u64 = 4;
+/// In streaming mode, a busy range more than this many pieces long is cut
+/// down to one piece. Well above 2, the most a piece can be when it starts,
+/// so a piece size that wavers with the speed doesn't cut ranges.
+const TRIM: u64 = 4;
+/// How often the download's speed, which sizes streaming pieces, is measured.
+const SPEED_INTERVAL: Duration = Duration::from_secs(1);
 
 pub(crate) enum Segmented {
     Finished,
@@ -206,10 +216,12 @@ pub(crate) async fn run(
     let mut first = first;
     let mut failure: Option<Error> = None;
     let mut restart: Option<RestartReason> = None;
-    // Where players need bytes next, most urgent first (empty if nobody reads).
-    let mut wanted: Vec<u64> = Vec::new();
+    let mut speed = Speed::new(written(&parts));
+    let piece = env.playback.streaming().then(|| piece_size(config, 0));
+    let heads = env.playback.offsets();
+    let mut order = steer(&mut parts, &heads, piece, total, config.min_split);
     fill(
-        &mut parts, &mut tasks, &context, &stop, &mut first, config, &wanted,
+        &mut parts, &mut tasks, &context, &stop, &mut first, config, &order,
     );
 
     let mut ticker = tokio::time::interval(PROGRESS_INTERVAL);
@@ -228,7 +240,7 @@ pub(crate) async fn run(
                 parts[index].stopping = false;
                 match result {
                     Ok(Ended::Done) if !stop.is_cancelled() => {
-                        fill(&mut parts, &mut tasks, &context, &stop, &mut first, config, &wanted);
+                        fill(&mut parts, &mut tasks, &context, &stop, &mut first, config, &order);
                     }
                     Ok(Ended::Done | Ended::Cancelled) => {}
                     Ok(Ended::Changed(reason)) => {
@@ -243,14 +255,18 @@ pub(crate) async fn run(
             }
             _ = ticker.tick() => {
                 let heads = env.playback.offsets();
-                context.reading.store(!heads.is_empty(), SeqCst);
-                wanted = needed(&parts, &heads, total);
-                if !wanted.is_empty() && !stop.is_cancelled() {
-                    follow(&mut parts, &wanted, config.min_split);
-                    fill(&mut parts, &mut tasks, &context, &stop, &mut first, config, &wanted);
-                    make_room(&mut parts, &wanted, config.min_split);
+                let reading = !heads.is_empty();
+                context.reading.store(reading, SeqCst);
+                speed.update(written(&parts));
+                if !stop.is_cancelled() {
+                    let piece = env.playback.streaming().then(|| piece_size(config, speed.per_second));
+                    order = steer(&mut parts, &heads, piece, total, config.min_split);
+                    if !order.wanted.is_empty() || order.pieces.is_some() {
+                        fill(&mut parts, &mut tasks, &context, &stop, &mut first, config, &order);
+                        make_room(&mut parts, &order.wanted, config.min_split);
+                    }
                 }
-                env.playback.show_written((!heads.is_empty()).then(|| shown(&parts)));
+                env.playback.show_written(reading.then(|| shown(&parts)));
                 let now = written(&parts);
                 if now != last_progress {
                     last_progress = now;
@@ -298,9 +314,49 @@ pub(crate) async fn run(
 
 type Task = (usize, Result<Ended, Error>);
 
+/// Where connections go first.
+struct Order {
+    /// Where players need bytes next, most urgent first (empty if nobody reads).
+    wanted: Vec<u64>,
+    /// Streaming mode: ranges are taken in order, a piece at a time.
+    pieces: Option<Pieces>,
+}
+
+#[derive(Clone, Copy)]
+struct Pieces {
+    /// Where the order starts: the newest player's offset, else the start of the file.
+    from: u64,
+    /// Bytes a connection takes at a time.
+    size: u64,
+}
+
+/// Works out where connections go first, and starts ranges there: at each
+/// point players need (see `needed`). In streaming mode (`piece` = the size
+/// of a piece), as if a player read from the start when none does, and no
+/// busy range is left much longer than a piece, so the rest comes in order.
+fn steer(parts: &mut Vec<Part>, heads: &[u64], piece: Option<u64>, total: u64, lead: u64) -> Order {
+    let heads = match piece {
+        Some(_) if heads.is_empty() => &[0][..],
+        _ => heads,
+    };
+    let wanted = needed(parts, heads, total);
+    follow(parts, &wanted, lead);
+    if let Some(size) = piece {
+        trim(parts, size);
+    }
+    Order {
+        wanted,
+        pieces: piece.map(|size| Pieces {
+            from: heads.first().copied().unwrap_or(0),
+            size,
+        }),
+    }
+}
+
 /// Starts connections until `config.connections` are busy: first on ranges
-/// that lead to a point players need (`wanted`), then on ranges nobody is
-/// working on, then by splitting the busy range with the most left.
+/// that lead to a point players need, then on ranges nobody is working on
+/// (in streaming mode, the next one in order, cut to a piece), then by
+/// splitting the busy range with the most left.
 fn fill(
     parts: &mut Vec<Part>,
     tasks: &mut JoinSet<Task>,
@@ -308,17 +364,26 @@ fn fill(
     stop: &CancellationToken,
     first: &mut Option<Response>,
     config: &HttpConfig,
-    wanted: &[u64],
+    order: &Order,
 ) {
     while parts.iter().filter(|p| p.busy).count() < config.connections.max(1) {
         let idle = |p: &Part| !p.busy && p.left() > 0;
         let next = parts
             .iter()
-            .position(|p| idle(p) && p.leads_to(wanted))
-            .or_else(|| parts.iter().position(idle));
+            .position(|p| idle(p) && p.leads_to(&order.wanted))
+            .or_else(|| match order.pieces {
+                Some(pieces) => next_in_order(parts, pieces.from),
+                None => parts.iter().position(idle),
+            });
         let Some(index) = next.or_else(|| split(parts, config.min_split)) else {
             return;
         };
+        if let Some(pieces) = order.pieces
+            && parts[index].left() >= 2 * pieces.size
+        {
+            let at = parts[index].pos() + pieces.size;
+            cut(parts, index, at);
+        }
         let part = &mut parts[index];
         part.busy = true;
         // The opening response starts at byte 0, so only the range there can use it.
@@ -334,7 +399,6 @@ fn fill(
 }
 
 /// Gives the second half of the busy range with the most left to a new range.
-/// The busy connection notices its lower `end` before its next write.
 fn split(parts: &mut Vec<Part>, min_split: u64) -> Option<usize> {
     let (index, left) = parts
         .iter()
@@ -345,15 +409,84 @@ fn split(parts: &mut Vec<Part>, min_split: u64) -> Option<usize> {
     if left < 2 * min_split.max(1) {
         return None;
     }
+    let middle = parts[index].end() - left / 2;
+    Some(cut(parts, index, middle))
+}
+
+/// Ends the range at `index` at `at`; what came after becomes a new range,
+/// for later, whose index this returns. A busy connection notices its lower
+/// `end` before its next write.
+fn cut(parts: &mut Vec<Part>, index: usize, at: u64) -> usize {
     let old_end = parts[index].end();
-    let middle = old_end - left / 2;
-    parts[index].shared.end.store(middle, SeqCst);
+    parts[index].shared.end.store(at, SeqCst);
     parts.push(Part::new(Segment {
-        start: middle,
+        start: at,
         end: old_end,
         done: 0,
     }));
-    Some(parts.len() - 1)
+    parts.len() - 1
+}
+
+/// Streaming mode: cuts each busy range with more than `TRIM` pieces left
+/// down to one piece. The rest waits for a connection, which takes ranges in
+/// order. After a switch to streaming mode, connections come to the front.
+fn trim(parts: &mut Vec<Part>, piece: u64) {
+    for index in 0..parts.len() {
+        let part = &parts[index];
+        if part.busy && !part.stopping && part.left() > TRIM * piece {
+            let at = part.pos() + piece;
+            tracing::debug!(at, "streaming: a long range is cut to a piece");
+            cut(parts, index, at);
+        }
+    }
+}
+
+/// The range nobody is working on that comes next from `from`: the first
+/// one that ends after it, else (when they're all before it) the first one.
+fn next_in_order(parts: &[Part], from: u64) -> Option<usize> {
+    parts
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| !p.busy && p.left() > 0)
+        .min_by_key(|(_, p)| (p.end() <= from, p.pos()))
+        .map(|(index, _)| index)
+}
+
+/// Streaming mode: how much a connection takes at a time, at `speed` bytes
+/// per second for the whole download. See [`HttpConfig::piece_time`].
+fn piece_size(config: &HttpConfig, speed: u64) -> u64 {
+    let connections = u64::try_from(config.connections.max(1)).unwrap_or(u64::MAX);
+    let by_speed = (speed as f64 * config.piece_time.as_secs_f64()) as u64 / connections;
+    by_speed.max(MIN_PIECE * config.min_split.max(1))
+}
+
+/// The download's speed, measured about once a second.
+struct Speed {
+    since: Instant,
+    written: u64,
+    per_second: u64,
+}
+
+impl Speed {
+    fn new(written: u64) -> Self {
+        Speed {
+            since: Instant::now(),
+            written,
+            per_second: 0,
+        }
+    }
+
+    /// `written`: bytes written so far.
+    fn update(&mut self, written: u64) {
+        let elapsed = self.since.elapsed();
+        if elapsed < SPEED_INTERVAL {
+            return;
+        }
+        // A cut can hide a few bytes written past a range's new end.
+        let bytes = written.saturating_sub(self.written);
+        self.per_second = (bytes as f64 / elapsed.as_secs_f64()) as u64;
+        (self.since, self.written) = (Instant::now(), written);
+    }
 }
 
 /// Where players need bytes next: from each of their `heads`, the first
@@ -393,24 +526,21 @@ fn missing_from(parts: &[Part], offset: u64) -> Option<u64> {
 /// then it gets there soon enough.
 fn follow(parts: &mut Vec<Part>, wanted: &[u64], lead: u64) {
     for &point in wanted {
-        let Some(part) = parts.iter().find(|p| p.start <= point && point < p.end()) else {
+        let Some(index) = parts
+            .iter()
+            .position(|p| p.start <= point && point < p.end())
+        else {
             continue;
         };
-        if point.saturating_sub(part.pos()) < lead {
+        if point.saturating_sub(parts[index].pos()) < lead {
             continue;
         }
         tracing::debug!(
             point,
-            busy = part.busy,
+            busy = parts[index].busy,
             "a player needs bytes here: a range starts"
         );
-        let old_end = part.end();
-        part.shared.end.store(point, SeqCst);
-        parts.push(Part::new(Segment {
-            start: point,
-            end: old_end,
-            done: 0,
-        }));
+        cut(parts, index, point);
     }
 }
 
@@ -434,16 +564,10 @@ fn make_room(parts: &mut Vec<Part>, wanted: &[u64], lead: u64) {
         let Some(index) = index else {
             return;
         };
-        let part = &mut parts[index];
-        let (pos, old_end) = (part.pos(), part.end());
+        let pos = parts[index].pos();
         tracing::debug!(at = pos, "a connection stops to make room for a player");
-        part.shared.end.store(pos, SeqCst);
-        part.stopping = true;
-        parts.push(Part::new(Segment {
-            start: pos,
-            end: old_end,
-            done: 0,
-        }));
+        parts[index].stopping = true;
+        cut(parts, index, pos);
     }
 }
 
@@ -716,6 +840,73 @@ mod tests {
         // it gets a range, but nobody is free to take it.
         assert!(!parts[0].stopping && !parts[1].stopping);
         assert_eq!(ranges(&parts), [(0, 1000), (1000, 1600), (1600, 2000)]);
+    }
+
+    const MIB: u64 = 1024 * 1024;
+    const KIB: u64 = 1024;
+
+    #[test]
+    fn streaming_wants_the_start_and_the_end_and_cuts_long_ranges() {
+        // Two ranges of 4 MiB, 1 MiB into each.
+        let mut parts: Vec<Part> = plan(8 * MIB, &config(2, 64 * KIB))
+            .into_iter()
+            .map(Part::new)
+            .collect();
+        for (part, pos) in parts.iter_mut().zip([MIB, 5 * MIB]) {
+            part.shared.pos.store(pos, SeqCst);
+            part.busy = true;
+        }
+        let order = steer(&mut parts, &[], Some(256 * KIB), 8 * MIB, 64 * KIB);
+        // As if a player read from the start; and the last MiB.
+        assert_eq!(order.wanted, [MIB, 7 * MIB]);
+        assert_eq!(order.pieces.map(|p| (p.from, p.size)), Some((0, 256 * KIB)));
+        // Each busy range is cut to a piece; the last MiB starts a range.
+        let piece_end = |pos| pos + 256 * KIB;
+        assert_eq!(
+            ranges(&parts),
+            [
+                (0, piece_end(MIB)),
+                (piece_end(MIB), 4 * MIB),
+                (4 * MIB, piece_end(5 * MIB)),
+                (piece_end(5 * MIB), 7 * MIB),
+                (7 * MIB, 8 * MIB)
+            ]
+        );
+    }
+
+    #[test]
+    fn without_streaming_nobody_reading_changes_nothing() {
+        let mut parts = two_busy(100, 1100);
+        let order = steer(&mut parts, &[], None, 2000, 100);
+        assert!(order.wanted.is_empty() && order.pieces.is_none());
+        assert_eq!(ranges(&parts), [(0, 1000), (1000, 2000)]);
+    }
+
+    #[test]
+    fn the_next_range_in_order_comes_after_the_player() {
+        let mut parts = two_busy(100, 1100);
+        let idle = |start, end| {
+            Part::new(Segment {
+                start,
+                end,
+                done: 0,
+            })
+        };
+        parts[0].shared.end.store(300, SeqCst);
+        parts[1].shared.end.store(1200, SeqCst);
+        parts.extend([idle(1200, 2000), idle(300, 1000)]);
+        let start = |index: Option<usize>| index.map(|i| parts[i].start);
+        assert_eq!(start(next_in_order(&parts, 0)), Some(300));
+        // Before the player, only once nothing after it is left.
+        assert_eq!(start(next_in_order(&parts, 1500)), Some(1200));
+        assert_eq!(start(next_in_order(&parts, 2000)), Some(300));
+    }
+
+    #[test]
+    fn pieces_last_about_two_seconds_of_one_connection() {
+        let config = config(4, MIB);
+        assert_eq!(piece_size(&config, 0), 4 * MIB, "never under 4 × min_split");
+        assert_eq!(piece_size(&config, 40 * MIB), 20 * MIB);
     }
 
     #[test]

@@ -35,6 +35,11 @@ retriesBeforeYield: number,
  */
 firstRetryWaitMs: number, 
 /**
+ * New video and music downloads start in streaming mode, unless the
+ * one adding them says otherwise.
+ */
+streamMedia: boolean, 
+/**
  * The look shared by the devices that choose to follow it; null until
  * one shares its own.
  */

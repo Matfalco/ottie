@@ -182,6 +182,14 @@ const MIGRATIONS: &[&str] = &[
         category_id INTEGER NOT NULL REFERENCES categories (id) ON DELETE CASCADE,
         PRIMARY KEY (view_id, category_id)
      ) STRICT;",
+    // 11: streaming mode per download, and whether the user chose it (else
+    // the file type decides); the setting that turns it on for videos and music.
+    "ALTER TABLE jobs ADD COLUMN streaming INTEGER NOT NULL DEFAULT 0
+        CHECK (streaming IN (0, 1));
+     ALTER TABLE jobs ADD COLUMN streaming_chosen INTEGER NOT NULL DEFAULT 0
+        CHECK (streaming_chosen IN (0, 1));
+     ALTER TABLE settings ADD COLUMN stream_media INTEGER NOT NULL DEFAULT 1
+        CHECK (stream_media IN (0, 1));",
 ];
 
 /// Everything saved about one job.
@@ -197,6 +205,10 @@ pub(crate) struct JobRecord {
     /// The user picked the category (or a folder, which decided it), rather
     /// than it being matched by extension; it is never re-matched.
     pub category_chosen: bool,
+    pub streaming: bool,
+    /// The user turned streaming mode on or off, rather than the file type
+    /// deciding; it is never decided again.
+    pub streaming_chosen: bool,
 }
 
 /// Everything the database holds, as read at start.
@@ -446,9 +458,10 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
         "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, file_name, state, total,
                            downloaded, validator_kind, validator_value, resumable, error,
                            priority, speed_limit, category_id, category_chosen,
-                           problem_kind, problem_number, problem_total, problem_detail)
+                           problem_kind, problem_number, problem_total, problem_detail,
+                           streaming, streaming_chosen)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                 ?17, ?18, ?19, ?20)
+                 ?17, ?18, ?19, ?20, ?21, ?22)
          ON CONFLICT (id_secs, id_seq) DO UPDATE SET
              url = excluded.url, dest_dir = excluded.dest_dir,
              file_name = excluded.file_name, state = excluded.state,
@@ -459,7 +472,8 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
              priority = excluded.priority, speed_limit = excluded.speed_limit,
              category_id = excluded.category_id, category_chosen = excluded.category_chosen,
              problem_kind = excluded.problem_kind, problem_number = excluded.problem_number,
-             problem_total = excluded.problem_total, problem_detail = excluded.problem_detail",
+             problem_total = excluded.problem_total, problem_detail = excluded.problem_detail,
+             streaming = excluded.streaming, streaming_chosen = excluded.streaming_chosen",
     )?
     .execute(params![
         secs,
@@ -482,6 +496,8 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
         number,
         total,
         detail,
+        record.streaming,
+        record.streaming_chosen,
     ])?;
     tx.prepare_cached("DELETE FROM segments WHERE job_secs = ?1 AND job_seq = ?2")?
         .execute(params![secs, seq])?;
@@ -537,7 +553,8 @@ fn load_jobs(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
         "SELECT id_secs, id_seq, url, dest_dir, file_name, state, total, downloaded,
                 validator_kind, validator_value, resumable, error, priority, speed_limit,
                 category_id, category_chosen,
-                problem_kind, problem_number, problem_total, problem_detail
+                problem_kind, problem_number, problem_total, problem_detail,
+                streaming, streaming_chosen
          FROM jobs ORDER BY id_secs, id_seq",
     )?;
     let mut rows = stmt.query([])?;
@@ -614,6 +631,8 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         speed_limit: row.get(13)?,
         category: CategoryId(row.get(14)?),
         category_chosen: row.get(15)?,
+        streaming: row.get(20)?,
+        streaming_chosen: row.get(21)?,
     }))
 }
 
@@ -668,7 +687,7 @@ fn problem_from_row(row: &Row) -> rusqlite::Result<Option<Problem>> {
 fn load_settings(conn: &Connection) -> Result<Settings, Error> {
     Ok(conn.query_row(
         "SELECT global_limit, max_concurrent, max_retries, retries_before_yield, retry_wait_ms,
-                setup_done, appearance_mode, appearance_palette, language
+                setup_done, appearance_mode, appearance_palette, language, stream_media
          FROM settings WHERE id = 1",
         [],
         |row| {
@@ -689,6 +708,7 @@ fn load_settings(conn: &Connection) -> Result<Settings, Error> {
                     retries_before_yield: row.get(3)?,
                     first_wait: Duration::from_millis(row.get(4)?),
                 },
+                stream_media: row.get(9)?,
                 setup_done: row.get(5)?,
                 appearance,
                 language: row.get(8)?,
@@ -703,7 +723,8 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
     conn.execute(
         "UPDATE settings SET global_limit = ?1, max_concurrent = ?2, max_retries = ?3,
                 retries_before_yield = ?4, retry_wait_ms = ?5, setup_done = ?6,
-                appearance_mode = ?7, appearance_palette = ?8, language = ?9
+                appearance_mode = ?7, appearance_palette = ?8, language = ?9,
+                stream_media = ?10
          WHERE id = 1",
         params![
             settings.global_limit,
@@ -715,6 +736,7 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
             settings.appearance.map(|a| a.mode.as_str()),
             settings.appearance.map(|a| a.palette.as_str()),
             settings.language,
+            settings.stream_media,
         ],
     )?;
     Ok(())
@@ -975,6 +997,8 @@ mod tests {
             speed_limit: 512 * 1024,
             category: CategoryId::GENERAL,
             category_chosen: false,
+            streaming: true,
+            streaming_chosen: true,
         }
     }
 
@@ -1116,6 +1140,7 @@ mod tests {
                 retries_before_yield: 0,
                 first_wait: Duration::from_millis(250),
             },
+            stream_media: false,
             setup_done: true,
             appearance: Some(Appearance {
                 mode: AppearanceMode::Light,

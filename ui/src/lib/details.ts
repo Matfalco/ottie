@@ -3,7 +3,7 @@
 import type { Job } from '@ottie/api-types/Job';
 import type { Priority } from '@ottie/api-types/Priority';
 import type { Action } from './bulk';
-import { fileKind } from './filetypes';
+import { fileKind, isMedia } from './filetypes';
 import { displayName, formatAdded, formatBytes, formatDuration, formatSpeed } from './format';
 import { addedAt } from './jobs';
 import { m } from './paraglide/messages.js';
@@ -51,8 +51,12 @@ export function isPlayable(job: Job): boolean {
 	if (job.fileName === null || job.state === 'cancelled') {
 		return false;
 	}
-	const kind = fileKind(job.fileName);
-	return kind === 'video' || kind === 'audio';
+	return isMedia(fileKind(job.fileName));
+}
+
+/** Streaming mode still matters: the download isn't over. */
+export function canStream(job: Job): boolean {
+	return job.state !== 'completed' && job.state !== 'cancelled';
 }
 
 export interface Fact {

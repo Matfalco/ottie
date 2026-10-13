@@ -72,6 +72,10 @@ pub struct NewJob {
     /// `None`: the category whose extensions include the file extension in
     /// the URL, or General if none does.
     pub category: Option<CategoryId>,
+    /// Streaming mode (docs/decisions/0029). `None`: on for videos and music
+    /// if [`Settings::stream_media`] says so, by the URL's extension and again
+    /// by the real name once the server answers.
+    pub streaming: Option<bool>,
 }
 
 impl NewJob {
@@ -80,6 +84,7 @@ impl NewJob {
             url,
             dest_dir: None,
             category: None,
+            streaming: None,
         }
     }
 
@@ -94,6 +99,12 @@ impl NewJob {
         self.category = Some(category);
         self
     }
+
+    /// Streaming mode on or off, whatever the file type.
+    pub fn streaming(mut self, on: bool) -> Self {
+        self.streaming = Some(on);
+        self
+    }
 }
 
 /// Some of a job's own settings to change at once; `None` leaves one as it
@@ -103,6 +114,8 @@ pub struct JobChange {
     /// Bytes per second; 0 = no limit of its own.
     pub speed_limit: Option<u64>,
     pub priority: Option<Priority>,
+    /// Streaming mode: in order, the end of the file first.
+    pub streaming: Option<bool>,
 }
 
 /// A copy of a job's public state, for listing and events.
@@ -122,6 +135,9 @@ pub struct JobSnapshot {
     pub priority: Priority,
     /// This job's own limit in bytes per second; 0 = none.
     pub speed_limit: u64,
+    /// Streaming mode (docs/decisions/0029): over several connections, the
+    /// file arrives in order, its last 1 MiB first, so it plays sooner.
+    pub streaming: bool,
     pub category: CategoryId,
     /// Failed attempts since bytes last arrived. With `Retrying`, the number
     /// of the retry it's waiting for.

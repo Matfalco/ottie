@@ -11,6 +11,9 @@ pub struct Settings {
     /// How many jobs may download at once. At least 1.
     pub max_concurrent: usize,
     pub retry: RetryPolicy,
+    /// New video and music downloads start in streaming mode, unless the
+    /// one adding them says otherwise (docs/decisions/0029).
+    pub stream_media: bool,
     /// The user has been through the first-start setup (or skipped it), so
     /// front ends shouldn't offer it again.
     pub setup_done: bool,
@@ -28,6 +31,7 @@ impl Default for Settings {
             global_limit: 0,
             max_concurrent: 3,
             retry: RetryPolicy::default(),
+            stream_media: true,
             setup_done: false,
             appearance: None,
             language: None,
@@ -45,6 +49,7 @@ impl Settings {
             max_retries,
             retries_before_yield,
             first_retry_wait,
+            stream_media,
             setup_done,
             appearance,
             language,
@@ -63,6 +68,9 @@ impl Settings {
         }
         if let Some(wait) = first_retry_wait {
             self.retry.first_wait = wait;
+        }
+        if let Some(on) = stream_media {
+            self.stream_media = on;
         }
         if let Some(done) = setup_done {
             self.setup_done = done;
@@ -84,6 +92,7 @@ pub struct SettingsChange {
     pub max_retries: Option<u32>,
     pub retries_before_yield: Option<u32>,
     pub first_retry_wait: Option<Duration>,
+    pub stream_media: Option<bool>,
     pub setup_done: Option<bool>,
     pub appearance: Option<Appearance>,
     pub language: Option<String>,

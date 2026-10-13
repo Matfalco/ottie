@@ -27,7 +27,7 @@ Each accepted decision has its own short file here (`NNNN-title.md`): what was d
 | [0018](0018-removing-downloads.md) | `DELETE /jobs/{id}` takes a download off the list in any state; a finished file stays on disk, an unfinished one is deleted. |
 | [0025](0025-ranges-in-progress.md) | Progress events carry each connection's range, so clients can show where every connection is. |
 | [0028](0028-moving-files-with-their-category.md) | Moving a download to another category moves its file to that category's folder, even while it runs. |
-| [0029](0029-play-while-downloading.md) | Play while downloading through short-lived play links that need no token; the download order follows the player, and a streaming mode keeps it in order. |
+| [0029](0029-play-while-downloading.md) | Play while downloading through short-lived play links that need no token; the download order follows the player, and a streaming mode (on by itself for videos and music) keeps it in order. |
 
 ## API and daemon
 

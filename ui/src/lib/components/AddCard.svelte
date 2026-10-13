@@ -11,6 +11,7 @@
 	<AddBar
 		categories={session.categories}
 		categoryList={session.categoryList}
+		streamMedia={session.settings?.streamMedia ?? true}
 		onMatch={(url, folder) => session.match(url, folder)}
 		onAdd={add}
 	/>

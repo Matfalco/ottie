@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use ottie_core::{
     Appearance, AppearanceMode, CategoryId, CategorySettings, Error, HttpBackend, HttpConfig,
-    JobId, JobSnapshot, JobState, Manager, NewJob, PART_SUFFIX, Palette, Priority, RetryPolicy,
-    Settings, SettingsChange, Store,
+    JobChange, JobId, JobSnapshot, JobState, Manager, NewJob, PART_SUFFIX, Palette, Priority,
+    RetryPolicy, Settings, SettingsChange, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -247,6 +247,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         palette: Palette::Neutral,
     };
     let change = SettingsChange {
+        stream_media: Some(false),
         setup_done: Some(true),
         appearance: Some(appearance),
         language: Some("fr".into()),
@@ -257,6 +258,11 @@ async fn settings_priorities_and_limits_survive_a_restart() {
     manager.pause(id).await.unwrap();
     manager.set_priority(id, Priority::High).await.unwrap();
     manager.set_speed_limit(id, 123_456).await.unwrap();
+    let streaming = JobChange {
+        streaming: Some(true),
+        ..JobChange::default()
+    };
+    manager.change_job(id, streaming).await.unwrap();
     manager.shutdown().await.unwrap();
 
     let manager = s.launch().await;
@@ -264,6 +270,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         global_limit: 5_000_000,
         max_concurrent: 2,
         retry,
+        stream_media: false,
         setup_done: true,
         appearance: Some(appearance),
         language: Some("fr".into()),
@@ -271,6 +278,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
     assert_eq!(manager.settings().await.unwrap(), expected);
     let job = &manager.list().await.unwrap()[0];
     assert_eq!((job.priority, job.speed_limit), (Priority::High, 123_456));
+    assert!(job.streaming);
 }
 
 #[tokio::test]

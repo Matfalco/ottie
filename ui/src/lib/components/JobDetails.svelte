@@ -10,7 +10,14 @@
 	import Play from '@lucide/svelte/icons/play';
 	import type { Action } from '#lib/bulk.js';
 	import { categoryName } from '#lib/categories.js';
-	import { PRIORITIES, facts, isPlayable, primaryAction, priorityName } from '#lib/details.js';
+	import {
+		PRIORITIES,
+		canStream,
+		facts,
+		isPlayable,
+		primaryAction,
+		priorityName
+	} from '#lib/details.js';
 	import { explainProblem } from '#lib/explain.js';
 	import { connections, strip } from '#lib/filemap.js';
 	import { statusName, statusOf } from '#lib/filters.js';
@@ -20,6 +27,7 @@
 	import { amount, fraction } from '#lib/status.js';
 	import { canChoosePlayer } from '#lib/window.js';
 	import LimitControl from './LimitControl.svelte';
+	import Switch from './Switch.svelte';
 
 	interface Props {
 		job: Job;
@@ -283,6 +291,19 @@
 					</div>
 					<span class="hint">{m.det_priority_hint()}</span>
 				</fieldset>
+				{#if canStream(job)}
+					<div class="field wide">
+						<span class="label">{m.det_streaming()}</span>
+						<span class="switch-row">
+							<Switch
+								on={job.streaming}
+								label={m.det_streaming()}
+								onChange={(streaming) => onChange({ streaming })}
+							/>
+							<span class="hint">{m.det_streaming_hint()}</span>
+						</span>
+					</div>
+				{/if}
 			</div>
 		</div>
 	{/if}
@@ -631,6 +652,12 @@
 	.hint {
 		color: var(--faint);
 		font-size: 0.8rem;
+	}
+
+	.switch-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
 	}
 
 	/* Radio buttons drawn as one row of segments (as in the filters). */

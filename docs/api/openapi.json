@@ -614,7 +614,7 @@
         "tags": [
           "jobs"
         ],
-        "summary": "Changes a download's own speed limit and priority (the fields given), in\nany state; they take effect at once, even while it runs. Every client\nhears of it through one `changed` event, none if nothing changed.",
+        "summary": "Changes a download's own speed limit, priority and streaming mode (the\nfields given), in any state; they take effect at once, even while it runs. Every client\nhears of it through one `changed` event, none if nothing changed.",
         "operationId": "changeJob",
         "parameters": [
           {
@@ -1679,6 +1679,13 @@
             ],
             "description": "An absolute folder. Default: the category's folder."
           },
+          "streaming": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Streaming mode. Default: on for videos and music if the settings'\n`streamMedia` is, by the link's extension, then by the file's real\nname once the server answers."
+          },
           "url": {
             "type": "string"
           }
@@ -2142,6 +2149,7 @@
           "resumable",
           "priority",
           "speedLimit",
+          "streaming",
           "category",
           "retries",
           "ranges",
@@ -2232,6 +2240,10 @@
           "state": {
             "$ref": "#/components/schemas/JobState"
           },
+          "streaming": {
+            "type": "boolean",
+            "description": "Streaming mode: over several connections, the file comes in order,\nits last 1 MiB first, so it can play while downloading."
+          },
           "total": {
             "type": [
               "integer",
@@ -2268,6 +2280,13 @@
             "format": "int64",
             "description": "Bytes per second; 0 = no limit of its own.",
             "minimum": 0
+          },
+          "streaming": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Streaming mode. Once set, the file type no longer decides it."
           }
         }
       },
@@ -3070,7 +3089,8 @@
           "globalLimit",
           "maxRetries",
           "retriesBeforeYield",
-          "firstRetryWaitMs"
+          "firstRetryWaitMs",
+          "streamMedia"
         ],
         "properties": {
           "appearance": {
@@ -3124,6 +3144,10 @@
           "setupDone": {
             "type": "boolean",
             "description": "The first-start setup (starter categories) was done or skipped;\nuntil then, front ends offer it."
+          },
+          "streamMedia": {
+            "type": "boolean",
+            "description": "New video and music downloads start in streaming mode, unless the\none adding them says otherwise."
           }
         }
       },
@@ -3188,6 +3212,12 @@
             "minimum": 0
           },
           "setupDone": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "streamMedia": {
             "type": [
               "boolean",
               "null"
