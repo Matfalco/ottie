@@ -19,6 +19,7 @@ use crate::error::Error;
 use crate::filename;
 use crate::id::{IdGenerator, JobId};
 use crate::job::{JobChange, JobEvent, JobSnapshot, JobState, NewJob, Priority};
+use crate::playback::{Head, Playbacks};
 use crate::problem::Problem;
 use crate::settings::{RetryPolicy, Settings, SettingsChange};
 use crate::store::{JobRecord, Store};
@@ -47,6 +48,7 @@ const EVENT_BUFFER: usize = 1024;
 pub struct Manager {
     commands: mpsc::Sender<Command>,
     events: broadcast::Sender<JobEvent>,
+    playbacks: Playbacks,
 }
 
 impl Manager {
@@ -82,6 +84,7 @@ impl Manager {
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
         let (internal, internal_rx) = mpsc::unbounded_channel();
         let (events, _) = broadcast::channel(EVENT_BUFFER);
+        let playbacks = Playbacks::default();
         let actor = Actor {
             backend: Arc::new(backend),
             store,
@@ -95,11 +98,16 @@ impl Manager {
             views,
             yields: 0,
             events: events.clone(),
+            playbacks: playbacks.clone(),
             internal,
             shutdown: None,
         };
         tokio::spawn(actor.run(command_rx, internal_rx));
-        Ok(Manager { commands, events })
+        Ok(Manager {
+            commands,
+            events,
+            playbacks,
+        })
     }
 
     /// Queues a download. It starts as soon as a slot is free (in total and
@@ -326,6 +334,12 @@ impl Manager {
 
     pub fn subscribe(&self) -> broadcast::Receiver<JobEvent> {
         self.events.subscribe()
+    }
+
+    /// A player reading the job's file: while it's running, the download
+    /// goes where the player reads (docs/decisions/0029).
+    pub(crate) fn head(&self, id: JobId) -> Head {
+        self.playbacks.head(id)
     }
 
     /// Stops every running job, saves everything, then stops the manager.
@@ -605,6 +619,8 @@ struct Actor<B> {
     yields: u64,
     ids: IdGenerator,
     events: broadcast::Sender<JobEvent>,
+    /// Where players read; each running job gets its own.
+    playbacks: Playbacks,
     /// Cloned into each job task so it can report back.
     internal: mpsc::UnboundedSender<Internal>,
     /// `Some` once shutting down; holds the replies to send when everything has stopped.
@@ -1546,6 +1562,7 @@ impl<B: Backend> Actor<B> {
         let throttle = self
             .limiter
             .register(id, job.speed_limit, job.priority, job.category);
+        let playback = self.playbacks.of(id);
 
         tokio::spawn(async move {
             let mut last_progress: Option<Instant> = None;
@@ -1560,7 +1577,7 @@ impl<B: Backend> Actor<B> {
                 let _ = internal.send(Internal::Event { id, event });
             };
             let result = backend
-                .run(&mut download, &throttle, &cancel, &mut on_event)
+                .run(&mut download, &throttle, &playback, &cancel, &mut on_event)
                 .await;
             drop(throttle);
             let _ = internal.send(Internal::Ended {

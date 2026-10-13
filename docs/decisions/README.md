@@ -51,3 +51,4 @@ Each accepted decision has its own short file here (`NNNN-title.md`): what was d
 | [0021](0021-themes-and-layout.md) | The UI follows the chosen mockups: four themes (Sea and Neutral palettes, each light and dark), tabs in the title bar. |
 | [0023](0023-downloads-filters-and-sorting.md) | The Downloads page has quick-filter pills, a filters and sorting panel, and a list grouped by status. |
 | [0027](0027-file-map-in-the-bar.md) | The detail panel's progress bar is the file map, showing each range where it lies in the file. Replaces 0025's separate map. |
+| [0031](0031-opening-a-player.md) | Play opens a media player: in the desktop app as set in Settings (the system's player through a playlist, the browser, or a picked program); in a browser, "Open in player" saves a playlist. |

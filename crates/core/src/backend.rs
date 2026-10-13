@@ -6,6 +6,7 @@ use tokio_util::sync::CancellationToken;
 use crate::download::{Download, Event, Outcome};
 use crate::error::Error;
 use crate::http::{self, HttpConfig};
+use crate::playback::Playback;
 use crate::throttle::Throttle;
 
 /// Something that can carry out a download. The manager only talks to this,
@@ -13,11 +14,13 @@ use crate::throttle::Throttle;
 pub trait Backend: Send + Sync + 'static {
     /// Same contract as [`crate::run`]: download until done or until `cancel`
     /// fires, keeping `dl` in step with what's on disk, and pass every
-    /// downloaded byte through `throttle` so speed limits apply.
+    /// downloaded byte through `throttle` so speed limits apply. `playback`
+    /// tells where players read the file, so the download can go there first.
     fn run(
         &self,
         dl: &mut Download,
         throttle: &Throttle,
+        playback: &Playback,
         cancel: &CancellationToken,
         on_event: &mut (dyn FnMut(Event) + Send),
     ) -> impl Future<Output = Result<Outcome, Error>> + Send;
@@ -47,9 +50,17 @@ impl Backend for HttpBackend {
         &self,
         dl: &mut Download,
         throttle: &Throttle,
+        playback: &Playback,
         cancel: &CancellationToken,
         on_event: &mut (dyn FnMut(Event) + Send),
     ) -> Result<Outcome, Error> {
-        http::run(&self.client, &self.config, dl, throttle, cancel, on_event).await
+        let env = http::Env {
+            client: &self.client,
+            config: &self.config,
+            throttle,
+            playback,
+            cancel,
+        };
+        http::run_in(&env, dl, on_event).await
     }
 }

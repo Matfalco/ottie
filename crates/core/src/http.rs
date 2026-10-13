@@ -18,6 +18,7 @@ use tokio_util::sync::CancellationToken;
 use crate::download::{Download, Event, Outcome, RestartReason, Validator, check_scheme};
 use crate::error::Error;
 use crate::filename;
+use crate::playback::Playback;
 use crate::segmented::{self, Segmented};
 use crate::throttle::Throttle;
 
@@ -80,27 +81,38 @@ pub async fn run(
     dl: &mut Download,
     throttle: &Throttle,
     cancel: &CancellationToken,
-    mut on_event: impl FnMut(Event),
+    on_event: impl FnMut(Event),
 ) -> Result<Outcome, Error> {
     let env = Env {
         client,
         config,
         throttle,
+        playback: &Playback::none(),
         cancel,
     };
+    run_in(&env, dl, on_event).await
+}
+
+/// [`run`], for a job of the manager: players may be reading it.
+pub(crate) async fn run_in(
+    env: &Env<'_>,
+    dl: &mut Download,
+    mut on_event: impl FnMut(Event),
+) -> Result<Outcome, Error> {
+    let config = env.config;
     let mut opened = match (dl.segments.is_empty(), dl.file_name.clone(), dl.part_path()) {
         (false, Some(name), Some(part)) => {
-            match resume_segmented(&env, dl, &name, &part, &mut on_event).await? {
+            match resume_segmented(env, dl, &name, &part, &mut on_event).await? {
                 Resumed::Stopped(outcome) => return Ok(outcome),
                 Resumed::Restart(reason) => {
                     restarting(dl, reason, &mut on_event);
-                    fresh(&env, dl, name, &part).await?
+                    fresh(env, dl, name, &part).await?
                 }
             }
         }
         _ => {
             dl.segments.clear();
-            open(&env, dl, &mut on_event).await?
+            open(env, dl, &mut on_event).await?
         }
     };
 
@@ -115,7 +127,8 @@ pub async fn run(
         };
         let Some(total) = splittable(config, dl, &response) else {
             started(dl, &name, &mut on_event);
-            return single(&env, response, file, dl, &name, &mut on_event).await;
+            tracing::debug!(%name, "one connection");
+            return single(env, response, file, dl, &name, &mut on_event).await;
         };
 
         // Full size up front, so every connection can write at its offset
@@ -126,13 +139,13 @@ pub async fn run(
         started(dl, &name, &mut on_event);
         let part = dl.dest_dir.join(filename::part_name(&name));
         let first = Some(response);
-        match segmented::run(&env, dl, &part, first, &mut on_event).await? {
+        match segmented::run(env, dl, &part, first, &mut on_event).await? {
             Segmented::Finished => return complete(dl, &name).await,
             Segmented::Cancelled => return Ok(Outcome::Paused),
             Segmented::Restart(reason) if !restarted_mid_run => {
                 restarted_mid_run = true;
                 restarting(dl, reason, &mut on_event);
-                opened = fresh(&env, dl, name, &part).await?;
+                opened = fresh(env, dl, name, &part).await?;
             }
             Segmented::Restart(_) => return Err(Error::RemoteUnstable),
         }
@@ -145,6 +158,7 @@ pub(crate) struct Env<'a> {
     pub client: &'a Client,
     pub config: &'a HttpConfig,
     pub throttle: &'a Throttle,
+    pub playback: &'a Playback,
     pub cancel: &'a CancellationToken,
 }
 

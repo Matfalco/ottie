@@ -5,6 +5,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod daemon;
+mod player;
 
 use std::sync::{Mutex, PoisonError};
 
@@ -20,10 +21,10 @@ const WINDOW: &str = "main";
 const PLAY_PATH: &str = "/api/v1/stream/";
 
 /// What the page may do in the app: control its window, since it draws its
-/// own title bar (docs/decisions/0019), and open the system folder picker,
-/// which only hands back the path the user chose. Only these, and only for
-/// the daemon's pages.
-const PAGE_PERMISSIONS: [&str; 9] = [
+/// own title bar (docs/decisions/0019), open the system folder picker, which
+/// only hands back the path the user chose, and choose how to play
+/// (docs/decisions/0031). Only these, and only for the daemon's pages.
+const PAGE_PERMISSIONS: [&str; 12] = [
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
@@ -36,6 +37,10 @@ const PAGE_PERMISSIONS: [&str; 9] = [
     "core:event:allow-unlisten",
     // "Browse…" next to a category's folder.
     "dialog:allow-open",
+    // "Play with" in Settings: this app's own commands (see build.rs).
+    "allow-player",
+    "allow-set-play-with",
+    "allow-choose-player",
 ];
 
 /// The daemon this app started, if it did: stopped when the app quits.
@@ -49,7 +54,13 @@ fn main() -> tauri::Result<()> {
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
         .plugin(tauri_plugin_dialog::init())
         .manage(Owned::default())
+        .invoke_handler(tauri::generate_handler![
+            player::player,
+            player::set_play_with,
+            player::choose_player
+        ])
         .setup(|app| {
+            app.manage(player::Chosen::load(app.handle()));
             let app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(err) = start(&app).await {
@@ -82,7 +93,8 @@ async fn start(app: &AppHandle) -> anyhow::Result<()> {
 
 fn open_window(app: &AppHandle, link: Url) -> tauri::Result<()> {
     let daemon = link.origin();
-    let player = daemon.clone();
+    let links = daemon.clone();
+    let handle = app.clone();
     let page = PAGE_PERMISSIONS.into_iter().fold(
         CapabilityBuilder::new("page")
             // The daemon's address is only known now, hence a runtime capability.
@@ -102,11 +114,10 @@ fn open_window(app: &AppHandle, link: Url) -> tauri::Result<()> {
         // window into a browser.
         .on_navigation(move |url| url.origin() == daemon)
         // "Play" opens the daemon's play link in a new tab: here, in the
-        // system's browser. No other page opens a window.
+        // player chosen in Settings. No other page opens a window.
         .on_new_window(move |url, _| {
-            if url.origin() == player && url.path().starts_with(PLAY_PATH) {
-                // Best effort: the user can still copy the link.
-                let _ = open::that_detached(url.as_str());
+            if url.origin() == links && url.path().starts_with(PLAY_PATH) {
+                player::play(&handle, &url);
             }
             NewWindowResponse::Deny
         })

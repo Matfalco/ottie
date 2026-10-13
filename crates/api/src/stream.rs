@@ -177,6 +177,7 @@ pub(crate) async fn serve_named(
 
 async fn play(state: AppState, ticket: &str, headers: &HeaderMap) -> Result<Response, Failure> {
     let id = state.links.job(ticket).ok_or_else(Failure::no_such_link)?;
+    let asked = Instant::now();
     // Waits for the download's first response if it hasn't come yet.
     let (reader, opened) = tokio::select! {
         opened = Reader::open(&state.manager, id) => opened?,
@@ -193,7 +194,8 @@ async fn play(state: AppState, ticket: &str, headers: &HeaderMap) -> Result<Resp
     let Some(total) = opened.total else {
         // Size unknown: no ranges, just everything until the download ends.
         response = response.header(ACCEPT_RANGES, "none");
-        let body = body(reader, 0, None, state.shutdown);
+        tracing::debug!(%id, "play: the whole file, size unknown");
+        let body = body(reader, 0, None, asked, state.shutdown);
         return response.body(body).map_err(|_| Failure::internal());
     };
     response = response.header(ACCEPT_RANGES, "bytes");
@@ -216,17 +218,25 @@ async fn play(state: AppState, ticket: &str, headers: &HeaderMap) -> Result<Resp
             return Ok(refused);
         }
     };
+    tracing::debug!(%id, start, end, total, "play: bytes asked for");
     response
         .status(status)
         .header(CONTENT_LENGTH, end - start)
-        .body(body(reader, start, Some(end), state.shutdown))
+        .body(body(reader, start, Some(end), asked, state.shutdown))
         .map_err(|_| Failure::internal())
 }
 
 /// The file from `start` up to `end` (else its end), as it arrives. An
 /// error ends the answer early, so the player sees a broken transfer rather
-/// than wrong bytes.
-fn body(reader: Reader, start: u64, end: Option<u64>, shutdown: CancellationToken) -> Body {
+/// than wrong bytes. `asked` is when the request came, to log how long its
+/// first bytes took.
+fn body(
+    reader: Reader,
+    start: u64,
+    end: Option<u64>,
+    asked: Instant,
+    shutdown: CancellationToken,
+) -> Body {
     let state = (reader, start, shutdown);
     Body::from_stream(futures_util::stream::unfold(
         state,
@@ -249,6 +259,10 @@ fn body(reader: Reader, start: u64, end: Option<u64>, shutdown: CancellationToke
                     (Err(short), (reader, pos, shutdown))
                 }),
                 Ok(bytes) => {
+                    if pos == start {
+                        let waited = asked.elapsed();
+                        tracing::debug!(start, ?waited, "play: first bytes sent");
+                    }
                     let next = pos + bytes.len() as u64;
                     Some((Ok(bytes), (reader, next, shutdown)))
                 }

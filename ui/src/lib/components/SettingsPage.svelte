@@ -3,6 +3,7 @@
 	import Copy from '@lucide/svelte/icons/copy';
 	import Download from '@lucide/svelte/icons/download';
 	import Paintbrush from '@lucide/svelte/icons/palette';
+	import Play from '@lucide/svelte/icons/play';
 	import Plug from '@lucide/svelte/icons/plug';
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
@@ -21,6 +22,14 @@
 		type Palette
 	} from '#lib/theme.js';
 	import { signInLink } from '#lib/token.js';
+	import {
+		canChoosePlayer,
+		choosePlayer,
+		player as playerSetting,
+		setPlayWith,
+		type PlayWith,
+		type Player
+	} from '#lib/window.js';
 	import LanguagePicker from './LanguagePicker.svelte';
 	import LimitControl from './LimitControl.svelte';
 	import NumberField from './NumberField.svelte';
@@ -42,10 +51,20 @@
 		neutral: { name: m.set_palette_neutral, hint: m.set_palette_neutral_hint }
 	};
 
+	/** The choices besides a program of one's own. */
+	const PLAY_NAMES: Record<'system' | 'browser', { name: () => string; hint: () => string }> = {
+		system: { name: m.set_play_system, hint: m.set_play_system_hint },
+		browser: { name: m.set_play_browser, hint: m.set_play_browser_hint }
+	};
+
+	/** Only the desktop app can start a player (docs/decisions/0031). */
+	const inApp = canChoosePlayer();
+
 	/** The sections, top to bottom, for the list on the left. */
 	const SECTIONS: { id: string; label: () => string }[] = [
 		{ id: 'set-appearance', label: m.set_appearance },
 		{ id: 'set-downloads', label: m.set_downloads },
+		...(inApp ? [{ id: 'set-playing', label: m.set_playing }] : []),
 		{ id: 'set-retries', label: m.set_retries },
 		{ id: 'set-connection', label: m.set_connection }
 	];
@@ -59,6 +78,41 @@
 	let copied = $state(false);
 	/** The clipboard refused: the link is shown to copy by hand. */
 	let showLink = $state(false);
+	/** How the desktop app plays; null until it has answered (or in a browser). */
+	let playing: Player | null = $state(null);
+	/** The choice shown, put back if a change doesn't happen. */
+	let playWith: PlayWith = $state('system');
+
+	if (inApp) {
+		playerSetting().then(showPlayer, () => (problem = m.set_play_failed()));
+	}
+
+	function showPlayer(player: Player) {
+		playing = player;
+		playWith = player.playWith;
+	}
+
+	/** A program is asked for the first time it's chosen. */
+	async function changePlayer(next: PlayWith) {
+		try {
+			showPlayer(
+				next === 'program' && !playing?.program
+					? await choosePlayer(m.set_play_pick_title(), m.set_play_programs())
+					: await setPlayWith(next)
+			);
+		} catch {
+			problem = m.set_play_failed();
+			playWith = playing?.playWith ?? 'system';
+		}
+	}
+
+	async function pickProgram() {
+		try {
+			showPlayer(await choosePlayer(m.set_play_pick_title(), m.set_play_programs()));
+		} catch {
+			problem = m.set_play_failed();
+		}
+	}
 
 	function scrolled() {
 		const top = page.getBoundingClientRect().top;
@@ -271,6 +325,57 @@
 				<p class="waiting">{m.connection_connecting()}</p>
 			{/if}
 		</section>
+
+		{#if inApp}
+			<section id="set-playing" class="card" aria-labelledby="playing-title">
+				<header>
+					<span class="icon" aria-hidden="true"><Play size={16} /></span>
+					<h2 id="playing-title">{m.set_playing()}</h2>
+					<p class="hint">{m.set_playing_hint()}</p>
+				</header>
+				{#if playing}
+					<fieldset class="last">
+						<legend>{m.set_play_with()}</legend>
+						<div class="options plays">
+							{#each ['system', 'browser'] as const as way (way)}
+								<label class="option row" class:chosen={playWith === way}>
+									<input
+										type="radio"
+										name="play"
+										value={way}
+										bind:group={playWith}
+										onchange={() => changePlayer(way)}
+									/>
+									<span class="names">
+										<span>{PLAY_NAMES[way].name()}</span>
+										<span class="hint">{PLAY_NAMES[way].hint()}</span>
+									</span>
+								</label>
+							{/each}
+							<!-- Not one label: the button inside mustn't pick the choice. -->
+							<div class="option row" class:chosen={playWith === 'program'}>
+								<label class="program">
+									<input
+										type="radio"
+										name="play"
+										value="program"
+										bind:group={playWith}
+										onchange={() => changePlayer('program')}
+									/>
+									<span class="names">
+										<span>{m.set_play_program()}</span>
+										<span class="hint path">{playing.program ?? m.set_play_program_none()}</span>
+									</span>
+								</label>
+								<button onclick={pickProgram}>{m.set_play_choose()}</button>
+							</div>
+						</div>
+					</fieldset>
+				{:else}
+					<p class="waiting">{m.connection_connecting()}</p>
+				{/if}
+			</section>
+		{/if}
 
 		<section id="set-retries" class="card" aria-labelledby="retries-title">
 			<header>
@@ -697,6 +802,27 @@
 
 	.offline .dot {
 		background: var(--danger);
+	}
+
+	.plays {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	fieldset.last {
+		border-bottom: none;
+	}
+
+	.program {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		gap: 0.75rem;
+		min-width: 0;
+		cursor: pointer;
+	}
+
+	.path {
+		overflow-wrap: anywhere;
 	}
 
 	.copy {

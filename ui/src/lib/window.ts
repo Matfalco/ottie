@@ -1,9 +1,9 @@
 // The desktop app around the page, when it runs inside it. The app hides the
 // system title bar (docs/decisions/0019), so the page draws its own and needs
 // the window's buttons; it can also open the system folder picker. In a
-// browser there's neither.
+// browser there's neither. It also chooses what plays a download.
 
-import { isTauri } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 
@@ -59,4 +59,34 @@ export function canPickFolder(): boolean {
 export async function pickFolder(start?: string): Promise<string | null> {
 	const chosen = await open({ directory: true, defaultPath: start || undefined });
 	return typeof chosen === 'string' ? chosen : null;
+}
+
+/** What "Play" opens in the desktop app (docs/decisions/0031). */
+export type PlayWith = 'system' | 'browser' | 'program';
+
+export interface Player {
+	playWith: PlayWith;
+	/** The program picked last, if any. */
+	program: string | null;
+}
+
+/** Whether "Play" can open a player here (only in the desktop app). */
+export function canChoosePlayer(): boolean {
+	return isTauri();
+}
+
+/** How the desktop app plays links. */
+export function player(): Promise<Player> {
+	return invoke<Player>('player');
+}
+
+/** Plays with the system's player, the browser, or the program already picked. */
+export function setPlayWith(playWith: PlayWith): Promise<Player> {
+	return invoke<Player>('set_play_with', { playWith });
+}
+
+/** Asks for a program with the system's picker; unchanged if cancelled.
+ * `programs` names the file filter (on Windows). */
+export function choosePlayer(title: string, programs: string): Promise<Player> {
+	return invoke<Player>('choose_player', { title, programs });
 }

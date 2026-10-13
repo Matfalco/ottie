@@ -1,6 +1,6 @@
 //! Reading a download while it arrives ("play while downloading"): a
-//! [`Reader`] hands out the bytes at any offset, waiting until they're on
-//! disk. See docs/decisions/0029.
+//! [`Reader`] hands out the bytes at any offset, waiting until they're in
+//! the file. See docs/decisions/0029.
 
 use std::io::{self, SeekFrom};
 use std::path::PathBuf;
@@ -16,6 +16,7 @@ use crate::filename;
 use crate::id::JobId;
 use crate::job::{JobEvent, JobSnapshot, JobState};
 use crate::manager::Manager;
+use crate::playback::Head;
 
 /// Bytes flushed by a multi-connection download aren't announced, so a
 /// waiting reader looks again at least this often.
@@ -29,13 +30,16 @@ pub struct Opened {
     pub total: Option<u64>,
 }
 
-/// Reads one download's file, complete or not. Only bytes already flushed
-/// to disk are handed out: up to the `.part.ottie` length with one
-/// connection, the flushed ranges with several, the whole file once complete.
+/// Reads one download's file, complete or not. Only bytes already in the
+/// file are handed out: up to the `.part.ottie` length with one connection,
+/// the ranges written with several (as the running download shows them
+/// while someone reads, else as saved), the whole file once complete.
 pub struct Reader {
     manager: Manager,
     id: JobId,
     events: broadcast::Receiver<JobEvent>,
+    /// Where it reads, so a running download goes there first.
+    head: Head,
     /// The file being read and where it was when opened. Reopened when the
     /// job's file moves or is renamed on completion.
     file: Option<(PathBuf, File)>,
@@ -50,6 +54,7 @@ impl Reader {
             manager: manager.clone(),
             id,
             events: manager.subscribe(),
+            head: manager.head(id),
             file: None,
         };
         loop {
@@ -73,6 +78,7 @@ impl Reader {
     /// cancelled before they arrive, or starts over (its file changed).
     pub async fn read(&mut self, offset: u64, max: usize) -> Result<Vec<u8>, Error> {
         self.check_events()?;
+        self.head.set(offset);
         loop {
             let job = self.manager.job(self.id).await?;
             let complete = job.state == JobState::Completed;
@@ -81,9 +87,12 @@ impl Reader {
             }
             if let Some(path) = file_path(&job) {
                 // With several connections the file has its full size from
-                // the start, so only the flushed ranges count.
-                let until = (!complete && !job.segments.is_empty())
-                    .then(|| readable_until(&job.segments, offset));
+                // the start, so only the ranges written count: as the
+                // running download shows them, else as last saved.
+                let shown = if complete { None } else { self.head.written() };
+                let segments = shown.as_deref().unwrap_or(&job.segments);
+                let until =
+                    (!complete && !segments.is_empty()).then(|| readable_until(segments, offset));
                 let max = until.map_or(max, |until| {
                     usize::try_from(until - offset).map_or(max, |left| left.min(max))
                 });
@@ -180,7 +189,7 @@ fn file_path(job: &JobSnapshot) -> Option<PathBuf> {
     }
 }
 
-/// How far the bytes from `offset` are on disk without a gap: `offset`
+/// How far the bytes from `offset` are in the file without a gap: `offset`
 /// itself if it isn't. `segments` are sorted and cover the file.
 fn readable_until(segments: &[Segment], offset: u64) -> u64 {
     let mut reach = offset;

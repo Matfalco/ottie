@@ -48,7 +48,7 @@ desktop app (Tauri) ──────┼──► crates/api (REST + WebSocket)
 Android app (Tauri) ──────┘    (on Android, core + api run inside the app)
 ```
 
-- **The HTTP API is the only contract.** Every client talks to the engine through it. It's documented in `docs/api/` (`docs/decisions/0030`): a guide, and `openapi.json` generated from the handlers. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart), never for download operations.
+- **The HTTP API is the only contract.** Every client talks to the engine through it. It's documented in `docs/api/` (`docs/decisions/0030`): a guide, and `openapi.json` generated from the handlers. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart, the player), never for download operations. The app's own commands are listed in `app/build.rs` and granted to the daemon's pages in `PAGE_PERMISSIONS`; a page never passes a program or path to run.
 - **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
 - **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
@@ -74,6 +74,7 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/download.rs    Download state (what gets persisted), Placement, Event, Outcome
   src/problem.rs     Problem: why a job failed, as a kind + details (English via Display)
   src/stream.rs      Reader: a job's bytes at any offset, waiting until they're on disk (play links)
+  src/playback.rs    where players read each job (Playback, one head per reader), for segmented.rs
   src/filename.rs    names from URL / Content-Disposition, sanitizing, collision-free names, .part.ottie → final rename,
                      relocate (a job's file into another folder; copy + delete between drives)
   tests/support/     in-process axum test server with fault injection
@@ -110,6 +111,9 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
   src/main.rs        frameless window on the daemon's page (it draws its own title bar, 0019),
                      single instance, stops the daemon it started on exit
   src/daemon.rs      find or start `ottie serve --managed` (the sidecar next to the app), ready / stop
+  src/player.rs      "Play with" (0031): system's player via a .m3u, browser, or a picked program;
+                     saved in the app's config folder; commands player / set_play_with / choose_player
+  build.rs           lists the app's commands, so Tauri generates their permissions (allow-…)
   tauri.conf.json    product, identifier, icons; tauri.bundle.json adds the sidecar for installers only
   scripts/          sidecar.mjs (UI + release ottie → binaries/), ico.mjs (icons/icon.ico from res/icons)
   package.json       pnpm package `app`: the Tauri CLI
@@ -128,11 +132,13 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      views.ts (saved views ↔ filters + arrangement, which pill is lit), format.ts, token.ts, adding.ts (the add step), setup.ts (starter categories),
                      theme.ts (light/dark/system + palette → theme, saved per device),
                      settings.ts (settings fields: kB/MB/GB per second, seconds, ranges; last limit
-                     per device), sync.ts (following the shared look + language)
+                     per device), sync.ts (following the shared look + language),
+                     playlist.ts (a play link as a .m3u, saved through the browser, 0031)
                      plain logic, unit-tested (*.test.ts, Vitest)
   src/lib/appearance.svelte.ts  the appearance chosen on this device (state shared by layout, shell
                      (follows the shared one, docs/decisions/0022) and Settings)
-  src/lib/window.ts  the desktop app: its window (minimize/maximize/close) and the folder picker
+  src/lib/window.ts  the desktop app: its window (minimize/maximize/close), the folder picker,
+                     and how Play opens a player (the app's commands, 0031)
   src/lib/explain.ts   daemon codes (Problem, Reason) → the page's language; English fallback
   src/lib/testing.ts   test helpers (sample job)
   src/lib/components/  Shell (TitleBar with NavMenu tabs + SpeedChip (limit popup: LimitControl), page,
@@ -144,7 +150,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        JobDetails under it for the one selected download (its bar maps the file)),
                        CategoriesPage (LinkTester, rows, CategoryEditor inline in place of a row),
                        SettingsPage (section list; appearance + sync, language: LanguagePicker; downloads;
-                       retries; connection + sign-in link), Switch, NumberField, LimitControl,
+                       playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
                        TitleBar (+ WindowControls), AddCard (AddBar: link, then category + folder step),
                        FileIcon, ConfirmDialog, Login
   messages/{en,fr}.json  every UI text, per language (Paraglide); project.inlang/ its settings
@@ -202,7 +208,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Pause/cancel of a running job** answers only once the task has really stopped and flushed. If the job completes first, it stays Completed. Cancel deletes the `.part.ottie`. Remove (`docs/decisions/0018`) works in any state: cancel unless completed, then forget the job (a completed file stays); the highest ID handed out is saved so a removed job's ID never comes back. Shutdown stops every running job, waits for them and flushes the database. Lowering `max_concurrent` never stops running jobs.
 - **Job IDs:** see `docs/decisions/0006`. IDs only ever increase; `BTreeMap<JobId, _>` order = creation order = queue order.
 - **Probe with the first request:** it asks for `bytes=0-`; a `206` proves ranges work, and that response becomes the first range. Split only with a 206, a validator, no `Accept-Ranges: none` and at least 2 × `min_split` bytes (`docs/decisions/0009`); otherwise one connection.
-- **Multi-connection** (`segmented.rs`): the coordinator owns the ranges; connections share `end`/`pos`/`durable` atomics with it. Full-size `.part.ottie` up front. Extra requests are closed ranges with `If-Range`. A changed file restarts the run from zero at most once. Idle connections take an unfinished range, else half of the busy range with the most left. Known cost: a connection whose range ends (or is split) discards what it had buffered past the end, up to ~400 KiB (hyper's read buffer fills while throttled). That's <1% on large files but ~20% on a 2 MiB one; it counts against speed limits. Possible fix later: re-request the first range closed once the size is known.
+- **Multi-connection** (`segmented.rs`): the coordinator owns the ranges; connections share `end`/`pos`/`durable` atomics with it. Full-size `.part.ottie` up front. Extra requests are closed ranges with `If-Range`. A changed file restarts the run from zero at most once. Idle connections take an unfinished range, else half of the busy range with the most left. Known cost: a connection whose range ends (or is split) discards what it had buffered past the end, up to ~400 KiB (hyper's read buffer fills while throttled). That's <1% on large files but ~20% on a 2 MiB one; it counts against speed limits. Possible fix later: re-request the first range closed once the size is known. While players read (`Playback`, `docs/decisions/0029`), every 200 ms each point they need next (from each head, and the last 1 MiB) gets its own range unless a connection is within `min_split` of it; a free connection takes it first, else the busy one serving no player with the most left stops where it is. Connections then also hand their bytes to the system every 200 ms (no `sync_data`: a disk sync can take seconds on Windows) and readers see those ranges through `Playback`; only synced ranges are saved.
 - **Resume safely:** `Range` + `If-Range` with a strong ETag (weak `W/` ETags are invalid in `If-Range`), else `Last-Modified`. No validator, a 200 instead of 206, or a `Content-Range` that doesn't match → restart from zero and emit `Event::Restarted(reason)`. Never splice bytes from two versions of a file.
 - **Single connection: the `.part.ottie` length is the truth** for the resume offset (multi-connection: the flushed ranges are). Bytes in flight when a connection dies are lost, so flush on every exit path (pause, error, completion) to keep `downloaded` equal to the file length.
 - **Resume re-requests the original URL,** not the redirect target: signed CDN links expire, and `If-Range` still guards consistency.
@@ -292,7 +298,7 @@ Done: ✅ and struck through.
    - ✅ ~~5e saved views (stored in the daemon, `docs/decisions/0026`), the detail bar as file map (`0027`), files move with their category (`0028`)~~
    - 5f play while downloading (`docs/decisions/0029`):
      - ✅ ~~5f1 play links + reader~~
-     - 5f2 follow the player (seek, last chunk early)
+     - ✅ ~~5f2 follow the player (seek, last chunk early)~~
      - 5f3 streaming mode per download
    - 5g queue reorder
    - 5h tray

@@ -2,11 +2,14 @@
 //! of ranges; each connection is its own task writing at its offset. When a
 //! connection finishes, it picks up an unfinished range or takes over the
 //! second half of the range with the most left. See docs/decisions/0009.
+//!
+//! While players read the file (docs/decisions/0029), connections go where
+//! they read, and to the end of the file, before anything else.
 
 use std::io::{self, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
 use std::time::{Duration, Instant};
 
 use reqwest::{Client, Response, StatusCode, Url};
@@ -26,6 +29,13 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(200);
 /// How often each connection flushes to disk, and so how often the saved
 /// progress (`Event::Checkpoint`) can move forward.
 const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
+/// While a player reads, connections also hand their bytes to the system
+/// this often, so the player can read them. Only that: syncing them to disk
+/// as often would make the player wait for the disk (seconds on Windows).
+const SHOW_INTERVAL: Duration = Duration::from_millis(200);
+/// While a player reads, this much of the end of the file comes early: many
+/// videos (MP4s especially) keep their index there.
+const TAIL: u64 = 1024 * 1024;
 
 pub(crate) enum Segmented {
     Finished,
@@ -65,12 +75,17 @@ struct Shared {
     pos: AtomicU64,
     /// Everything before this offset is flushed to disk.
     durable: AtomicU64,
+    /// Everything before this offset is in the file, if not yet on disk:
+    /// players can read it. Never behind `durable`.
+    shown: AtomicU64,
 }
 
 struct Part {
     start: u64,
     shared: Arc<Shared>,
     busy: bool,
+    /// Its connection was told to stop where it is, to go where a player reads.
+    stopping: bool,
 }
 
 impl Part {
@@ -82,8 +97,10 @@ impl Part {
                 end: AtomicU64::new(segment.end),
                 pos: AtomicU64::new(reached),
                 durable: AtomicU64::new(reached),
+                shown: AtomicU64::new(reached),
             }),
             busy: false,
+            stopping: false,
         }
     }
 
@@ -100,6 +117,13 @@ impl Part {
         self.end() - self.pos()
     }
 
+    /// Whether its next bytes lead to one of the `points` players need.
+    fn leads_to(&self, points: &[u64]) -> bool {
+        points
+            .iter()
+            .any(|&point| self.pos() <= point && point < self.end())
+    }
+
     /// What has arrived, flushed or not: for showing progress, never for saving.
     fn received(&self) -> Segment {
         Segment {
@@ -110,12 +134,21 @@ impl Part {
     }
 
     fn segment(&self) -> Segment {
+        self.up_to(&self.shared.durable)
+    }
+
+    /// What players can read: in the file, maybe not yet on disk.
+    fn shown(&self) -> Segment {
+        self.up_to(&self.shared.shown)
+    }
+
+    fn up_to(&self, reached: &AtomicU64) -> Segment {
         let end = self.end();
-        let durable = self.shared.durable.load(SeqCst).min(end);
+        let reached = reached.load(SeqCst).min(end);
         Segment {
             start: self.start,
             end,
-            done: durable - self.start,
+            done: reached - self.start,
         }
     }
 }
@@ -129,6 +162,8 @@ struct Context {
     path: PathBuf,
     total: u64,
     throttle: Throttle,
+    /// Someone is reading the file: hand bytes to the system more often.
+    reading: AtomicBool,
 }
 
 enum Ended {
@@ -160,8 +195,10 @@ pub(crate) async fn run(
         path: path.to_owned(),
         total,
         throttle: env.throttle.clone(),
+        reading: AtomicBool::new(false),
     });
     let mut parts: Vec<Part> = dl.segments.iter().copied().map(Part::new).collect();
+    tracing::debug!(ranges = parts.len(), total, "several connections");
     // Stops every connection, either because the user paused or because
     // one connection hit a problem that ends the whole run.
     let stop = cancel.child_token();
@@ -169,7 +206,11 @@ pub(crate) async fn run(
     let mut first = first;
     let mut failure: Option<Error> = None;
     let mut restart: Option<RestartReason> = None;
-    fill(&mut parts, &mut tasks, &context, &stop, &mut first, config);
+    // Where players need bytes next, most urgent first (empty if nobody reads).
+    let mut wanted: Vec<u64> = Vec::new();
+    fill(
+        &mut parts, &mut tasks, &context, &stop, &mut first, config, &wanted,
+    );
 
     let mut ticker = tokio::time::interval(PROGRESS_INTERVAL);
     let mut last_progress = written(&parts);
@@ -184,9 +225,10 @@ pub(crate) async fn run(
                     continue;
                 };
                 parts[index].busy = false;
+                parts[index].stopping = false;
                 match result {
                     Ok(Ended::Done) if !stop.is_cancelled() => {
-                        fill(&mut parts, &mut tasks, &context, &stop, &mut first, config);
+                        fill(&mut parts, &mut tasks, &context, &stop, &mut first, config, &wanted);
                     }
                     Ok(Ended::Done | Ended::Cancelled) => {}
                     Ok(Ended::Changed(reason)) => {
@@ -200,6 +242,15 @@ pub(crate) async fn run(
                 }
             }
             _ = ticker.tick() => {
+                let heads = env.playback.offsets();
+                context.reading.store(!heads.is_empty(), SeqCst);
+                wanted = needed(&parts, &heads, total);
+                if !wanted.is_empty() && !stop.is_cancelled() {
+                    follow(&mut parts, &wanted, config.min_split);
+                    fill(&mut parts, &mut tasks, &context, &stop, &mut first, config, &wanted);
+                    make_room(&mut parts, &wanted, config.min_split);
+                }
+                env.playback.show_written((!heads.is_empty()).then(|| shown(&parts)));
                 let now = written(&parts);
                 if now != last_progress {
                     last_progress = now;
@@ -220,7 +271,9 @@ pub(crate) async fn run(
         }
     }
 
-    // Every connection has stopped and flushed: record exactly what's on disk.
+    // Every connection has stopped and flushed: record exactly what's on
+    // disk. Readers go by that from now on.
+    env.playback.show_written(None);
     dl.segments = segments(&parts);
     dl.downloaded = dl.segments.iter().map(|s| s.done).sum();
     on_event(Event::Checkpoint {
@@ -246,7 +299,8 @@ pub(crate) async fn run(
 type Task = (usize, Result<Ended, Error>);
 
 /// Starts connections until `config.connections` are busy: first on ranges
-/// nobody is working on, then by splitting the busy range with the most left.
+/// that lead to a point players need (`wanted`), then on ranges nobody is
+/// working on, then by splitting the busy range with the most left.
 fn fill(
     parts: &mut Vec<Part>,
     tasks: &mut JoinSet<Task>,
@@ -254,10 +308,15 @@ fn fill(
     stop: &CancellationToken,
     first: &mut Option<Response>,
     config: &HttpConfig,
+    wanted: &[u64],
 ) {
     while parts.iter().filter(|p| p.busy).count() < config.connections.max(1) {
-        let idle = parts.iter().position(|p| !p.busy && p.left() > 0);
-        let Some(index) = idle.or_else(|| split(parts, config.min_split)) else {
+        let idle = |p: &Part| !p.busy && p.left() > 0;
+        let next = parts
+            .iter()
+            .position(|p| idle(p) && p.leads_to(wanted))
+            .or_else(|| parts.iter().position(idle));
+        let Some(index) = next.or_else(|| split(parts, config.min_split)) else {
             return;
         };
         let part = &mut parts[index];
@@ -297,6 +356,97 @@ fn split(parts: &mut Vec<Part>, min_split: u64) -> Option<usize> {
     Some(parts.len() - 1)
 }
 
+/// Where players need bytes next: from each of their `heads`, the first
+/// byte that hasn't arrived; then the same from the start of the file's last
+/// `TAIL` bytes. Most urgent first (heads come newest first), no duplicates.
+/// Empty when nobody reads.
+fn needed(parts: &[Part], heads: &[u64], total: u64) -> Vec<u64> {
+    let mut points = Vec::new();
+    if heads.is_empty() {
+        return points;
+    }
+    let tail = total.saturating_sub(TAIL);
+    for from in heads.iter().copied().chain([tail]) {
+        if let Some(point) = missing_from(parts, from)
+            && !points.contains(&point)
+        {
+            points.push(point);
+        }
+    }
+    points
+}
+
+/// The first byte from `offset` on that hasn't arrived; `None` if they all have.
+fn missing_from(parts: &[Part], offset: u64) -> Option<u64> {
+    let mut reach = offset;
+    loop {
+        let part = parts.iter().find(|p| p.start <= reach && reach < p.end())?;
+        if part.pos() < part.end() {
+            return Some(reach.max(part.pos()));
+        }
+        reach = part.end();
+    }
+}
+
+/// Splits ranges so each point players need starts one, unless the range's
+/// connection (or its start, if idle) is less than `lead` bytes before it:
+/// then it gets there soon enough.
+fn follow(parts: &mut Vec<Part>, wanted: &[u64], lead: u64) {
+    for &point in wanted {
+        let Some(part) = parts.iter().find(|p| p.start <= point && point < p.end()) else {
+            continue;
+        };
+        if point.saturating_sub(part.pos()) < lead {
+            continue;
+        }
+        tracing::debug!(
+            point,
+            busy = part.busy,
+            "a player needs bytes here: a range starts"
+        );
+        let old_end = part.end();
+        part.shared.end.store(point, SeqCst);
+        parts.push(Part::new(Segment {
+            start: point,
+            end: old_end,
+            done: 0,
+        }));
+    }
+}
+
+/// For each point players need that still waits for a connection, stops the
+/// busy connection that leads to no such point and has the most left, where
+/// it is now: it ends at its next chunk, and `fill` then sends it to the
+/// point. The rest of its range becomes a range of its own, for later.
+fn make_room(parts: &mut Vec<Part>, wanted: &[u64], lead: u64) {
+    let waiting = parts
+        .iter()
+        .filter(|p| !p.busy && p.left() > 0 && p.leads_to(wanted))
+        .count();
+    let stopping = parts.iter().filter(|p| p.busy && p.stopping).count();
+    for _ in stopping..waiting {
+        let index = parts
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.busy && !p.stopping && !p.leads_to(wanted) && p.left() >= lead)
+            .max_by_key(|(_, p)| p.left())
+            .map(|(index, _)| index);
+        let Some(index) = index else {
+            return;
+        };
+        let part = &mut parts[index];
+        let (pos, old_end) = (part.pos(), part.end());
+        tracing::debug!(at = pos, "a connection stops to make room for a player");
+        part.shared.end.store(pos, SeqCst);
+        part.stopping = true;
+        parts.push(Part::new(Segment {
+            start: pos,
+            end: old_end,
+            done: 0,
+        }));
+    }
+}
+
 /// One connection: request its range (unless given an open response), then
 /// write until it reaches its `end`, which may move down while it runs.
 /// If a split lands just behind it, it may write a few bytes past the new
@@ -311,16 +461,23 @@ async fn connection(
     let mut pos = shared.pos.load(SeqCst);
     let mut response = match response {
         Some(response) => response,
-        None => match request(context, pos, shared.end.load(SeqCst), stop).await? {
-            Ok(response) => response,
-            Err(ended) => return Ok(ended),
-        },
+        None => {
+            let asked = Instant::now();
+            let answer = request(context, pos, shared.end.load(SeqCst), stop).await?;
+            let waited = asked.elapsed();
+            tracing::debug!(from = pos, ?waited, "the server answered a range request");
+            match answer {
+                Ok(response) => response,
+                Err(ended) => return Ok(ended),
+            }
+        }
     };
 
     let mut file = OpenOptions::new().write(true).open(&context.path).await?;
     file.seek(SeekFrom::Start(pos)).await?;
     let mut writer = BufWriter::new(file);
     let mut last_flush = Instant::now();
+    let mut last_shown = last_flush;
 
     let result = async {
         loop {
@@ -350,7 +507,13 @@ async fn connection(
             if last_flush.elapsed() >= FLUSH_INTERVAL {
                 flush(&mut writer).await?;
                 shared.durable.store(pos, SeqCst);
-                last_flush = Instant::now();
+                shared.shown.store(pos, SeqCst);
+                (last_flush, last_shown) = (Instant::now(), Instant::now());
+            } else if context.reading.load(SeqCst) && last_shown.elapsed() >= SHOW_INTERVAL {
+                // To the system, which players read from; not to the disk.
+                writer.flush().await?;
+                shared.shown.store(pos, SeqCst);
+                last_shown = Instant::now();
             }
             // Every connection spends from the same job budget.
             tokio::select! {
@@ -364,7 +527,10 @@ async fn connection(
 
     // Whatever happened, flush so `durable` covers everything written.
     match flush(&mut writer).await {
-        Ok(()) => shared.durable.store(pos, SeqCst),
+        Ok(()) => {
+            shared.durable.store(pos, SeqCst);
+            shared.shown.store(pos, SeqCst);
+        }
         Err(err) if result.is_ok() => return Err(err.into()),
         Err(_) => {} // Report the first problem, not this one.
     }
@@ -416,7 +582,15 @@ fn written(parts: &[Part]) -> u64 {
 
 /// The ranges as flushed to disk, sorted, ready to save.
 fn segments(parts: &[Part]) -> Vec<Segment> {
-    let mut segments: Vec<Segment> = parts.iter().map(Part::segment).collect();
+    sorted(parts.iter().map(Part::segment).collect())
+}
+
+/// The ranges as players can read them, sorted.
+fn shown(parts: &[Part]) -> Vec<Segment> {
+    sorted(parts.iter().map(Part::shown).collect())
+}
+
+fn sorted(mut segments: Vec<Segment>) -> Vec<Segment> {
     segments.sort_by_key(|s| s.start);
     segments
 }
@@ -469,6 +643,79 @@ mod tests {
         parts[1].shared.pos.store(750, SeqCst);
         parts[new].shared.pos.store(900, SeqCst);
         assert!(split(&mut parts, 100).is_none());
+    }
+
+    /// Two busy ranges of 1000 bytes, written up to the given offsets.
+    fn two_busy(first_pos: u64, second_pos: u64) -> Vec<Part> {
+        let parts: Vec<Part> = plan(2000, &config(2, 100))
+            .into_iter()
+            .map(Part::new)
+            .collect();
+        for (part, pos) in parts.iter().zip([first_pos, second_pos]) {
+            part.shared.pos.store(pos, SeqCst);
+        }
+        parts
+            .into_iter()
+            .map(|p| Part { busy: true, ..p })
+            .collect()
+    }
+
+    fn ranges(parts: &[Part]) -> Vec<(u64, u64)> {
+        let mut ranges: Vec<_> = parts.iter().map(|p| (p.start, p.end())).collect();
+        ranges.sort_unstable();
+        ranges
+    }
+
+    #[test]
+    fn players_need_the_first_byte_that_has_not_arrived() {
+        let parts = two_busy(1000, 1200); // the first range is complete
+        assert_eq!(missing_from(&parts, 0), Some(1200));
+        assert_eq!(missing_from(&parts, 1100), Some(1200));
+        assert_eq!(missing_from(&parts, 1500), Some(1500));
+        assert_eq!(missing_from(&parts, 2000), None);
+
+        // Newest head first, then the tail (the whole file here, as it's small).
+        assert_eq!(needed(&parts, &[1500, 300], 2000), [1500, 1200]);
+        assert!(needed(&parts, &[], 2000).is_empty(), "nobody reads");
+    }
+
+    #[test]
+    fn a_player_far_ahead_of_a_connection_gets_a_range_of_its_own() {
+        let mut parts = two_busy(100, 1100);
+        follow(&mut parts, &[1150, 600], 100);
+        // 1150 is close behind the second connection; 600 isn't.
+        assert_eq!(ranges(&parts), [(0, 600), (600, 1000), (1000, 2000)]);
+    }
+
+    #[test]
+    fn a_connection_that_serves_no_player_makes_room() {
+        let mut parts = two_busy(100, 1100);
+        follow(&mut parts, &[600], 100);
+        make_room(&mut parts, &[600], 100);
+        // The second connection, with the most left, stops where it is.
+        assert!(parts[1].stopping);
+        assert_eq!(parts[1].end(), 1100);
+        assert_eq!(
+            ranges(&parts),
+            [(0, 600), (600, 1000), (1000, 1100), (1100, 2000)]
+        );
+
+        // Asked once is enough while it stops.
+        make_room(&mut parts, &[600], 100);
+        assert_eq!(parts.len(), 4);
+        assert!(!parts[0].stopping);
+    }
+
+    #[test]
+    fn a_connection_that_serves_a_player_keeps_going() {
+        let mut parts = two_busy(100, 1100);
+        let wanted = [150, 1150, 1600];
+        follow(&mut parts, &wanted, 100);
+        make_room(&mut parts, &wanted, 100);
+        // Each serves a player (at 150 and 1150). 1600 is too far ahead, so
+        // it gets a range, but nobody is free to take it.
+        assert!(!parts[0].stopping && !parts[1].stopping);
+        assert_eq!(ranges(&parts), [(0, 1000), (1000, 1600), (1600, 2000)]);
     }
 
     #[test]

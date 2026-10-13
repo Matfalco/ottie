@@ -6,6 +6,7 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import Copy from '@lucide/svelte/icons/copy';
+	import ListVideo from '@lucide/svelte/icons/list-video';
 	import Play from '@lucide/svelte/icons/play';
 	import type { Action } from '#lib/bulk.js';
 	import { categoryName } from '#lib/categories.js';
@@ -15,7 +16,9 @@
 	import { statusName, statusOf } from '#lib/filters.js';
 	import { displayName, formatPercent } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { savePlaylist } from '#lib/playlist.js';
 	import { amount, fraction } from '#lib/status.js';
+	import { canChoosePlayer } from '#lib/window.js';
 	import LimitControl from './LimitControl.svelte';
 
 	interface Props {
@@ -73,6 +76,8 @@
 	let id = $derived(job.id);
 	let playable = $derived(isPlayable(job));
 	let link: string | null = $state(null);
+	/** In the desktop app, Play opens the player chosen in Settings. */
+	const inApp = canChoosePlayer();
 	let copied = $state(false);
 	/** The clipboard refused: the link is shown to copy by hand. */
 	let showLink = $state(false);
@@ -130,11 +135,25 @@
 			{/if}
 			{#if link}
 				<!-- A real link: the browser plays it in a new tab (the desktop
-				     app hands it to the system's browser). -->
-				<a class="button" href={link} target="_blank" rel="noopener" title={m.det_play_hint()}>
+				     app hands it to the player chosen in Settings). -->
+				<a
+					class="button"
+					href={link}
+					target="_blank"
+					rel="noopener"
+					title={inApp ? m.det_play_hint_app() : m.det_play_hint()}
+				>
 					<Play size={13} aria-hidden="true" />
 					{m.det_play()}
 				</a>
+				{#if !inApp}
+					<!-- A web page can't start a player: it saves a playlist
+					     that the system opens with one. -->
+					<button title={m.det_open_player_hint()} onclick={() => link && savePlaylist(name, link)}>
+						<ListVideo size={13} aria-hidden="true" />
+						{m.det_open_player()}
+					</button>
+				{/if}
 				<button title={m.det_copy_link_hint()} onclick={() => link && copy(link)}>
 					<Copy size={13} aria-hidden="true" />
 					{copied ? m.det_link_copied() : m.det_copy_link()}
