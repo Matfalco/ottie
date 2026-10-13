@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { job } from './testing';
-import { applyEvent, currentSpeed, newestFirst, nextRate, type Jobs } from './jobs';
+import { addedAt, applyEvent, currentSpeed, newestFirst, nextRate, type Jobs } from './jobs';
 
 describe('applyEvent', () => {
 	it('upserts changed jobs and updates progress', () => {
@@ -35,6 +35,13 @@ describe('newestFirst', () => {
 			'2026.10.12-14.03.07-9',
 			'2026.10.11-23.59.59-1'
 		]);
+	});
+});
+
+describe('addedAt', () => {
+	it('reads the UTC creation time from the ID', () => {
+		expect(addedAt('2026.10.12-14.03.07-2')?.toISOString()).toBe('2026-10-12T14:03:07.000Z');
+		expect(addedAt('not an id')).toBe(null);
 	});
 });
 

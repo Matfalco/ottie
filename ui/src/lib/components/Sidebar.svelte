@@ -1,5 +1,10 @@
 <script lang="ts">
-	import icon from '#lib/assets/ottie.svg';
+	import type { Component } from 'svelte';
+	import ArrowDownToLine from '@lucide/svelte/icons/arrow-down-to-line';
+	import CircleCheck from '@lucide/svelte/icons/circle-check';
+	import CirclePause from '@lucide/svelte/icons/circle-pause';
+	import Clock from '@lucide/svelte/icons/clock';
+	import List from '@lucide/svelte/icons/list';
 	import { FILTERS, filterName, type Filter } from '#lib/filters.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -14,22 +19,27 @@
 	}
 
 	let { filter, counts, connection, onSelect }: Props = $props();
+
+	const ICONS: Record<Filter, Component> = {
+		all: List,
+		active: ArrowDownToLine,
+		queued: Clock,
+		stopped: CirclePause,
+		completed: CircleCheck
+	};
 </script>
 
 <aside>
-	<div class="brand">
-		<img src={icon} alt="" width="32" height="32" />
-		<h1>Ottie</h1>
-	</div>
-
 	<nav aria-label={m.filters_label()}>
 		{#each FILTERS as each (each)}
+			{@const Icon = ICONS[each]}
 			<button
 				class:current={each === filter}
 				aria-current={each === filter ? 'true' : undefined}
 				onclick={() => onSelect(each)}
 			>
-				<span>{filterName(each)}</span>
+				<Icon size={16} aria-hidden="true" />
+				<span class="name">{filterName(each)}</span>
 				<span class="count">{formatCount(counts[each])}</span>
 			</button>
 		{/each}
@@ -51,60 +61,55 @@
 
 <style>
 	aside {
-		/* Stays in view while the list scrolls. */
-		position: sticky;
-		top: 0;
-		height: 100vh;
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
-		padding: 1rem 0.75rem;
-		background: var(--surface);
+		gap: 1rem;
+		min-height: 0;
+		padding: 0.75rem 0.6rem;
+		background: var(--chrome);
 		border-right: 1px solid var(--border);
-	}
-
-	.brand {
-		display: flex;
-		align-items: center;
-		gap: 0.55rem;
-		padding: 0 0.5rem;
-	}
-
-	.brand img {
-		border-radius: 8px;
-	}
-
-	h1 {
-		margin: 0;
-		font-size: 1.25rem;
 	}
 
 	nav {
 		display: grid;
-		gap: 0.15rem;
+		gap: 0.1rem;
 	}
 
 	nav button {
 		display: flex;
-		justify-content: space-between;
-		gap: 0.75rem;
+		align-items: center;
+		gap: 0.6rem;
+		height: 2.1rem;
+		padding: 0 0.6rem;
 		border-color: transparent;
 		background: none;
+		color: var(--muted);
 		text-align: left;
 	}
 
 	nav button:hover {
 		border-color: transparent;
-		background: var(--track);
+		background: var(--hover);
+		color: var(--text);
 	}
 
 	nav button.current {
 		background: var(--selected);
-		color: var(--accent);
+		color: var(--text);
 		font-weight: 600;
 	}
 
+	nav button.current :global(svg) {
+		color: var(--accent);
+	}
+
+	.name {
+		flex: 1;
+	}
+
 	.count {
+		font-size: 0.85em;
+		font-weight: 400;
 		color: var(--muted);
 		font-variant-numeric: tabular-nums;
 	}
@@ -113,7 +118,7 @@
 		display: grid;
 		gap: 0.6rem;
 		margin-top: auto;
-		padding: 0 0.5rem;
+		padding: 0 0.4rem;
 	}
 
 	.connection {
@@ -134,31 +139,23 @@
 		color: var(--danger);
 	}
 
-	/* Phones: a bar on top, the views in a row that scrolls sideways. */
+	/* Narrow: the views in a row that scrolls sideways, under the title bar. */
 	@media (max-width: 40rem) {
 		aside {
-			position: static;
-			height: auto;
 			display: grid;
 			/* minmax(0, …): the row of views scrolls instead of widening the page. */
-			grid-template-columns: auto minmax(0, 1fr);
-			grid-template-areas: 'brand foot' 'nav nav';
-			gap: 0.6rem 1rem;
-			padding: 0.6rem 1rem;
+			grid-template-columns: minmax(0, 1fr) auto;
+			align-items: center;
+			gap: 0.5rem;
+			padding: 0.4rem 0.75rem;
 			border-right: none;
 			border-bottom: 1px solid var(--border);
 		}
 
-		.brand {
-			grid-area: brand;
-			padding: 0;
-		}
-
 		nav {
-			grid-area: nav;
 			display: flex;
 			overflow-x: auto;
-			scrollbar-width: thin;
+			scrollbar-width: none;
 		}
 
 		nav button {
@@ -166,12 +163,14 @@
 		}
 
 		.foot {
-			grid-area: foot;
 			display: flex;
-			align-items: center;
-			justify-content: flex-end;
 			margin-top: 0;
 			padding: 0;
+		}
+
+		/* Room is short: say something only when it isn't connected. */
+		.connection.live {
+			display: none;
 		}
 	}
 </style>

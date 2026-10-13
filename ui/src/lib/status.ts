@@ -63,6 +63,38 @@ export function describe(
 	}
 }
 
+/** What the Speed and Time left columns show: numbers while the job is
+ * downloading, otherwise one text across both (why it waits or failed…). */
+export type Motion = { speed: string; left: string } | { status: string };
+
+export function motion(
+	job: Job,
+	bytesPerSec: number,
+	now: number,
+	locale: Locale = getLocale()
+): Motion {
+	const options = { locale };
+	switch (job.state) {
+		case 'downloading': {
+			if (bytesPerSec <= 0) {
+				return { speed: '—', left: '—' };
+			}
+			const left =
+				job.total === null
+					? '—'
+					: formatDuration((job.total - job.downloaded) / bytesPerSec, locale);
+			return { speed: formatSpeed(bytesPerSec, locale), left };
+		}
+		case 'paused':
+			return { status: m.status_paused({}, options) };
+		case 'completed':
+			return { status: m.status_done({}, options) };
+		default:
+			// The same words as the full description.
+			return { status: describe(job, bytesPerSec, now, locale) };
+	}
+}
+
 /** "a · b", skipping empty parts. */
 function join(parts: string[]): string {
 	return parts.filter(Boolean).join(' · ');

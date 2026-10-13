@@ -3,6 +3,7 @@
 
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
 import { Api, ApiFailure, Unauthorized } from './api';
+import type { Action } from './bulk';
 import { explainRefusal } from './explain';
 import { m } from './paraglide/messages.js';
 import { applyEvent, newestFirst, nextRate, type Jobs, type Rate } from './jobs';
@@ -53,25 +54,15 @@ export class Session {
 		return this.attempt(() => this.api.addJob({ url, destDir }));
 	}
 
-	pause(id: string): Promise<boolean> {
-		return this.attempt(() => this.api.pause(id));
-	}
-
-	resume(id: string): Promise<boolean> {
-		return this.attempt(() => this.api.resume(id));
-	}
-
-	cancel(id: string): Promise<boolean> {
-		return this.attempt(() => this.api.cancel(id));
-	}
-
-	remove(id: string): Promise<boolean> {
-		return this.attempt(() => this.api.remove(id));
-	}
-
-	/** Removes them all at once; any failure shows on the page. */
-	async removeAll(ids: string[]): Promise<void> {
-		await Promise.all(ids.map((id) => this.remove(id)));
+	/** Does it to every job in `ids` at once; any failure shows on the page. */
+	async run(action: Action, ids: string[]): Promise<void> {
+		const request = {
+			resume: (id: string) => this.api.resume(id),
+			pause: (id: string) => this.api.pause(id),
+			cancel: (id: string) => this.api.cancel(id),
+			remove: (id: string) => this.api.remove(id)
+		}[action];
+		await Promise.all(ids.map((id) => this.attempt(() => request(id))));
 	}
 
 	/** Runs a request; on failure shows why and returns false. */

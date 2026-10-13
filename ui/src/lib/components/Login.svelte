@@ -3,6 +3,7 @@
 	import { Api, Unauthorized } from '#lib/api.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import LanguagePicker from './LanguagePicker.svelte';
+	import TitleBar from './TitleBar.svelte';
 
 	interface Props {
 		onSignIn: (token: string) => void;
@@ -29,6 +30,8 @@
 		}
 	}
 </script>
+
+<TitleBar />
 
 <main>
 	<img src={icon} alt="" width="72" height="72" />

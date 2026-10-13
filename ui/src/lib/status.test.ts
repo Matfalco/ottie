@@ -6,6 +6,7 @@ import {
 	describe,
 	fraction,
 	isFinished,
+	motion,
 	removeLosesData
 } from './status';
 import { job, plain } from './testing';
@@ -81,5 +82,17 @@ group('removing', () => {
 	it('counts completed and cancelled jobs as finished', () => {
 		expect(isFinished(job({ state: 'cancelled' }))).toBe(true);
 		expect(isFinished(job({ state: 'failed' }))).toBe(false);
+	});
+});
+
+group('motion', () => {
+	it('gives speed and time left while downloading, else a status', () => {
+		const downloading = job({ state: 'downloading', downloaded: 10 * MB, total: 30 * MB });
+		expect(motion(downloading, 2 * MB, 0, 'en')).toEqual({ speed: '2.0 MB/s', left: '10 sec' });
+		expect(motion(downloading, 0, 0, 'en')).toEqual({ speed: '—', left: '—' });
+		expect(motion(job({ state: 'paused', downloaded: MB }), 0, 0, 'en')).toEqual({
+			status: 'Paused'
+		});
+		expect(motion(job(), 0, 0, 'en')).toEqual({ status: 'Waiting for a free slot' });
 	});
 });

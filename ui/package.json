@@ -36,6 +36,8 @@
 		"#lib/*": "./src/lib/*"
 	},
 	"dependencies": {
-		"@ottie/api-types": "workspace:*"
+		"@lucide/svelte": "1.48.0",
+		"@ottie/api-types": "workspace:*",
+		"@tauri-apps/api": "2.12.0"
 	}
 }

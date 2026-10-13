@@ -8,12 +8,28 @@ mod daemon;
 
 use std::sync::{Mutex, PoisonError};
 
+use tauri::ipc::CapabilityBuilder;
 use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 use crate::daemon::Started;
 
 const WINDOW: &str = "main";
+
+/// What the page may do to its window: it draws its own title bar
+/// (docs/decisions/0019). Only these, and only for the daemon's pages.
+const TITLE_BAR_PERMISSIONS: [&str; 8] = [
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized",
+    // Dragging the title bar, and double-clicking it to maximize.
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    // To hear when the window is resized (maximize or restore button).
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+];
 
 /// The daemon this app started, if it did: stopped when the app quits.
 #[derive(Default)]
@@ -59,8 +75,19 @@ async fn start(app: &AppHandle) -> anyhow::Result<()> {
 
 fn open_window(app: &AppHandle, link: Url) -> tauri::Result<()> {
     let daemon = link.origin();
+    let title_bar = TITLE_BAR_PERMISSIONS.into_iter().fold(
+        CapabilityBuilder::new("title-bar")
+            // The daemon's address is only known now, hence a runtime capability.
+            .remote(daemon.ascii_serialization())
+            .local(false)
+            .window(WINDOW),
+        CapabilityBuilder::permission,
+    );
+    app.add_capability(title_bar)?;
     WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::External(link))
         .title("Ottie")
+        // No system title bar: the page draws its own.
+        .decorations(false)
         .inner_size(960.0, 680.0)
         .min_inner_size(400.0, 320.0)
         // Only the daemon's pages: a link to elsewhere must not turn this

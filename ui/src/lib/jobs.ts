@@ -77,3 +77,16 @@ export function currentSpeed(rate: Rate | undefined, now: number): number {
 	}
 	return rate.bytesPerSec;
 }
+
+/** `2026.10.12-14.03.07-1`: the creation time in UTC, then a counter. */
+const ID = /^(\d{4})\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})\.(\d{2})-\d+$/;
+
+/** When the job was added, read from its ID; null if the ID isn't one. */
+export function addedAt(id: string): Date | null {
+	const match = ID.exec(id);
+	if (!match) {
+		return null;
+	}
+	const [year, month, day, hours, minutes, seconds] = match.slice(1).map(Number);
+	return new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
+}

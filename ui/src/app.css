@@ -6,33 +6,50 @@
 	--amber: #ffc247;
 
 	--bg: #faf6f0;
+	/* The title bar and the sidebar: a shade apart from the list. */
+	--chrome: #f3ece2;
 	--surface: #ffffff;
 	--text: #1f1712;
 	--muted: #6b5d52;
 	--border: #e4d9cc;
+	/* Between rows: lighter than other borders. */
+	--border-soft: #efe7dc;
 	--accent: var(--teal);
 	--on-accent: #ffffff;
 	--progress: var(--teal-light);
 	--track: #ece3d8;
-	--selected: #e2eff0;
+	--selected: #dcecee;
+	--hover: rgb(31 23 18 / 5%);
 	--danger: #b3261e;
+	--danger-strong: #b3261e;
 	--danger-bg: #fbe9e7;
 	--focus: var(--amber);
+	/* The window's close button, as Windows draws it. */
+	--close-hover: #c42b1c;
+	--on-close: #ffffff;
+	--shadow: 0 8px 24px rgb(31 23 18 / 14%);
+	--backdrop: rgb(31 23 18 / 30%);
 }
 
 @media (prefers-color-scheme: dark) {
 	:root {
 		--bg: #10171a;
+		--chrome: #0c1214;
 		--surface: #182226;
 		--text: #eee7de;
 		--muted: #a59887;
 		--border: #2b3a3f;
+		--border-soft: #1c272b;
 		--accent: var(--teal-light);
 		--progress: var(--teal-light);
 		--track: #26343a;
 		--selected: #1c3a41;
+		--hover: rgb(238 231 222 / 6%);
 		--danger: #f2b8b5;
+		--danger-strong: #b3261e;
 		--danger-bg: #3b1e1c;
+		--shadow: 0 8px 24px rgb(0 0 0 / 45%);
+		--backdrop: rgb(0 0 0 / 50%);
 	}
 }
 

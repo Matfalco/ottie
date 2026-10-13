@@ -14,4 +14,4 @@ Accepted 2026-10-13.
 
 **Inside the manager:** `Stop::Remove` ranks above Cancel. Its target state is Cancelled, so a running job goes through the usual cancel path (stop, flush, delete the `.part.ottie` file) and is forgotten afterwards. If the job completes before it notices the stop, the file is kept, as with cancel. A pause or cancel request still waiting on that job gets `JobNotFound`.
 
-**In the UI:** each row has Remove, which asks first only when downloaded data would be lost. "Clear finished" removes the completed and cancelled jobs in the current view, with one request per job.
+**In the UI:** each row has Remove, and the toolbar removes the selected downloads. It asks first only when downloaded data would be lost. "Clear finished" removes the completed and cancelled jobs in the current view, with one request per job.

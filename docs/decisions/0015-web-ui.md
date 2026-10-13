@@ -19,7 +19,14 @@ Accepted 2026-10-12.
 - The UI reads the fragment, removes it from the address bar and history, and keeps the token in `localStorage`.
 - Without a token, a login page asks for it (`ottie token`). A 401 signs out.
 
-**Layout:** a sidebar with the views (All, Active, Queued, Stopped, Completed), each with its count, plus the connection status and the language. The main column holds the add bar and the list. "Stopped" means paused, failed or cancelled: whatever won't carry on by itself. Adding a download while a view would hide it switches back to All. Categories, settings and the like will join the sidebar. On a phone-wide screen (under 40rem), the sidebar becomes a top bar with the views in a row that scrolls sideways.
+**Layout:** the page fills the window like an app; only the list scrolls.
+- **Top row:** the logo and the add bar. The folder for a download is set in a small panel under a folder button. In the desktop app this row is the title bar, with the window buttons (`docs/decisions/0019`).
+- **Sidebar:** the views (All, Active, Queued, Stopped, Completed), each with an icon and its count, then the connection status and the language. "Stopped" means paused, failed or cancelled: whatever won't carry on by itself. Adding a download while a view would hide it switches back to All. Categories and saved views will join the sidebar.
+- **Toolbar:** Resume, Pause, Cancel and Remove act on the selected downloads that each one applies to. It also shows the selection count and "Clear finished". Cancel and Remove ask first, in a dialog, only when downloaded data would be lost.
+- **List:** a table with compact rows, one per download. Columns: a checkbox, Name (with a file-type icon), Size, Progress (bar and percent), Speed and Time left (one status text across both when the download isn't running: why it waits, failed or retries), and Added. Header widths are fixed, so columns don't jump as the numbers change. Narrower windows drop Added, then Size.
+- **Selection** works as in a file manager. A click selects one row, Ctrl+click adds or removes one, and Shift+click selects a range. The checkboxes, Ctrl+A, Escape and Delete work too. Each row's own Pause/Resume and Remove buttons appear on hover (always on touch screens).
+- **Icons:** Lucide (`@lucide/svelte`, ISC), imported one by one.
+- **Phone-wide screens (under 40rem):** the add bar gets its own row, the views form a row that scrolls sideways, and each download shows its name and full status above its progress bar.
 
 **Live data:**
 - The page opens the events WebSocket first, then fetches `GET /jobs`. Events that arrive during the fetch are buffered and replayed after it. They're full states in order, so the replay always ends on the latest state.

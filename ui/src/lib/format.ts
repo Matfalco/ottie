@@ -48,7 +48,26 @@ export function formatCount(count: number, locale: Locale = getLocale()): string
 	return new Intl.NumberFormat(locale).format(count);
 }
 
-/** The two largest units:"45 sec", "3 min 20 sec", "2 hr 5 min" (French: "2 h 5 min"). */
+/** "80%" (French: "80 %"); whole percents, rounded down so 99.9% isn't "100%". */
+export function formatPercent(fraction: number, locale: Locale = getLocale()): string {
+	const whole = Math.floor(fraction * 100) / 100;
+	return new Intl.NumberFormat(locale, { style: 'percent' }).format(whole);
+}
+
+/** When a job was added: the time if it was today, else the date (with the
+ * year only if it isn't this year). In the page's time zone. */
+export function formatAdded(added: Date, now: Date, locale: Locale = getLocale()): string {
+	if (added.toDateString() === now.toDateString()) {
+		return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(added);
+	}
+	const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+	if (added.getFullYear() !== now.getFullYear()) {
+		options.year = 'numeric';
+	}
+	return new Intl.DateTimeFormat(locale, options).format(added);
+}
+
+/** The two largest units: "45 sec", "3 min 20 sec", "2 hr 5 min" (French: "2 h 5 min"). */
 export function formatDuration(seconds: number, locale: Locale = getLocale()): string {
 	const part = (value: number, unit: string) =>
 		new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'short' }).format(value);
