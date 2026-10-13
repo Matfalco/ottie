@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
 		SPEED_UNITS,
@@ -6,7 +7,8 @@
 		limitToField,
 		loadLastLimit,
 		saveLastLimit,
-		unitLabel
+		unitLabel,
+		type LimitMemory
 	} from '#lib/settings.js';
 	import Switch from './Switch.svelte';
 
@@ -14,13 +16,23 @@
 		/** Bytes per second; 0 = no limit. */
 		limit: number;
 		disabled?: boolean;
+		/** The switch's name. Default: the total limit's. */
+		label?: string;
+		/** Which last limit to remember (default: the total one's). */
+		memory?: LimitMemory;
 		/** Saves a new limit (0 = none); resolves to false if it couldn't. */
 		onChange: (bytesPerSec: number) => Promise<boolean>;
 	}
 
-	let { limit, disabled = false, onChange }: Props = $props();
+	let {
+		limit,
+		disabled = false,
+		label = m.limit_total(),
+		memory = 'total',
+		onChange
+	}: Props = $props();
 	/** Shown while the limit is off, and set again when it's switched on. */
-	let last = $state(loadLastLimit());
+	let last = $state(untrack(() => loadLastLimit(memory)));
 	const on = $derived(limit > 0);
 	/** The number and its unit, from the saved limit: after a change, the
 	 * unit is the largest the new limit has one of. */
@@ -29,7 +41,10 @@
 	$effect(() => {
 		if (limit > 0) {
 			last = limit;
-			saveLastLimit(limit);
+			saveLastLimit(
+				limit,
+				untrack(() => memory)
+			);
 		}
 	});
 
@@ -54,14 +69,9 @@
 	}
 </script>
 
-<!-- The total speed limit: on or off, and how much. -->
+<!-- A speed limit: on or off, and how much. -->
 <span class="limit">
-	<Switch
-		{on}
-		label={m.limit_total()}
-		{disabled}
-		onChange={(next) => void onChange(next ? last : 0)}
-	/>
+	<Switch {on} {label} {disabled} onChange={(next) => void onChange(next ? last : 0)} />
 	<input
 		value={field.value}
 		inputmode="decimal"

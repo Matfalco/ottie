@@ -182,6 +182,30 @@ pub struct Matched {
     pub by_folder: bool,
 }
 
+/// Body of `PATCH /jobs/{id}`: the job's own settings to change; a field
+/// left out stays as it is.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct JobChange {
+    /// Bytes per second; 0 = no limit of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub speed_limit: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub priority: Option<Priority>,
+}
+
+impl From<JobChange> for ottie_core::JobChange {
+    fn from(change: JobChange) -> Self {
+        ottie_core::JobChange {
+            speed_limit: change.speed_limit,
+            priority: change.priority.map(Into::into),
+        }
+    }
+}
+
 /// Body of `POST /jobs/{id}/category`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -594,6 +618,18 @@ impl From<ottie_core::JobState> for JobState {
             S::Failed => JobState::Failed,
             S::Cancelled => JobState::Cancelled,
             S::Retrying => JobState::Retrying,
+        }
+    }
+}
+
+impl From<Priority> for ottie_core::Priority {
+    fn from(priority: Priority) -> Self {
+        use ottie_core::Priority as P;
+        match priority {
+            Priority::Low => P::Low,
+            Priority::Normal => P::Normal,
+            Priority::High => P::High,
+            Priority::Urgent => P::Urgent,
         }
     }
 }

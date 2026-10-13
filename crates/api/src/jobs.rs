@@ -1,4 +1,5 @@
-//! `/jobs`: list, add, pause, resume, cancel, remove, change category.
+//! `/jobs`: list, add, pause, resume, cancel, remove, change a job's own
+//! settings, change category.
 
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
@@ -9,7 +10,7 @@ use ottie_core::{CategoryId, JobId, NewJob};
 use crate::AppState;
 use crate::categories::{absolute_folder, parse_url};
 use crate::error::Failure;
-use crate::types::{AddJob, Added, Job, MoveJob};
+use crate::types::{AddJob, Added, Job, JobChange, MoveJob};
 
 /// `GET /jobs`: every job, oldest first.
 pub(crate) async fn list(State(state): State<AppState>) -> Result<Json<Vec<Job>>, Failure> {
@@ -69,6 +70,23 @@ pub(crate) async fn remove(
     Path(id): Path<String>,
 ) -> Result<StatusCode, Failure> {
     state.manager.remove(id.parse::<JobId>()?).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `PATCH /jobs/{id}`: changes the job's own speed limit and priority (the
+/// fields given), in any state; they take effect immediately, even while it
+/// runs. Every client hears of it through one `changed` event, none if
+/// nothing changed.
+pub(crate) async fn change(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    body: Result<Json<JobChange>, JsonRejection>,
+) -> Result<StatusCode, Failure> {
+    let Json(change) = body?;
+    state
+        .manager
+        .change_job(id.parse::<JobId>()?, change.into())
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

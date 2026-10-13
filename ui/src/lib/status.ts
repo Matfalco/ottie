@@ -7,7 +7,7 @@ import { m } from './paraglide/messages.js';
 import { getLocale, type Locale } from './paraglide/runtime.js';
 
 /** "12.3 MB of 45.6 MB", or just what's downloaded when the size is unknown. */
-function amount(job: Job, locale: Locale): string {
+export function amount(job: Job, locale: Locale = getLocale()): string {
 	const done = formatBytes(job.downloaded, locale);
 	return job.total === null
 		? done

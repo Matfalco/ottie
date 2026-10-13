@@ -29,8 +29,8 @@ use tokio_util::sync::CancellationToken;
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
 pub use types::{
     AddJob, Added, AddedCategory, ApiError, Appearance, AppearanceMode, BuiltIn, Category,
-    CategoryBody, Event, Job, JobState, MatchLink, Matched, MoveJob, Palette, Priority, Problem,
-    Reason, Settings, SettingsChange,
+    CategoryBody, Event, Job, JobChange, JobState, MatchLink, Matched, MoveJob, Palette, Priority,
+    Problem, Reason, Settings, SettingsChange,
 };
 pub use ui::UiSource;
 
@@ -53,7 +53,7 @@ pub fn router(manager: Manager, token: Token, shutdown: CancellationToken, ui: U
     };
     let api = Router::new()
         .route("/jobs", get(jobs::list).post(jobs::add))
-        .route("/jobs/{id}", delete(jobs::remove))
+        .route("/jobs/{id}", delete(jobs::remove).patch(jobs::change))
         .route("/jobs/{id}/pause", post(jobs::pause))
         .route("/jobs/{id}/resume", post(jobs::resume))
         .route("/jobs/{id}/cancel", post(jobs::cancel))

@@ -18,7 +18,7 @@ use crate::download::{Download, Event, Outcome, Placement};
 use crate::error::Error;
 use crate::filename;
 use crate::id::{IdGenerator, JobId};
-use crate::job::{JobEvent, JobSnapshot, JobState, NewJob, Priority};
+use crate::job::{JobChange, JobEvent, JobSnapshot, JobState, NewJob, Priority};
 use crate::problem::Problem;
 use crate::settings::{RetryPolicy, Settings, SettingsChange};
 use crate::store::{JobRecord, Store};
@@ -197,25 +197,33 @@ impl Manager {
         self.change_settings(change).await.map(drop)
     }
 
-    /// One job's own limit in bytes per second; 0 = none (the global limit
-    /// still applies). Takes effect immediately, even while it runs.
-    pub async fn set_speed_limit(&self, id: JobId, bytes_per_sec: u64) -> Result<(), Error> {
-        self.request(|reply| Command::SetSpeedLimit {
-            id,
-            bytes_per_sec,
-            reply,
-        })
-        .await
+    /// Changes some of a job's own settings at once, in any state; they take
+    /// effect immediately, even while it runs. If anything changed, the job
+    /// is saved once and one `Changed` event goes out; otherwise neither.
+    /// - `speed_limit`: bytes per second; 0 = none (the global and category
+    ///   limits still apply).
+    /// - `priority`: its share of the global limit and its place in the queue.
+    pub async fn change_job(&self, id: JobId, change: JobChange) -> Result<(), Error> {
+        self.request(|reply| Command::ChangeJob { id, change, reply })
+            .await
     }
 
-    /// Changes the job's share of the global limit and its place in the queue.
+    /// One job's own limit; see [`Manager::change_job`].
+    pub async fn set_speed_limit(&self, id: JobId, bytes_per_sec: u64) -> Result<(), Error> {
+        let change = JobChange {
+            speed_limit: Some(bytes_per_sec),
+            ..JobChange::default()
+        };
+        self.change_job(id, change).await
+    }
+
+    /// One job's priority; see [`Manager::change_job`].
     pub async fn set_priority(&self, id: JobId, priority: Priority) -> Result<(), Error> {
-        self.request(|reply| Command::SetPriority {
-            id,
-            priority,
-            reply,
-        })
-        .await
+        let change = JobChange {
+            priority: Some(priority),
+            ..JobChange::default()
+        };
+        self.change_job(id, change).await
     }
 
     /// Every category, by ID. General (ID 1) is always first; Other is
@@ -327,14 +335,9 @@ enum Command {
         change: SettingsChange,
         reply: Reply<Settings>,
     },
-    SetSpeedLimit {
+    ChangeJob {
         id: JobId,
-        bytes_per_sec: u64,
-        reply: Reply<()>,
-    },
-    SetPriority {
-        id: JobId,
-        priority: Priority,
+        change: JobChange,
         reply: Reply<()>,
     },
     Categories {
@@ -573,21 +576,8 @@ impl<B: Backend> Actor<B> {
             Command::ChangeSettings { change, reply } => {
                 let _ = reply.send(Ok(self.change_settings(change)));
             }
-            Command::SetSpeedLimit {
-                id,
-                bytes_per_sec,
-                reply,
-            } => {
-                let _ = reply.send(self.change(id, |job| job.speed_limit = bytes_per_sec));
-                self.limiter.set_limit(id, bytes_per_sec);
-            }
-            Command::SetPriority {
-                id,
-                priority,
-                reply,
-            } => {
-                let _ = reply.send(self.change(id, |job| job.priority = priority));
-                self.limiter.set_priority(id, priority);
+            Command::ChangeJob { id, change, reply } => {
+                let _ = reply.send(self.change_job(id, change));
             }
             Command::Categories { reply } => {
                 let _ = reply.send(Ok(self.categories()));
@@ -767,6 +757,35 @@ impl<B: Backend> Actor<B> {
 
     /// Changes a setting of one job (any state), saves it and tells
     /// subscribers. A queued job's new priority counts at the next `schedule`.
+    /// Applies what differs from the job's settings, then tells the limiter.
+    fn change_job(&mut self, id: JobId, change: JobChange) -> Result<(), Error> {
+        let job = self.jobs.get(&id).ok_or(Error::JobNotFound(id))?;
+        let JobChange {
+            speed_limit,
+            priority,
+        } = change;
+        let speed_limit = speed_limit.filter(|&limit| limit != job.speed_limit);
+        let priority = priority.filter(|&priority| priority != job.priority);
+        if speed_limit.is_none() && priority.is_none() {
+            return Ok(());
+        }
+        self.change(id, |job| {
+            if let Some(limit) = speed_limit {
+                job.speed_limit = limit;
+            }
+            if let Some(priority) = priority {
+                job.priority = priority;
+            }
+        })?;
+        if let Some(limit) = speed_limit {
+            self.limiter.set_limit(id, limit);
+        }
+        if let Some(priority) = priority {
+            self.limiter.set_priority(id, priority);
+        }
+        Ok(())
+    }
+
     fn change(&mut self, id: JobId, edit: impl FnOnce(&mut Job)) -> Result<(), Error> {
         let job = self.jobs.get_mut(&id).ok_or(Error::JobNotFound(id))?;
         edit(job);

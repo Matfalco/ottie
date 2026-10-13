@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use ottie_core::{
-    Error, HttpBackend, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob, Problem,
-    SettingsChange, Store,
+    Error, HttpBackend, JobChange, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob,
+    Priority, Problem, SettingsChange, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -375,4 +375,42 @@ async fn changed_settings_are_announced_once() {
     // Nothing new: nothing to announce.
     s.manager.change_settings(change).await.unwrap();
     assert!(s.events.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn a_job_change_is_announced_once() {
+    let mut s = setup(1, 50).await;
+    let id = s.add("a.bin").await;
+    s.manager.pause(id).await.unwrap();
+    while s.events.try_recv().is_ok() {} // What came before.
+
+    let change = JobChange {
+        speed_limit: Some(64 * 1024),
+        priority: Some(Priority::Urgent),
+    };
+    s.manager.change_job(id, change).await.unwrap();
+    match s.events.try_recv() {
+        Ok(JobEvent::Changed(job)) => {
+            assert_eq!(
+                (job.speed_limit, job.priority),
+                (64 * 1024, Priority::Urgent)
+            );
+        }
+        other => panic!("expected the changed job, got {other:?}"),
+    }
+    assert!(s.events.try_recv().is_err(), "one event for both fields");
+
+    // Nothing new: nothing to announce.
+    s.manager.change_job(id, change).await.unwrap();
+    s.manager
+        .change_job(id, JobChange::default())
+        .await
+        .unwrap();
+    assert!(s.events.try_recv().is_err());
+
+    s.manager.remove(id).await.unwrap();
+    assert!(matches!(
+        s.manager.change_job(id, change).await,
+        Err(Error::JobNotFound(_))
+    ));
 }

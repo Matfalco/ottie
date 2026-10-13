@@ -95,6 +95,15 @@ impl NewJob {
     }
 }
 
+/// Some of a job's own settings to change at once; `None` leaves one as it
+/// is. See [`crate::Manager::change_job`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct JobChange {
+    /// Bytes per second; 0 = no limit of its own.
+    pub speed_limit: Option<u64>,
+    pub priority: Option<Priority>,
+}
+
 /// A copy of a job's public state, for listing and events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobSnapshot {

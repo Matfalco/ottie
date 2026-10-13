@@ -3,6 +3,7 @@
 
 import type { AddJob } from '@ottie/api-types/AddJob';
 import type { CategoryBody } from '@ottie/api-types/CategoryBody';
+import type { JobChange } from '@ottie/api-types/JobChange';
 import type { Matched } from '@ottie/api-types/Matched';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
@@ -96,6 +97,18 @@ export class Session {
 	/** Moves the jobs to `category`, as the user's choice. */
 	async move(ids: string[], category: number): Promise<void> {
 		await Promise.all(ids.map((id) => this.attempt(() => this.api.setCategory(id, category))));
+	}
+
+	/** Changes one download's own speed limit or priority; every page hears
+	 * of it through a `changed` event. Resolves to null once done, else to
+	 * why not. */
+	async changeJob(id: string, change: JobChange): Promise<string | null> {
+		try {
+			await this.api.changeJob(id, change);
+			return null;
+		} catch (error) {
+			return this.why(error);
+		}
 	}
 
 	/** Adds a category (`id` null) or replaces one's settings. Resolves to

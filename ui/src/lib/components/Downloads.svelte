@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { JobChange } from '@ottie/api-types/JobChange';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -20,11 +21,13 @@
 		parseFilters,
 		type Filters
 	} from '#lib/filters.js';
+	import { currentSpeed } from '#lib/jobs.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { NOTHING, keepShown, selectAll, type Selection } from '#lib/selection.js';
 	import { isFinished } from '#lib/status.js';
 	import AddCard from './AddCard.svelte';
 	import FilterPanel from './FilterPanel.svelte';
+	import JobDetails from './JobDetails.svelte';
 	import JobTable from './JobTable.svelte';
 	import QuickFilters from './QuickFilters.svelte';
 	import Toolbar from './Toolbar.svelte';
@@ -51,6 +54,9 @@
 	let current = $derived(keepShown(selection, order));
 	let selected = $derived(shown.filter((job) => current.ids.has(job.id)));
 	let finished = $derived(shown.filter(isFinished));
+	// The panel under the list shows the one selected download.
+	let picked = $derived(selected.length === 1 ? selected[0] : null);
+	let detailsOpen = $state(true);
 	// Categories with downloads get a quick filter.
 	let used = $derived(
 		session.categoryList.filter((category) =>
@@ -66,6 +72,15 @@
 	function setFilters(next: Filters) {
 		filters = next;
 		void goto(downloads + filtersQuery(next), { replace: true, reset: false });
+	}
+
+	/** Saves a change to one download's own settings; shows why if it can't. */
+	async function changeJob(id: string, change: JobChange): Promise<boolean> {
+		const why = await session.changeJob(id, change);
+		if (why !== null) {
+			session.error = why;
+		}
+		return why === null;
 	}
 
 	function setArrangement(next: Arrangement) {
@@ -158,6 +173,22 @@
 			onSelect={(chosen) => (selection = chosen)}
 			onRun={run}
 			onSort={(sort) => setArrangement(sortBy(arrangement, sort))}
+		/>
+	{/if}
+
+	{#if picked}
+		{@const job = picked}
+		<JobDetails
+			{job}
+			categories={session.categoryList}
+			speed={currentSpeed(session.rates[job.id], session.now)}
+			now={session.now}
+			maxRetries={session.settings?.maxRetries ?? null}
+			open={detailsOpen}
+			onToggle={() => (detailsOpen = !detailsOpen)}
+			onRun={(action) => run(action, [job])}
+			onMove={(category) => session.move([job.id], category)}
+			onChange={(change) => changeJob(job.id, change)}
 		/>
 	{/if}
 </section>

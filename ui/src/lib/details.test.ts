@@ -1,0 +1,79 @@
+import { describe, expect, it } from 'vitest';
+import { PRIORITIES, facts, isPlayable, primaryAction, priorityName } from './details';
+import { job, plain } from './testing';
+
+const MB = 1024 * 1024;
+// The sample job's ID says it was added 2026-10-12 14:03:07 UTC; the same day.
+const NOW = Date.parse('2026-10-12T15:00:00Z');
+const labels = (list: { label: string }[]) => list.map((fact) => fact.label);
+
+describe('details', () => {
+	it('offer the likely next step as the main button', () => {
+		expect(primaryAction(job({ state: 'downloading' }), 'en')).toEqual({
+			action: 'pause',
+			label: 'Pause'
+		});
+		expect(primaryAction(job({ state: 'failed' }), 'en')).toEqual({
+			action: 'resume',
+			label: 'Try again'
+		});
+		expect(primaryAction(job({ state: 'paused' }), 'fr')?.action).toBe('resume');
+		expect(primaryAction(job({ state: 'completed' }), 'en')).toBeNull();
+	});
+
+	it('list what matters while downloading', () => {
+		const running = job({ state: 'downloading', downloaded: 2 * MB, total: 6 * MB });
+		const list = facts(running, MB, NOW, 10, 'en');
+		expect(labels(list)).toEqual(['Speed', 'Time left', 'Size', 'Added']);
+		expect(list.map((fact) => plain(fact.value)).slice(0, 3)).toEqual([
+			'1.0 MB/s',
+			'4 sec',
+			'6.0 MB'
+		]);
+		// No speed yet: nothing to estimate from.
+		expect(facts(running, 0, NOW, 10, 'en')[1].value).toBe('—');
+	});
+
+	it('count retries against the setting', () => {
+		const retrying = job({ state: 'retrying', retries: 2, retryAt: NOW + 8000 });
+		const list = facts(retrying, 0, NOW, 10, 'en');
+		expect(labels(list)).toEqual(['Next try', 'Retries', 'Size', 'Added']);
+		expect(plain(list[0].value)).toBe('8 sec');
+		expect(list[1].value).toBe('2 of 10');
+		expect(facts(job({ state: 'failed', retries: 3 }), 0, NOW, null, 'fr')[0].value).toBe('3');
+	});
+
+	it('say whether a paused download can resume', () => {
+		const paused = job({ state: 'paused', downloaded: MB, resumable: false });
+		const list = facts(paused, 0, NOW, null, 'en');
+		expect(labels(list)).toEqual(['Downloaded', 'Size', 'Can resume', 'Added']);
+		expect(list[1].value).toBe('Unknown');
+		expect(list[2].value).toBe('No, starts over');
+	});
+
+	it('know a finished download’s size', () => {
+		const done = facts(job({ state: 'completed', downloaded: 3 * MB }), 0, NOW, null, 'en');
+		expect(plain(done[0].value)).toBe('3.0 MB');
+		expect(labels(facts(job({ state: 'queued' }), 0, NOW, null, 'en'))).toEqual([
+			'Size',
+			'Priority',
+			'Added'
+		]);
+	});
+
+	it('tell what can be played', () => {
+		expect(isPlayable(job())).toBe(true); // movie night.mkv
+		expect(isPlayable(job({ fileName: 'song.mp3' }))).toBe(true);
+		expect(isPlayable(job({ fileName: 'setup.exe' }))).toBe(false);
+	});
+
+	it('name the priorities in each language', () => {
+		expect(PRIORITIES.map((priority) => priorityName(priority, 'en'))).toEqual([
+			'Low',
+			'Normal',
+			'High',
+			'Urgent'
+		]);
+		expect(priorityName('urgent', 'fr')).toBe('Urgente');
+	});
+});

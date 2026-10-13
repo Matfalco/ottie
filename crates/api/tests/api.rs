@@ -11,8 +11,8 @@ use axum::routing::get;
 use futures_util::StreamExt;
 use ottie_api::{
     AddJob, Added, AddedCategory, ApiError, Appearance, AppearanceMode, BuiltIn, Category,
-    CategoryBody, EVENTS_PROTOCOL, Event, Job, JobState, Matched, Palette, Problem, Reason,
-    Settings, SettingsChange, TOKEN_PROTOCOL_PREFIX, Token, UiSource,
+    CategoryBody, EVENTS_PROTOCOL, Event, Job, JobState, Matched, Palette, Priority, Problem,
+    Reason, Settings, SettingsChange, TOKEN_PROTOCOL_PREFIX, Token, UiSource,
 };
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
@@ -262,6 +262,62 @@ async fn pause_resume_and_cancel() {
     let cancelled = d.post(&format!("/jobs/{id}/cancel")).send().await.unwrap();
     assert_eq!(cancelled.status(), StatusCode::NO_CONTENT);
     assert_eq!(d.job(&id).await.state, JobState::Cancelled);
+}
+
+#[tokio::test]
+async fn a_jobs_limit_and_priority_change_while_it_runs() {
+    let d = start().await;
+    let offered = format!("{EVENTS_PROTOCOL}, {TOKEN_PROTOCOL_PREFIX}{TOKEN}");
+    let (mut events, _) = d.events(&offered).await.unwrap();
+    let id = d.add("slow.bin").await;
+    d.wait_until(&id, JobState::Downloading).await;
+    let patch = |id: &str, change: serde_json::Value| {
+        let request = d.client.patch(d.url(&format!("/jobs/{id}")));
+        request.bearer_auth(TOKEN).json(&change).send()
+    };
+
+    let change = serde_json::json!({ "speedLimit": 32_768, "priority": "urgent" });
+    let response = patch(&id, change).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let job = d.job(&id).await;
+    assert_eq!((job.speed_limit, job.priority), (32_768, Priority::Urgent));
+    assert_eq!(job.state, JobState::Downloading, "it keeps running");
+    // Every client hears of it.
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            let Some(Ok(Message::Text(text))) = events.next().await else {
+                continue;
+            };
+            if let Event::Changed { job } = serde_json::from_str(&text).unwrap()
+                && job.priority == Priority::Urgent
+            {
+                assert_eq!(job.speed_limit, 32_768);
+                return;
+            }
+        }
+    })
+    .await
+    .expect("a changed event");
+
+    // A field left out stays as it is.
+    let response = patch(&id, serde_json::json!({ "speedLimit": 0 }))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let job = d.job(&id).await;
+    assert_eq!((job.speed_limit, job.priority), (0, Priority::Urgent));
+
+    let response = patch(&id, serde_json::json!({ "priority": "asap" }))
+        .await
+        .unwrap();
+    let (status, error) = error_of(response).await;
+    assert_eq!(
+        (status, error.reason),
+        (StatusCode::UNPROCESSABLE_ENTITY, Reason::InvalidBody)
+    );
+    let missing = "2020.01.01-00.00.00-1";
+    let response = patch(missing, serde_json::json!({})).await.unwrap();
+    assert_eq!(error_of(response).await.0, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

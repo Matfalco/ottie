@@ -17,7 +17,14 @@ export const DEFAULT_LIMIT = 10 * UNIT_BYTES.MB;
  * `crates/api/src/settings.rs`). */
 export { RANGES };
 
-const LAST_LIMIT_KEY = 'ottie.lastLimit';
+/** Which last limit a limit control remembers: the total one, or the one
+ * last given to a download. Kept apart, so setting one never changes the
+ * other's. */
+export type LimitMemory = 'total' | 'download';
+const LAST_LIMIT_KEYS: Record<LimitMemory, string> = {
+	total: 'ottie.lastLimit',
+	download: 'ottie.lastDownloadLimit'
+};
 
 /** A number for a field: "40", "0.5" (French: "0,5"), two decimals at most. */
 export function toField(value: number, locale: Locale = getLocale()): string {
@@ -80,18 +87,18 @@ export function parseSeconds(text: string, range: { min: number; max: number }):
 }
 
 /** The limit last used on this device, so switching it back on restores it. */
-export function loadLastLimit(): number {
+export function loadLastLimit(memory: LimitMemory = 'total'): number {
 	try {
-		const stored = Number(localStorage.getItem(LAST_LIMIT_KEY));
+		const stored = Number(localStorage.getItem(LAST_LIMIT_KEYS[memory]));
 		return Number.isSafeInteger(stored) && stored > 0 ? stored : DEFAULT_LIMIT;
 	} catch {
 		return DEFAULT_LIMIT; // Storage blocked.
 	}
 }
 
-export function saveLastLimit(bytesPerSec: number): void {
+export function saveLastLimit(bytesPerSec: number, memory: LimitMemory = 'total'): void {
 	try {
-		localStorage.setItem(LAST_LIMIT_KEY, String(bytesPerSec));
+		localStorage.setItem(LAST_LIMIT_KEYS[memory], String(bytesPerSec));
 	} catch {
 		// Storage blocked: the default comes back next time.
 	}

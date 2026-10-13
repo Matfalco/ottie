@@ -11,6 +11,7 @@ import type { MatchLink } from '@ottie/api-types/MatchLink';
 import type { Matched } from '@ottie/api-types/Matched';
 import type { ApiError } from '@ottie/api-types/ApiError';
 import type { Job } from '@ottie/api-types/Job';
+import type { JobChange } from '@ottie/api-types/JobChange';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 
@@ -63,6 +64,11 @@ export class Api {
 	/** Takes the job off the list (stopping it first if it runs). */
 	remove(id: string): Promise<void> {
 		return this.request('DELETE', `/jobs/${encodeURIComponent(id)}`);
+	}
+
+	/** Changes the job's own settings given (speed limit, priority). */
+	changeJob(id: string, change: JobChange): Promise<void> {
+		return this.request('PATCH', `/jobs/${encodeURIComponent(id)}`, change);
 	}
 
 	/** Moves the job to another category, as the user's choice. */
