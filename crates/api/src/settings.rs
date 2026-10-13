@@ -9,16 +9,35 @@ use axum::http::StatusCode;
 
 use crate::AppState;
 use crate::error::Failure;
-use crate::types::{Reason, Settings, SettingsChange};
+use crate::types::{ApiError, Reason, Settings, SettingsChange};
 
-/// `GET /settings`.
+/// Every setting.
+#[utoipa::path(
+    get,
+    path = "/settings",
+    operation_id = "getSettings",
+    tag = "settings",
+    responses((status = OK, description = "Every setting", body = Settings))
+)]
 pub(crate) async fn get(State(state): State<AppState>) -> Result<Json<Settings>, Failure> {
     Ok(Json(state.manager.settings().await?.into()))
 }
 
-/// `PATCH /settings`: changes the fields given, all at once; each is saved
-/// and takes effect immediately. Every client hears of it through a
-/// `settingsChanged` event. One value out of range refuses the whole change.
+/// Changes the settings given, all at once; each is saved and takes effect
+/// at once. Every client hears of it through a `settingsChanged` event. One
+/// value out of range refuses the whole change.
+#[utoipa::path(
+    patch,
+    path = "/settings",
+    operation_id = "changeSettings",
+    tag = "settings",
+    request_body = SettingsChange,
+    responses(
+        (status = NO_CONTENT, description = "Changed"),
+        (status = BAD_REQUEST, description = "`outOfRange` (with the setting and its range) or `invalidLanguage`", body = ApiError),
+        (status = UNPROCESSABLE_ENTITY, description = "`invalidBody`", body = ApiError),
+    )
+)]
 pub(crate) async fn change(
     State(state): State<AppState>,
     body: Result<Json<SettingsChange>, JsonRejection>,

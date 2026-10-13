@@ -34,6 +34,23 @@ impl Failure {
         )
     }
 
+    pub(crate) fn no_such_link() -> Self {
+        Self::new(
+            StatusCode::NOT_FOUND,
+            Reason::NoSuchLink,
+            "no such play link, or it has expired",
+        )
+    }
+
+    /// Something that can't go wrong went wrong.
+    pub(crate) fn internal() -> Self {
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Reason::Internal,
+            "unexpected internal error",
+        )
+    }
+
     pub(crate) fn no_such_endpoint() -> Self {
         Self::new(
             StatusCode::NOT_FOUND,
@@ -110,6 +127,10 @@ impl From<Error> for Failure {
             Error::ViewNameTaken(name) => {
                 (S::CONFLICT, Reason::ViewNameTaken { name: name.clone() })
             }
+            Error::DownloadStopped(id) => {
+                (S::CONFLICT, Reason::DownloadStopped { id: id.to_string() })
+            }
+            Error::FileChanged(id) => (S::CONFLICT, Reason::FileChanged { id: id.to_string() }),
             Error::ManagerStopped => (S::SERVICE_UNAVAILABLE, Reason::Stopping),
             _ => {
                 // Engine messages never contain URLs or credentials.

@@ -21,7 +21,7 @@
 - A background **daemon** that does all the downloading, with three front ends on top: a **web UI**, a **desktop app** (Windows, Linux, later macOS) and an **Android app**. iOS is out of scope.
 - A **browser extension** (Chromium-based browsers and Firefox, desktop) that takes over downloads from the browser: intercepts them, hides the browser's own download UI where possible, and shows our download list in its popup.
 - Must-haves: pause/resume (including after a restart or crash), multi-connection downloads, and speed limits at three levels (per download, per category, global), adjustable while downloads run.
-- **Play while downloading** (uGet can): the API serves a partial file at `GET /jobs/{id}/stream` with range support, so the browser, VLC/mpv or an Android player can play a video before it finishes, locally or from a remote daemon. Needs an in-order download mode that also fetches the last chunk early (many MP4s keep their index at the end).
+- **Play while downloading** (uGet can): a short-lived play link (`POST /jobs/{id}/stream` → `GET /stream/{ticket}/{name}`, no token, range support) serves a partial file, so the browser, VLC/mpv or an Android player can play a video before it finishes, locally or from a remote daemon (`docs/decisions/0029`). The download order follows the player and, in a per-download streaming mode, stays in order and fetches the last chunk early (many MP4s keep their index at the end).
 - **Translated UI:** English and French to start (more languages = one JSON file each); daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
 - uGet features to bring over time: categories (folder + file-type rules), queue with max concurrent downloads, opt-in clipboard monitoring, batch/URL-list import, scheduler.
 
@@ -29,7 +29,7 @@
 
 | Part | Tech |
 |---|---|
-| Download engine, daemon, API | Rust (edition 2024), tokio, reqwest 0.13, axum, rusqlite (`bundled`) |
+| Download engine, daemon, API | Rust (edition 2024), tokio, reqwest 0.13, axum, rusqlite (`bundled`), utoipa (OpenAPI) |
 | UI (shared by web, desktop, Android) | Svelte 5 + TypeScript + Vite, static build |
 | Desktop + Android shell | Tauri 2 |
 | Browser extension | TypeScript, WebExtension Manifest V3 |
@@ -48,7 +48,7 @@ desktop app (Tauri) ──────┼──► crates/api (REST + WebSocket)
 Android app (Tauri) ──────┘    (on Android, core + api run inside the app)
 ```
 
-- **The HTTP API is the only contract.** Every client talks to the engine through it. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart), never for download operations.
+- **The HTTP API is the only contract.** Every client talks to the engine through it. It's documented in `docs/api/` (`docs/decisions/0030`): a guide, and `openapi.json` generated from the handlers. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart), never for download operations.
 - **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
 - **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
@@ -73,12 +73,16 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/segmented.rs   multi-connection transfer: coordinator, connection tasks, dynamic splitting
   src/download.rs    Download state (what gets persisted), Placement, Event, Outcome
   src/problem.rs     Problem: why a job failed, as a kind + details (English via Display)
+  src/stream.rs      Reader: a job's bytes at any offset, waiting until they're on disk (play links)
   src/filename.rs    names from URL / Content-Disposition, sanitizing, collision-free names, .part.ottie → final rename,
                      relocate (a job's file into another folder; copy + delete between drives)
   tests/support/     in-process axum test server with fault injection
   examples/fetch.rs  manual CLI try-out
 crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 3b)  [exists]
-  src/lib.rs         router(manager, token, shutdown), AppState, JSON 404 fallback
+  src/lib.rs         router(manager, token, shutdown), AppState, JSON 404 fallback; routes come
+                     from each handler's #[utoipa::path] (utoipa-axum), openapi()
+  src/openapi.rs     the OpenAPI description: info, token scheme, 401/503 everywhere,
+                     GET /openapi.json; its test writes docs/api/openapi.json
   src/auth.rs        Token, Bearer / WebSocket-protocol check (constant-time)
   src/types.rs       wire types (camelCase JSON) + ts-rs export, From<engine types>
   src/jobs.rs        GET/POST /jobs, POST /jobs/{id}/pause|resume|cancel|category,
@@ -88,6 +92,7 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
                      appearance + language, setupDone; the ranges people may choose (its tests
                      write them to shared/api-types/Ranges.ts)
   src/views.rs       GET/POST /views, PUT/DELETE /views/{id} (saved views)
+  src/stream.rs      play links: POST /jobs/{id}/stream → GET /stream/{ticket}/{name} (no token, Range)
   src/events.rs      GET /events WebSocket: changed / progress / removed / categoryChanged /
                      categoryRemoved / settingsChanged / viewChanged / viewRemoved / resync
   src/error.rs       engine Error → status + {"error": "…"}
@@ -149,7 +154,9 @@ extension/         WebExtension (Chrome + Firefox)
 shared/api-types/  TypeScript types generated from Rust (ts-rs, by `cargo test -p ottie-api`;
                    output folder set in .cargo/config.toml), plus Ranges.ts (settings' ranges).
                    Never edit by hand.  [exists]
-docs/decisions/    one short file per accepted decision (NNNN-title.md)       [exists]
+docs/api/          README.md (how to talk to the daemon) + openapi.json (generated) [exists]
+docs/decisions/    one short file per accepted decision (NNNN-title.md), and README.md,
+                   one line per decision                                      [exists]
 res/icons/         the drawn Ottie icons (app, tray), PNG + SVG               [exists]
 ```
 
@@ -161,10 +168,10 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 cargo run -p ottie-core --example fetch -- <url> [folder]   # Ctrl+C pauses, Enter resumes
-cargo publish --workspace --dry-run  # check a crates.io release of core → api → ottie (Mathieu publishes)
+cargo publish --workspace --dry-run  # check a crates.io release of core → api → ottie (the maintainer publishes)
 cargo run -p ottie -- serve          # daemon on 127.0.0.1:24068 (OTTIE_LOG=debug for more logs)
 cargo run -p ottie -- token          # print the API token
-cargo test -p ottie-api              # also regenerates shared/api-types/*.ts: commit them
+cargo test -p ottie-api              # also regenerates shared/api-types/*.ts and docs/api/openapi.json: commit them
 cargo run -p ottie -- open           # the web UI in a browser, signed in
 cargo run -p ottie -- link           # print that signed-in address
 
@@ -186,7 +193,7 @@ pnpm --filter app tauri android dev  # Android device/emulator
 
 Before calling a task done: fmt, clippy, tests for the crates you touched; for TS packages you touched, `check`, `test` and `lint`. A release builds the UI before the Rust binary. Update this section when a part comes to exist.
 
-Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed. The workspace includes the Tauri app, so `cargo build/test/clippy --workspace` compile Tauri too (WebView2 comes with Windows 11; Linux needs the webkit2gtk 4.1 dev packages). In a dev run, set `OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` to keep away from your real downloads: the app passes them on to the daemon.
+Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed. The workspace includes the Tauri app, so `cargo build/test/clippy --workspace` compile Tauri too (WebView2 comes with Windows 11; Linux needs the webkit2gtk 4.1 dev packages). In a dev run, set `OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` to keep away from your real downloads: the app passes them on to the daemon.
 
 ## Engine rules (crates/core)
 
@@ -215,7 +222,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 ## Platform gotchas
 
-- **TLS:** rustls everywhere. No OpenSSL/native-tls; it breaks Android and Windows builds. On Android, `rustls-platform-verifier` must be initialised with the app's JNI context and ships a small Kotlin component. Check its docs in the Android step (7).
+- **TLS:** rustls everywhere. No OpenSSL/native-tls; it breaks Android and Windows builds. On Android, `rustls-platform-verifier` must be initialised with the app's JNI context and ships a small Kotlin component. Check its docs in the Android step (8).
 - **Android background work:** downloads must keep going when the app is in the background. Android 15 limits `dataSync` foreground services to 6 hours per 24 h; prefer user-initiated data transfer jobs. This needs a small Kotlin Tauri plugin. Check current Android docs before implementing.
 - **Android storage:** the engine needs a seekable file. Write `.part.ottie` files to app storage and publish finished files to Downloads through MediaStore.
 - **Android browser integration:** no reliable extension route (Chrome for Android has no extensions; Firefox for Android only partly supports the downloads API). Take URLs from the share sheet and "Open with" intent filters instead.
@@ -225,6 +232,7 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 
 - The daemon binds 127.0.0.1:24068 by default (`address`/`port` in config.toml, `--address`/`--port`, `OTTIE_ADDRESS`/`OTTIE_PORT`; flags win over the file). Remote access is opt-in, always requires the token, and should sit behind a reverse proxy or VPN rather than be exposed directly.
 - Every API request carries the token (`docs/decisions/0014`): `Authorization: Bearer`, or for the events WebSocket the offered protocol `ottie.token.<token>` (never in a URL or a cookie). The token (32 random bytes, hex) lives in `<config>/token`, created on first use; `ottie serve` mentions where only when stdout is a terminal, never in logs. Unknown API paths also need it.
+- Play links (`/stream/{ticket}/…`, `docs/decisions/0029`) are the one exception: the random ticket reads one job's file and expires after 12 h unused. They're served with `Content-Security-Policy: sandbox`, so a downloaded page or SVG can't run scripts as the daemon's pages.
 - Cookies and auth headers forwarded by the extension belong to that one job: never log them, never reuse them for another job.
 - Logs and errors never contain query strings or credentials: log URLs through `redact()`, and wrap `reqwest::Error` with `without_url()` (done in `Error::from`).
 - Only `http`/`https` (plus schemes a backend explicitly supports). The redirect policy in `build_client()` rejects anything else, and caps redirects at 10.
@@ -237,29 +245,62 @@ Dev machine (Windows): Rust via rustup (stable, MSVC target) plus VS 2022 Build 
 - TypeScript: `strict`, no `any`. API types come only from `shared/api-types/` (`import type { Job } from '@ottie/api-types/Job'`). In the UI, `#lib/…` imports of TS files end in `.js` (`#lib/format.js`). Logic lives in plain `.ts` files with unit tests; components stay thin. Prettier formats (tabs, single quotes).
 - UI (`docs/decisions/0015`, `0021`): runes mode; styles in each component's `<style>` using the variables in `app.css` (colours, `--font`/`--mono`, `--radius-s/m/l`), never raw colours; the page talks to the daemon only through `api.ts`. Every theme must keep working: check light and dark when adding colours.
 - Translations (`docs/decisions/0016`): no visible text in components or logic: every string is a message in `messages/en.json` *and* `fr.json` (French typography: no-break space before `: ? !` and inside « »); numbers, sizes and durations go through `format.ts` (`Intl`); daemon text is shown through `explain.ts`. Functions that build text take a `locale` parameter (default `getLocale()`) so tests can check both languages.
+- API docs (`docs/decisions/0030`): every handler has a `#[utoipa::path]` (route, body, answers, the `Reason` codes it can refuse with) and is registered with `routes!`; wire types derive `ToSchema` beside `TS`. Fields inside the tagged enums (`Problem`, `Reason`, `Event`) stay one word (utoipa ignores `rename_all_fields`; a test checks). A change in how to use the API also updates `docs/api/README.md`.
 - API errors (`docs/decisions/0016`): every refusal has a `Reason` code (`crates/api/src/types.rs`) besides the English `error`; a new engine `Error` variant gets a code in `error.rs`.
 - Tests: engine behaviour is tested against the in-process server in `crates/core/tests/support/` (dropped connections, no range support, slow chunks, changed ETag). Speed-limit tests (`tests/throttle.rs`) assert shares and minimum durations with wide margins, never exact speeds; progress snapshots lag up to ~0.5 s, so don't measure rates over short windows. Multi-connection tests (`tests/segmented.rs`) use `HttpConfig { connections: 4, min_split: 64 KiB }`; the other test files pin one connection or use files too small to split. Tests never hit the real internet. A resumed download must be byte-identical to a clean one. Don't assert exact byte counts after an injected connection drop; assert `.part.ottie` length == `downloaded` instead. Manager tests subscribe before adding jobs, and wait for several concurrent jobs with `wait_for_all` (any order), never one after another.
 - Line endings: LF everywhere (`.gitattributes`).
-- Commits: Conventional Commits (`feat(core): …`, `fix(extension): …`), one per slice: the code, its tests and its docs (decision record, CLAUDE.md) together. Unrelated changes (e.g. a test fix found along the way) get their own.
+- Commits: Conventional Commits (`feat(core): …`, `fix(extension): …`), one per slice: the code, its tests and its docs (decision record + its line in `docs/decisions/README.md`, CLAUDE.md) together. Unrelated changes (e.g. a test fix found along the way) get their own.
 - New dependency: say what it's for and why it beats the alternatives before adding it.
 
-## Working with Mathieu
+## How we work
 
-- Mathieu knows basic Python and is new to Rust and TypeScript. When code introduces a concept for the first time, explain it in two or three sentences in your reply, not in code comments. Already explained: borrowing (`&mut`), `Result`/`?`, async/await + `tokio::select!`, enums with data + `match`, closures (`impl FnMut`), traits + generics, `Arc`, channels (mpsc/oneshot/broadcast) and the actor pattern, `Box`, OS threads vs tokio tasks, SQL migrations, atomics, `JoinSet`, child cancellation tokens, `Mutex`, lifetimes (`Env<'a>`), `Drop`, newtypes + associated consts (`CategoryId::GENERAL`), builder methods (`NewJob::new(url).in_dir(..)`), struct update syntax (`..CategorySettings::named(..)`), iterator chains (`map`/`flat_map`/`collect`), `move` closures, `Option::take`, match guards (`pattern if condition =>`), derive macros with attributes (clap's `#[derive(Parser)]`, `#[arg(...)]`), axum extractors (handler arguments filled from the request), `#[cfg(...)]` conditional compilation. Also explained: Paraglide message functions (`m.key({ params })`), JSON imports, `as unknown as` in tests, Svelte components and runes (`$state`, `$derived`, `$props`), TypeScript basics (types, interfaces, unions, `import type`), classes with private fields, promises/`async` in JS, `Promise.all`, TS utility types (`Record`, `Exclude`), `Option` ordering (`None` < `Some`), CSS `minmax(0, 1fr)`, Svelte snippets (`children` + `{@render}`), `$state.raw`, `bind:this`, `<dialog>` + `showModal()`, Tauri capabilities (runtime, remote origin), SvelteKit routes and layouts, `page` from `$app/state`, `resolve` / `goto`, `createContext`, `{#key}`, CSS container queries (`container: page / inline-size`), `Option::transpose`. Also explained: Tauri (a native window around the system's WebView), sidecar processes and their stdin/stdout pipes, `#![cfg_attr(...)]`, turbofish (`app.state::<Owned>()`), `PoisonError`. Also explained: CSS variables redefined per `[data-theme]` attribute, `matchMedia` change listeners, shared `$state` exported from a `.svelte.ts` module, `$effect` + `untrack`, destructuring a struct so every field must be handled, `Option::zip`, `if let … && …` chains, `RangeInclusive` (`1..=50`). Also explained: writable `$derived` (assigning to it until its inputs change), `{@const}`, snippets with parameters, `Pick<T, keys>`, `URLSearchParams` with repeated keys, `{#each { length: n }}`, `Option::filter` with a `|&x|` pattern, `Array.from({ length }, fn)`. Also explained: `bool::then`, iterating an `Option<Vec<_>>` with `.iter().flatten()`, `std::slice::from_ref`, serde `rename` on enum variants, `export type { … }` re-exports. Also explained: `type` aliases (`type Place = (PathBuf, Option<String>)`), matching on `io::ErrorKind` (`CrossesDevices`). Still to come: Svelte stores/context if needed, Tauri commands, etc.
-- For decisions that are hard to reverse (data model, API shape, crate choices, architecture), present 2–3 options with trade-offs and let him choose. For small implementation details, decide and say what you chose.
+- For decisions that are hard to reverse (data model, API shape, crate choices, architecture), present 2–3 options with trade-offs and let the maintainer choose. For small implementation details, decide and say what you chose.
 - Work in small vertical slices that run end to end. Don't scaffold code ahead of need.
 - Show the diff and wait for a go-ahead before committing.
-- Record accepted decisions in `docs/decisions/` and update this file when commands, layout or rules change.
+- Record each accepted decision in `docs/decisions/` (one short file, `NNNN-title.md`) and add a line for it to `docs/decisions/README.md`, which sums up every decision. Update this file when commands, layout or rules change.
 
 ## Build order
 
-1. ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~ Done.
-2. Slices: ~~2a job manager + state machine, `Backend` trait, queue~~ → ~~2b SQLite persistence~~ → ~~2c multi-connection~~ (streaming mode comes with the stream endpoint) → ~~2d speed limits + priorities~~ → ~~2e categories~~ → ~~2f `Content-Disposition` filenames + category re-match~~ → ~~2g retry with backoff~~.
-3. Usable app, early: ~~3a minimal `ottie serve` (jobs API + events WebSocket, token, folders)~~ → ~~3b first web UI (SvelteKit SPA built into the binary; list, add, pause/resume/cancel; token link + login page; `ottie open`)~~ → ~~3b2 translations (en, fr; Paraglide) + error codes from the daemon~~ → ~~3c first desktop app (Tauri window on the same UI, starts the daemon as a sidecar, Ottie icons from `res/icons/`)~~.
-4. Then features grow through API, UI and desktop app together, one slice each: ~~4a list layout (sidebar views, remove, clear finished)~~ → ~~4b table list with selection + toolbar, own title bar~~ → ~~4c left menu (Dashboard, Downloads), status filter in Downloads, dashboard~~ → ~~4d categories (API, Categories page, folder picker, Category column, move to category)~~ → ~~4e category step when adding + first-start setup with editable starter categories~~ → the redesign from the mockups (`docs/decisions/0021`): ~~5a look (four themes, tabs in the title bar, add card, the four tabs laid out as in the mockups, Settings with appearance + language)~~ → ~~5b settings (API + page: max concurrent, global limit with the title-bar chip, retry policy, appearance sync)~~ → ~~5c1 Downloads filters (quick-filter pills, Filters and sorting panel, group by status; `docs/decisions/0023`)~~ → ~~5c2 detail panel with per-download speed limit + priority (`PATCH /jobs/{id}`, `docs/decisions/0024`)~~ → ~~5d per-connection progress + file map (ranges in progress events, `docs/decisions/0025`)~~ → ~~5e saved views (stored in the daemon, `docs/decisions/0026`)~~ → the `/jobs/{id}/stream` endpoint (play while downloading), queue reorder, tray, notifications, autostart.
-5. Browser extension.
+Done: ✅ and struck through.
+
+1. ✅ ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~
+2. ✅ Engine slices:
+   - ✅ ~~2a job manager + state machine, `Backend` trait, queue~~
+   - ✅ ~~2b SQLite persistence~~
+   - ✅ ~~2c multi-connection~~ (streaming mode comes in 5f3)
+   - ✅ ~~2d speed limits + priorities~~
+   - ✅ ~~2e categories~~
+   - ✅ ~~2f `Content-Disposition` filenames + category re-match~~
+   - ✅ ~~2g retry with backoff~~
+3. ✅ Usable app, early:
+   - ✅ ~~3a minimal `ottie serve` (jobs API + events WebSocket, token, folders)~~
+   - ✅ ~~3b first web UI (SvelteKit SPA built into the binary; list, add, pause/resume/cancel; token link + login page; `ottie open`)~~
+   - ✅ ~~3b2 translations (en, fr; Paraglide) + error codes from the daemon~~
+   - ✅ ~~3c first desktop app (Tauri window on the same UI, starts the daemon as a sidecar, Ottie icons from `res/icons/`)~~
+4. ✅ Features grow through API, UI and desktop app together, one slice each:
+   - ✅ ~~4a list layout (sidebar views, remove, clear finished)~~
+   - ✅ ~~4b table list with selection + toolbar, own title bar~~
+   - ✅ ~~4c left menu (Dashboard, Downloads), status filter in Downloads, dashboard~~
+   - ✅ ~~4d categories (API, Categories page, folder picker, Category column, move to category)~~
+   - ✅ ~~4e category step when adding + first-start setup with editable starter categories~~
+5. The redesign from the mockups (`docs/decisions/0021`), then more features the same way:
+   - ✅ ~~5a look (four themes, tabs in the title bar, add card, the four tabs laid out as in the mockups, Settings with appearance + language)~~
+   - ✅ ~~5b settings (API + page: max concurrent, global limit with the title-bar chip, retry policy, appearance sync)~~
+   - ✅ ~~5c1 Downloads filters (quick-filter pills, Filters and sorting panel, group by status; `docs/decisions/0023`)~~
+   - ✅ ~~5c2 detail panel with per-download speed limit + priority (`PATCH /jobs/{id}`, `docs/decisions/0024`)~~
+   - ✅ ~~5d per-connection progress + file map (ranges in progress events, `docs/decisions/0025`)~~
+   - ✅ ~~5e saved views (stored in the daemon, `docs/decisions/0026`), the detail bar as file map (`0027`), files move with their category (`0028`)~~
+   - 5f play while downloading (`docs/decisions/0029`):
+     - ✅ ~~5f1 play links + reader~~
+     - 5f2 follow the player (seek, last chunk early)
+     - 5f3 streaming mode per download
+   - 5g queue reorder
+   - 5h tray
+   - 5i notifications
+   - 5j autostart
 6. Scheduler, clipboard monitoring, uGet import, aria2 / yt-dlp backends.
-7. Tauri Android, last, once everything else is done (Mathieu's choice): embedded core, background downloads, share-sheet intake.
+7. Browser extension.
+8. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.
 
 ## Open decisions
 

@@ -110,6 +110,16 @@ pub enum Error {
 
     #[error("no more view IDs are available")]
     TooManyViews,
+
+    /// Reading a download that failed or was cancelled before the bytes
+    /// asked for arrived.
+    #[error("download {0} stopped before these bytes arrived")]
+    DownloadStopped(JobId),
+
+    /// The download started over (its file changed on the server) while
+    /// being read, so what was read so far belongs to another version.
+    #[error("download {0} started over while being read")]
+    FileChanged(JobId),
 }
 
 impl Error {

@@ -5,6 +5,10 @@
 //!
 //! Byte counts and times are `u64` in Rust but plain `number`s in
 //! TypeScript (JSON has no bigger integers); they stay far below 2^53.
+//!
+//! `utoipa` describes them in the OpenAPI spec (`docs/api/openapi.json`).
+//! It ignores serde's `rename_all_fields`, so fields inside the tagged
+//! enums (`Problem`, `Reason`, `Event`) stay one word each; a test checks.
 
 use std::path::Path;
 use std::time::{Duration, UNIX_EPOCH};
@@ -12,9 +16,10 @@ use std::time::{Duration, UNIX_EPOCH};
 use ottie_core::JobSnapshot;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use utoipa::ToSchema;
 
 /// One download, as listed by `GET /jobs` and sent in `changed` events.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Job {
@@ -55,7 +60,7 @@ pub struct Job {
 }
 
 /// A part of the file that one connection fetches.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ByteRange {
@@ -79,7 +84,7 @@ impl From<ottie_core::Segment> for ByteRange {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum JobState {
@@ -93,7 +98,7 @@ pub enum JobState {
     Retrying,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum Priority {
@@ -104,7 +109,7 @@ pub enum Priority {
 }
 
 /// Body of `POST /jobs`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AddJob {
@@ -120,16 +125,27 @@ pub struct AddJob {
 }
 
 /// Answer to `POST /jobs`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Added {
     pub id: String,
 }
 
+/// Answer to `POST /jobs/{id}/stream`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct StreamLink {
+    /// A path on the daemon (`/api/v1/stream/<ticket>/<name>`) that serves
+    /// the file to anyone who has it, without the token, with `Range`
+    /// support. Valid for 12 hours after its last use.
+    pub url: String,
+}
+
 /// A category: where its downloads go and which files it takes. As listed
 /// by `GET /categories` and sent in `categoryChanged` events.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Category {
@@ -150,7 +166,7 @@ pub struct Category {
 }
 
 /// The categories Ottie itself needs; they can't be removed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum BuiltIn {
@@ -163,7 +179,7 @@ pub enum BuiltIn {
 
 /// Body of `POST /categories` and `PUT /categories/{id}`: every setting (a
 /// PUT replaces them all).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct CategoryBody {
@@ -178,7 +194,7 @@ pub struct CategoryBody {
 }
 
 /// Answer to `POST /categories`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AddedCategory {
@@ -186,7 +202,7 @@ pub struct AddedCategory {
 }
 
 /// Body of `POST /categories/match`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct MatchLink {
@@ -201,7 +217,7 @@ pub struct MatchLink {
 /// Answer to `POST /categories/match`: the category a download of that link
 /// would get. The server's real file name may still move it, unless the user
 /// picks the category or a folder.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Matched {
@@ -215,7 +231,7 @@ pub struct Matched {
 
 /// A saved view: a name, which downloads it shows and how they're laid out.
 /// Listed by `GET /views` and sent in `viewChanged` events.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct View {
@@ -226,7 +242,7 @@ pub struct View {
 }
 
 /// Which downloads a view shows: those that pass every filter.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ViewFilters {
@@ -242,7 +258,7 @@ pub struct ViewFilters {
 
 /// How recently a download was added; "today" starts at local midnight
 /// where the list is shown.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum AddedWithin {
@@ -253,7 +269,7 @@ pub enum AddedWithin {
 }
 
 /// How a list of downloads is laid out.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Arrangement {
@@ -263,7 +279,7 @@ pub struct Arrangement {
     pub grouped: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum SortKey {
@@ -274,7 +290,7 @@ pub enum SortKey {
     Progress,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[ts(export)]
 pub enum SortDirection {
     #[serde(rename = "asc")]
@@ -285,7 +301,7 @@ pub enum SortDirection {
 
 /// Body of `POST /views` and `PUT /views/{id}`: everything about the view
 /// (a PUT replaces it all).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ViewBody {
@@ -295,7 +311,7 @@ pub struct ViewBody {
 }
 
 /// Answer to `POST /views`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct AddedView {
@@ -304,7 +320,7 @@ pub struct AddedView {
 
 /// Body of `PATCH /jobs/{id}`: the job's own settings to change; a field
 /// left out stays as it is.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct JobChange {
@@ -327,7 +343,7 @@ impl From<JobChange> for ottie_core::JobChange {
 }
 
 /// Body of `POST /jobs/{id}/category`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct MoveJob {
@@ -336,7 +352,7 @@ pub struct MoveJob {
 
 /// What applies to the whole daemon, as `GET /settings` answers it and
 /// `settingsChanged` events send it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Settings {
@@ -369,7 +385,7 @@ pub struct Settings {
 /// Body of `PATCH /settings`: only the fields given change, all at once.
 /// A value out of its range (see `crates/api/src/settings.rs`) refuses the
 /// whole change with `outOfRange`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct SettingsChange {
@@ -401,7 +417,7 @@ pub struct SettingsChange {
 
 /// How the front ends look: light, dark or as the system says, and which
 /// pair of themes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Appearance {
@@ -409,7 +425,7 @@ pub struct Appearance {
     pub palette: Palette,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum AppearanceMode {
@@ -419,7 +435,7 @@ pub enum AppearanceMode {
 }
 
 /// A light theme and a dark one that go together.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum Palette {
@@ -431,7 +447,7 @@ pub enum Palette {
 
 /// Why a job failed or is retrying. Clients translate it by `code` and
 /// fall back to the job's English `error` for codes they don't know.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(
     tag = "code",
     rename_all = "camelCase",
@@ -476,7 +492,7 @@ pub enum Problem {
 
 /// Body of every error answer: English text, plus a code (and details) for
 /// clients to translate.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ApiError {
@@ -487,7 +503,7 @@ pub struct ApiError {
 }
 
 /// Why a request was refused.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(
     tag = "code",
     rename_all = "camelCase",
@@ -570,6 +586,16 @@ pub enum Reason {
     InvalidLanguage {
         language: String,
     },
+    /// A play link that doesn't exist or has expired.
+    NoSuchLink,
+    /// Played past what arrived, but the download failed or was cancelled.
+    DownloadStopped {
+        id: String,
+    },
+    /// The download started over while being played (its file changed).
+    FileChanged {
+        id: String,
+    },
     /// The daemon is shutting down.
     Stopping,
     /// A bug or an unexpected failure; `error` has the details.
@@ -579,7 +605,7 @@ pub enum Reason {
 /// A message on the `GET /events` WebSocket. Connect first, then fetch
 /// `GET /jobs`, then apply events in order (insert-or-replace by `id`, or
 /// drop on `removed`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",

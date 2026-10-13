@@ -14,6 +14,7 @@ import type { Job } from '@ottie/api-types/Job';
 import type { JobChange } from '@ottie/api-types/JobChange';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
+import type { StreamLink } from '@ottie/api-types/StreamLink';
 import type { AddedView } from '@ottie/api-types/AddedView';
 import type { View } from '@ottie/api-types/View';
 import type { ViewBody } from '@ottie/api-types/ViewBody';
@@ -72,6 +73,12 @@ export class Api {
 	/** Changes the job's own settings given (speed limit, priority). */
 	changeJob(id: string, change: JobChange): Promise<void> {
 		return this.request('PATCH', `/jobs/${encodeURIComponent(id)}`, change);
+	}
+
+	/** A link that plays the job's file, even unfinished, without the token
+	 * (docs/decisions/0029). Always the same one while it's in use. */
+	streamLink(id: string): Promise<StreamLink> {
+		return this.request('POST', `/jobs/${encodeURIComponent(id)}/stream`);
 	}
 
 	/** Moves the job to another category, as the user's choice. */

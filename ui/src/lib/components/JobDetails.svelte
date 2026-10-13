@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { Category } from '@ottie/api-types/Category';
 	import type { Job } from '@ottie/api-types/Job';
 	import type { JobChange } from '@ottie/api-types/JobChange';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import Copy from '@lucide/svelte/icons/copy';
 	import Play from '@lucide/svelte/icons/play';
 	import type { Action } from '#lib/bulk.js';
 	import { categoryName } from '#lib/categories.js';
@@ -32,10 +34,23 @@
 		onMove: (category: number) => void;
 		/** Saves a change to the job's own settings; resolves to false if it couldn't. */
 		onChange: (change: JobChange) => Promise<boolean>;
+		/** The job's play link; null if the daemon can't give one. */
+		getLink: () => Promise<string | null>;
 	}
 
-	let { job, categories, speed, now, maxRetries, open, onToggle, onRun, onMove, onChange }: Props =
-		$props();
+	let {
+		job,
+		categories,
+		speed,
+		now,
+		maxRetries,
+		open,
+		onToggle,
+		onRun,
+		onMove,
+		onChange,
+		getLink
+	}: Props = $props();
 
 	let name = $derived(displayName(job));
 	let status = $derived(statusOf(job));
@@ -52,6 +67,44 @@
 	let choices = $derived(
 		categories.filter((category) => category.builtIn !== 'other' || category.id === job.category)
 	);
+
+	// The play link, asked for again only when another download is shown or
+	// this one becomes playable (not on every change).
+	let id = $derived(job.id);
+	let playable = $derived(isPlayable(job));
+	let link: string | null = $state(null);
+	let copied = $state(false);
+	/** The clipboard refused: the link is shown to copy by hand. */
+	let showLink = $state(false);
+
+	$effect(() => {
+		const wanted = playable ? id : null;
+		link = null;
+		copied = false;
+		showLink = false;
+		if (wanted === null) {
+			return;
+		}
+		let current = true;
+		void untrack(getLink).then((url) => {
+			if (current) {
+				link = url;
+			}
+		});
+		return () => {
+			current = false;
+		};
+	});
+
+	async function copy(url: string) {
+		try {
+			await navigator.clipboard.writeText(url);
+			copied = true;
+			setTimeout(() => (copied = false), 2000);
+		} catch {
+			showLink = true; // Not allowed here (a plain-http remote page).
+		}
+	}
 
 	function percent(fraction: number): string {
 		return `${fraction * 100}%`;
@@ -75,11 +128,16 @@
 			{#if primary}
 				<button class="primary" onclick={() => onRun(primary.action)}>{primary.label}</button>
 			{/if}
-			<!-- Not in the daemon yet (docs/decisions/0021): shown, but disabled. -->
-			{#if isPlayable(job) && job.state !== 'completed'}
-				<button disabled title={m.coming_later()}>
+			{#if link}
+				<!-- A real link: the browser plays it in a new tab (the desktop
+				     app hands it to the system's browser). -->
+				<a class="button" href={link} target="_blank" rel="noopener" title={m.det_play_hint()}>
 					<Play size={13} aria-hidden="true" />
 					{m.det_play()}
+				</a>
+				<button title={m.det_copy_link_hint()} onclick={() => link && copy(link)}>
+					<Copy size={13} aria-hidden="true" />
+					{copied ? m.det_link_copied() : m.det_copy_link()}
 				</button>
 			{/if}
 			<button disabled title={m.coming_later()}>{m.det_show_folder()}</button>
@@ -99,6 +157,10 @@
 			</button>
 		</div>
 	</div>
+
+	{#if showLink && link}
+		<input class="link" readonly value={link} aria-label={m.det_link_label()} />
+	{/if}
 
 	{#if open}
 		<div class="body">
@@ -278,12 +340,35 @@
 		gap: 0.35rem;
 	}
 
-	.buttons button {
+	.buttons button,
+	.buttons a {
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
 		height: 2rem;
 		font-weight: 500;
+	}
+
+	/* A link that looks like the buttons next to it. */
+	a.button {
+		padding: 0.4rem 0.85rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-s);
+		background: var(--surface);
+		color: inherit;
+		text-decoration: none;
+	}
+
+	a.button:hover {
+		border-color: var(--muted);
+	}
+
+	.link {
+		display: block;
+		width: calc(100% - 1.8rem);
+		margin: 0 0.9rem 0.6rem;
+		font-family: var(--mono);
+		font-size: 0.8rem;
 	}
 
 	.danger {

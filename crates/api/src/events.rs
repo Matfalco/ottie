@@ -10,8 +10,22 @@ use tokio_util::sync::CancellationToken;
 
 use crate::AppState;
 use crate::auth::EVENTS_PROTOCOL;
-use crate::types::{ByteRange, Category, Event, Job, Settings, View};
+use crate::types::{ApiError, ByteRange, Category, Event, Job, Settings, View};
 
+/// Live changes, as a WebSocket of JSON `Event` messages. Offer the
+/// protocols `ottie.v1` and `ottie.token.<token>` (browsers can't set headers
+/// here); the server picks `ottie.v1`. Connect first, then fetch the lists
+/// (`GET /jobs`, …), then apply events in order; on `resync`, fetch again.
+#[utoipa::path(
+    get,
+    path = "/events",
+    operation_id = "events",
+    tag = "events",
+    responses(
+        (status = SWITCHING_PROTOCOLS, description = "The WebSocket is open; each message is an `Event`", body = Event),
+        (status = UNAUTHORIZED, description = "`unauthorized`: no `ottie.token.<token>` protocol with the right token", body = ApiError),
+    )
+)]
 pub(crate) async fn subscribe(State(state): State<AppState>, ws: WebSocketUpgrade) -> Response {
     // Subscribe now rather than after the upgrade, so a client that fetches
     // `GET /jobs` once connected can't miss a change in between.

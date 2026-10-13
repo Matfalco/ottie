@@ -9,12 +9,15 @@ mod daemon;
 use std::sync::{Mutex, PoisonError};
 
 use tauri::ipc::CapabilityBuilder;
+use tauri::webview::NewWindowResponse;
 use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 use crate::daemon::Started;
 
 const WINDOW: &str = "main";
+/// The daemon's play links (docs/decisions/0029).
+const PLAY_PATH: &str = "/api/v1/stream/";
 
 /// What the page may do in the app: control its window, since it draws its
 /// own title bar (docs/decisions/0019), and open the system folder picker,
@@ -79,6 +82,7 @@ async fn start(app: &AppHandle) -> anyhow::Result<()> {
 
 fn open_window(app: &AppHandle, link: Url) -> tauri::Result<()> {
     let daemon = link.origin();
+    let player = daemon.clone();
     let page = PAGE_PERMISSIONS.into_iter().fold(
         CapabilityBuilder::new("page")
             // The daemon's address is only known now, hence a runtime capability.
@@ -97,6 +101,15 @@ fn open_window(app: &AppHandle, link: Url) -> tauri::Result<()> {
         // Only the daemon's pages: a link to elsewhere must not turn this
         // window into a browser.
         .on_navigation(move |url| url.origin() == daemon)
+        // "Play" opens the daemon's play link in a new tab: here, in the
+        // system's browser. No other page opens a window.
+        .on_new_window(move |url, _| {
+            if url.origin() == player && url.path().starts_with(PLAY_PATH) {
+                // Best effort: the user can still copy the link.
+                let _ = open::that_detached(url.as_str());
+            }
+            NewWindowResponse::Deny
+        })
         .build()?;
     Ok(())
 }

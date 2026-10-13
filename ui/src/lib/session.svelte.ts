@@ -99,6 +99,16 @@ export class Session {
 		await Promise.all(ids.map((id) => this.attempt(() => request(id))));
 	}
 
+	/** The job's play link as a full address; null if the daemon can't give one. */
+	async streamLink(id: string): Promise<string | null> {
+		try {
+			const { url } = await this.api.streamLink(id);
+			return new URL(url, location.href).href;
+		} catch {
+			return null;
+		}
+	}
+
 	/** Moves the jobs to `category`, as the user's choice. */
 	async move(ids: string[], category: number): Promise<void> {
 		await Promise.all(ids.map((id) => this.attempt(() => this.api.setCategory(id, category))));

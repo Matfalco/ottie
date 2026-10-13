@@ -13,7 +13,7 @@ use ottie_api::{
     AddJob, Added, AddedCategory, AddedView, AddedWithin, ApiError, Appearance, AppearanceMode,
     Arrangement, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL, Event, Job, JobState, Matched,
     Palette, Priority, Problem, Reason, Settings, SettingsChange, SortDirection, SortKey,
-    TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
+    StreamLink, TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
 };
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
@@ -157,6 +157,21 @@ impl Daemon {
                 .insert("Sec-WebSocket-Protocol", value);
         }
         tokio_tungstenite::connect_async(request).await
+    }
+}
+
+impl Daemon {
+    /// The job's play link, as a full URL.
+    async fn play_link(&self, id: &str) -> String {
+        let response = self
+            .post(&format!("/jobs/{id}/stream"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let link: StreamLink = response.json().await.unwrap();
+        assert!(link.url.starts_with("/api/v1/stream/"), "{}", link.url);
+        format!("http://{}{}", self.addr, link.url)
     }
 }
 
@@ -879,4 +894,94 @@ async fn views_are_listed_added_changed_and_removed() {
         (status, refused.reason),
         (StatusCode::NOT_FOUND, Reason::ViewNotFound { id })
     );
+}
+
+#[tokio::test]
+async fn a_play_link_serves_the_file_without_the_token() {
+    let d = start().await;
+    let id = d.add("file.bin").await;
+    d.wait_until(&id, JobState::Completed).await;
+    let anonymous = d.client.post(d.url(&format!("/jobs/{id}/stream")));
+    let refused = anonymous.send().await.unwrap();
+    assert_eq!(refused.status(), StatusCode::UNAUTHORIZED);
+
+    let link = d.play_link(&id).await;
+    assert!(link.ends_with("/file.bin"), "named after the file: {link}");
+    assert_eq!(d.play_link(&id).await, link, "the same link every time");
+
+    let whole = d.client.get(&link).send().await.unwrap();
+    assert_eq!(whole.status(), StatusCode::OK);
+    let headers = whole.headers();
+    assert_eq!(headers["accept-ranges"], "bytes");
+    assert_eq!(headers["content-length"], SIZE.to_string().as_str());
+    assert_eq!(headers["content-security-policy"], "sandbox");
+    assert_eq!(whole.bytes().await.unwrap(), vec![7u8; SIZE]);
+
+    let part = d.client.get(&link).header("Range", "bytes=100-199");
+    let part = part.send().await.unwrap();
+    assert_eq!(part.status(), StatusCode::PARTIAL_CONTENT);
+    let range = format!("bytes 100-199/{SIZE}");
+    assert_eq!(part.headers()["content-range"], range.as_str());
+    assert_eq!(part.bytes().await.unwrap().len(), 100);
+
+    let past = d
+        .client
+        .get(&link)
+        .header("Range", format!("bytes={SIZE}-"));
+    let past = past.send().await.unwrap();
+    assert_eq!(past.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+    let range = format!("bytes */{SIZE}");
+    assert_eq!(past.headers()["content-range"], range.as_str());
+
+    // The name is only for players.
+    let (unnamed, _) = link.rsplit_once('/').unwrap();
+    let unnamed = d.client.get(unnamed).send().await.unwrap();
+    assert_eq!(unnamed.status(), StatusCode::OK);
+
+    let guess = d.client.get(d.url("/stream/0123/file.bin")).send().await;
+    let (status, refused) = error_of(guess.unwrap()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(refused.reason, Reason::NoSuchLink);
+}
+
+#[tokio::test]
+async fn a_play_link_streams_a_download_as_it_arrives() {
+    let d = start().await;
+    let id = d.add("slow.bin").await;
+    let link = d.play_link(&id).await;
+    let mut response = d.client.get(&link).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    // The server sends no size, so there are no ranges to ask for.
+    assert_eq!(response.headers()["accept-ranges"], "none");
+
+    let first = response.chunk().await.unwrap().unwrap();
+    assert_ne!(d.job(&id).await.state, JobState::Completed);
+    let mut received = first.len();
+    tokio::time::timeout(TIMEOUT, async {
+        while let Some(chunk) = response.chunk().await.unwrap() {
+            assert!(chunk.iter().all(|&byte| byte == 1));
+            received += chunk.len();
+        }
+    })
+    .await
+    .expect("never finished");
+    assert_eq!(received, 200 * 1024);
+}
+
+#[tokio::test]
+async fn the_api_describes_itself() {
+    let d = start().await;
+    let anonymous = d.client.get(d.url("/openapi.json")).send().await.unwrap();
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+
+    let spec: serde_json::Value = d
+        .get("/openapi.json")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(spec, serde_json::to_value(ottie_api::openapi()).unwrap());
+    assert!(spec["paths"]["/api/v1/jobs"]["post"].is_object());
 }

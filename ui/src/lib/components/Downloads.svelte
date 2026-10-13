@@ -220,6 +220,7 @@
 			onRun={(action) => run(action, [job])}
 			onMove={(category) => session.move([job.id], category)}
 			onChange={(change) => changeJob(job.id, change)}
+			getLink={() => session.streamLink(job.id)}
 		/>
 	{/if}
 </section>

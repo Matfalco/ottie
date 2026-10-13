@@ -45,9 +45,13 @@ export function primaryAction(
 	return null;
 }
 
-/** Videos and music, which can be played before they finish (later). */
+/** Videos and music with a file to play: what has arrived so far, or all
+ * of it once complete. */
 export function isPlayable(job: Job): boolean {
-	const kind = fileKind(displayName(job));
+	if (job.fileName === null || job.state === 'cancelled') {
+		return false;
+	}
+	const kind = fileKind(job.fileName);
 	return kind === 'video' || kind === 'audio';
 }
 

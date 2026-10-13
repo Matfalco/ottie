@@ -9,30 +9,38 @@
 //! Everything is under `/api/v1` and needs the token, as
 //! `Authorization: Bearer <token>` or, for the events WebSocket (browsers
 //! can't set headers there), as the WebSocket protocol `ottie.token.<token>`.
+//! Only play links (`/stream/…`) do without it: their ticket is the permission.
+//!
+//! [`openapi`] describes it all; the tests write that to `docs/api/openapi.json`.
 
 mod auth;
 mod categories;
 mod error;
 mod events;
 mod jobs;
+mod openapi;
 mod settings;
+mod stream;
 mod types;
 mod ui;
 mod views;
 
+use std::sync::Arc;
+
 use axum::Router;
 use axum::http::{Method, Uri};
 use axum::middleware;
-use axum::routing::{delete, get, post, put};
 use ottie_core::Manager;
 use tokio_util::sync::CancellationToken;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
 pub use types::{
     AddJob, Added, AddedCategory, AddedView, AddedWithin, ApiError, Appearance, AppearanceMode,
     Arrangement, BuiltIn, ByteRange, Category, CategoryBody, Event, Job, JobChange, JobState,
     MatchLink, Matched, MoveJob, Palette, Priority, Problem, Reason, Settings, SettingsChange,
-    SortDirection, SortKey, View, ViewBody, ViewFilters,
+    SortDirection, SortKey, StreamLink, View, ViewBody, ViewFilters,
 };
 pub use ui::UiSource;
 
@@ -41,44 +49,71 @@ pub use ui::UiSource;
 struct AppState {
     manager: Manager,
     token: Token,
-    /// Cancelled when the daemon stops, so open WebSockets close.
+    /// Cancelled when the daemon stops, so open WebSockets and streams close.
     shutdown: CancellationToken,
+    links: Arc<stream::Links>,
+    /// The OpenAPI description, as served at `/openapi.json`.
+    spec: Arc<serde_json::Value>,
+}
+
+/// Everything that needs the token. Each handler's `#[utoipa::path]`
+/// gives both its route and its description.
+fn private_routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(jobs::list, jobs::add))
+        .routes(routes!(jobs::remove, jobs::change))
+        .routes(routes!(jobs::pause))
+        .routes(routes!(jobs::resume))
+        .routes(routes!(jobs::cancel))
+        .routes(routes!(jobs::set_category))
+        .routes(routes!(stream::link))
+        .routes(routes!(categories::list, categories::add))
+        .routes(routes!(categories::matching))
+        .routes(routes!(categories::update, categories::remove))
+        .routes(routes!(settings::get, settings::change))
+        .routes(routes!(views::list, views::add))
+        .routes(routes!(views::update, views::remove))
+        .routes(routes!(events::subscribe))
+        .routes(routes!(openapi::spec))
+}
+
+/// Players can't send the token: the ticket in the path stands for it.
+fn public_routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(stream::serve))
+        .routes(routes!(stream::serve_named))
+}
+
+/// The OpenAPI description of the API, as `docs/api/openapi.json` holds it.
+pub fn openapi() -> utoipa::openapi::OpenApi {
+    let api = OpenApiRouter::new()
+        .nest("/api/v1", private_routes().merge(public_routes()))
+        .into_openapi();
+    openapi::describe(api)
 }
 
 /// The API under `/api/v1`, and the web UI everywhere else. Cancel
 /// `shutdown` before stopping the server so event streams end.
 pub fn router(manager: Manager, token: Token, shutdown: CancellationToken, ui: UiSource) -> Router {
+    // Can't fail: these types always serialize.
+    let spec = serde_json::to_value(openapi()).unwrap_or_default();
     let state = AppState {
         manager,
         token,
         shutdown,
+        links: Arc::default(),
+        spec: Arc::new(spec),
     };
-    let api = Router::new()
-        .route("/jobs", get(jobs::list).post(jobs::add))
-        .route("/jobs/{id}", delete(jobs::remove).patch(jobs::change))
-        .route("/jobs/{id}/pause", post(jobs::pause))
-        .route("/jobs/{id}/resume", post(jobs::resume))
-        .route("/jobs/{id}/cancel", post(jobs::cancel))
-        .route("/jobs/{id}/category", post(jobs::set_category))
-        .route("/categories", get(categories::list).post(categories::add))
-        .route("/categories/match", post(categories::matching))
-        .route(
-            "/categories/{id}",
-            put(categories::update).delete(categories::remove),
-        )
-        .route("/settings", get(settings::get).patch(settings::change))
-        .route("/views", get(views::list).post(views::add))
-        .route("/views/{id}", put(views::update).delete(views::remove))
-        .route("/events", get(events::subscribe))
+    let private = private_routes()
         .fallback(not_found)
         // Also covers the fallback, so unknown paths don't reveal what exists.
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_token,
-        ))
-        .with_state(state);
+        ));
+    let (api, _) = public_routes().merge(private).split_for_parts();
     Router::new()
-        .nest("/api/v1", api)
+        .nest("/api/v1", api.with_state(state))
         .fallback(move |method: Method, uri: Uri| async move { ui::serve(&ui, method, &uri).await })
 }
 

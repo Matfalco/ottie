@@ -1,0 +1,3356 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ottie API",
+    "description": "The HTTP API of the Ottie daemon (`ottie serve`): every client (web UI, desktop and Android apps, browser extension, scripts) goes through it. How to use it, with examples: docs/api/README.md in the repository.",
+    "license": {
+      "name": "MPL-2.0",
+      "identifier": "MPL-2.0"
+    },
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:24068",
+      "description": "A daemon on this computer, at the default address"
+    }
+  ],
+  "paths": {
+    "/api/v1/categories": {
+      "get": {
+        "tags": [
+          "categories"
+        ],
+        "summary": "Every category by ID; General (1) first.",
+        "operationId": "listCategories",
+        "responses": {
+          "200": {
+            "description": "Every category",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Category"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "categories"
+        ],
+        "summary": "Adds a category.",
+        "operationId": "addCategory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddedCategory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalidCategoryName`, `invalidExtension`, `relativeFolder` or `nonUtf8Path`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`categoryNameTaken` or `extensionTaken`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categories/match": {
+      "post": {
+        "tags": [
+          "categories"
+        ],
+        "summary": "The category a link would get if added without one (in that folder, if\n`destDir` is given). A POST, so links, which may carry tokens, never sit\nin an address or a log.",
+        "operationId": "matchCategory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchLink"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The category it would get",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Matched"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalidUrl` or `relativeFolder`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categories/{id}": {
+      "put": {
+        "tags": [
+          "categories"
+        ],
+        "summary": "Replaces every setting of a category. A new folder applies to downloads\nadded from now on.",
+        "operationId": "updateCategory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Category ID (General is 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Replaced"
+          },
+          "400": {
+            "description": "`invalidCategoryName`, `invalidExtension`, `relativeFolder` or `nonUtf8Path`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`categoryNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`categoryNameTaken` or `extensionTaken`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "categories"
+        ],
+        "summary": "Removes a category. Its downloads move to General first (a `changed`\nevent for each); their files stay where they are.",
+        "operationId": "removeCategory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Category ID (General is 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`categoryNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`cannotRemoveBuiltIn` (General and Other)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Live changes, as a WebSocket of JSON `Event` messages. Offer the\nprotocols `ottie.v1` and `ottie.token.<token>` (browsers can't set headers\nhere); the server picks `ottie.v1`. Connect first, then fetch the lists\n(`GET /jobs`, …), then apply events in order; on `resync`, fetch again.",
+        "operationId": "events",
+        "responses": {
+          "101": {
+            "description": "The WebSocket is open; each message is an `Event`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Event"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no `ottie.token.<token>` protocol with the right token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Every job, oldest first.",
+        "operationId": "listJobs",
+        "responses": {
+          "200": {
+            "description": "Every job, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Job"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Queues a download. It starts as soon as a slot is free.",
+        "operationId": "addJob",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddJob"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Added"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalidUrl`, `unsupportedScheme`, `relativeFolder`, `nonUtf8Path` or `noFolder`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`categoryNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}": {
+      "delete": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Takes a download off the list, in any state. Stops it first if it's\nrunning (answering once it has) and deletes its partial file; a completed\nfile stays on disk.",
+        "operationId": "removeJob",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID, like `2026.10.13-14.28.59-1`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "400": {
+            "description": "`invalidJobId`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`jobNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`jobMoving`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Changes a download's own speed limit and priority (the fields given), in\nany state; they take effect at once, even while it runs. Every client\nhears of it through one `changed` event, none if nothing changed.",
+        "operationId": "changeJob",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID, like `2026.10.13-14.28.59-1`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Changed"
+          },
+          "400": {
+            "description": "`invalidJobId`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`jobNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}/cancel": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Stops a download for good and deletes its partial file. It stays on the\nlist as `cancelled`.",
+        "operationId": "cancelJob",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID, like `2026.10.13-14.28.59-1`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelled"
+          },
+          "400": {
+            "description": "`invalidJobId`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`jobNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`invalidTransition` or `jobMoving`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}/category": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Moves a download to another category, as the user's choice (never\nre-matched), and its file to that category's folder. A running download\nstops, moves and carries on. Answers once the file has moved, which\nbetween drives takes as long as a copy. A category without a folder\nleaves the file where it is.",
+        "operationId": "moveJob",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID, like `2026.10.13-14.28.59-1`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveJob"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Moved"
+          },
+          "400": {
+            "description": "`invalidJobId`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`jobNotFound` or `categoryNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`jobMoving`, or `cannotMoveWhileRunning` (it can't resume)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`moveFailed`: the file couldn't move (disk full…)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}/pause": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Pauses a download. Answers once it has really stopped and its file is flushed.",
+        "operationId": "pauseJob",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID, like `2026.10.13-14.28.59-1`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Paused"
+          },
+          "400": {
+            "description": "`invalidJobId`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`jobNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`invalidTransition` (a finished download…) or `jobMoving`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}/resume": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Puts a paused or failed download back in the queue.",
+        "operationId": "resumeJob",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID, like `2026.10.13-14.28.59-1`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Queued again"
+          },
+          "400": {
+            "description": "`invalidJobId`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`jobNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`invalidTransition` or `jobMoving`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}/stream": {
+      "post": {
+        "tags": [
+          "play"
+        ],
+        "summary": "A download's play link, as a path on this server: the same one while it\nis in use. It ends with the file name once known, so players can show it.",
+        "operationId": "getPlayLink",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID, like `2026.10.13-14.28.59-1`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Its play link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalidJobId`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`jobNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "This description, as JSON.",
+        "operationId": "openapi",
+        "responses": {
+          "200": {
+            "description": "The OpenAPI description of this API",
+            "content": {
+              "application/json": {}
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Every setting.",
+        "operationId": "getSettings",
+        "responses": {
+          "200": {
+            "description": "Every setting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Changes the settings given, all at once; each is saved and takes effect\nat once. Every client hears of it through a `settingsChanged` event. One\nvalue out of range refuses the whole change.",
+        "operationId": "changeSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Changed"
+          },
+          "400": {
+            "description": "`outOfRange` (with the setting and its range) or `invalidLanguage`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stream/{ticket}": {
+      "get": {
+        "tags": [
+          "play"
+        ],
+        "summary": "The same as `GET /stream/{ticket}/{name}`, without the name.",
+        "operationId": "playUnnamed",
+        "parameters": [
+          {
+            "name": "ticket",
+            "in": "path",
+            "description": "From the play link",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The whole file",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "404": {
+            "description": "`noSuchLink`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/stream/{ticket}/{name}": {
+      "get": {
+        "tags": [
+          "play"
+        ],
+        "summary": "Plays a download, complete or not: no token, the ticket in the path is\nthe permission. Bytes that haven't arrived yet are waited for (also while\nthe download is queued or paused). The answer breaks off if the download\nfails, is cancelled or removed, or starts over. `Range` works when the\nsize is known (`Accept-Ranges: bytes`).",
+        "operationId": "play",
+        "parameters": [
+          {
+            "name": "ticket",
+            "in": "path",
+            "description": "From the play link",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "description": "The file name; only for players to show",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "description": "One range, like `bytes=1000-` or `bytes=-500`",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The whole file, as it arrives",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "206": {
+            "description": "The range asked for",
+            "content": {
+              "application/octet-stream": {}
+            }
+          },
+          "404": {
+            "description": "`noSuchLink` (unknown or expired) or `jobNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`downloadStopped`: it failed or was cancelled before it had a file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The range starts past the end (`Content-Range: bytes */<size>`)"
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/views": {
+      "get": {
+        "tags": [
+          "views"
+        ],
+        "summary": "Every saved view, oldest first.",
+        "operationId": "listViews",
+        "responses": {
+          "200": {
+            "description": "Every saved view",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/View"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "views"
+        ],
+        "summary": "Saves a new view.",
+        "operationId": "addView",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddedView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalidViewName`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`viewNameTaken`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/views/{id}": {
+      "put": {
+        "tags": [
+          "views"
+        ],
+        "summary": "Replaces a view, name included.",
+        "operationId": "updateView",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "View ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ViewBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Replaced"
+          },
+          "400": {
+            "description": "`invalidViewName`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`viewNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`viewNameTaken`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "views"
+        ],
+        "summary": "Removes a view.",
+        "operationId": "removeView",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "View ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`viewNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddJob": {
+        "type": "object",
+        "description": "Body of `POST /jobs`.",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "category": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Default: matched by the file's extension.",
+            "minimum": 0
+          },
+          "destDir": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "An absolute folder. Default: the category's folder."
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "Added": {
+        "type": "object",
+        "description": "Answer to `POST /jobs`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "AddedCategory": {
+        "type": "object",
+        "description": "Answer to `POST /categories`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "AddedView": {
+        "type": "object",
+        "description": "Answer to `POST /views`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "AddedWithin": {
+        "type": "string",
+        "description": "How recently a download was added; \"today\" starts at local midnight\nwhere the list is shown.",
+        "enum": [
+          "any",
+          "today",
+          "week"
+        ]
+      },
+      "ApiError": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Reason"
+          },
+          {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "description": "English: for logs, and for codes a client doesn't know."
+              }
+            }
+          }
+        ],
+        "description": "Body of every error answer: English text, plus a code (and details) for\nclients to translate."
+      },
+      "Appearance": {
+        "type": "object",
+        "description": "How the front ends look: light, dark or as the system says, and which\npair of themes.",
+        "required": [
+          "mode",
+          "palette"
+        ],
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/AppearanceMode"
+          },
+          "palette": {
+            "$ref": "#/components/schemas/Palette"
+          }
+        }
+      },
+      "AppearanceMode": {
+        "type": "string",
+        "enum": [
+          "system",
+          "light",
+          "dark"
+        ]
+      },
+      "Arrangement": {
+        "type": "object",
+        "description": "How a list of downloads is laid out.",
+        "required": [
+          "sort",
+          "direction",
+          "grouped"
+        ],
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/SortDirection"
+          },
+          "grouped": {
+            "type": "boolean",
+            "description": "Grouped by status, each group sorted."
+          },
+          "sort": {
+            "$ref": "#/components/schemas/SortKey"
+          }
+        }
+      },
+      "BuiltIn": {
+        "type": "string",
+        "description": "The categories Ottie itself needs; they can't be removed.",
+        "enum": [
+          "general",
+          "other"
+        ]
+      },
+      "ByteRange": {
+        "type": "object",
+        "description": "A part of the file that one connection fetches.",
+        "required": [
+          "start",
+          "end",
+          "done"
+        ],
+        "properties": {
+          "done": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bytes from `start` that have arrived.",
+            "minimum": 0
+          },
+          "end": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Exclusive.",
+            "minimum": 0
+          },
+          "start": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "description": "A category: where its downloads go and which files it takes. As listed\nby `GET /categories` and sent in `categoryChanged` events.",
+        "required": [
+          "id",
+          "name",
+          "extensions",
+          "speedLimit",
+          "maxConcurrent"
+        ],
+        "properties": {
+          "builtIn": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BuiltIn",
+                "description": "Null for the user's own categories."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Lowercase, without the dot. Each belongs to one category at most."
+          },
+          "folder": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where its downloads are saved; null: each download must name a folder."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "General is 1.",
+            "minimum": 0
+          },
+          "maxConcurrent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many of its downloads may run at once; 0 = no cap of its own.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "speedLimit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bytes per second for all its downloads together; 0 = none.",
+            "minimum": 0
+          }
+        }
+      },
+      "CategoryBody": {
+        "type": "object",
+        "description": "Body of `POST /categories` and `PUT /categories/{id}`: every setting (a\nPUT replaces them all).",
+        "required": [
+          "name",
+          "extensions",
+          "speedLimit",
+          "maxConcurrent"
+        ],
+        "properties": {
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "With or without the dot, any case: `.MKV` and `mkv` are the same."
+          },
+          "folder": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "An absolute folder, or null."
+          },
+          "maxConcurrent": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "speedLimit": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "Event": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A job was added or changed state, name or settings.",
+            "required": [
+              "job",
+              "type"
+            ],
+            "properties": {
+              "job": {
+                "$ref": "#/components/schemas/Job"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "changed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Bytes arrived; sent a few times per second per running job.",
+            "required": [
+              "id",
+              "downloaded",
+              "ranges",
+              "type"
+            ],
+            "properties": {
+              "downloaded": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "id": {
+                "type": "string"
+              },
+              "ranges": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ByteRange"
+                },
+                "description": "Several connections: each one's range, with what has arrived so\nfar. Empty for one connection."
+              },
+              "total": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "progress"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A job was removed (`DELETE /jobs/{id}`): drop it.",
+            "required": [
+              "id",
+              "type"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "removed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A category was added or changed: insert-or-replace by `id`.",
+            "required": [
+              "category",
+              "type"
+            ],
+            "properties": {
+              "category": {
+                "$ref": "#/components/schemas/Category"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "categoryChanged"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A category was removed; its jobs were moved to General first (and a\n`changed` event was sent for each).",
+            "required": [
+              "id",
+              "type"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "categoryRemoved"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The settings changed (from any client): all of them, as now.",
+            "required": [
+              "settings",
+              "type"
+            ],
+            "properties": {
+              "settings": {
+                "$ref": "#/components/schemas/Settings"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "settingsChanged"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A saved view was added or changed: insert-or-replace by `id`.",
+            "required": [
+              "view",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "viewChanged"
+                ]
+              },
+              "view": {
+                "$ref": "#/components/schemas/View"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A saved view was removed.",
+            "required": [
+              "id",
+              "type"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "viewRemoved"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Events were missed (the client was too slow): fetch `GET /jobs` again.",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "resync"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "A message on the `GET /events` WebSocket. Connect first, then fetch\n`GET /jobs`, then apply events in order (insert-or-replace by `id`, or\ndrop on `removed`)."
+      },
+      "Job": {
+        "type": "object",
+        "description": "One download, as listed by `GET /jobs` and sent in `changed` events.",
+        "required": [
+          "id",
+          "url",
+          "destDir",
+          "state",
+          "downloaded",
+          "resumable",
+          "priority",
+          "speedLimit",
+          "category",
+          "retries",
+          "ranges",
+          "moving"
+        ],
+        "properties": {
+          "category": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "destDir": {
+            "type": "string"
+          },
+          "downloaded": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why it failed, or the last failure while `retrying`, in English."
+          },
+          "fileName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Known once the server has answered."
+          },
+          "id": {
+            "type": "string",
+            "description": "Like `2026.10.12-14.03.07-1`; sorting by it sorts by creation."
+          },
+          "moving": {
+            "type": "boolean",
+            "description": "Its file is moving to another category's folder. Until it's done, it\ncan't be paused, resumed, cancelled, removed or moved again."
+          },
+          "priority": {
+            "$ref": "#/components/schemas/Priority"
+          },
+          "problem": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Problem",
+                "description": "The same, as a code to translate (see `Problem`)."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ranges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ByteRange"
+            },
+            "description": "Downloads over several connections: each connection's range, as last\nsaved (`progress` events bring them live). Empty for one connection."
+          },
+          "resumable": {
+            "type": "boolean",
+            "description": "Whether pausing keeps what's downloaded."
+          },
+          "retries": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Failed attempts since bytes last arrived.",
+            "minimum": 0
+          },
+          "retryAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "While `retrying`: when, in milliseconds since 1970 (UTC).",
+            "minimum": 0
+          },
+          "speedLimit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bytes per second; 0 = no limit of its own.",
+            "minimum": 0
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "total": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Size in bytes, if the server said.",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "JobChange": {
+        "type": "object",
+        "description": "Body of `PATCH /jobs/{id}`: the job's own settings to change; a field\nleft out stays as it is.",
+        "properties": {
+          "priority": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Priority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "speedLimit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Bytes per second; 0 = no limit of its own.",
+            "minimum": 0
+          }
+        }
+      },
+      "JobState": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "connecting",
+          "downloading",
+          "paused",
+          "completed",
+          "failed",
+          "cancelled",
+          "retrying"
+        ]
+      },
+      "MatchLink": {
+        "type": "object",
+        "description": "Body of `POST /categories/match`.",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "destDir": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The folder it would be saved in, if not its category's: then the\nfolder decides the category."
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "Matched": {
+        "type": "object",
+        "description": "Answer to `POST /categories/match`: the category a download of that link\nwould get. The server's real file name may still move it, unless the user\npicks the category or a folder.",
+        "required": [
+          "category",
+          "byFolder"
+        ],
+        "properties": {
+          "byFolder": {
+            "type": "boolean",
+            "description": "The folder decided: it's this category's folder, or (Other) the\nfolder of none."
+          },
+          "category": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "extension": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The extension the link suggests, if any."
+          }
+        }
+      },
+      "MoveJob": {
+        "type": "object",
+        "description": "Body of `POST /jobs/{id}/category`.",
+        "required": [
+          "category"
+        ],
+        "properties": {
+          "category": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "Palette": {
+        "type": "string",
+        "description": "A light theme and a dark one that go together.",
+        "enum": [
+          "sea",
+          "neutral"
+        ]
+      },
+      "Priority": {
+        "type": "string",
+        "enum": [
+          "low",
+          "normal",
+          "high",
+          "urgent"
+        ]
+      },
+      "Problem": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Connecting or reading failed; `detail` is English.",
+            "required": [
+              "detail",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "network"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Too many redirects, or one to something other than http(s).",
+            "required": [
+              "detail",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "redirect"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The server answered with a status we can't use (404, 503…).",
+            "required": [
+              "status",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "httpStatus"
+                ]
+              },
+              "status": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "No data for this many seconds.",
+            "required": [
+              "seconds",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "stalled"
+                ]
+              },
+              "seconds": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The connection closed before the end of the file.",
+            "required": [
+              "received",
+              "expected",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "incomplete"
+                ]
+              },
+              "expected": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "received": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The file kept changing on the server.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "remoteChanging"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Writing the file failed; `detail` is English.",
+            "required": [
+              "detail",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "disk"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "detail",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "other"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "description": "Why a job failed or is retrying. Clients translate it by `code` and\nfall back to the job's English `error` for codes they don't know."
+      },
+      "Reason": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The token is missing or wrong (401).",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "unauthorized"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "noSuchEndpoint"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The body isn't the JSON expected; `error` says what's wrong.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidBody"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidUrl"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "`destDir` must be an absolute path.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "relativeFolder"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "scheme",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "unsupportedScheme"
+                ]
+              },
+              "scheme": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "nonUtf8Path"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "No folder given, and the category has none.",
+            "required": [
+              "category",
+              "code"
+            ],
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string",
+                "enum": [
+                  "noFolder"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidJobId"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "jobNotFound"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The job's state doesn't allow it (resuming a completed job…).",
+            "required": [
+              "from",
+              "to",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidTransition"
+                ]
+              },
+              "from": {
+                "$ref": "#/components/schemas/JobState"
+              },
+              "to": {
+                "$ref": "#/components/schemas/JobState"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "categoryNotFound"
+                ]
+              },
+              "id": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidCategoryName"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "extension",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidExtension"
+                ]
+              },
+              "extension": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "name",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "categoryNameTaken"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "extension",
+              "category",
+              "code"
+            ],
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string",
+                "enum": [
+                  "extensionTaken"
+                ]
+              },
+              "extension": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "General and Other can't be removed.",
+            "required": [
+              "category",
+              "code"
+            ],
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string",
+                "enum": [
+                  "cannotRemoveBuiltIn"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A setting must be from `min` to `max`; `setting` is its field name\n(`maxConcurrent`…).",
+            "required": [
+              "setting",
+              "min",
+              "max",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "outOfRange"
+                ]
+              },
+              "max": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "min": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "setting": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Its file is moving; try again once it's done.",
+            "required": [
+              "id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "jobMoving"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The download can't resume, so moving it now would start it over.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "cannotMoveWhileRunning"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The file couldn't move (disk full, no permission…); `detail` says why.",
+            "required": [
+              "detail",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "moveFailed"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "viewNotFound"
+                ]
+              },
+              "id": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidViewName"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "name",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "viewNameTaken"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Not a language tag like `en` or `pt-BR`.",
+            "required": [
+              "language",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidLanguage"
+                ]
+              },
+              "language": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A play link that doesn't exist or has expired.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "noSuchLink"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Played past what arrived, but the download failed or was cancelled.",
+            "required": [
+              "id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "downloadStopped"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The download started over while being played (its file changed).",
+            "required": [
+              "id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "fileChanged"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The daemon is shutting down.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "stopping"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A bug or an unexpected failure; `error` has the details.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "internal"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Why a request was refused."
+      },
+      "Settings": {
+        "type": "object",
+        "description": "What applies to the whole daemon, as `GET /settings` answers it and\n`settingsChanged` events send it.",
+        "required": [
+          "setupDone",
+          "maxConcurrent",
+          "globalLimit",
+          "maxRetries",
+          "retriesBeforeYield",
+          "firstRetryWaitMs"
+        ],
+        "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Appearance",
+                "description": "The look shared by the devices that choose to follow it; null until\none shares its own."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firstRetryWaitMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Wait before the first retry, in milliseconds; each next one waits\ntwice as long, up to a minute.",
+            "minimum": 0
+          },
+          "globalLimit": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bytes per second for all downloads together; 0 = no limit.",
+            "minimum": 0
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The language those devices show, as a tag like `en` or `pt-BR`; null\nuntil one shares its own. A device without it keeps its own."
+          },
+          "maxConcurrent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many downloads run at once; the others wait. At least 1.",
+            "minimum": 0
+          },
+          "maxRetries": {
+            "type": "integer",
+            "format": "int32",
+            "description": "A download that keeps failing with errors that may go away (a dropped\nconnection, a busy server) fails after this many retries in a row.\n0 = never retry.",
+            "minimum": 0
+          },
+          "retriesBeforeYield": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Retries a download makes before letting a waiting one go first.",
+            "minimum": 0
+          },
+          "setupDone": {
+            "type": "boolean",
+            "description": "The first-start setup (starter categories) was done or skipped;\nuntil then, front ends offer it."
+          }
+        }
+      },
+      "SettingsChange": {
+        "type": "object",
+        "description": "Body of `PATCH /settings`: only the fields given change, all at once.\nA value out of its range (see `crates/api/src/settings.rs`) refuses the\nwhole change with `outOfRange`.",
+        "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Appearance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "firstRetryWaitMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "globalLimit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maxConcurrent": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "maxRetries": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "retriesBeforeYield": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "setupDone": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
+      "SortDirection": {
+        "type": "string",
+        "enum": [
+          "asc",
+          "desc"
+        ]
+      },
+      "SortKey": {
+        "type": "string",
+        "enum": [
+          "added",
+          "name",
+          "size",
+          "progress"
+        ]
+      },
+      "StreamLink": {
+        "type": "object",
+        "description": "Answer to `POST /jobs/{id}/stream`.",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "A path on the daemon (`/api/v1/stream/<ticket>/<name>`) that serves\nthe file to anyone who has it, without the token, with `Range`\nsupport. Valid for 12 hours after its last use."
+          }
+        }
+      },
+      "View": {
+        "type": "object",
+        "description": "A saved view: a name, which downloads it shows and how they're laid out.\nListed by `GET /views` and sent in `viewChanged` events.",
+        "required": [
+          "id",
+          "name",
+          "filters",
+          "arrangement"
+        ],
+        "properties": {
+          "arrangement": {
+            "$ref": "#/components/schemas/Arrangement"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/ViewFilters"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ViewBody": {
+        "type": "object",
+        "description": "Body of `POST /views` and `PUT /views/{id}`: everything about the view\n(a PUT replaces it all).",
+        "required": [
+          "name",
+          "filters",
+          "arrangement"
+        ],
+        "properties": {
+          "arrangement": {
+            "$ref": "#/components/schemas/Arrangement"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/ViewFilters"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ViewFilters": {
+        "type": "object",
+        "description": "Which downloads a view shows: those that pass every filter.",
+        "required": [
+          "nameContains",
+          "added"
+        ],
+        "properties": {
+          "added": {
+            "$ref": "#/components/schemas/AddedWithin"
+          },
+          "categories": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "description": "Category IDs; null: any category."
+          },
+          "nameContains": {
+            "type": "string",
+            "description": "Part of the file name, in any case; empty: any name."
+          },
+          "states": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/JobState"
+            },
+            "description": "Null: any state. An empty list shows nothing. `connecting` counts as\n`downloading` (the daemon saves it so)."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "token": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The token from `ottie token` (or `<config folder>/token`). The events WebSocket takes it as the protocol `ottie.token.<token>` instead."
+      }
+    }
+  },
+  "security": [
+    {
+      "token": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "jobs",
+      "description": "Downloads: add, pause, resume, cancel, remove, change"
+    },
+    {
+      "name": "play",
+      "description": "Play while downloading: play links that need no token"
+    },
+    {
+      "name": "categories",
+      "description": "Where downloads go, by file extension or folder"
+    },
+    {
+      "name": "views",
+      "description": "Saved views of the downloads list"
+    },
+    {
+      "name": "settings",
+      "description": "What applies to the whole daemon"
+    },
+    {
+      "name": "events",
+      "description": "Live changes over a WebSocket"
+    },
+    {
+      "name": "meta",
+      "description": "About the API itself"
+    }
+  ]
+}

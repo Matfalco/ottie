@@ -150,6 +150,11 @@ impl Manager {
         self.request(|reply| Command::List { reply }).await
     }
 
+    /// One job as it is now.
+    pub async fn job(&self, id: JobId) -> Result<JobSnapshot, Error> {
+        self.request(|reply| Command::Job { id, reply }).await
+    }
+
     pub async fn settings(&self) -> Result<Settings, Error> {
         self.request(|reply| Command::Settings { reply }).await
     }
@@ -359,6 +364,10 @@ enum Command {
     },
     List {
         reply: Reply<Vec<JobSnapshot>>,
+    },
+    Job {
+        id: JobId,
+        reply: Reply<JobSnapshot>,
     },
     Settings {
         reply: Reply<Settings>,
@@ -645,6 +654,10 @@ impl<B: Backend> Actor<B> {
             }
             Command::List { reply } => {
                 let _ = reply.send(Ok(self.list()));
+            }
+            Command::Job { id, reply } => {
+                let snapshot = self.jobs.get(&id).map(|job| job.snapshot(id));
+                let _ = reply.send(snapshot.ok_or(Error::JobNotFound(id)));
             }
             Command::Settings { reply } => {
                 let _ = reply.send(Ok(self.settings.clone()));

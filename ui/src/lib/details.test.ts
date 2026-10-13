@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Job } from '@ottie/api-types/Job';
 import { PRIORITIES, facts, isPlayable, primaryAction, priorityName } from './details';
 import { job, plain } from './testing';
 
@@ -62,9 +63,14 @@ describe('details', () => {
 	});
 
 	it('tell what can be played', () => {
-		expect(isPlayable(job())).toBe(true); // movie night.mkv
-		expect(isPlayable(job({ fileName: 'song.mp3' }))).toBe(true);
-		expect(isPlayable(job({ fileName: 'setup.exe' }))).toBe(false);
+		const named = (fileName: string, state: Job['state'] = 'downloading') =>
+			job({ fileName, state });
+		expect(isPlayable(named('movie night.mkv'))).toBe(true);
+		expect(isPlayable(named('song.mp3', 'completed'))).toBe(true);
+		expect(isPlayable(named('setup.exe'))).toBe(false);
+		// No file yet (the URL looks like a video), or none left.
+		expect(isPlayable(job())).toBe(false);
+		expect(isPlayable(named('movie night.mkv', 'cancelled'))).toBe(false);
 	});
 
 	it('name the priorities in each language', () => {
