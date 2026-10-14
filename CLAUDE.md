@@ -115,7 +115,7 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
                      started on exit
   src/daemon.rs      find or start `ottie serve --managed` (the sidecar next to the app), ready / stop
   src/client.rs      the app as an API client: events WebSocket, jobs, settings, pause/resume, limit
-  src/status.rs      follows the events (reconnects), sums them up once a second for the tray (counts, speed),
+  src/status.rs      follows the events (reconnects), sums them up once a second for the tray (counts, speed, progress of those of known size),
                      and passes downloads that finished or failed to notify.rs
   src/notify.rs      notifications (0035): what to tell (each, all at once, failed), a click opens the window
   src/tray.rs        tray icon (white/black by taskbar, size by scale), clicks, the system's menu and its

@@ -265,6 +265,7 @@
 	"tray_idle": "Aucun téléchargement en cours",
 	"tray_running": "{count} en cours",
 	"tray_waiting": "{count} en attente",
+	"tray_more": "+{count} autres en cours",
 	"limit_presets": "Limites courantes",
 	"chip_speed": "Vitesse de téléchargement {speed}, sans limite",
 	"chip_speed_limited": "Vitesse de téléchargement {speed}, limitée à {limit}",

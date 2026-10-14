@@ -4,7 +4,7 @@
 use serde::Deserialize;
 
 use crate::client::Problem;
-use crate::status::Summary;
+use crate::status::{Progress, Summary};
 
 /// Each language's texts, by its tag. The first is the fallback.
 const LANGUAGES: [(&str, &str); 2] = [
@@ -34,6 +34,10 @@ pub struct Texts {
     running: String,
     /// `{count}` downloads waiting.
     waiting: String,
+    /// `{number}` percent.
+    percent: String,
+    /// `{time}` left before the running downloads are done.
+    left: String,
     /// The decimal separator.
     decimal: String,
     /// Between groups of three digits.
@@ -42,6 +46,8 @@ pub struct Texts {
     speed: String,
     /// Bytes, kB… per second.
     units: [String; 5],
+    /// `{count}` seconds, minutes, hours.
+    durations: [String; 3],
     /// A notification's title: one download finished…
     pub finished: String,
     /// …or several, once nothing runs or waits any more.
@@ -118,6 +124,46 @@ impl Texts {
             status.push_str(&self.speed(summary.speed));
         }
         status
+    }
+
+    /// "45% · 8 min left": how far the running downloads of known size have
+    /// come, and when they'll be done at their speed.
+    pub fn progress(&self, progress: &Progress) -> String {
+        let done = progress.downloaded.min(progress.total) as f64 / progress.total.max(1) as f64;
+        // Whole percents, rounded down so 99.9% isn't "100%", as on the page.
+        let percent = (done * 100.0).floor() as u64;
+        let mut line = self.percent.replace("{number}", &percent.to_string());
+        if progress.speed > 0 {
+            let left = progress.total.saturating_sub(progress.downloaded);
+            // Whole seconds, never above u64 (bytes / bytes per second).
+            let seconds = (left as f64 / progress.speed as f64).round() as u64;
+            line.push_str(" · ");
+            line.push_str(&self.left.replace("{time}", &self.duration(seconds)));
+        }
+        line
+    }
+
+    /// "45 sec", "3 min 20 sec", "2 hr 5 min": the two largest units, as on
+    /// the page (`formatDuration`).
+    fn duration(&self, seconds: u64) -> String {
+        let [in_seconds, in_minutes, in_hours] = &self.durations;
+        let part = |text: &str, count: u64| text.replace("{count}", &self.grouped(count));
+        let both = |big: String, rest: u64, small: &str| {
+            if rest == 0 {
+                big
+            } else {
+                format!("{big} {}", part(small, rest))
+            }
+        };
+        let minutes = seconds / 60;
+        let hours = minutes / 60;
+        if minutes == 0 {
+            part(in_seconds, seconds)
+        } else if hours == 0 {
+            both(part(in_minutes, minutes), seconds % 60, in_seconds)
+        } else {
+            both(part(in_hours, hours), minutes % 60, in_minutes)
+        }
     }
 
     /// "Limit speed to 10 MB/s".
@@ -296,5 +342,26 @@ mod tests {
         );
         let queued = Summary { running: 0, ..busy };
         assert_eq!(en.status(&queued), "1,234 waiting");
+    }
+
+    #[test]
+    fn the_progress_says_how_far_and_how_long() {
+        let en = Texts::for_language(Some("en"));
+        let fr = Texts::for_language(Some("fr"));
+        let progress = |downloaded, speed| Progress {
+            downloaded,
+            total: 10_000,
+            speed,
+        };
+        assert_eq!(en.progress(&progress(4599, 0)), "45%");
+        assert_eq!(en.progress(&progress(9999, 0)), "99%");
+        assert_eq!(en.progress(&progress(5000, 10)), "50% · 8 min 20 sec left");
+        assert_eq!(
+            fr.progress(&progress(5000, 10)),
+            "50\u{a0}% · encore 8\u{202f}min 20\u{202f}s"
+        );
+        assert_eq!(en.progress(&progress(5000, 1)), "50% · 1 hr 23 min left");
+        assert_eq!(en.progress(&progress(9000, 100)), "90% · 10 sec left");
+        assert_eq!(en.progress(&progress(4000, 50)), "40% · 2 min left");
     }
 }

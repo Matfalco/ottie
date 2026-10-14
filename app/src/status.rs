@@ -45,6 +45,18 @@ pub struct Summary {
     pub speed: u64,
     /// The total limit; 0 = none.
     pub global_limit: u64,
+    /// How far the running downloads have come; none while none of them
+    /// has a known size.
+    pub progress: Option<Progress>,
+}
+
+/// The running downloads whose size is known, together.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Progress {
+    pub downloaded: u64,
+    pub total: u64,
+    /// Their speeds added up, in bytes per second.
+    pub speed: u64,
 }
 
 /// Follows the daemon for as long as the app runs, sending a summary every
@@ -153,6 +165,8 @@ struct Model {
 #[derive(Debug)]
 struct Tracked {
     state: String,
+    downloaded: u64,
+    total: Option<u64>,
     rate: Rate,
 }
 
@@ -181,6 +195,8 @@ impl Model {
             job.id,
             Tracked {
                 state: job.state,
+                downloaded: job.downloaded,
+                total: job.total,
                 rate,
             },
         );
@@ -193,8 +209,14 @@ impl Model {
                 let tracked = self.jobs.remove(&job.id);
                 self.track(job, tracked, now);
             }
-            Event::Progress { id, downloaded } => {
+            Event::Progress {
+                id,
+                downloaded,
+                total,
+            } => {
                 if let Some(tracked) = self.jobs.get_mut(&id) {
+                    tracked.downloaded = downloaded;
+                    tracked.total = total;
                     tracked.rate = tracked.rate.next(downloaded, now);
                 }
             }
@@ -222,11 +244,19 @@ impl Model {
             ..Summary::default()
         };
         let mut speed = 0.0;
+        let mut sized = Progress::default();
+        let mut sized_speed = 0.0;
         for tracked in self.jobs.values() {
             match tracked.state.as_str() {
                 state if RUNNING.contains(&state) => {
                     summary.running += 1;
-                    speed += tracked.rate.current(now);
+                    let current = tracked.rate.current(now);
+                    speed += current;
+                    if let Some(total) = tracked.total.filter(|&total| total > 0) {
+                        sized.downloaded += tracked.downloaded.min(total);
+                        sized.total += total;
+                        sized_speed += current;
+                    }
                 }
                 "queued" => summary.waiting += 1,
                 "paused" => summary.paused += 1,
@@ -235,6 +265,8 @@ impl Model {
         }
         // Rounded down to whole bytes: only shown, never computed with.
         summary.speed = speed as u64;
+        sized.speed = sized_speed as u64;
+        summary.progress = (sized.total > 0).then_some(sized);
         summary
     }
 }
@@ -299,6 +331,7 @@ mod tests {
             file_name: Some(format!("{id}.zip")),
             state: state.to_owned(),
             downloaded,
+            total: None,
             moving: false,
             problem: None,
             error: None,
@@ -363,6 +396,7 @@ mod tests {
                 paused: 1,
                 speed: 0,
                 global_limit: 512,
+                progress: None,
             }
         );
         model.apply(Event::Removed { id: "a".to_owned() }, now);
@@ -389,6 +423,7 @@ mod tests {
             let progress = Event::Progress {
                 id: id.to_owned(),
                 downloaded,
+                total: None,
             };
             model.apply(progress, second);
         }
@@ -398,12 +433,61 @@ mod tests {
         let progress = Event::Progress {
             id: "a".to_owned(),
             downloaded: 3000,
+            total: None,
         };
         model.apply(progress, third);
         assert_eq!(model.summary(third).speed, 1300 + 3000);
         // "b" has had nothing for 3.5 s, "a" for 2.5 s.
         let later = third + Duration::from_millis(2500);
         assert_eq!(model.summary(later).speed, 1300);
+    }
+
+    #[test]
+    fn the_progress_adds_up_running_downloads_of_known_size() {
+        let start = Instant::now();
+        let mut model = Model::default();
+        let sized = |id, state, downloaded, total| Job {
+            total: Some(total),
+            ..job(id, state, downloaded)
+        };
+        model.reset(
+            vec![
+                sized("a", "downloading", 0, 4000),
+                job("b", "downloading", 0),
+                sized("c", "paused", 500, 1000),
+            ],
+            start,
+        );
+        assert_eq!(
+            model.summary(start).progress,
+            Some(Progress {
+                downloaded: 0,
+                total: 4000,
+                speed: 0,
+            })
+        );
+        let second = start + Duration::from_secs(1);
+        for (id, downloaded, total) in [("a", 1000, Some(4000)), ("b", 5000, None)] {
+            let progress = Event::Progress {
+                id: id.to_owned(),
+                downloaded,
+                total,
+            };
+            model.apply(progress, second);
+        }
+        // "b"'s speed counts in the total, not in the progress.
+        let summary = model.summary(second);
+        assert_eq!(summary.speed, 6000);
+        assert_eq!(
+            summary.progress,
+            Some(Progress {
+                downloaded: 1000,
+                total: 4000,
+                speed: 1000,
+            })
+        );
+        model.apply(Event::Removed { id: "a".to_owned() }, second);
+        assert_eq!(model.summary(second).progress, None);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! The tray icon (docs/decisions/0034). A right click opens Ottie's own menu
 //! (`popup.rs`), which has the limit's field. The system's menu below (open
-//! the window, see what runs, pause or resume everything, switch the total
+//! the window, see what runs and how far it has come, pause or resume everything, switch the total
 //! limit or pick one, quit) is there while the daemon can't be reached, since
 //! Ottie's menu is its page, and always on Linux, whose trays report no
 //! clicks. What it shows comes from the daemon's events (`status.rs`); what
@@ -24,6 +24,7 @@ use crate::{popup, prefs};
 
 const OPEN: &str = "open";
 const STATUS: &str = "status";
+const PROGRESS: &str = "progress";
 const PAUSE_ALL: &str = "pause-all";
 const RESUME_ALL: &str = "resume-all";
 const LIMIT: &str = "limit";
@@ -49,6 +50,9 @@ const PRESETS: [u64; 8] = [
 /// Linux trays report no clicks: the system's menu is always there.
 const ALWAYS_MENU: bool = cfg!(target_os = "linux");
 
+/// Where the progress goes in the system's menu while there's one: under
+/// the status (after "Open Ottie" and a separator).
+const PROGRESS_AT: usize = 3;
 /// How often the tray's texts, menu and icon are brought up to date.
 const REFRESH: Duration = Duration::from_secs(1);
 /// Switching the total limit on for the first time, as on the page
@@ -114,6 +118,8 @@ struct Actions {
 struct Items {
     open: MenuItem<Wry>,
     status: MenuItem<Wry>,
+    /// In the menu only while running downloads have a known size.
+    progress: MenuItem<Wry>,
     pause_all: MenuItem<Wry>,
     resume_all: MenuItem<Wry>,
     limit: CheckMenuItem<Wry>,
@@ -136,6 +142,7 @@ pub fn start(app: &AppHandle, daemon: Arc<Daemon>) -> tauri::Result<()> {
             false,
             None::<&str>,
         )?,
+        progress: MenuItem::with_id(app, PROGRESS, "", false, None::<&str>)?,
         pause_all: MenuItem::with_id(app, PAUSE_ALL, &texts.pause_all, false, None::<&str>)?,
         resume_all: MenuItem::with_id(app, RESUME_ALL, &texts.resume_all, false, None::<&str>)?,
         limit: CheckMenuItem::with_id(
@@ -302,8 +309,9 @@ fn last_limit(app: &AppHandle) -> u64 {
         .unwrap_or(DEFAULT_LIMIT)
 }
 
-/// Brings the tray up to date every second: the status, which actions
-/// apply, the language, and the icon for the taskbar's colours.
+/// Brings the tray up to date every second: the status and progress (in the
+/// menu and the tooltip), which actions apply, the language, and the icon
+/// for the taskbar's colours.
 async fn refresh(
     app: AppHandle,
     tray: TrayIcon,
@@ -315,6 +323,8 @@ async fn refresh(
     let mut language = None;
     let mut texts = Texts::default();
     let mut shown = Shown::default();
+    // Whether the progress item is in the menu.
+    let mut progress_listed = false;
     let mut tick = tokio::time::interval(REFRESH);
     loop {
         tick.tick().await;
@@ -342,6 +352,7 @@ async fn refresh(
         };
         let now = Shown {
             status: Some(texts.status(&summary)),
+            progress: summary.progress.map(|progress| texts.progress(&progress)),
             can_pause: summary.running + summary.waiting > 0,
             can_resume: summary.paused > 0,
             limit: Some(texts.limit(limit)),
@@ -352,7 +363,30 @@ async fn refresh(
             && let Some(status) = &now.status
         {
             let _ = items.status.set_text(status);
-            let _ = tray.set_tooltip(Some(format!("Ottie\n{status}")));
+        }
+        match &now.progress {
+            Some(progress) => {
+                if now.progress != shown.progress {
+                    let _ = items.progress.set_text(progress);
+                }
+                if !progress_listed {
+                    progress_listed = menu.insert(&items.progress, PROGRESS_AT).is_ok();
+                }
+            }
+            None => {
+                if progress_listed && menu.remove(&items.progress).is_ok() {
+                    progress_listed = false;
+                }
+            }
+        }
+        if (&now.status, &now.progress) != (&shown.status, &shown.progress) {
+            // "Ottie", what runs, how far it has come: far below the 127
+            // characters Windows shows.
+            let lines = ["Ottie"]
+                .into_iter()
+                .chain(now.status.as_deref())
+                .chain(now.progress.as_deref());
+            let _ = tray.set_tooltip(Some(lines.collect::<Vec<_>>().join("\n")));
         }
         if now.can_pause != shown.can_pause {
             let _ = items.pause_all.set_enabled(now.can_pause);
@@ -396,6 +430,7 @@ fn tick_if(item: &CheckMenuItem<Wry>, on: bool) {
 #[derive(Default)]
 struct Shown {
     status: Option<String>,
+    progress: Option<String>,
     can_pause: bool,
     can_resume: bool,
     limit: Option<String>,

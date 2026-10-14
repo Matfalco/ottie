@@ -169,6 +169,7 @@ mod tests {
             file_name: file_name.map(str::to_owned),
             state: state.to_owned(),
             downloaded: 0,
+            total: None,
             moving: false,
             problem: None,
             error: None,

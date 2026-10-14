@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { Session } from '#lib/session.svelte.js';
 	import { loadToken } from '#lib/token.js';
-	import { pauseSteps, resumeTargets, trayStatus } from '#lib/tray.js';
+	import { pauseSteps, resumeTargets, trayRunning, trayStatus } from '#lib/tray.js';
 	import { hideMenu, menuReady, quitApp, showMain } from '#lib/window.js';
 	import LimitControl from './LimitControl.svelte';
 	import RatePresets from './RatePresets.svelte';
+	import RunningList from './RunningList.svelte';
 
 	// Ottie's own tray menu in the desktop app (docs/decisions/0034): the
 	// app opens it at the tray icon, sized to what's drawn here. Signed in
@@ -21,6 +23,7 @@
 	const speed = $derived(session?.history.at(-1) ?? 0);
 	const limit = $derived(session?.settings?.globalLimit ?? null);
 	const status = $derived(trayStatus(jobs, speed, connection));
+	const running = $derived(trayRunning(jobs));
 	const steps = $derived(pauseSteps(jobs));
 	const resumable = $derived(resumeTargets(jobs));
 
@@ -75,6 +78,15 @@
 	{#if session}
 		<hr />
 		<p class="status" role="status">{status}</p>
+		{#if connection === 'live' && running.shown.length > 0}
+			<!-- Like the dashboard's "Downloading now": each with its bar. -->
+			<div class="running">
+				<RunningList running={running.shown} next={[]} rates={session.rates} now={session.now} />
+				{#if running.more > 0}
+					<p class="more">{m.tray_more({ count: formatCount(running.more) })}</p>
+				{/if}
+			</div>
+		{/if}
 		<button
 			class="item"
 			role="menuitem"
@@ -143,6 +155,18 @@
 		margin: 0;
 		padding: 0.35rem 0.75rem;
 		color: var(--muted);
+		font-size: 0.8rem;
+	}
+
+	.running {
+		display: grid;
+		gap: 0.6rem;
+		padding: 0.15rem 0.75rem 0.5rem;
+	}
+
+	.more {
+		margin: 0;
+		color: var(--faint);
 		font-size: 0.8rem;
 	}
 

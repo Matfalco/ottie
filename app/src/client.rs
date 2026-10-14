@@ -29,6 +29,8 @@ pub struct Job {
     pub file_name: Option<String>,
     pub state: String,
     pub downloaded: u64,
+    /// Its size, if the server said.
+    pub total: Option<u64>,
     /// Its file is moving: it can't be paused or resumed until it's done.
     pub moving: bool,
     /// Why it failed, as a code to translate…
@@ -81,6 +83,7 @@ pub enum Event {
     Progress {
         id: String,
         downloaded: u64,
+        total: Option<u64>,
     },
     Removed {
         id: String,

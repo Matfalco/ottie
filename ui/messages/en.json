@@ -265,6 +265,7 @@
 	"tray_idle": "Nothing downloading",
 	"tray_running": "{count} downloading",
 	"tray_waiting": "{count} waiting",
+	"tray_more": "+{count} more downloading",
 	"limit_presets": "Common limits",
 	"chip_speed": "Download speed {speed}, no limit",
 	"chip_speed_limited": "Download speed {speed}, limited to {limit}",

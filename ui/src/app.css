@@ -33,6 +33,8 @@
 	--ok-bg: #dcf0e2;
 	/* Bars of downloads that aren't moving (queued, paused). */
 	--quiet: #9db5af;
+	/* Scroll bars' thumbs (their track is the surface under them). */
+	--scrollbar: #9db5af;
 	/* The file map's blocks that are arriving now. */
 	--arriving: #ff8a5c;
 	--focus: #0b7d79;
@@ -72,6 +74,7 @@
 	--ok: #8fd6a6;
 	--ok-bg: #133a2a;
 	--quiet: #5d8a90;
+	--scrollbar: #4a7379;
 	/* The file map's blocks that are arriving now. */
 	--arriving: #7fe0d0;
 	--focus: #7fe0d0;
@@ -110,6 +113,7 @@
 	--ok: #2f7a46;
 	--ok-bg: #dcf0e2;
 	--quiet: #a2a7ad;
+	--scrollbar: #b4b8bd;
 	/* The file map's blocks that are arriving now. */
 	--arriving: #ff8a5c;
 	--focus: #0b7d79;
@@ -149,6 +153,7 @@
 	--ok: #8fd6a6;
 	--ok-bg: #1c3326;
 	--quiet: #6a6d72;
+	--scrollbar: #55585d;
 	/* The file map's blocks that are arriving now. */
 	--arriving: #ffc247;
 	--focus: #ffc247;
@@ -184,6 +189,12 @@
 
 * {
 	box-sizing: border-box;
+}
+
+/* Scroll bars in the theme's colours rather than the system's grey (inherited,
+   so this covers every scrolling element). */
+html {
+	scrollbar-color: var(--scrollbar) transparent;
 }
 
 body {

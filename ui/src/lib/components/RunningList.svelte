@@ -18,7 +18,7 @@
 </script>
 
 <!-- The dashboard's "Downloading now" card: each running download with its
-     bar, then what's next in line. -->
+     bar, then what's next in line. The tray menu shows it too, with nothing next. -->
 {#if running.length > 0}
 	<ul class="running">
 		{#each running as job (job.id)}
