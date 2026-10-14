@@ -5,6 +5,7 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { replaceState } from '$app/navigation';
+	import { page } from '$app/state';
 	import { appearance } from '#lib/appearance.svelte.js';
 	import icon from '#lib/assets/ottie.svg';
 	import Login from '#lib/components/Login.svelte';
@@ -12,15 +13,20 @@
 	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { themeFor } from '#lib/theme.js';
 	import { forgetToken, loadToken, saveToken, tokenFromFragment } from '#lib/token.js';
+	import { tellLanguage } from '#lib/window.js';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
 	let token: string | null = $state(null);
 	let ready = $state(false);
+	/** The desktop app's tray menu: no shell around it (docs/decisions/0034). */
+	const inTray = page.route.id === '/tray';
 
 	// For screen readers, spell checking and hyphenation. (Changing the
 	// language reloads the page, so this runs again.)
 	document.documentElement.lang = getLocale();
+	// The desktop app's tray speaks it too.
+	tellLanguage(getLocale());
 
 	// The theme, set before anything is drawn, then kept up to date with the
 	// user's choice and the system's dark mode.
@@ -64,7 +70,9 @@
 </svelte:head>
 
 {#if ready}
-	{#if token}
+	{#if inTray}
+		{@render children()}
+	{:else if token}
 		<!-- Keyed: a new token means a new session. -->
 		{#key token}
 			<Shell {token} onUnauthorized={signOut}>

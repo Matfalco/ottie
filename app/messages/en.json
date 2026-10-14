@@ -1,0 +1,17 @@
+{
+	"open": "Open Ottie",
+	"pauseAll": "Pause all",
+	"resumeAll": "Resume all",
+	"limit": "Limit speed to {speed}",
+	"changeLimit": "Change the limit",
+	"otherLimit": "Other…",
+	"quit": "Quit Ottie",
+	"connecting": "Connecting to Ottie…",
+	"idle": "Nothing downloading",
+	"running": "{count} downloading",
+	"waiting": "{count} waiting",
+	"decimal": ".",
+	"group": ",",
+	"speed": "{number} {unit}",
+	"units": ["B/s", "kB/s", "MB/s", "GB/s", "TB/s"]
+}

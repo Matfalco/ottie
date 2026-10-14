@@ -1,7 +1,8 @@
 // The desktop app around the page, when it runs inside it. The app hides the
 // system title bar (docs/decisions/0019), so the page draws its own and needs
 // the window's buttons; it can also open the system folder picker. In a
-// browser there's neither. It also chooses what plays a download.
+// browser there's neither. It also chooses what plays a download, and hears
+// from the tray.
 
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -89,4 +90,47 @@ export function setPlayWith(playWith: PlayWith): Promise<Player> {
  * `programs` names the file filter (on Windows). */
 export function choosePlayer(title: string, programs: string): Promise<Player> {
 	return invoke<Player>('choose_player', { title, programs });
+}
+
+/** The desktop app's own settings (docs/decisions/0034). */
+export interface Desktop {
+	/** Closing the window keeps Ottie running in the tray. */
+	closeToTray: boolean;
+}
+
+export function desktop(): Promise<Desktop> {
+	return invoke<Desktop>('desktop');
+}
+
+export function setCloseToTray(on: boolean): Promise<Desktop> {
+	return invoke<Desktop>('set_close_to_tray', { on });
+}
+
+/** Tells the desktop app which language the page shows, for the tray's
+ * texts. Nothing in a browser; a failure leaves the tray as it was. */
+export function tellLanguage(language: string): void {
+	if (isTauri()) {
+		invoke('set_language', { language }).catch(() => {});
+	}
+}
+
+/** Ottie's own tray menu (docs/decisions/0034), drawn by the `/tray` page:
+ * says how tall it is, so the app can size and place its window. */
+export function menuReady(height: number): void {
+	invoke('menu_ready', { height }).catch(() => {});
+}
+
+/** The menu's "Open Ottie": the main window, brought forward. */
+export function showMain(): Promise<void> {
+	return invoke('show_main');
+}
+
+/** The menu's "Quit Ottie". */
+export function quitApp(): Promise<void> {
+	return invoke('quit_app');
+}
+
+/** Closes the menu, as a click elsewhere does. */
+export function hideMenu(): Promise<void> {
+	return getCurrentWindow().hide();
 }

@@ -47,10 +47,11 @@ Each accepted decision has its own short file here (`NNNN-title.md`): what was d
 | # | Decision |
 |---|---|
 | [0015](0015-web-ui.md) | The web UI is a SvelteKit single-page app in plain CSS, built into the binary. |
-| [0017](0017-desktop-app.md) | The desktop app (Tauri 2) is a window on the daemon's own page, and starts the daemon as a sidecar unless one already answers. |
+| [0017](0017-desktop-app.md) | The desktop app (Tauri 2) is a window on the daemon's own page, and starts the daemon as a sidecar unless one already answers. Amended by 0034. |
 | [0019](0019-own-title-bar.md) | The desktop window draws its own title bar, with its own window buttons. |
 | [0020](0020-first-start-setup.md) | A first-start setup offers starter categories; a built-in Other category holds folders of no category; adding a download has a category step. |
 | [0021](0021-themes-and-layout.md) | The UI follows the chosen mockups: four themes (Sea and Neutral palettes, each light and dark), tabs in the title bar. |
 | [0023](0023-downloads-filters-and-sorting.md) | The Downloads page has quick-filter pills, a filters and sorting panel, and a list grouped by status. Amended by 0032 (oldest first by default). |
 | [0027](0027-file-map-in-the-bar.md) | The detail panel's progress bar is the file map, showing each range where it lies in the file. Replaces 0025's separate map. |
 | [0031](0031-opening-a-player.md) | Play opens a media player: in the desktop app as set in Settings (the system's player through a playlist, the browser, or a picked program); in a browser, "Open in player" saves a playlist. |
+| [0034](0034-tray.md) | Closing the window keeps Ottie in the tray (a setting can make it quit). A right click opens Ottie's own menu (the daemon's `/tray` page in a small window): status, pause or resume everything, the total limit's field with standard rates; the system's menu stays for Linux and while the daemon is unreachable. |

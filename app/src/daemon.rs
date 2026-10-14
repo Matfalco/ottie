@@ -12,6 +12,8 @@ use tauri::Url;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 
+use crate::client;
+
 /// A first start creates the database; a large one takes a moment to load.
 const STARTUP: Duration = Duration::from_secs(30);
 /// Stopping saves every running download first.
@@ -87,10 +89,7 @@ async fn link(ottie: &Path) -> Result<Url> {
 /// Whether an Ottie daemon answers at the link's address. Refusing our token
 /// counts: it's Ottie started with other folders, and its page asks for one.
 async fn answers(link: &Url) -> bool {
-    let token = link
-        .fragment()
-        .and_then(|f| f.strip_prefix("token="))
-        .unwrap_or_default();
+    let token = client::token(link);
     let Ok(jobs) = link.join("/api/v1/jobs") else {
         return false;
     };

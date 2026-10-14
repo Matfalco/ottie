@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, Url};
 use tauri_plugin_dialog::DialogExt;
 
+use crate::config;
+
 const FILE: &str = "player.json";
 /// Playlists written for the system's player are deleted after this long:
 /// a player reads them when it starts.
@@ -48,11 +50,7 @@ impl Chosen {
     /// installed where its installer puts it, else the system's player. A
     /// setting with no program of its own gets VLC's, ready to choose.
     pub fn load(app: &AppHandle) -> Chosen {
-        let saved: Option<Player> = setting_path(app)
-            .and_then(|path| Ok(fs::read_to_string(path)?))
-            .ok()
-            .and_then(|text| serde_json::from_str(&text).ok());
-        let player = match saved {
+        let player = match config::load::<Player>(app, FILE) {
             Some(player) if player.program.is_some() => player,
             Some(player) => Player {
                 program: find_vlc(),
@@ -213,17 +211,8 @@ fn find_vlc() -> Option<String> {
         .and_then(|place| place.to_str().map(str::to_owned))
 }
 
-fn setting_path(app: &AppHandle) -> anyhow::Result<PathBuf> {
-    Ok(app.path().app_config_dir()?.join(FILE))
-}
-
 fn save(app: &AppHandle, player: &Player) -> anyhow::Result<()> {
-    let path = setting_path(app)?;
-    if let Some(folder) = path.parent() {
-        fs::create_dir_all(folder).context("can't create the app's config folder")?;
-    }
-    let text = serde_json::to_string_pretty(player)?;
-    fs::write(&path, text).with_context(|| format!("can't save {}", path.display()))
+    config::save(app, FILE, player)
 }
 
 #[cfg(test)]

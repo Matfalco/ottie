@@ -13,6 +13,19 @@ const UNIT_BYTES: Record<SpeedUnit, number> = { kB: 1024, MB: 1024 ** 2, GB: 102
 /** Switching the total limit on for the first time on this device. */
 export const DEFAULT_LIMIT = 10 * UNIT_BYTES.MB;
 
+/** Common limits, offered as buttons beside the field (and in the desktop
+ * app's tray: `PRESETS` in `app/src/tray.rs`). */
+export const LIMIT_PRESETS: number[] = [
+	256 * UNIT_BYTES.kB,
+	512 * UNIT_BYTES.kB,
+	UNIT_BYTES.MB,
+	2 * UNIT_BYTES.MB,
+	5 * UNIT_BYTES.MB,
+	10 * UNIT_BYTES.MB,
+	20 * UNIT_BYTES.MB,
+	50 * UNIT_BYTES.MB
+];
+
 /** What people may choose, as the daemon allows it (generated from
  * `crates/api/src/settings.rs`). */
 export { RANGES };

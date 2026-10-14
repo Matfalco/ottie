@@ -1,0 +1,17 @@
+{
+	"open": "Ouvrir Ottie",
+	"pauseAll": "Tout mettre en pause",
+	"resumeAll": "Tout reprendre",
+	"limit": "Limiter la vitesse à {speed}",
+	"changeLimit": "Changer la limite",
+	"otherLimit": "Autre…",
+	"quit": "Quitter Ottie",
+	"connecting": "Connexion à Ottie…",
+	"idle": "Aucun téléchargement en cours",
+	"running": "{count} en cours",
+	"waiting": "{count} en attente",
+	"decimal": ",",
+	"group": "\u202f",
+	"speed": "{number}\u00a0{unit}",
+	"units": ["o/s", "ko/s", "Mo/s", "Go/s", "To/s"]
+}

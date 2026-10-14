@@ -18,14 +18,22 @@ function scale(bytes: number): { value: number; unit: number } {
 	return { value, unit };
 }
 
-function number(value: number, unit: number, locale: Locale, intlUnit: string, long: boolean) {
-	// One decimal for small numbers ("1.5 MB"), none for big ones ("234 MB").
+function number(
+	value: number,
+	unit: number,
+	locale: Locale,
+	intlUnit: string,
+	long: boolean,
+	trim = false
+) {
+	// One decimal for small numbers ("1.5 MB"), none for big ones ("234 MB");
+	// trimmed, none when it's 0 ("1 MB").
 	const digits = unit > 0 && value < 10 ? 1 : 0;
 	return new Intl.NumberFormat(locale, {
 		style: 'unit',
 		unit: intlUnit,
 		unitDisplay: long ? 'long' : 'short',
-		minimumFractionDigits: digits,
+		minimumFractionDigits: trim ? 0 : digits,
 		maximumFractionDigits: digits
 	}).format(value);
 }
@@ -41,6 +49,13 @@ export function formatBytes(bytes: number, locale: Locale = getLocale()): string
 export function formatSpeed(bytesPerSec: number, locale: Locale = getLocale()): string {
 	const { value, unit } = scale(bytesPerSec);
 	return number(value, unit, locale, `${UNITS[unit]}-per-second`, false);
+}
+
+/** A round limit as people pick it: "1 MB/s", "512 kB/s", "1.5 MB/s"
+ * (French: "1 Mo/s"). */
+export function formatLimit(bytesPerSec: number, locale: Locale = getLocale()): string {
+	const { value, unit } = scale(bytesPerSec);
+	return number(value, unit, locale, `${UNITS[unit]}-per-second`, false, true);
 }
 
 /** "1,234" (French: "1 234"). */

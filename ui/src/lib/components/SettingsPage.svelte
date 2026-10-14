@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { SettingsChange } from '@ottie/api-types/SettingsChange';
+	import AppWindow from '@lucide/svelte/icons/app-window';
 	import Copy from '@lucide/svelte/icons/copy';
 	import Download from '@lucide/svelte/icons/download';
 	import Paintbrush from '@lucide/svelte/icons/palette';
@@ -25,8 +26,11 @@
 	import {
 		canChoosePlayer,
 		choosePlayer,
+		desktop as desktopSetting,
 		player as playerSetting,
+		setCloseToTray,
 		setPlayWith,
+		type Desktop,
 		type PlayWith,
 		type Player
 	} from '#lib/window.js';
@@ -57,14 +61,20 @@
 		browser: { name: m.set_play_browser, hint: m.set_play_browser_hint }
 	};
 
-	/** Only the desktop app can start a player (docs/decisions/0031). */
+	/** Only the desktop app can start a player (docs/decisions/0031) or
+	 * stay in the tray (0034). */
 	const inApp = canChoosePlayer();
 
 	/** The sections, top to bottom, for the list on the left. */
 	const SECTIONS: { id: string; label: () => string }[] = [
 		{ id: 'set-appearance', label: m.set_appearance },
 		{ id: 'set-downloads', label: m.set_downloads },
-		...(inApp ? [{ id: 'set-playing', label: m.set_playing }] : []),
+		...(inApp
+			? [
+					{ id: 'set-app', label: m.set_app },
+					{ id: 'set-playing', label: m.set_playing }
+				]
+			: []),
 		{ id: 'set-retries', label: m.set_retries },
 		{ id: 'set-connection', label: m.set_connection }
 	];
@@ -83,8 +93,23 @@
 	/** The choice shown, put back if a change doesn't happen. */
 	let playWith: PlayWith = $state('system');
 
+	/** The desktop app's own settings; null until it has answered (or in a browser). */
+	let desktop: Desktop | null = $state(null);
+
 	if (inApp) {
 		playerSetting().then(showPlayer, () => (problem = m.set_play_failed()));
+		desktopSetting().then(
+			(answer) => (desktop = answer),
+			() => (problem = m.set_app_failed())
+		);
+	}
+
+	async function changeCloseToTray(on: boolean) {
+		try {
+			desktop = await setCloseToTray(on);
+		} catch {
+			problem = m.set_app_failed();
+		}
 	}
 
 	function showPlayer(player: Player) {
@@ -338,6 +363,29 @@
 		</section>
 
 		{#if inApp}
+			<section id="set-app" class="card" aria-labelledby="app-title">
+				<header>
+					<span class="icon" aria-hidden="true"><AppWindow size={16} /></span>
+					<h2 id="app-title">{m.set_app()}</h2>
+					<p class="hint">{m.set_app_hint()}</p>
+				</header>
+				{#if desktop}
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_close_to_tray()}</span>
+							<span class="hint">{m.set_close_to_tray_hint()}</span>
+						</span>
+						<Switch
+							on={desktop.closeToTray}
+							label={m.set_close_to_tray()}
+							onChange={changeCloseToTray}
+						/>
+					</div>
+				{:else}
+					<p class="waiting">{m.connection_connecting()}</p>
+				{/if}
+			</section>
+
 			<section id="set-playing" class="card" aria-labelledby="playing-title">
 				<header>
 					<span class="icon" aria-hidden="true"><Play size={16} /></span>

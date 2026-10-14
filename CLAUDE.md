@@ -22,7 +22,7 @@
 - A **browser extension** (Chromium-based browsers and Firefox, desktop) that takes over downloads from the browser: intercepts them, hides the browser's own download UI where possible, and shows our download list in its popup.
 - Must-haves: pause/resume (including after a restart or crash), multi-connection downloads, and speed limits at three levels (per download, per category, global), adjustable while downloads run.
 - **Play while downloading** (uGet can): a short-lived play link (`POST /jobs/{id}/stream` → `GET /stream/{ticket}/{name}`, no token, range support) serves a partial file, so the browser, VLC/mpv or an Android player can play a video before it finishes, locally or from a remote daemon (`docs/decisions/0029`). The download order follows the player and, in a per-download streaming mode, stays in order and fetches the last chunk early (many MP4s keep their index at the end).
-- **Translated UI:** English and French to start (more languages = one JSON file each); daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
+- **Translated UI:** English and French to start (more languages = one JSON file each, in `ui/messages/` and, for the tray, `app/messages/`); daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
 - uGet features to bring over time: categories (folder + file-type rules), queue with max concurrent downloads, opt-in clipboard monitoring, batch/URL-list import, scheduler.
 
 ## Stack
@@ -50,7 +50,7 @@ Android app (Tauri) ──────┘    (on Android, core + api run inside 
 
 - **The HTTP API is the only contract.** Every client talks to the engine through it. It's documented in `docs/api/` (`docs/decisions/0030`): a guide, and `openapi.json` generated from the handlers. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart, the player), never for download operations. The app's own commands are listed in `app/build.rs` and granted to the daemon's pages in `PAGE_PERMISSIONS`; a page never passes a program or path to run.
 - **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
-- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
+- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable) and the tooltip, with its own texts in `app/messages/`. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
 - **Headless:** the daemon runs standalone (systemd user service, Docker) and serves the built web UI itself.
 
@@ -111,18 +111,31 @@ crates/ottie/      ottie: the binary  [exists]
   tests/cli.rs       runs the real binary
 app/               ottie-app: Tauri 2 shell (desktop; Android later, then with core + api)  [exists]
   src/main.rs        frameless window on the daemon's page (it draws its own title bar, 0019),
-                     single instance, stops the daemon it started on exit
+                     single instance, closing hides it (or quits, per app.json), stops the daemon it
+                     started on exit
   src/daemon.rs      find or start `ottie serve --managed` (the sidecar next to the app), ready / stop
+  src/client.rs      the app as an API client: events WebSocket, jobs, settings, pause/resume, limit
+  src/status.rs      follows the events (reconnects), sums them up once a second for the tray (counts, speed)
+  src/tray.rs        tray icon (white/black by taskbar, size by scale), clicks, the system's menu and its
+                     actions (Linux, or while the daemon is unreachable) (0034)
+  src/popup.rs       Ottie's own tray menu: the /tray page in a borderless window beside the click, hidden
+                     on blur; commands menu_ready / show_main / quit_app
+  src/texts.rs       the tray's texts from messages/{en,fr}.json, speeds and counts per language
+  src/prefs.rs       app.json: close to tray, the page's language, last total limit; commands
+                     desktop / set_close_to_tray / set_language
+  src/config.rs      load/save the app's JSON settings files in its config folder
   src/player.rs      "Play with" (0031): system's player via a .m3u, browser, or a picked program;
                      saved in the app's config folder; commands player / set_play_with / choose_player
+  messages/          the tray's texts, one JSON file per language
   build.rs           lists the app's commands, so Tauri generates their permissions (allow-…)
   tauri.conf.json    product, identifier, icons; tauri.bundle.json adds the sidecar for installers only
   scripts/          sidecar.mjs (UI + release ottie → binaries/), ico.mjs (icons/icon.ico from res/icons)
   package.json       pnpm package `app`: the Tauri CLI
 ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [exists]
-  src/routes/        +layout.svelte (fonts, app.css, theme, favicon, token → Login | Shell),
+  src/routes/        +layout.svelte (fonts, app.css, theme, favicon, token → Login | Shell; /tray without),
                      +layout.ts (ssr = false), +page.svelte (Dashboard), downloads/+page.svelte
-                     (Downloads, ?status= filter), categories/+page.svelte, settings/+page.svelte
+                     (Downloads, ?status= filter), categories/+page.svelte, settings/+page.svelte,
+                     tray/+page.svelte (the desktop app's tray menu: TrayMenu)
   src/lib/api.ts     fetch + WebSocket client for /api/v1 (Unauthorized, ApiFailure)
   src/lib/session.svelte.ts  live job list: events WebSocket, reconnect, buffered resync
   src/lib/context.ts what every page shares (session, run): Svelte createContext
@@ -136,6 +149,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      settings.ts (settings fields: kB/MB/GB per second, seconds, ranges; last limit
                      per device), sync.ts (following the shared look + language),
                      playlist.ts (a play link as a .m3u, saved through the browser, 0031),
+                     tray.ts (the tray menu's status line, what Pause all / Resume all act on),
                      queue.ts (queue order, up next, whether up/down would move anything, what a drag
                      carries and where it may drop, 0032)
                      plain logic, unit-tested (*.test.ts, Vitest)
@@ -145,7 +159,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      and how Play opens a player (the app's commands, 0031)
   src/lib/explain.ts   daemon codes (Problem, Reason) → the page's language; English fallback
   src/lib/testing.ts   test helpers (sample job)
-  src/lib/components/  Shell (TitleBar with NavMenu tabs + SpeedChip (limit popup: LimitControl), page,
+  src/lib/components/  Shell (TitleBar with NavMenu tabs + SpeedChip (limit popup: LimitControl + RatePresets), page,
                        dialog; Setup on first start),
                        Dashboard (AddCard, tiles, SpeedChart, RunningList, JobSummary),
                        Downloads (AddCard, then one pane: Toolbar + MoveMenu, QuickFilters (with the
@@ -154,9 +168,9 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        JobDetails under it for the one selected download (its bar maps the file)),
                        CategoriesPage (LinkTester, rows, CategoryEditor inline in place of a row),
                        SettingsPage (section list; appearance + sync, language: LanguagePicker; downloads;
-                       playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
+                       desktop app + playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
                        TitleBar (+ WindowControls), AddCard (AddBar: link, then category + folder step),
-                       FileIcon, ConfirmDialog, Login
+                       FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu)
   messages/{en,fr}.json  every UI text, per language (Paraglide); project.inlang/ its settings
   src/app.css        the four themes as variables under [data-theme] (docs/decisions/0021), fonts, radii
   vite.config.ts     SvelteKit + adapter-static → ../crates/api/ui-dist; Paraglide; dev proxy /api → daemon
@@ -203,7 +217,7 @@ pnpm --filter app tauri android dev  # Android device/emulator
 
 Before calling a task done: fmt, clippy, tests for the crates you touched; for TS packages you touched, `check`, `test` and `lint`. A release builds the UI before the Rust binary. Update this section when a part comes to exist.
 
-Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed. The workspace includes the Tauri app, so `cargo build/test/clippy --workspace` compile Tauri too (WebView2 comes with Windows 11; Linux needs the webkit2gtk 4.1 dev packages). In a dev run, set `OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` to keep away from your real downloads: the app passes them on to the daemon.
+Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed. The workspace includes the Tauri app, so `cargo build/test/clippy --workspace` compile Tauri too (WebView2 comes with Windows 11; Linux needs the webkit2gtk 4.1 dev packages, and libayatana-appindicator3 for the tray). In a dev run, set `OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` to keep away from your real downloads: the app passes them on to the daemon.
 
 ## Engine rules (crates/core)
 
@@ -305,7 +319,7 @@ Done: ✅ and struck through.
      - ✅ ~~5f2 follow the player (seek, last chunk early)~~
      - ✅ ~~5f3 streaming mode per download (on by itself for videos and music, a setting turns that off)~~
    - ✅ ~~5g queue reorder (`docs/decisions/0032`)~~
-   - 5h tray
+   - ✅ ~~5h tray (`docs/decisions/0034`)~~
    - 5i notifications
    - 5j autostart
 6. Scheduler, clipboard monitoring, uGet import, aria2 / yt-dlp backends.

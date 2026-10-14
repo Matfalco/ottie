@@ -1,0 +1,492 @@
+//! The tray icon (docs/decisions/0034). A right click opens Ottie's own menu
+//! (`popup.rs`), which has the limit's field. The system's menu below (open
+//! the window, see what runs, pause or resume everything, switch the total
+//! limit or pick one, quit) is there while the daemon can't be reached, since
+//! Ottie's menu is its page, and always on Linux, whose trays report no
+//! clicks. What it shows comes from the daemon's events (`status.rs`); what
+//! it does goes through the daemon's API, like any other front end.
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use tauri::image::Image;
+use tauri::menu::{
+    CheckMenuItem, IsMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu,
+};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, Wry};
+use tokio::sync::watch;
+
+use crate::client::Daemon;
+use crate::status::{self, Summary};
+use crate::texts::Texts;
+use crate::{popup, prefs};
+
+const OPEN: &str = "open";
+const STATUS: &str = "status";
+const PAUSE_ALL: &str = "pause-all";
+const RESUME_ALL: &str = "resume-all";
+const LIMIT: &str = "limit";
+const LIMITS: &str = "limits";
+/// A preset limit's item: `limit-<bytes per second>`.
+const PRESET: &str = "limit-";
+const OTHER_LIMIT: &str = "limit-other";
+const QUIT: &str = "quit";
+
+/// The limits offered in the system's menu, in bytes per second, as on the
+/// page (`LIMIT_PRESETS` in `ui/src/lib/settings.ts`). "Other…" opens Ottie's
+/// menu, which has a field.
+const PRESETS: [u64; 8] = [
+    256 * 1024,
+    512 * 1024,
+    1024 * 1024,
+    2 * 1024 * 1024,
+    5 * 1024 * 1024,
+    10 * 1024 * 1024,
+    20 * 1024 * 1024,
+    50 * 1024 * 1024,
+];
+/// Linux trays report no clicks: the system's menu is always there.
+const ALWAYS_MENU: bool = cfg!(target_os = "linux");
+
+/// How often the tray's texts, menu and icon are brought up to date.
+const REFRESH: Duration = Duration::from_secs(1);
+/// Switching the total limit on for the first time, as on the page
+/// (`DEFAULT_LIMIT` in `ui/src/lib/settings.ts`).
+const DEFAULT_LIMIT: u64 = 10 * 1024 * 1024;
+/// The size of a tray icon at 100 %, in pixels.
+const BASE_SIZE: f64 = 16.0;
+
+/// The drawn tray icons (`res/icons/png/tray`), by size: white for dark
+/// taskbars, black for light ones.
+const WHITE: [(u32, &[u8]); 5] = [
+    (
+        16,
+        include_bytes!("../../res/icons/png/tray/ottie-tray-white-16.png"),
+    ),
+    (
+        24,
+        include_bytes!("../../res/icons/png/tray/ottie-tray-white-24.png"),
+    ),
+    (
+        32,
+        include_bytes!("../../res/icons/png/tray/ottie-tray-white-32.png"),
+    ),
+    (
+        48,
+        include_bytes!("../../res/icons/png/tray/ottie-tray-white-48.png"),
+    ),
+    (
+        64,
+        include_bytes!("../../res/icons/png/tray/ottie-tray-white-64.png"),
+    ),
+];
+const BLACK: [(u32, &[u8]); 5] = [
+    (
+        16,
+        include_bytes!("../../res/icons/png/tray/ottie-tray-black-16.png"),
+    ),
+    (
+        24,
+        include_bytes!("../../res/icons/png/tray/ottie-tray-black-24.png"),
+    ),
+    (
+        32,
+        include_bytes!("../../res/icons/png/tray/ottie-tray-black-32.png"),
+    ),
+    (
+        48,
+        include_bytes!("../../res/icons/png/tray/ottie-tray-black-48.png"),
+    ),
+    (
+        64,
+        include_bytes!("../../res/icons/png/tray/ottie-tray-black-64.png"),
+    ),
+];
+
+/// What the menu's actions need, as managed state.
+struct Actions {
+    daemon: Arc<Daemon>,
+    summaries: watch::Receiver<Summary>,
+}
+
+/// The menu's items whose text or state changes.
+struct Items {
+    open: MenuItem<Wry>,
+    status: MenuItem<Wry>,
+    pause_all: MenuItem<Wry>,
+    resume_all: MenuItem<Wry>,
+    limit: CheckMenuItem<Wry>,
+    limits: Submenu<Wry>,
+    presets: Vec<(u64, CheckMenuItem<Wry>)>,
+    other_limit: MenuItem<Wry>,
+    quit: MenuItem<Wry>,
+}
+
+/// Puts Ottie in the tray, and keeps it up to date with the daemon.
+pub fn start(app: &AppHandle, daemon: Arc<Daemon>) -> tauri::Result<()> {
+    let (out, summaries) = watch::channel(Summary::default());
+    let texts = Texts::for_language(app.state::<prefs::Saved>().get().language.as_deref());
+    let items = Items {
+        open: MenuItem::with_id(app, OPEN, &texts.open, true, None::<&str>)?,
+        status: MenuItem::with_id(
+            app,
+            STATUS,
+            texts.status(&Summary::default()),
+            false,
+            None::<&str>,
+        )?,
+        pause_all: MenuItem::with_id(app, PAUSE_ALL, &texts.pause_all, false, None::<&str>)?,
+        resume_all: MenuItem::with_id(app, RESUME_ALL, &texts.resume_all, false, None::<&str>)?,
+        limit: CheckMenuItem::with_id(
+            app,
+            LIMIT,
+            texts.limit(DEFAULT_LIMIT),
+            false,
+            false,
+            None::<&str>,
+        )?,
+        limits: Submenu::with_id(app, LIMITS, &texts.change_limit, false)?,
+        presets: PRESETS
+            .into_iter()
+            .map(|limit| {
+                let id = format!("{PRESET}{limit}");
+                let item =
+                    CheckMenuItem::with_id(app, id, texts.rate(limit), true, false, None::<&str>);
+                item.map(|item| (limit, item))
+            })
+            .collect::<tauri::Result<_>>()?,
+        other_limit: MenuItem::with_id(app, OTHER_LIMIT, &texts.other_limit, true, None::<&str>)?,
+        quit: MenuItem::with_id(app, QUIT, &texts.quit, true, None::<&str>)?,
+    };
+    let presets: Vec<&dyn IsMenuItem<Wry>> = items
+        .presets
+        .iter()
+        .map(|(_, item)| item as &dyn IsMenuItem<Wry>)
+        .collect();
+    items.limits.append_items(&presets)?;
+    items.limits.append(&PredefinedMenuItem::separator(app)?)?;
+    items.limits.append(&items.other_limit)?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &items.open,
+            &PredefinedMenuItem::separator(app)?,
+            &items.status,
+            &items.pause_all,
+            &items.resume_all,
+            &items.limit,
+            &items.limits,
+            &PredefinedMenuItem::separator(app)?,
+            &items.quit,
+        ],
+    )?;
+    let look = Look::now(app);
+    let tray = TrayIconBuilder::with_id("main")
+        .icon(look.icon())
+        // macOS draws it in the menu bar's colour.
+        .icon_as_template(true)
+        .tooltip("Ottie")
+        .menu(&menu)
+        // A click opens the window, a right click a menu.
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(clicked)
+        .on_menu_event(chosen)
+        .build(app)?;
+    app.manage(Actions {
+        daemon: daemon.clone(),
+        summaries: summaries.clone(),
+    });
+    tauri::async_runtime::spawn(status::follow(app.clone(), daemon, out));
+    tauri::async_runtime::spawn(refresh(app.clone(), tray, menu, items, look, summaries));
+    Ok(())
+}
+
+fn clicked(tray: &TrayIcon, event: TrayIconEvent) {
+    let TrayIconEvent::Click {
+        button,
+        button_state: MouseButtonState::Up,
+        position,
+        ..
+    } = event
+    else {
+        return;
+    };
+    let app = tray.app_handle();
+    match button {
+        MouseButton::Left => crate::show(app),
+        // Without the daemon, the system's menu opens instead.
+        MouseButton::Right if app.state::<Actions>().summaries.borrow().connected => {
+            popup::toggle(app, position);
+        }
+        _ => {}
+    }
+}
+
+fn chosen(app: &AppHandle, event: MenuEvent) {
+    let actions = app.state::<Actions>();
+    let daemon = actions.daemon.clone();
+    let summary = *actions.summaries.borrow();
+    let id = event.id().as_ref();
+    match id {
+        OPEN => crate::show(app),
+        OTHER_LIMIT => {
+            if let Ok(at) = app.cursor_position() {
+                popup::toggle(app, at);
+            }
+        }
+        QUIT => app.exit(0),
+        PAUSE_ALL => {
+            tauri::async_runtime::spawn(async move { pause_all(&daemon).await });
+        }
+        RESUME_ALL => {
+            tauri::async_runtime::spawn(async move { resume_all(&daemon).await });
+        }
+        LIMIT => {
+            let limit = if summary.global_limit > 0 {
+                0
+            } else {
+                last_limit(app)
+            };
+            tauri::async_runtime::spawn(async move {
+                // Failed: the next refresh puts the check mark back.
+                let _ = daemon.set_global_limit(limit).await;
+            });
+        }
+        _ => {
+            let preset = id.strip_prefix(PRESET).and_then(|limit| limit.parse().ok());
+            if let Some(limit) = preset {
+                tauri::async_runtime::spawn(async move {
+                    let _ = daemon.set_global_limit(limit).await;
+                });
+            }
+        }
+    }
+}
+
+/// Every running or waiting download. The waiting ones first: otherwise
+/// each running one paused would start one of them. Best effort: one that
+/// finished or failed meanwhile is refused, and the rest go on.
+async fn pause_all(daemon: &Daemon) {
+    let Ok(jobs) = daemon.jobs().await else {
+        return;
+    };
+    let waiting = |state: &str| state == "queued";
+    let running = |state: &str| matches!(state, "connecting" | "downloading" | "retrying");
+    for which in [waiting as fn(&str) -> bool, running] {
+        for job in jobs.iter().filter(|job| !job.moving && which(&job.state)) {
+            let _ = daemon.pause(&job.id).await;
+        }
+    }
+}
+
+/// Every paused download, in the order they were added. Failed ones stay as
+/// they are: they need a look first.
+async fn resume_all(daemon: &Daemon) {
+    let Ok(jobs) = daemon.jobs().await else {
+        return;
+    };
+    for job in jobs
+        .iter()
+        .filter(|job| !job.moving && job.state == "paused")
+    {
+        let _ = daemon.resume(&job.id).await;
+    }
+}
+
+fn last_limit(app: &AppHandle) -> u64 {
+    app.state::<prefs::Saved>()
+        .get()
+        .last_limit
+        .filter(|&limit| limit > 0)
+        .unwrap_or(DEFAULT_LIMIT)
+}
+
+/// Brings the tray up to date every second: the status, which actions
+/// apply, the language, and the icon for the taskbar's colours.
+async fn refresh(
+    app: AppHandle,
+    tray: TrayIcon,
+    menu: Menu<Wry>,
+    items: Items,
+    mut look: Look,
+    summaries: watch::Receiver<Summary>,
+) {
+    let mut language = None;
+    let mut texts = Texts::default();
+    let mut shown = Shown::default();
+    let mut tick = tokio::time::interval(REFRESH);
+    loop {
+        tick.tick().await;
+        let prefs = app.state::<prefs::Saved>().get();
+        if language.as_ref() != Some(&prefs.language) {
+            texts = Texts::for_language(prefs.language.as_deref());
+            language = Some(prefs.language);
+            // Every text again, in the new language.
+            shown = Shown::default();
+            let _ = items.open.set_text(&texts.open);
+            let _ = items.pause_all.set_text(&texts.pause_all);
+            let _ = items.resume_all.set_text(&texts.resume_all);
+            let _ = items.quit.set_text(&texts.quit);
+            let _ = items.limits.set_text(&texts.change_limit);
+            let _ = items.other_limit.set_text(&texts.other_limit);
+            for (limit, item) in &items.presets {
+                let _ = item.set_text(texts.rate(*limit));
+            }
+        }
+        let summary = *summaries.borrow();
+        let limit = if summary.global_limit > 0 {
+            summary.global_limit
+        } else {
+            last_limit(&app)
+        };
+        let now = Shown {
+            status: Some(texts.status(&summary)),
+            can_pause: summary.running + summary.waiting > 0,
+            can_resume: summary.paused > 0,
+            limit: Some(texts.limit(limit)),
+            connected: summary.connected,
+        };
+        // Best effort below: a tray that misses one update gets the next.
+        if now.status != shown.status
+            && let Some(status) = &now.status
+        {
+            let _ = items.status.set_text(status);
+            let _ = tray.set_tooltip(Some(format!("Ottie\n{status}")));
+        }
+        if now.can_pause != shown.can_pause {
+            let _ = items.pause_all.set_enabled(now.can_pause);
+        }
+        if now.can_resume != shown.can_resume {
+            let _ = items.resume_all.set_enabled(now.can_resume);
+        }
+        if now.limit != shown.limit
+            && let Some(limit) = &now.limit
+        {
+            let _ = items.limit.set_text(limit);
+        }
+        if now.connected != shown.connected {
+            let _ = items.limit.set_enabled(now.connected);
+            let _ = items.limits.set_enabled(now.connected);
+            let attached = (ALWAYS_MENU || !now.connected).then(|| menu.clone());
+            let _ = tray.set_menu(attached);
+        }
+        // Checked by the items themselves: a click ticks one before the
+        // daemon has answered, and nothing else would untick it if that failed.
+        tick_if(&items.limit, summary.global_limit > 0);
+        for (limit, item) in &items.presets {
+            tick_if(item, summary.global_limit == *limit);
+        }
+        shown = now;
+        let next = Look::now(&app);
+        if next != look {
+            look = next;
+            let _ = tray.set_icon(Some(look.icon()));
+        }
+    }
+}
+
+fn tick_if(item: &CheckMenuItem<Wry>, on: bool) {
+    if item.is_checked().is_ok_and(|checked| checked != on) {
+        let _ = item.set_checked(on);
+    }
+}
+
+/// What the menu shows now, to change only what differs.
+#[derive(Default)]
+struct Shown {
+    status: Option<String>,
+    can_pause: bool,
+    can_resume: bool,
+    limit: Option<String>,
+    connected: bool,
+}
+
+/// Which icon suits the tray: its colour and size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Look {
+    /// Black, for a light taskbar; else white.
+    black: bool,
+    size: u32,
+}
+
+impl Look {
+    fn now(app: &AppHandle) -> Look {
+        let scale = app
+            .primary_monitor()
+            .ok()
+            .flatten()
+            .map_or(1.0, |monitor| monitor.scale_factor());
+        Look {
+            black: light_taskbar(),
+            size: size_for(scale),
+        }
+    }
+
+    fn icon(self) -> Image<'static> {
+        let icons = if self.black { BLACK } else { WHITE };
+        let (_, png) = icons
+            .into_iter()
+            .find(|&(size, _)| size == self.size)
+            .unwrap_or(icons[0]);
+        // The PNGs are built in and tested, so this never fails; if it did,
+        // an empty icon beats no tray at all.
+        Image::from_bytes(png).unwrap_or_else(|_| Image::new_owned(vec![0; 4], 1, 1))
+    }
+}
+
+/// The drawn size for a display scale: the smallest one at least as big as
+/// the icon's place (16 px at 100 %), else the biggest.
+fn size_for(scale: f64) -> u32 {
+    let wanted = BASE_SIZE * scale;
+    WHITE
+        .iter()
+        .map(|&(size, _)| size)
+        .find(|&size| f64::from(size) >= wanted - 0.01)
+        .unwrap_or(64)
+}
+
+/// Windows: the taskbar's own setting ("Choose your default Windows mode"),
+/// which can differ from the apps' one. Changes show at the next refresh.
+#[cfg(windows)]
+fn light_taskbar() -> bool {
+    windows_registry::CURRENT_USER
+        .open(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+        .and_then(|key| key.get_u32("SystemUsesLightTheme"))
+        .is_ok_and(|light| light == 1)
+}
+
+/// macOS draws template icons in the menu bar's colour, from a black one.
+#[cfg(target_os = "macos")]
+fn light_taskbar() -> bool {
+    true
+}
+
+/// Linux: most panels are dark, and there's no common way to ask.
+#[cfg(not(any(windows, target_os = "macos")))]
+fn light_taskbar() -> bool {
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_icon_reads() {
+        for (size, png) in WHITE.into_iter().chain(BLACK) {
+            let image = Image::from_bytes(png).unwrap();
+            assert_eq!((image.width(), image.height()), (size, size));
+        }
+    }
+
+    #[test]
+    fn the_size_follows_the_display_scale() {
+        assert_eq!(size_for(1.0), 16);
+        assert_eq!(size_for(1.25), 24);
+        assert_eq!(size_for(1.5), 24);
+        assert_eq!(size_for(2.0), 32);
+        assert_eq!(size_for(3.5), 64);
+        assert_eq!(size_for(5.0), 64);
+    }
+}

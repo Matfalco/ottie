@@ -4,16 +4,24 @@
 // Release builds on Windows: no console window behind the app.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod client;
+mod config;
 mod daemon;
 mod player;
+mod popup;
+mod prefs;
+mod status;
+mod texts;
+mod tray;
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use tauri::ipc::CapabilityBuilder;
 use tauri::webview::NewWindowResponse;
-use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
+use crate::client::Daemon;
 use crate::daemon::Started;
 
 const WINDOW: &str = "main";
@@ -22,9 +30,11 @@ const PLAY_PATH: &str = "/api/v1/stream/";
 
 /// What the page may do in the app: control its window, since it draws its
 /// own title bar (docs/decisions/0019), open the system folder picker, which
-/// only hands back the path the user chose, and choose how to play
-/// (docs/decisions/0031). Only these, and only for the daemon's pages.
-const PAGE_PERMISSIONS: [&str; 12] = [
+/// only hands back the path the user chose, choose how to play
+/// (docs/decisions/0031), set what closing does and the tray's language, and,
+/// in Ottie's tray menu, open the window, quit, and hide the menu
+/// (docs/decisions/0034). Only these, and only for the daemon's pages.
+const PAGE_PERMISSIONS: [&str; 19] = [
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
@@ -41,6 +51,15 @@ const PAGE_PERMISSIONS: [&str; 12] = [
     "allow-player",
     "allow-set-play-with",
     "allow-choose-player",
+    // Settings → Desktop app, and the page's language for the tray.
+    "allow-desktop",
+    "allow-set-close-to-tray",
+    "allow-set-language",
+    // Ottie's tray menu (`popup.rs`).
+    "core:window:allow-hide",
+    "allow-menu-ready",
+    "allow-show-main",
+    "allow-quit-app",
 ];
 
 /// The daemon this app started, if it did: stopped when the app quits.
@@ -57,10 +76,17 @@ fn main() -> tauri::Result<()> {
         .invoke_handler(tauri::generate_handler![
             player::player,
             player::set_play_with,
-            player::choose_player
+            player::choose_player,
+            prefs::desktop,
+            prefs::set_close_to_tray,
+            prefs::set_language,
+            popup::menu_ready,
+            popup::show_main,
+            popup::quit_app
         ])
         .setup(|app| {
             app.manage(player::Chosen::load(app.handle()));
+            app.manage(prefs::Saved::load(app.handle()));
             let app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(err) = start(&app).await {
@@ -83,11 +109,15 @@ fn main() -> tauri::Result<()> {
     Ok(())
 }
 
-/// Finds or starts the daemon, then opens the window on it.
+/// Finds or starts the daemon, then opens the window on it and puts Ottie
+/// in the tray.
 async fn start(app: &AppHandle) -> anyhow::Result<()> {
     let connection = daemon::connect(&daemon::sidecar()?).await?;
     *owned(app) = connection.started;
+    let daemon = Arc::new(Daemon::new(&connection.link)?);
+    app.manage(popup::Popup::new(&connection.link));
     open_window(app, connection.link)?;
+    tray::start(app, daemon)?;
     Ok(())
 }
 
@@ -100,11 +130,11 @@ fn open_window(app: &AppHandle, link: Url) -> tauri::Result<()> {
             // The daemon's address is only known now, hence a runtime capability.
             .remote(daemon.ascii_serialization())
             .local(false)
-            .window(WINDOW),
+            .windows([WINDOW, popup::LABEL]),
         CapabilityBuilder::permission,
     );
     app.add_capability(page)?;
-    WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::External(link))
+    let window = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::External(link))
         .title("Ottie")
         // No system title bar: the page draws its own.
         .decorations(false)
@@ -122,19 +152,37 @@ fn open_window(app: &AppHandle, link: Url) -> tauri::Result<()> {
             NewWindowResponse::Deny
         })
         .build()?;
+    let hidden = window.clone();
+    let handle = app.clone();
+    window.on_window_event(move |event| {
+        // Closing hides the window, unless Settings say it quits
+        // (docs/decisions/0034). The tray's "Quit Ottie" always quits.
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            if handle.state::<prefs::Saved>().get().close_to_tray {
+                // Best effort: if it can't hide, it stays open.
+                let _ = hidden.hide();
+            } else {
+                // Quits even with the tray's menu window still there, hidden.
+                handle.exit(0);
+            }
+        }
+    });
     Ok(())
 }
 
+/// Brings the window forward: from the tray, or a second launch.
 fn show(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(WINDOW) {
         // Best effort: the user can still find the window themselves.
+        let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
 }
 
-/// The window is closed: stop the daemon if we started it. One that was
-/// already running (a terminal, a service) keeps running.
+/// The app quits: stop the daemon if we started it. One that was already
+/// running (a terminal, a service) keeps running.
 fn stop(app: &AppHandle) {
     if let Some(started) = owned(app).take() {
         tauri::async_runtime::block_on(started.stop());

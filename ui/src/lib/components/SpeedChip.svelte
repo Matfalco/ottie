@@ -4,6 +4,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import type { Connection } from '#lib/session.svelte.js';
 	import LimitControl from './LimitControl.svelte';
+	import RatePresets from './RatePresets.svelte';
 
 	interface Props {
 		/** All downloads together, in bytes per second. */
@@ -66,6 +67,7 @@
 			<div class="popup" role="dialog" aria-label={m.limit_total()} tabindex="-1">
 				<p class="title">{m.limit_total()}</p>
 				<LimitControl {limit} onChange={onLimit} />
+				<RatePresets {limit} onChange={onLimit} />
 				<p class="hint">{m.limit_chip_hint()}</p>
 			</div>
 		{/if}
