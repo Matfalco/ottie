@@ -1,5 +1,6 @@
 //! The daemon this window shows: the one already running on this computer,
 //! or `ottie serve --managed` started for the app (docs/decisions/0017).
+//! At sign-in it can also be started on its own (docs/decisions/0039).
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -68,6 +69,45 @@ pub async fn connect(ottie: &Path) -> Result<Connection> {
         });
     }
     Err(failure)
+}
+
+/// Starts `ottie serve` on its own, not tied to the app (which then quits),
+/// its log in `log`; done once it answers. Fine if one was running already.
+pub async fn start_alone(ottie: &Path, log: &Path) -> Result<()> {
+    let link = link(ottie).await?;
+    if let Some(folder) = log.parent() {
+        std::fs::create_dir_all(folder)
+            .with_context(|| format!("can't create {}", folder.display()))?;
+    }
+    let file =
+        std::fs::File::create(log).with_context(|| format!("can't create {}", log.display()))?;
+    // Not killed on drop: it outlives the app.
+    let mut child = command(ottie)
+        .arg("serve")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(file)
+        .spawn()
+        .with_context(|| format!("can't start {}", ottie.display()))?;
+    let waited = tokio::time::timeout(STARTUP, async {
+        loop {
+            if answers(&link).await {
+                return Ok(());
+            }
+            if let Some(status) = child.try_wait()? {
+                // Another Ottie took the port while we looked: that one serves.
+                if answers(&link).await {
+                    return Ok(());
+                }
+                let text = std::fs::read_to_string(log).unwrap_or_default();
+                bail!(reason(text.lines(), status));
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    });
+    waited
+        .await
+        .unwrap_or_else(|_| bail!("Ottie didn't start within {} s", STARTUP.as_secs()))
 }
 
 /// `ottie link`: the address and token, as `ottie serve` will use them.

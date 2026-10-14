@@ -4,6 +4,7 @@
 // Release builds on Windows: no console window behind the app.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod client;
 mod config;
 mod daemon;
@@ -34,10 +35,10 @@ const PLAY_PATH: &str = "/api/v1/stream/";
 /// own title bar (docs/decisions/0019), open the system folder picker, which
 /// only hands back the path the user chose, choose how to play
 /// (docs/decisions/0031), set what closing does, when to notify
-/// (docs/decisions/0035) and the tray's language, and, in Ottie's tray menu,
-/// open the window, quit, and hide the menu (docs/decisions/0034). Only
-/// these, and only for the daemon's pages.
-const PAGE_PERMISSIONS: [&str; 24] = [
+/// (docs/decisions/0035), what happens at sign-in (0039) and the tray's
+/// language, and, in Ottie's tray menu, open the window, quit, and hide the
+/// menu (docs/decisions/0034). Only these, and only for the daemon's pages.
+const PAGE_PERMISSIONS: [&str; 25] = [
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
@@ -54,9 +55,10 @@ const PAGE_PERMISSIONS: [&str; 24] = [
     "allow-player",
     "allow-set-play-with",
     "allow-choose-player",
-    // Settings → Desktop app and Notifications, and the page's language
-    // for the tray.
+    // Settings → Desktop app and Notifications (and the first-start setup's
+    // sign-in choice), and the page's language for the tray.
     "allow-desktop",
+    "allow-set-startup",
     "allow-set-close-to-tray",
     "allow-set-notify",
     "allow-set-notify-failed",
@@ -88,6 +90,7 @@ fn main() -> tauri::Result<()> {
             player::set_play_with,
             player::choose_player,
             prefs::desktop,
+            prefs::set_startup,
             prefs::set_close_to_tray,
             prefs::set_notify,
             prefs::set_notify_failed,
@@ -101,16 +104,26 @@ fn main() -> tauri::Result<()> {
         ])
         .setup(|app| {
             app.manage(player::Chosen::load(app.handle()));
-            app.manage(prefs::Saved::load(app.handle()));
-            notify::listen(app.handle());
+            let saved = prefs::Saved::load(app.handle());
+            let startup = saved.get().startup;
+            app.manage(saved);
+            autostart::refresh(app.handle());
+            let at_sign_in = autostart::at_sign_in();
             let app = app.handle().clone();
+            if at_sign_in && startup == autostart::Mode::Daemon {
+                tauri::async_runtime::spawn(async move {
+                    if let Err(err) = start_alone(&app).await {
+                        cant_start(&app, &err);
+                    }
+                    app.exit(0);
+                });
+                return Ok(());
+            }
+            notify::listen(&app);
             tauri::async_runtime::spawn(async move {
-                if let Err(err) = start(&app).await {
-                    app.dialog()
-                        .message(format!("{err:#}"))
-                        .title("Ottie can't start")
-                        .kind(MessageDialogKind::Error)
-                        .blocking_show();
+                // At sign-in, Ottie starts in the tray.
+                if let Err(err) = start(&app, !at_sign_in).await {
+                    cant_start(&app, &err);
                     app.exit(1);
                 }
             });
@@ -125,19 +138,35 @@ fn main() -> tauri::Result<()> {
     Ok(())
 }
 
-/// Finds or starts the daemon, then opens the window on it and puts Ottie
-/// in the tray.
-async fn start(app: &AppHandle) -> anyhow::Result<()> {
+/// Finds or starts the daemon, then opens the window on it (shown or not)
+/// and puts Ottie in the tray.
+async fn start(app: &AppHandle, shown: bool) -> anyhow::Result<()> {
     let connection = daemon::connect(&daemon::sidecar()?).await?;
     *owned(app) = connection.started;
     let daemon = Arc::new(Daemon::new(&connection.link)?);
     app.manage(popup::Popup::new(&connection.link));
-    open_window(app, connection.link)?;
+    open_window(app, connection.link, shown)?;
     tray::start(app, daemon)?;
     Ok(())
 }
 
-fn open_window(app: &AppHandle, link: Url) -> tauri::Result<()> {
+/// At sign-in, set to start only the daemon (docs/decisions/0039): it runs
+/// on its own, its log in the app's log folder, and the app quits. Opened
+/// later, the app finds it, and quitting the app leaves it running.
+async fn start_alone(app: &AppHandle) -> anyhow::Result<()> {
+    let log = app.path().app_log_dir()?.join("daemon.log");
+    daemon::start_alone(&daemon::sidecar()?, &log).await
+}
+
+fn cant_start(app: &AppHandle, err: &anyhow::Error) {
+    app.dialog()
+        .message(format!("{err:#}"))
+        .title("Ottie can't start")
+        .kind(MessageDialogKind::Error)
+        .blocking_show();
+}
+
+fn open_window(app: &AppHandle, link: Url, shown: bool) -> tauri::Result<()> {
     let daemon = link.origin();
     let links = daemon.clone();
     let handle = app.clone();
@@ -156,6 +185,7 @@ fn open_window(app: &AppHandle, link: Url) -> tauri::Result<()> {
         .decorations(false)
         .inner_size(960.0, 680.0)
         .min_inner_size(400.0, 320.0)
+        .visible(shown)
         // Only the daemon's pages: a link to elsewhere must not turn this
         // window into a browser.
         .on_navigation(move |url| url.origin() == daemon)

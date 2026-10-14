@@ -31,6 +31,7 @@
 		type Sound,
 		type SoundKind
 	} from '#lib/sounds.js';
+	import { STARTUP_CHOICES, STARTUP_NAMES } from '#lib/startup.js';
 	import { signInLink } from '#lib/token.js';
 	import {
 		canChoosePlayer,
@@ -44,10 +45,12 @@
 		setPlayWith,
 		setSound,
 		setSounds,
+		setStartup,
 		type Desktop,
 		type Notify,
 		type PlayWith,
-		type Player
+		type Player,
+		type Startup
 	} from '#lib/window.js';
 	import LanguagePicker from './LanguagePicker.svelte';
 	import LimitControl from './LimitControl.svelte';
@@ -92,7 +95,7 @@
 	const SOUND_KINDS = Object.keys(SOUND_NAMES) as SoundKind[];
 
 	/** Only the desktop app can start a player (docs/decisions/0031), stay
-	 * in the tray (0034) or notify (0035). */
+	 * in the tray (0034), notify (0035) or start at sign-in (0039). */
 	const inApp = canChoosePlayer();
 
 	/** The sections, top to bottom, for the list on the left. */
@@ -128,6 +131,8 @@
 	let desktop: Desktop | null = $state(null);
 	/** The notify choice shown, put back if a change doesn't happen. */
 	let notify: Notify = $state('all');
+	/** The sign-in choice shown, put back the same way. */
+	let startup: Startup = $state('off');
 
 	if (inApp) {
 		playerSetting().then(showPlayer, () => (problem = m.set_play_failed()));
@@ -137,6 +142,7 @@
 	function showDesktop(answer: Desktop) {
 		desktop = answer;
 		notify = answer.notify;
+		startup = answer.startup;
 	}
 
 	async function changeDesktop(change: () => Promise<Desktop>) {
@@ -145,6 +151,7 @@
 		} catch {
 			problem = m.set_app_failed();
 			notify = desktop?.notify ?? 'all';
+			startup = desktop?.startup ?? 'off';
 		}
 	}
 
@@ -468,6 +475,26 @@
 					<p class="hint">{m.set_app_hint()}</p>
 				</header>
 				{#if desktop}
+					<fieldset>
+						<legend>{m.set_startup()}</legend>
+						<div class="options startups">
+							{#each STARTUP_CHOICES as choice (choice)}
+								<label class="option row" class:chosen={startup === choice}>
+									<input
+										type="radio"
+										name="startup"
+										value={choice}
+										bind:group={startup}
+										onchange={() => changeDesktop(() => setStartup(choice))}
+									/>
+									<span class="names">
+										<span>{STARTUP_NAMES[choice].name()}</span>
+										<span class="hint">{STARTUP_NAMES[choice].hint()}</span>
+									</span>
+								</label>
+							{/each}
+						</div>
+					</fieldset>
 					<div class="setting">
 						<span class="names">
 							<span>{m.set_close_to_tray()}</span>
@@ -1065,7 +1092,8 @@
 	}
 
 	.plays,
-	.notifies {
+	.notifies,
+	.startups {
 		grid-template-columns: minmax(0, 1fr);
 	}
 

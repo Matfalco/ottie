@@ -9,7 +9,14 @@
 	import { useApp } from '#lib/context.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { asCategory, edited, folderOf, starters, toCreate, type Starter } from '#lib/setup.js';
-	import { canPickFolder, pickFolder } from '#lib/window.js';
+	import { FIRST_STARTUP, STARTUP_CHOICES, STARTUP_NAMES } from '#lib/startup.js';
+	import {
+		canPickFolder,
+		canStartAtSignIn,
+		pickFolder,
+		setStartup,
+		type Startup
+	} from '#lib/window.js';
 	import CategoryEditor from './CategoryEditor.svelte';
 
 	const { session } = useApp();
@@ -22,6 +29,9 @@
 	let added = 0;
 	let saving = $state(false);
 	let problem: string | null = $state(null);
+	/** In the desktop app: what starts at sign-in (docs/decisions/0039). */
+	const offerStartup = canStartAtSignIn();
+	let startup: Startup = $state(FIRST_STARTUP);
 
 	async function browse() {
 		const chosen = await pickFolder(downloads);
@@ -45,6 +55,16 @@
 
 	async function finish(skip: boolean) {
 		saving = true;
+		// Skipping skips the categories; the sign-in choice is above both buttons.
+		if (offerStartup) {
+			try {
+				await setStartup(startup);
+			} catch {
+				problem = m.set_app_failed();
+				saving = false;
+				return;
+			}
+		}
 		problem = skip
 			? await session.finishSetup(null, [])
 			: await session.finishSetup(
@@ -116,6 +136,26 @@
 				{m.setup_add()}
 			</button>
 		</section>
+
+		{#if offerStartup}
+			<section>
+				<h2 class="heading" id="startup-title">{m.set_startup()}</h2>
+				<ul role="radiogroup" aria-labelledby="startup-title">
+					{#each STARTUP_CHOICES as choice (choice)}
+						<li>
+							<label class="startup">
+								<input type="radio" name="startup" value={choice} bind:group={startup} />
+								<span class="choice">
+									<span class="choice-name">{STARTUP_NAMES[choice].name()}</span>
+									<small>{STARTUP_NAMES[choice].hint()}</small>
+								</span>
+							</label>
+						</li>
+					{/each}
+				</ul>
+				<small>{m.setup_startup_hint()}</small>
+			</section>
+		{/if}
 
 		{#if problem}
 			<p class="problem" role="alert">{problem}</p>
@@ -297,6 +337,30 @@
 
 	.add {
 		justify-self: start;
+	}
+
+	.startup {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		gap: 0.75rem;
+		cursor: pointer;
+	}
+
+	.startup input {
+		flex: none;
+		margin: 0;
+		accent-color: var(--accent);
+	}
+
+	.choice {
+		display: grid;
+		gap: 0.1rem;
+		min-width: 0;
+	}
+
+	.choice-name {
+		font-weight: 600;
 	}
 
 	.problem {

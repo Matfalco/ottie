@@ -1,14 +1,16 @@
 //! What this app remembers on this computer besides the player
 //! (docs/decisions/0034): whether closing the window keeps Ottie in the tray,
-//! when to notify (docs/decisions/0035) and with which sounds (0038), the
-//! language the page shows (for the tray's texts and notifications), and the
-//! last total speed limit (for the tray's "Limit speed").
+//! when to notify (docs/decisions/0035) and with which sounds (0038), what
+//! starting at sign-in starts (0039), the language the page shows (for the
+//! tray's texts and notifications), and the last total speed limit (for the
+//! tray's "Limit speed").
 
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
+use crate::autostart::{self, Mode, Startup};
 use crate::config;
 use crate::notify::Kind;
 use crate::sound::{self, Sound, Sounds};
@@ -33,6 +35,8 @@ pub struct Prefs {
     pub sound_finished: Sound,
     /// …and a failed one's.
     pub sound_failed: Sound,
+    /// What the system's entry starts at sign-in, when there is one.
+    pub startup: Mode,
     /// The page's language, as it said last.
     pub language: Option<String>,
     /// The total limit last set (bytes per second), by anyone.
@@ -48,6 +52,7 @@ impl Default for Prefs {
             sounds: Sounds::System,
             sound_finished: Sound::System,
             sound_failed: Sound::System,
+            startup: Mode::Tray,
             language: None,
             last_limit: None,
         }
@@ -84,6 +89,8 @@ pub enum Notify {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Desktop {
+    /// What happens at sign-in: the system's entry, then `Prefs::startup`.
+    pub startup: Startup,
     pub close_to_tray: bool,
     pub notify: Notify,
     pub notify_failed: bool,
@@ -96,9 +103,10 @@ pub struct Desktop {
     pub system_sound: bool,
 }
 
-impl From<Prefs> for Desktop {
-    fn from(prefs: Prefs) -> Desktop {
+impl Desktop {
+    fn new(app: &AppHandle, prefs: Prefs) -> Desktop {
         Desktop {
+            startup: autostart::current(app, prefs.startup),
             close_to_tray: prefs.close_to_tray,
             notify: prefs.notify,
             notify_failed: prefs.notify_failed,
@@ -146,8 +154,24 @@ impl Saved {
 }
 
 #[tauri::command]
-pub fn desktop(saved: State<'_, Saved>) -> Desktop {
-    saved.get().into()
+pub fn desktop(app: AppHandle, saved: State<'_, Saved>) -> Desktop {
+    Desktop::new(&app, saved.get())
+}
+
+/// What happens at sign-in: the system's entry is added or removed, and
+/// what it starts is saved.
+#[tauri::command]
+pub fn set_startup(
+    app: AppHandle,
+    saved: State<'_, Saved>,
+    startup: Startup,
+) -> Result<Desktop, String> {
+    autostart::set(&app, startup != Startup::Off).map_err(|err| format!("{err:#}"))?;
+    change_desktop(&app, &saved, |prefs| match startup {
+        Startup::Off => {}
+        Startup::Tray => prefs.startup = Mode::Tray,
+        Startup::Daemon => prefs.startup = Mode::Daemon,
+    })
 }
 
 #[tauri::command]
@@ -238,7 +262,7 @@ fn change_desktop(
 ) -> Result<Desktop, String> {
     saved
         .change(app, change)
-        .map(Desktop::from)
+        .map(|prefs| Desktop::new(app, prefs))
         .map_err(|err| format!("{err:#}"))
 }
 
@@ -270,6 +294,7 @@ mod tests {
         assert_eq!(prefs.notify, Notify::All);
         assert!(prefs.notify_failed);
         assert_eq!(prefs.sounds, Sounds::System);
+        assert_eq!(prefs.startup, Mode::Tray);
         assert_eq!(prefs.language.as_deref(), Some("fr"));
         assert_eq!(prefs.last_limit, None);
     }

@@ -8,6 +8,7 @@ fn main() {
         "set_play_with",
         "choose_player",
         "desktop",
+        "set_startup",
         "set_close_to_tray",
         "set_notify",
         "set_notify_failed",

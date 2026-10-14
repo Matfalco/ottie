@@ -97,8 +97,13 @@ export function choosePlayer(title: string, programs: string): Promise<Player> {
  * as each one finishes, once nothing runs or waits any more, or never. */
 export type Notify = 'each' | 'all' | 'never';
 
-/** The desktop app's own settings (docs/decisions/0034, 0035, 0038). */
+/** What happens when one signs in to the computer (docs/decisions/0039):
+ * the app starts in the tray, only the daemon starts, or nothing. */
+export type Startup = 'tray' | 'daemon' | 'off';
+
+/** The desktop app's own settings (docs/decisions/0034, 0035, 0038, 0039). */
 export interface Desktop {
+	startup: Startup;
 	/** Closing the window keeps Ottie running in the tray. */
 	closeToTray: boolean;
 	notify: Notify;
@@ -116,6 +121,15 @@ export interface Desktop {
 
 export function desktop(): Promise<Desktop> {
 	return invoke<Desktop>('desktop');
+}
+
+/** Whether Ottie can start at sign-in (only the desktop app). */
+export function canStartAtSignIn(): boolean {
+	return isTauri();
+}
+
+export function setStartup(startup: Startup): Promise<Desktop> {
+	return invoke<Desktop>('set_startup', { startup });
 }
 
 export function setCloseToTray(on: boolean): Promise<Desktop> {
