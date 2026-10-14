@@ -104,6 +104,10 @@ describe('filters', () => {
 		expect(showsNewJobs(NO_FILTERS)).toBe(true);
 		expect(showsNewJobs(groupFilters('waiting'))).toBe(true);
 		expect(showsNewJobs(groupFilters('finished'))).toBe(false);
+		const queued = { ...NO_FILTERS, statuses: ['queued' as const] };
+		expect(showsNewJobs(queued)).toBe(true);
+		expect(showsNewJobs(queued, 'scheduled')).toBe(false);
+		expect(showsNewJobs(groupFilters('waiting'), 'scheduled')).toBe(true);
 		expect(showsNewJobs({ ...NO_FILTERS, categories: [1] })).toBe(false);
 	});
 
@@ -111,6 +115,7 @@ describe('filters', () => {
 		expect(groupOf(job({ state: 'connecting' }))).toBe('running');
 		expect(groupOf(job({ state: 'retrying' }))).toBe('attention');
 		expect(groupOf(job({ state: 'paused' }))).toBe('waiting');
+		expect(groupOf(job({ state: 'scheduled' }))).toBe('waiting');
 		expect(groupOf(job({ state: 'cancelled' }))).toBe('finished');
 	});
 
@@ -124,13 +129,14 @@ describe('filters', () => {
 			'Completed'
 		]);
 		expect(pills.more.map((pill) => pill.name)).toEqual([
+			'Scheduled',
 			'Paused',
 			'Added today',
 			'General',
 			'Videos'
 		]);
-		expect(pills.more[3].filters).toEqual({ ...NO_FILTERS, categories: [4] });
-		expect(new Set([...pills.main, ...pills.more].map((pill) => pill.key)).size).toBe(9);
+		expect(pills.more[4].filters).toEqual({ ...NO_FILTERS, categories: [4] });
+		expect(new Set([...pills.main, ...pills.more].map((pill) => pill.key)).size).toBe(10);
 	});
 
 	it('have names in each language', () => {

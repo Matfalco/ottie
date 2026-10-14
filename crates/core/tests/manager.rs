@@ -388,6 +388,7 @@ async fn a_job_change_is_announced_once() {
         speed_limit: Some(64 * 1024),
         priority: Some(Priority::Urgent),
         streaming: Some(true),
+        ..JobChange::default()
     };
     s.manager.change_job(id, change).await.unwrap();
     match s.events.try_recv() {

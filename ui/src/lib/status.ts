@@ -5,6 +5,7 @@ import { explainProblem } from './explain';
 import { formatBytes, formatDuration, formatSpeed } from './format';
 import { m } from './paraglide/messages.js';
 import { getLocale, type Locale } from './paraglide/runtime.js';
+import { formatWhen } from './schedule';
 
 /** "12.3 MB of 45.6 MB", or just what's downloaded when the size is unknown. */
 export function amount(job: Job, locale: Locale = getLocale()): string {
@@ -23,16 +24,28 @@ export function describe(
 ): string {
 	const options = { locale };
 	const why = () => explainProblem(job.problem, job.error, locale);
+	// When it will pause, if it has a stop time.
+	const stops =
+		job.stopAt === null
+			? ''
+			: m.status_stops({ when: formatWhen(job.stopAt, now, locale) }, options);
 	if (job.moving) {
 		return m.status_moving({}, options);
 	}
 	switch (job.state) {
 		case 'queued':
 			return job.retries > 0
-				? join([m.status_waiting_retry({}, options), why()])
-				: m.status_waiting({}, options);
+				? join([m.status_waiting_retry({}, options), why(), stops])
+				: join([m.status_waiting({}, options), stops]);
+		case 'scheduled':
+			return join([
+				job.startAt === null
+					? m.status_waiting({}, options)
+					: m.status_starts({ when: formatWhen(job.startAt, now, locale) }, options),
+				stops
+			]);
 		case 'connecting':
-			return m.status_connecting({}, options);
+			return join([m.status_connecting({}, options), stops]);
 		case 'downloading': {
 			const parts = [amount(job, locale)];
 			if (job.waitingForBandwidth) {
@@ -44,7 +57,7 @@ export function describe(
 					parts.push(m.status_left({ time }, options));
 				}
 			}
-			return join(parts);
+			return join([...parts, stops]);
 		}
 		case 'paused':
 			return join([m.status_paused({}, options), amount(job, locale)]);
@@ -125,11 +138,15 @@ export function fraction(job: Job): number | null {
 // A download whose file is moving can't be stopped or started until it's done.
 
 export function canPause(job: Job): boolean {
-	return !job.moving && ['queued', 'connecting', 'downloading', 'retrying'].includes(job.state);
+	return (
+		!job.moving &&
+		['queued', 'scheduled', 'connecting', 'downloading', 'retrying'].includes(job.state)
+	);
 }
 
+/** Paused or failed: back to the queue; scheduled: to the queue now. */
 export function canResume(job: Job): boolean {
-	return !job.moving && (job.state === 'paused' || job.state === 'failed');
+	return !job.moving && ['paused', 'failed', 'scheduled'].includes(job.state);
 }
 
 export function canCancel(job: Job): boolean {

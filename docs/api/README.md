@@ -78,7 +78,20 @@ curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH \
      -d '{"globalLimit": 5242880, "maxConcurrent": 3}' $API/settings
 ```
 
-A download's `state` is one of `queued`, `connecting`, `downloading`, `paused`, `completed`, `failed`, `cancelled` and `retrying`. Downloads wait in `queued` until a slot is free: the highest `priority` first, then the lowest `place` (new downloads go last; `POST /jobs/reorder` moves them among the queued and paused ones of their priority). `failed` and `paused` downloads can be resumed. `completed` and `cancelled` are final. A `downloading` job with `waitingForBandwidth: true` is running but gets no bandwidth for now: the speed limits give it all to others (urgent ones first).
+A download's `state` is one of `queued`, `connecting`, `downloading`, `paused`, `completed`, `failed`, `cancelled`, `retrying` and `scheduled`. Downloads wait in `queued` until a slot is free: the highest `priority` first, then the lowest `place` (new downloads go last; `POST /jobs/reorder` moves them among the queued, scheduled and paused ones of their priority). `failed` and `paused` downloads can be resumed. `completed` and `cancelled` are final. A `downloading` job with `waitingForBandwidth: true` is running but gets no bandwidth for now: the speed limits give it all to others (urgent ones first).
+
+## Start and stop times
+
+A download can wait for a start time and pause at a stop time (`startAt`, `stopAt`, in milliseconds since 1970, UTC), given when adding it (`POST /jobs`) or later (`PATCH /jobs/{id}`). Until its start time it's `scheduled`, then it joins the queue at its `place`; at its stop time it pauses if it hasn't finished (even if it never started). Each time is used once, then becomes `null`. The stop time must come after the start time (`stopBeforeStart`).
+
+- A start time already past means now. In a `PATCH`, `null` takes a time away; a scheduled download then joins the queue at once, as it does when resumed (`POST /jobs/{id}/resume`).
+- Given to a queued, paused, failed or retrying download, a start time makes it `scheduled`; a running one stops first (its `changed` event comes once it has).
+- A completed or cancelled download takes no times (`invalidTransition`).
+
+```bash
+# Start at 23:00 on 2026-10-14 (UTC), stop at 07:00 the next morning
+curl -H "$AUTH" -H "Content-Type: application/json"      -d '{"url": "https://example.com/file.iso", "startAt": 1792018800000, "stopAt": 1792047600000}' $API/jobs
+```
 
 ## Several links at once
 

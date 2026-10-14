@@ -392,7 +392,8 @@
 
 	.paused .fill,
 	.cancelled .fill,
-	.queued .fill {
+	.queued .fill,
+	.scheduled .fill {
 		background: var(--muted);
 	}
 

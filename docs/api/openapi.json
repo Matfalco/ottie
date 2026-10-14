@@ -460,7 +460,7 @@
         "tags": [
           "jobs"
         ],
-        "summary": "Queues a download. It starts as soon as a slot is free.",
+        "summary": "Queues a download. It starts as soon as a slot is free, or waits for\nits start time (`scheduled`) if it has one.",
         "operationId": "addJob",
         "requestBody": {
           "content": {
@@ -484,7 +484,7 @@
             }
           },
           "400": {
-            "description": "`invalidUrl`, `unsupportedScheme`, `relativeFolder`, `nonUtf8Path` or `noFolder`",
+            "description": "`invalidUrl`, `unsupportedScheme`, `relativeFolder`, `nonUtf8Path`, `noFolder` or `stopBeforeStart`",
             "content": {
               "application/json": {
                 "schema": {
@@ -683,7 +683,7 @@
         "tags": [
           "jobs"
         ],
-        "summary": "Moves downloads in the queue, among the waiting (queued or paused)\ndownloads of their priority: priority comes first, the place only orders\ndownloads of the same one. Those moved keep their order among themselves,\nso neighbours move as a block. Downloads that aren't waiting stay as they\nare; next to a download (`before`, `after`), so do those of another\npriority than it. Every client hears of each one that moved through a\n`changed` event (its new `place`).",
+        "summary": "Moves downloads in the queue, among the waiting (queued, scheduled or paused)\ndownloads of their priority: priority comes first, the place only orders\ndownloads of the same one. Those moved keep their order among themselves,\nso neighbours move as a block. Downloads that aren't waiting stay as they\nare; next to a download (`before`, `after`), so do those of another\npriority than it. Every client hears of each one that moved through a\n`changed` event (its new `place`).",
         "operationId": "reorderJobs",
         "requestBody": {
           "content": {
@@ -830,7 +830,7 @@
         "tags": [
           "jobs"
         ],
-        "summary": "Changes a download's own speed limit, priority and streaming mode (the\nfields given), in any state; they take effect at once, even while it runs. Every client\nhears of it through one `changed` event, none if nothing changed.",
+        "summary": "Changes a download's own speed limit, priority, streaming mode, start\nand stop time (the fields given), in any state; they take effect at\nonce, even while it runs. A start time to come makes it `scheduled` (a\nrunning download stops first, and its `changed` event comes once it\nhas). Every client hears of it through one `changed` event, none if\nnothing changed.",
         "operationId": "changeJob",
         "parameters": [
           {
@@ -858,7 +858,7 @@
             "description": "Changed"
           },
           "400": {
-            "description": "`invalidJobId`",
+            "description": "`invalidJobId` or `stopBeforeStart`",
             "content": {
               "application/json": {
                 "schema": {
@@ -879,6 +879,16 @@
           },
           "404": {
             "description": "`jobNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Times for a finished download (`invalidTransition`), or `jobMoving`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1170,7 +1180,7 @@
         "tags": [
           "jobs"
         ],
-        "summary": "Puts a paused or failed download back in the queue.",
+        "summary": "Puts a paused or failed download back in the queue; a scheduled one\njoins it now, without waiting for its start time.",
         "operationId": "resumeJob",
         "parameters": [
           {
@@ -1895,6 +1905,24 @@
             ],
             "description": "An absolute folder. Default: the category's folder."
           },
+          "startAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Wait until then (`scheduled`), in milliseconds since 1970 (UTC).\nDefault, or a time already past: queued at once.",
+            "minimum": 0
+          },
+          "stopAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Pause then if it hasn't finished, the same way. After `startAt`.",
+            "minimum": 0
+          },
           "streaming": {
             "type": [
               "boolean",
@@ -2567,8 +2595,26 @@
             "description": "Bytes per second; 0 = no limit of its own.",
             "minimum": 0
           },
+          "startAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "While `scheduled`: when it joins the queue, in milliseconds since\n1970 (UTC).",
+            "minimum": 0
+          },
           "state": {
             "$ref": "#/components/schemas/JobState"
+          },
+          "stopAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "When it pauses if it hasn't finished by then, the same way.",
+            "minimum": 0
           },
           "streaming": {
             "type": "boolean",
@@ -2615,6 +2661,24 @@
             "description": "Bytes per second; 0 = no limit of its own.",
             "minimum": 0
           },
+          "startAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Wait until then, in milliseconds since 1970 (UTC): a queued, paused,\nfailed or retrying download becomes `scheduled`; a running one stops\nfirst. `null`: no start time (a scheduled download joins the queue\nnow, as it does for a time already past).",
+            "minimum": 0
+          },
+          "stopAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Pause then, wherever it is; `null`: no stop time. After the start time.",
+            "minimum": 0
+          },
           "streaming": {
             "type": [
               "boolean",
@@ -2634,7 +2698,8 @@
           "completed",
           "failed",
           "cancelled",
-          "retrying"
+          "retrying",
+          "scheduled"
         ]
       },
       "MatchLink": {
@@ -3095,6 +3160,21 @@
               },
               "to": {
                 "$ref": "#/components/schemas/JobState"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A download's stop time must come after its start time.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "stopBeforeStart"
+                ]
               }
             }
           },
@@ -3571,7 +3651,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The downloads to move. Those that aren't queued or paused stay as they are."
+            "description": "The downloads to move. Those that aren't queued, scheduled or paused stay as they are."
           },
           "to": {
             "$ref": "#/components/schemas/Reorder"

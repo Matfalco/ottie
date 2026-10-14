@@ -6,6 +6,6 @@ import type { Reorder } from "./Reorder";
  */
 export type ReorderJobs = { 
 /**
- * The downloads to move. Those that aren't queued or paused stay as they are.
+ * The downloads to move. Those that aren't queued, scheduled or paused stay as they are.
  */
 ids: Array<string>, to: Reorder, };

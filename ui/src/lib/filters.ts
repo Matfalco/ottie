@@ -22,6 +22,7 @@ export const STATUSES: Status[] = [
 	'downloading',
 	'retrying',
 	'queued',
+	'scheduled',
 	'paused',
 	'failed',
 	'cancelled',
@@ -173,10 +174,11 @@ export function filtersQuery(filters: Filters): string {
 }
 
 /** Whether a download just added shows up with these filters: it starts
- * out queued, and its category isn't known yet. */
-export function showsNewJobs(filters: Filters): boolean {
+ * out queued (or scheduled, with a start time), and its category isn't
+ * known yet. */
+export function showsNewJobs(filters: Filters, state: Status = 'queued'): boolean {
 	return (
-		(filters.statuses === null || filters.statuses.includes('queued')) &&
+		(filters.statuses === null || filters.statuses.includes(state)) &&
 		filters.categories === null &&
 		filters.query.trim() === ''
 	);
@@ -190,7 +192,7 @@ export const GROUPS: Group[] = ['running', 'attention', 'waiting', 'finished'];
 const GROUP_STATUSES: Record<Group, Status[]> = {
 	running: ['downloading'],
 	attention: ['retrying', 'failed'],
-	waiting: ['queued', 'paused'],
+	waiting: ['queued', 'scheduled', 'paused'],
 	finished: ['cancelled', 'completed']
 };
 
@@ -232,6 +234,7 @@ export function quickFilters(
 			statuses('completed', m.filter_completed({}, options), ['completed'])
 		],
 		more: [
+			statuses('scheduled', m.filter_scheduled({}, options), ['scheduled']),
 			statuses('paused', m.filter_paused({}, options), ['paused']),
 			{
 				key: 'today',
@@ -256,6 +259,8 @@ export function statusName(status: Status, locale: Locale = getLocale()): string
 			return m.state_retrying({}, options);
 		case 'queued':
 			return m.state_queued({}, options);
+		case 'scheduled':
+			return m.state_scheduled({}, options);
 		case 'paused':
 			return m.state_paused({}, options);
 		case 'failed':

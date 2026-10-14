@@ -82,6 +82,27 @@ group('progress and buttons', () => {
 		expect(canCancel(job({ state: 'paused' }))).toBe(true);
 	});
 
+	it('says when a scheduled download starts, and when one stops', () => {
+		const now = new Date(2026, 9, 14, 9, 0).getTime();
+		const tonight = new Date(2026, 9, 14, 23, 0).getTime();
+		const morning = new Date(2026, 9, 15, 7, 0).getTime();
+		const later = job({ state: 'scheduled', startAt: tonight, stopAt: morning });
+		expect(describe(later, 0, now, 'en')).toBe(
+			'Starts today at 11:00 PM · Stops tomorrow at 7:00 AM'
+		);
+		expect(describe(later, 0, now, 'fr')).toBe(
+			'Démarre aujourd’hui à 23:00 · S’arrête demain à 07:00'
+		);
+		expect(motion(later, 0, now, 'en')).toEqual({
+			status: 'Starts today at 11:00 PM · Stops tomorrow at 7:00 AM'
+		});
+		const stopping = job({ state: 'downloading', downloaded: MB, stopAt: morning });
+		expect(describe(stopping, 0, now, 'en')).toBe('1.0 MB · Stops tomorrow at 7:00 AM');
+		// Paused, it starts now when resumed; pausing takes its start time away.
+		expect(canResume(later)).toBe(true);
+		expect(canPause(later)).toBe(true);
+	});
+
 	it('offers nothing while the file moves, and says so', () => {
 		const moving = job({ state: 'downloading', moving: true });
 		expect([canPause(moving), canResume(moving), canCancel(moving)]).toEqual([false, false, false]);

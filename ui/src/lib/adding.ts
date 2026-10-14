@@ -53,6 +53,12 @@ export function streamsByDefault(matched: Matched | null, streamMedia: boolean):
 	return streamMedia && matched?.extension != null && isMedia(extensionKind(matched.extension));
 }
 
+/** A start and a stop time, in milliseconds; null for none. */
+export interface Times {
+	start: number | null;
+	stop: number | null;
+}
+
 /** The body of `POST /jobs`. Automatic sends no category, so the daemon
  * may still move it once it knows the file's real name; `streaming` null
  * leaves streaming mode to the daemon the same way. */
@@ -60,7 +66,8 @@ export function jobRequest(
 	url: string,
 	choice: Choice,
 	folder: string,
-	streaming: boolean | null = null
+	streaming: boolean | null = null,
+	times: Times = { start: null, stop: null }
 ): AddJob {
 	const job: AddJob = { url: url.trim() };
 	if (choice !== 'auto') {
@@ -71,6 +78,12 @@ export function jobRequest(
 	}
 	if (streaming !== null) {
 		job.streaming = streaming;
+	}
+	if (times.start !== null) {
+		job.startAt = times.start;
+	}
+	if (times.stop !== null) {
+		job.stopAt = times.stop;
 	}
 	return job;
 }

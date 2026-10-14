@@ -17,4 +17,13 @@ category?: number,
  * `streamMedia` is, by the link's extension, then by the file's real
  * name once the server answers.
  */
-streaming?: boolean, };
+streaming?: boolean, 
+/**
+ * Wait until then (`scheduled`), in milliseconds since 1970 (UTC).
+ * Default, or a time already past: queued at once.
+ */
+startAt?: number, 
+/**
+ * Pause then if it hasn't finished, the same way. After `startAt`.
+ */
+stopAt?: number, };

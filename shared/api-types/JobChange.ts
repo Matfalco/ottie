@@ -13,4 +13,15 @@ speedLimit?: number, priority?: Priority,
 /**
  * Streaming mode. Once set, the file type no longer decides it.
  */
-streaming?: boolean, };
+streaming?: boolean, 
+/**
+ * Wait until then, in milliseconds since 1970 (UTC): a queued, paused,
+ * failed or retrying download becomes `scheduled`; a running one stops
+ * first. `null`: no start time (a scheduled download joins the queue
+ * now, as it does for a time already past).
+ */
+startAt?: number | null, 
+/**
+ * Pause then, wherever it is; `null`: no stop time. After the start time.
+ */
+stopAt?: number | null, };

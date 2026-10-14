@@ -13,7 +13,7 @@ use crate::categories::{absolute_folder, parse_url};
 use crate::error::Failure;
 use crate::types::{
     AddJob, AddJobs, Added, AddedJobs, ApiError, Job, JobChange, MoveJob, Preview, PreviewLinks,
-    RefusedJob, ReorderJobs,
+    RefusedJob, ReorderJobs, from_millis,
 };
 
 /// Every job, oldest first.
@@ -29,7 +29,8 @@ pub(crate) async fn list(State(state): State<AppState>) -> Result<Json<Vec<Job>>
     Ok(Json(jobs.into_iter().map(Job::from).collect()))
 }
 
-/// Queues a download. It starts as soon as a slot is free.
+/// Queues a download. It starts as soon as a slot is free, or waits for
+/// its start time (`scheduled`) if it has one.
 #[utoipa::path(
     post,
     path = "/jobs",
@@ -38,7 +39,7 @@ pub(crate) async fn list(State(state): State<AppState>) -> Result<Json<Vec<Job>>
     request_body = AddJob,
     responses(
         (status = CREATED, description = "Queued", body = Added),
-        (status = BAD_REQUEST, description = "`invalidUrl`, `unsupportedScheme`, `relativeFolder`, `nonUtf8Path` or `noFolder`", body = ApiError),
+        (status = BAD_REQUEST, description = "`invalidUrl`, `unsupportedScheme`, `relativeFolder`, `nonUtf8Path`, `noFolder` or `stopBeforeStart`", body = ApiError),
         (status = NOT_FOUND, description = "`categoryNotFound`", body = ApiError),
         (status = UNPROCESSABLE_ENTITY, description = "`invalidBody`", body = ApiError),
     )
@@ -62,6 +63,12 @@ fn new_job(body: AddJob) -> Result<NewJob, Failure> {
     }
     if let Some(on) = body.streaming {
         job = job.streaming(on);
+    }
+    if let Some(at) = body.start_at {
+        job = job.starting_at(from_millis(at));
+    }
+    if let Some(at) = body.stop_at {
+        job = job.stopping_at(from_millis(at));
     }
     Ok(job)
 }
@@ -176,7 +183,8 @@ pub(crate) async fn pause(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Puts a paused or failed download back in the queue.
+/// Puts a paused or failed download back in the queue; a scheduled one
+/// joins it now, without waiting for its start time.
 #[utoipa::path(
     post,
     path = "/jobs/{id}/resume",
@@ -245,9 +253,12 @@ pub(crate) async fn remove(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Changes a download's own speed limit, priority and streaming mode (the
-/// fields given), in any state; they take effect at once, even while it runs. Every client
-/// hears of it through one `changed` event, none if nothing changed.
+/// Changes a download's own speed limit, priority, streaming mode, start
+/// and stop time (the fields given), in any state; they take effect at
+/// once, even while it runs. A start time to come makes it `scheduled` (a
+/// running download stops first, and its `changed` event comes once it
+/// has). Every client hears of it through one `changed` event, none if
+/// nothing changed.
 #[utoipa::path(
     patch,
     path = "/jobs/{id}",
@@ -257,8 +268,9 @@ pub(crate) async fn remove(
     request_body = JobChange,
     responses(
         (status = NO_CONTENT, description = "Changed"),
-        (status = BAD_REQUEST, description = "`invalidJobId`", body = ApiError),
+        (status = BAD_REQUEST, description = "`invalidJobId` or `stopBeforeStart`", body = ApiError),
         (status = NOT_FOUND, description = "`jobNotFound`", body = ApiError),
+        (status = CONFLICT, description = "Times for a finished download (`invalidTransition`), or `jobMoving`", body = ApiError),
         (status = UNPROCESSABLE_ENTITY, description = "`invalidBody`", body = ApiError),
     )
 )]
@@ -275,7 +287,7 @@ pub(crate) async fn change(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Moves downloads in the queue, among the waiting (queued or paused)
+/// Moves downloads in the queue, among the waiting (queued, scheduled or paused)
 /// downloads of their priority: priority comes first, the place only orders
 /// downloads of the same one. Those moved keep their order among themselves,
 /// so neighbours move as a block. Downloads that aren't waiting stay as they

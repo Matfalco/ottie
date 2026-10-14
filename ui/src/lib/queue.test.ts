@@ -8,15 +8,16 @@ const paused = job({ id: 'b', place: 3, state: 'paused' });
 const last = job({ id: 'c', place: 7 });
 const low = job({ id: 'l', priority: 'low', place: 1 });
 const running = job({ id: 'r', place: 5, state: 'downloading' });
-const jobs = [last, low, running, paused, first, urgent];
+const later = job({ id: 's', place: 8, state: 'scheduled', startAt: 1 });
+const jobs = [last, low, running, paused, first, urgent, later];
 const ids = (list: { id: string }[]) => list.map((each) => each.id);
 
 describe('the queue', () => {
 	it('goes by priority, then by place', () => {
-		expect(ids([...jobs].sort(byQueue))).toEqual(['u', 'a', 'b', 'r', 'c', 'l']);
+		expect(ids([...jobs].sort(byQueue))).toEqual(['u', 'a', 'b', 'r', 'c', 's', 'l']);
 	});
 
-	it('lists what starts next, leaving out paused and running downloads', () => {
+	it('lists what starts next, leaving out paused, scheduled and running downloads', () => {
 		expect(ids(upNext(jobs))).toEqual(['u', 'a', 'c', 'l']);
 	});
 
@@ -25,7 +26,9 @@ describe('the queue', () => {
 		expect(canReorder(jobs, [paused], 'down')).toBe(true);
 		// The running one in between doesn't count.
 		expect(canReorder(jobs, [last], 'top')).toBe(true);
-		expect(canReorder(jobs, [last], 'down')).toBe(false);
+		// A scheduled one waits in the queue too.
+		expect(canReorder(jobs, [last], 'down')).toBe(true);
+		expect(canReorder(jobs, [later], 'down')).toBe(false);
 	});
 
 	it('cannot move past another priority, nor past the selection itself', () => {

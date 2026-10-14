@@ -55,6 +55,17 @@ describe('adding', () => {
 		});
 	});
 
+	it('sends the start and stop time when given', () => {
+		expect(jobRequest('https://a.com/f', 'auto', '', null, { start: 5, stop: null })).toEqual({
+			url: 'https://a.com/f',
+			startAt: 5
+		});
+		expect(jobRequest('https://a.com/f', 'auto', '', null, { start: null, stop: 9 })).toEqual({
+			url: 'https://a.com/f',
+			stopAt: 9
+		});
+	});
+
 	it('streams videos and music by default, if the settings say so', () => {
 		const matched = (extension: string | null) => ({ category: 1, extension, byFolder: false });
 		expect(streamsByDefault(matched('MKV'), true)).toBe(true);

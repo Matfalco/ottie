@@ -68,4 +68,13 @@ moving: boolean,
  * Downloading, but the speed limits give it no bandwidth for now: other
  * downloads take it all (urgent ones first).
  */
-waitingForBandwidth: boolean, };
+waitingForBandwidth: boolean, 
+/**
+ * While `scheduled`: when it joins the queue, in milliseconds since
+ * 1970 (UTC).
+ */
+startAt: number | null, 
+/**
+ * When it pauses if it hasn't finished by then, the same way.
+ */
+stopAt: number | null, };

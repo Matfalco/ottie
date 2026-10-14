@@ -90,7 +90,8 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
   src/auth.rs        Token, Bearer / WebSocket-protocol check (constant-time)
   src/types.rs       wire types (camelCase JSON) + ts-rs export, From<engine types>
   src/jobs.rs        GET/POST /jobs, POST /jobs/{id}/pause|resume|cancel|category,
-                     PATCH /jobs/{id} (own speed limit, priority, streaming mode), DELETE /jobs/{id},
+                     PATCH /jobs/{id} (own speed limit, priority, streaming mode, start/stop time),
+                     DELETE /jobs/{id},
                      POST /jobs/reorder (move waiting jobs in the queue), POST /jobs/batch (several at
                      once), POST /jobs/preview (the links in some text; both take bodies up to 64 MB)
   src/categories.rs  GET/POST /categories, PUT/DELETE /categories/{id}, POST /categories/match
@@ -170,6 +171,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      queue.ts (queue order, up next, whether up/down would move anything, what a drag
                      carries and where it may drop, 0032),
                      startup.ts (the sign-in choices, for Settings and Setup, 0039),
+                     schedule.ts (a download's start and stop time: date-and-time fields ↔
+                     milliseconds, "today at 23:00", 0040),
                      batch.ts (several links at once: when a paste opens the list, its rows, what to
                      add, what was refused, 0036), sounds.ts (the notification sounds' choices: sets, or one for each kind, 0038)
                      plain logic, unit-tested (*.test.ts, Vitest)
@@ -243,7 +246,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 ## Engine rules (crates/core)
 
 - **One owner of job state.** The actor task in `manager.rs` owns all jobs; the cloneable `Manager` handle sends it commands over an `mpsc` channel, each with a `oneshot` reply. Job tasks report back on an internal channel (progress at most every 250 ms). Events go out on a `broadcast` channel: `Changed(JobSnapshot)` on every state change (clients upsert by ID), plus `Progress` (multi-connection: each range as received so far, `docs/decisions/0025`) and `Restarted`. A subscriber that lags misses events and should resync with `list()`. No shared mutable job state behind ad-hoc locks.
-- **Explicit state machine:** Queued → Connecting → Downloading → Paused | Completed | Failed | Cancelled | Retrying; Retrying → Connecting | Queued (gave way) | Paused | Cancelled; Paused/Failed → Queued on resume. The rules live in `JobState::can_become`, and every change goes through `Actor::transition`; invalid transitions are errors.
+- **Explicit state machine:** Queued → Connecting → Downloading → Paused | Completed | Failed | Cancelled | Retrying; Retrying → Connecting | Queued (gave way) | Paused | Cancelled; Paused/Failed → Queued on resume. Scheduled (waiting for its start time): Queued | Paused | Failed | Retrying | running → Scheduled; Scheduled → Queued | Paused | Cancelled. The rules live in `JobState::can_become`, and every change goes through `Actor::transition`; invalid transitions are errors.
 - **Pause/cancel of a running job** answers only once the task has really stopped and flushed. If the job completes first, it stays Completed. Cancel deletes the `.part.ottie`. Remove (`docs/decisions/0018`) works in any state: cancel unless completed, then forget the job (a completed file stays); the highest ID handed out is saved so a removed job's ID never comes back. Shutdown stops every running job, waits for them and flushes the database. Lowering `max_concurrent` never stops running jobs.
 - **Job IDs:** see `docs/decisions/0006`. IDs only ever increase; `BTreeMap<JobId, _>` order = creation order = queue order.
 - **Probe with the first request:** it asks for `bytes=0-`; a `206` proves ranges work, and that response becomes the first range. Split only with a 206, a validator, no `Accept-Ranges: none` and at least 2 × `min_split` bytes (`docs/decisions/0009`); otherwise one connection.
@@ -254,7 +257,8 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Request `Accept-Encoding: identity`** so byte ranges map to file offsets.
 - **Speed limits and priorities** (`docs/decisions/0010`): one token bucket per running job, shared by its connections, spent after each chunk (pause still interrupts the wait). A 50 ms refill task shares the global limit: Urgent first, then weights High 4 / Normal 2 / Low 1, capped by each job's own limit, unused share redistributed (`share()`). Per download, not per connection. A category's limit caps its running jobs together (`allocate()`). Limits change live; 0 = unlimited. A running job that owes budget and gets none for 1 s is reported to the manager (`Limiter::new`'s callback), which sends `waiting_for_bandwidth` in a `Changed` (not saved).
 - **Several at once** (`docs/decisions/0036`): `Manager::add_many` adds each job as `add` would (the good ones even if others are refused), saves them in one transaction and schedules once; more than `Settings::max_batch` refuses them all (`TooManyLinks`). `Manager::preview` finds the links in text (`links::find`, in the caller's task) and tells, for each, its name, the category it would get and whether a job has that URL already. Sequences in a link (`docs/decisions/0037`, `sequence.rs`) give each link they hold; `find` counts them before making any, so the cap refuses a huge one at once.
-- **Queue order** (`docs/decisions/0032`): highest priority first, then the lowest `place` (new jobs go last). Urgent waits for a free slot (no preemption). `Manager::reorder(ids, Reorder)` (up, down, top, bottom, before/after a job) moves waiting (queued/paused) jobs within their priority by swapping places among them, so other jobs keep theirs; each moved job is saved and gets a `Changed`.
+- **Queue order** (`docs/decisions/0032`): highest priority first, then the lowest `place` (new jobs go last). Urgent waits for a free slot (no preemption). `Manager::reorder(ids, Reorder)` (up, down, top, bottom, before/after a job) moves waiting (queued/scheduled/paused) jobs within their priority by swapping places among them, so other jobs keep theirs; each moved job is saved and gets a `Changed`.
+- **Start and stop times** (`docs/decisions/0040`): a job's own `start_at`/`stop_at` (`NewJob`, `JobChange`; saved in ms since 1970, UTC). A start time to come makes it `Scheduled`; a running job stops first (`Stop::Hold`). At its start time it joins the queue at its place; at its stop time it pauses wherever it is. Each time is used once, then cleared (`transition` clears the start time on leaving for the queue or a stop). The actor's loop sleeps until the next time (`Actor::wake_at`, `check_times`), at most `CLOCK_CHECK` (30 s), and compares with the wall clock, so sleep or a clock change can't make it miss one. Resume on a scheduled job queues it now.
 - **Retries** (`docs/decisions/0013`): only `Error::is_retryable()` errors (network, drop, stall, 5xx, 408, 429). A retrying job keeps its slot for `retries_before_yield` retries, then gives way if a queued job is waiting (queues behind every job that never gave way); fails after `max_retries`. Waits double from `first_wait` up to 60 s; `Retry-After` (seconds) can ask for up to 10 min. The count resets when bytes arrive or on a manual resume. Stalls: `tokio::time::timeout` around each network wait (`HttpConfig::stall_timeout`), never reqwest's `read_timeout` (it would fire while our throttle waits). Each run of a job (start, resume, retry) gets its own reqwest `Client` (`HttpBackend`), so it never reuses a pooled connection that died silently when the network changed (VPN, Wi-Fi); HTTP/2 connections are also pinged after 10 s of silence.
 - **Failures are `Problem`s** (`docs/decisions/0016`), never bare strings: a kind plus details, saved in the `problem_*` columns. Add a kind = a migration (CHECK list), a `Display` wording, an API `Problem` variant and UI messages.
 - **Settings** live in the single-row `settings` table; `Manager::start(backend, store)` loads them. They change through `Manager::change_settings` (several at once): one save and one `JobEvent::SettingsChanged` per change, none if nothing changed (`docs/decisions/0022`). A job's own settings (speed limit, priority) change the same way through `Manager::change_job(id, JobChange)`: one save and one `Changed` (`docs/decisions/0024`).
@@ -346,14 +350,18 @@ Done: ✅ and struck through.
    - ✅ ~~5j several links at once (`docs/decisions/0036`)~~
    - ✅ ~~5k sequences in one link (`[001-120]`, curl-style; `docs/decisions/0037`)~~
    - ✅ ~~5l starting at sign-in (`docs/decisions/0039`)~~
-6. Scheduler (time slots, start/stop at set times, a download's own start time, an action once everything has finished), clipboard monitoring, yt-dlp backend (its own updates, apart from the app's).
+6. Scheduler (`docs/decisions/0040`), clipboard monitoring, yt-dlp backend (its own updates, apart from the app's):
+   - ✅ ~~6a a download's own start and stop time (the `Scheduled` state)~~
+   - 6b time slots + the Schedule tab
+   - 6c when everything has finished (desktop app)
+   - 6d clipboard monitoring
+   - 6e yt-dlp
 7. Browser extension.
 8. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.
 
 ## Open decisions
 
 - Extension pairing: both, a native messaging host when installed (zero-config, can start the daemon) and the token as the fallback (remote daemon, portable setup). Details in step 7.
-- Scheduler: the shape of time slots (data model, overlaps, scope).
 - yt-dlp: bundled or found, how it updates, ffmpeg, format choice.
 
 Settled: no uGet import; no aria2 (its HTTP strengths are in our engine already) and no BitTorrent/magnet links.

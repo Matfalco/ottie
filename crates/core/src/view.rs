@@ -49,10 +49,11 @@ pub enum SortDirection {
 /// The states a view can pick, in the order lists of them are kept.
 /// `Connecting` isn't one: it counts as `Downloading` (it only lasts until
 /// the server answers).
-const STATES: [JobState; 7] = [
+const STATES: [JobState; 8] = [
     JobState::Downloading,
     JobState::Retrying,
     JobState::Queued,
+    JobState::Scheduled,
     JobState::Paused,
     JobState::Failed,
     JobState::Cancelled,

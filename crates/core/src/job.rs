@@ -25,6 +25,9 @@ pub enum JobState {
     /// Stopped by an error that may go away; waiting to try again. Holds its
     /// download slot until it gives way to a waiting job (docs/decisions/0013).
     Retrying,
+    /// Waiting for its start time, then it joins the queue at its place
+    /// (docs/decisions/0040).
+    Scheduled,
 }
 
 impl JobState {
@@ -33,14 +36,18 @@ impl JobState {
         use JobState::*;
         matches!(
             (self, next),
-            (Queued, Connecting | Paused | Cancelled)
+            (Queued, Connecting | Paused | Cancelled | Scheduled)
                 | (Connecting, Downloading)
                 | (
                     Connecting | Downloading,
-                    Completed | Paused | Failed | Cancelled | Retrying
+                    Completed | Paused | Failed | Cancelled | Retrying | Scheduled
                 )
-                | (Retrying, Connecting | Queued | Paused | Cancelled)
-                | (Paused | Failed, Queued | Cancelled)
+                | (
+                    Retrying,
+                    Connecting | Queued | Paused | Cancelled | Scheduled
+                )
+                | (Paused | Failed, Queued | Cancelled | Scheduled)
+                | (Scheduled, Queued | Paused | Cancelled)
         )
     }
 
@@ -48,10 +55,18 @@ impl JobState {
         matches!(self, JobState::Connecting | JobState::Downloading)
     }
 
-    /// Queued or paused: in the queue, or back in it at its place once
-    /// resumed. These are the jobs [`crate::Manager::reorder`] moves.
+    /// Queued, scheduled or paused: in the queue, or back in it at its place
+    /// once resumed or due. These are the jobs [`crate::Manager::reorder`] moves.
     pub fn is_waiting(self) -> bool {
-        matches!(self, JobState::Queued | JobState::Paused)
+        matches!(
+            self,
+            JobState::Queued | JobState::Scheduled | JobState::Paused
+        )
+    }
+
+    /// Completed or cancelled: nothing more will happen to it.
+    pub fn is_finished(self) -> bool {
+        matches!(self, JobState::Completed | JobState::Cancelled)
     }
 }
 
@@ -172,6 +187,11 @@ pub struct NewJob {
     /// if [`Settings::stream_media`] says so, by the URL's extension and again
     /// by the real name once the server answers.
     pub streaming: Option<bool>,
+    /// Waits until then (`Scheduled`), then joins the queue. `None`, or a
+    /// time already past: queued at once.
+    pub start_at: Option<SystemTime>,
+    /// Pauses then if it hasn't finished. Must be after `start_at`.
+    pub stop_at: Option<SystemTime>,
 }
 
 impl NewJob {
@@ -181,6 +201,8 @@ impl NewJob {
             dest_dir: None,
             category: None,
             streaming: None,
+            start_at: None,
+            stop_at: None,
         }
     }
 
@@ -201,6 +223,16 @@ impl NewJob {
         self.streaming = Some(on);
         self
     }
+
+    pub fn starting_at(mut self, at: SystemTime) -> Self {
+        self.start_at = Some(at);
+        self
+    }
+
+    pub fn stopping_at(mut self, at: SystemTime) -> Self {
+        self.stop_at = Some(at);
+        self
+    }
 }
 
 /// Some of a job's own settings to change at once; `None` leaves one as it
@@ -212,6 +244,12 @@ pub struct JobChange {
     pub priority: Option<Priority>,
     /// Streaming mode: in order, the end of the file first.
     pub streaming: Option<bool>,
+    /// `Some(Some(at))`: wait until then (a running job stops and waits; a
+    /// paused or failed one waits too). `Some(None)`: no start time (a
+    /// scheduled job is queued at once). See [`crate::Manager::change_job`].
+    pub start_at: Option<Option<SystemTime>>,
+    /// `Some(Some(at))`: pause then; `Some(None)`: no stop time.
+    pub stop_at: Option<Option<SystemTime>>,
 }
 
 /// A copy of a job's public state, for listing and events.
@@ -252,6 +290,10 @@ pub struct JobSnapshot {
     /// Running, but the speed limits give it no bandwidth for now: other
     /// downloads take it all (Urgent ones first). See docs/decisions/0033.
     pub waiting_for_bandwidth: bool,
+    /// While `Scheduled`: when it joins the queue.
+    pub start_at: Option<SystemTime>,
+    /// When it pauses if it hasn't finished by then.
+    pub stop_at: Option<SystemTime>,
 }
 
 /// Broadcast to every subscriber of the manager.
@@ -290,7 +332,7 @@ mod tests {
     use super::JobState::*;
     use super::*;
 
-    const ALL: [JobState; 8] = [
+    const ALL: [JobState; 9] = [
         Queued,
         Connecting,
         Downloading,
@@ -299,6 +341,7 @@ mod tests {
         Failed,
         Cancelled,
         Retrying,
+        Scheduled,
     ];
 
     #[test]
@@ -380,6 +423,19 @@ mod tests {
         assert_eq!(order, [id(1), id(2), id(3)]);
         Reorder::After(id(1)).apply(&mut order, |&job| job == id(3));
         assert_eq!(order, [id(1), id(3), id(2)]);
+    }
+
+    #[test]
+    fn scheduled_waits_outside_the_queue() {
+        for state in [Queued, Connecting, Downloading, Retrying, Paused, Failed] {
+            assert!(state.can_become(Scheduled), "{state:?}");
+        }
+        assert!(Scheduled.can_become(Queued));
+        assert!(Scheduled.can_become(Paused));
+        assert!(Scheduled.can_become(Cancelled));
+        // It joins the queue first, never starts on its own.
+        assert!(!Scheduled.can_become(Connecting));
+        assert!(!Completed.can_become(Scheduled));
     }
 
     #[test]

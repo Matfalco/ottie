@@ -88,6 +88,8 @@ export function explainRefusal(
 			return m.reason_job_not_found({}, options);
 		case 'invalidTransition':
 			return m.reason_invalid_transition({}, options);
+		case 'stopBeforeStart':
+			return m.reason_stop_before_start({}, options);
 		case 'stopping':
 			return m.reason_stopping({}, options);
 		case 'categoryNotFound':

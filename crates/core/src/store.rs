@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::mpsc as std_mpsc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use reqwest::Url;
 use rusqlite::{Connection, Row, params};
@@ -199,6 +199,64 @@ const MIGRATIONS: &[&str] = &[
     // 13: the most links added at once.
     "ALTER TABLE settings ADD COLUMN max_batch INTEGER NOT NULL DEFAULT 10000
         CHECK (max_batch >= 1);",
+    // 14: the `scheduled` state, and each job's own start and stop time, in
+    // milliseconds since 1970 (UTC). `jobs` and `view_states` are rebuilt for
+    // their CHECKs, as in 5.
+    "CREATE TABLE jobs_new (
+        id_secs          INTEGER NOT NULL,
+        id_seq           INTEGER NOT NULL,
+        url              TEXT    NOT NULL,
+        dest_dir         TEXT    NOT NULL,
+        file_name        TEXT,
+        state            TEXT    NOT NULL CHECK (state IN ('queued', 'connecting',
+                             'downloading', 'paused', 'completed', 'failed', 'cancelled',
+                             'retrying', 'scheduled')),
+        total            INTEGER,
+        downloaded       INTEGER NOT NULL DEFAULT 0,
+        validator_kind   TEXT    CHECK (validator_kind IN ('etag', 'last-modified')),
+        validator_value  TEXT,
+        resumable        INTEGER NOT NULL DEFAULT 0 CHECK (resumable IN (0, 1)),
+        error            TEXT,
+        priority         TEXT    NOT NULL DEFAULT 'normal'
+                             CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+        speed_limit      INTEGER NOT NULL DEFAULT 0 CHECK (speed_limit >= 0),
+        category_id      INTEGER NOT NULL DEFAULT 1 REFERENCES categories (id),
+        category_chosen  INTEGER NOT NULL DEFAULT 0 CHECK (category_chosen IN (0, 1)),
+        problem_kind     TEXT    CHECK (problem_kind IN ('network', 'redirect', 'http-status',
+                             'stalled', 'incomplete', 'remote-changing', 'disk', 'other')),
+        problem_number   INTEGER,
+        problem_total    INTEGER,
+        problem_detail   TEXT,
+        streaming        INTEGER NOT NULL DEFAULT 0 CHECK (streaming IN (0, 1)),
+        streaming_chosen INTEGER NOT NULL DEFAULT 0 CHECK (streaming_chosen IN (0, 1)),
+        queue_place      INTEGER NOT NULL DEFAULT 0 CHECK (queue_place >= 0),
+        start_at         INTEGER CHECK (start_at >= 0),
+        stop_at          INTEGER CHECK (stop_at >= 0),
+        PRIMARY KEY (id_secs, id_seq)
+     ) STRICT;
+     INSERT INTO jobs_new (id_secs, id_seq, url, dest_dir, file_name, state, total,
+                           downloaded, validator_kind, validator_value, resumable, error,
+                           priority, speed_limit, category_id, category_chosen,
+                           problem_kind, problem_number, problem_total, problem_detail,
+                           streaming, streaming_chosen, queue_place)
+        SELECT id_secs, id_seq, url, dest_dir, file_name, state, total,
+               downloaded, validator_kind, validator_value, resumable, error,
+               priority, speed_limit, category_id, category_chosen,
+               problem_kind, problem_number, problem_total, problem_detail,
+               streaming, streaming_chosen, queue_place
+        FROM jobs;
+     DROP TABLE jobs;
+     ALTER TABLE jobs_new RENAME TO jobs;
+     CREATE TABLE view_states_new (
+        view_id INTEGER NOT NULL REFERENCES views (id) ON DELETE CASCADE,
+        state   TEXT    NOT NULL CHECK (state IN ('queued', 'downloading', 'paused',
+                                                  'completed', 'failed', 'cancelled', 'retrying',
+                                                  'scheduled')),
+        PRIMARY KEY (view_id, state)
+     ) STRICT;
+     INSERT INTO view_states_new SELECT view_id, state FROM view_states;
+     DROP TABLE view_states;
+     ALTER TABLE view_states_new RENAME TO view_states;",
 ];
 
 /// Everything saved about one job.
@@ -220,6 +278,8 @@ pub(crate) struct JobRecord {
     /// The user turned streaming mode on or off, rather than the file type
     /// deciding; it is never decided again.
     pub streaming_chosen: bool,
+    pub start_at: Option<SystemTime>,
+    pub stop_at: Option<SystemTime>,
 }
 
 /// Everything the database holds, as read at start.
@@ -493,9 +553,9 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
                            downloaded, validator_kind, validator_value, resumable, error,
                            priority, speed_limit, category_id, category_chosen,
                            problem_kind, problem_number, problem_total, problem_detail,
-                           streaming, streaming_chosen, queue_place)
+                           streaming, streaming_chosen, queue_place, start_at, stop_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                 ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+                 ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
          ON CONFLICT (id_secs, id_seq) DO UPDATE SET
              url = excluded.url, dest_dir = excluded.dest_dir,
              file_name = excluded.file_name, state = excluded.state,
@@ -508,7 +568,8 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
              problem_kind = excluded.problem_kind, problem_number = excluded.problem_number,
              problem_total = excluded.problem_total, problem_detail = excluded.problem_detail,
              streaming = excluded.streaming, streaming_chosen = excluded.streaming_chosen,
-             queue_place = excluded.queue_place",
+             queue_place = excluded.queue_place, start_at = excluded.start_at,
+             stop_at = excluded.stop_at",
     )?
     .execute(params![
         secs,
@@ -534,6 +595,8 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
         record.streaming,
         record.streaming_chosen,
         record.place,
+        record.start_at.map(unix_millis),
+        record.stop_at.map(unix_millis),
     ])?;
     tx.prepare_cached("DELETE FROM segments WHERE job_secs = ?1 AND job_seq = ?2")?
         .execute(params![secs, seq])?;
@@ -589,7 +652,7 @@ fn load_jobs(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
                 validator_kind, validator_value, resumable, error, priority, speed_limit,
                 category_id, category_chosen,
                 problem_kind, problem_number, problem_total, problem_detail,
-                streaming, streaming_chosen, queue_place
+                streaming, streaming_chosen, queue_place, start_at, stop_at
          FROM jobs ORDER BY id_secs, id_seq",
     )?;
     let mut rows = stmt.query([])?;
@@ -669,7 +732,20 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         streaming: row.get(20)?,
         streaming_chosen: row.get(21)?,
         place: row.get(22)?,
+        start_at: row.get::<_, Option<u64>>(23)?.map(from_unix_millis),
+        stop_at: row.get::<_, Option<u64>>(24)?.map(from_unix_millis),
     }))
+}
+
+/// How times are stored: milliseconds since 1970 (UTC); earlier ones as 0.
+fn unix_millis(at: SystemTime) -> u64 {
+    at.duration_since(UNIX_EPOCH).map_or(0, |since| {
+        u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
+    })
+}
+
+fn from_unix_millis(millis: u64) -> SystemTime {
+    UNIX_EPOCH + Duration::from_millis(millis)
 }
 
 /// How a problem is stored: its kind, up to two numbers and a text.
@@ -998,6 +1074,7 @@ fn state_name(state: JobState) -> &'static str {
         JobState::Failed => "failed",
         JobState::Cancelled => "cancelled",
         JobState::Retrying => "retrying",
+        JobState::Scheduled => "scheduled",
     }
 }
 
@@ -1011,6 +1088,7 @@ fn parse_state(name: &str) -> Option<JobState> {
         "failed" => JobState::Failed,
         "cancelled" => JobState::Cancelled,
         "retrying" => JobState::Retrying,
+        "scheduled" => JobState::Scheduled,
         _ => return None,
     })
 }
@@ -1039,6 +1117,8 @@ mod tests {
             streaming: true,
             streaming_chosen: true,
             place: u64::from(seq) * 10,
+            start_at: None,
+            stop_at: Some(UNIX_EPOCH + Duration::from_millis(1_760_300_000_123)),
         }
     }
 
@@ -1056,6 +1136,66 @@ mod tests {
             store.save(r);
         }
         assert_eq!(store.load().await.unwrap().jobs, [record(1), failed, fresh]);
+    }
+
+    #[tokio::test]
+    async fn scheduled_jobs_keep_their_times() {
+        let store = Store::open_in_memory().await.unwrap();
+        let mut job = record(1);
+        job.state = JobState::Scheduled;
+        job.start_at = Some(UNIX_EPOCH + Duration::from_millis(1_760_299_000_456));
+        store.save(job.clone());
+        assert_eq!(store.load().await.unwrap().jobs, [job]);
+    }
+
+    #[test]
+    fn rebuilding_for_scheduled_keeps_jobs_and_views() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (i, sql) in MIGRATIONS[..13].iter().enumerate() {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", i + 1).unwrap();
+        }
+        conn.execute_batch(
+            "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, file_name, state, downloaded,
+                               problem_kind, problem_detail, streaming, queue_place)
+             VALUES (1, 1, 'https://example.com/a.mkv', '/d', 'a.mkv', 'failed', 40,
+                     'disk', 'disk full', 1, 7);
+             INSERT INTO segments VALUES (1, 1, 0, 50, 30), (1, 1, 50, 100, 10);
+             INSERT INTO views (id, name, any_state, any_category, added, sort, direction, grouped)
+             VALUES (1, 'Broken', 0, 1, 'any', 'added', 'asc', 1);
+             INSERT INTO view_states VALUES (1, 'failed');",
+        )
+        .unwrap();
+        prepare(&mut conn).unwrap();
+
+        let loaded = load_all(&conn).unwrap();
+        let job = &loaded.jobs[0];
+        assert_eq!(job.state, JobState::Failed);
+        let disk_full = Problem::Disk {
+            detail: "disk full".into(),
+        };
+        assert_eq!(job.problem, Some(disk_full));
+        assert_eq!((job.place, job.streaming), (7, true));
+        assert_eq!((job.start_at, job.stop_at), (None, None));
+        assert_eq!(job.download.segments.len(), 2);
+        assert_eq!(
+            loaded.views[0].settings.states,
+            Some(vec![JobState::Failed])
+        );
+        // A view can pick scheduled downloads now.
+        conn.execute("INSERT INTO view_states VALUES (1, 'scheduled')", [])
+            .unwrap();
+        // The segments and view states still belong to the rebuilt tables.
+        conn.execute_batch("DELETE FROM jobs; DELETE FROM views;")
+            .unwrap();
+        let left: i64 = conn
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM segments) + (SELECT COUNT(*) FROM view_states)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0);
     }
 
     #[tokio::test]
@@ -1426,6 +1566,7 @@ mod tests {
             Failed,
             Cancelled,
             Retrying,
+            Scheduled,
         ] {
             assert_eq!(parse_state(state_name(state)), Some(state));
         }

@@ -43,6 +43,9 @@ const LONGEST_RETRY_WAIT: Duration = Duration::from_secs(24 * 3600);
 /// Subscribers that fall further behind than this miss events (and should
 /// call [`Manager::list`] to catch up).
 const EVENT_BUFFER: usize = 1024;
+/// Start and stop times are checked against the clock at least this often:
+/// the computer may have slept, or its clock changed, while waiting.
+const CLOCK_CHECK: Duration = Duration::from_secs(30);
 
 /// Handle to the job manager. Cheap to clone; every clone talks to the same jobs.
 #[derive(Clone)]
@@ -105,6 +108,7 @@ impl Manager {
             other,
             views,
             yields: 0,
+            wake_at: None,
             events: events.clone(),
             playbacks: playbacks.clone(),
             internal,
@@ -165,7 +169,8 @@ impl Manager {
         .await
     }
 
-    /// Puts a paused or failed job back in the queue.
+    /// Puts a paused or failed job back in the queue; a scheduled one joins
+    /// it now, without waiting for its start time.
     pub async fn resume(&self, id: JobId) -> Result<(), Error> {
         self.request(|reply| Command::Resume { id, reply }).await
     }
@@ -263,6 +268,15 @@ impl Manager {
     ///   limits still apply).
     /// - `priority`: its share of the global limit and its place in the queue.
     /// - `streaming`: streaming mode; once set, the file type no longer decides it.
+    /// - `start_at` (docs/decisions/0040): a time to come makes the job
+    ///   `Scheduled` until then, whether it was queued, paused, failed or
+    ///   retrying; a running one stops first (its `Changed` comes once it
+    ///   has). No time, or one already past, queues a scheduled job at once.
+    /// - `stop_at`: it pauses then, wherever it is (a time already past:
+    ///   now). It must come after the start time ([`Error::StopBeforeStart`]).
+    ///
+    /// Times can't change on a completed or cancelled job
+    /// ([`Error::InvalidTransition`]), nor while its file moves.
     pub async fn change_job(&self, id: JobId, change: JobChange) -> Result<(), Error> {
         self.request(|reply| Command::ChangeJob { id, change, reply })
             .await
@@ -545,6 +559,8 @@ enum Stop {
     Move,
     /// Leave the state as it is, so the next start continues the job.
     Shutdown,
+    /// Wait for its start time (`Scheduled`), given while it ran.
+    Hold,
     Pause,
     Cancel,
     /// Cancel (unless it completed), then forget the job.
@@ -555,6 +571,7 @@ impl Stop {
     fn target(self) -> Option<JobState> {
         match self {
             Stop::Move | Stop::Shutdown => None,
+            Stop::Hold => Some(JobState::Scheduled),
             Stop::Pause => Some(JobState::Paused),
             Stop::Cancel | Stop::Remove => Some(JobState::Cancelled),
         }
@@ -589,6 +606,11 @@ struct Job {
     gave_way: u64,
     /// Running, but the speed limits give it no bandwidth (not saved).
     waiting_for_bandwidth: bool,
+    /// While `Scheduled`: when it joins the queue. Also set on a running job
+    /// that is stopping to wait for it (`Stop::Hold`).
+    start_at: Option<SystemTime>,
+    /// When it pauses if it hasn't finished by then.
+    stop_at: Option<SystemTime>,
     /// Present while a task is downloading this job.
     task: Option<Task>,
     /// Present while its category is changing and its file moving there.
@@ -615,6 +637,13 @@ impl Job {
         if state.is_running() || state == JobState::Retrying {
             state = JobState::Queued;
         }
+        // Stopped by the shutdown while stopping to wait for its start time,
+        // or (a database edited by hand) scheduled for no time.
+        match (state, record.start_at) {
+            (JobState::Queued, Some(_)) => state = JobState::Scheduled,
+            (JobState::Scheduled, None) => state = JobState::Queued,
+            _ => {}
+        }
         // What's on disk is the truth for how much we have; the saved byte
         // count can lag behind it. With several connections the file has its
         // full size from the start, so the saved ranges tell instead.
@@ -640,6 +669,8 @@ impl Job {
             retry_at: None,
             gave_way: 0,
             waiting_for_bandwidth: false,
+            start_at: record.start_at,
+            stop_at: record.stop_at,
             task: None,
             moving: None,
             last_saved: None,
@@ -676,7 +707,14 @@ impl Job {
             segments: dl.segments.clone(),
             moving: self.moving.is_some(),
             waiting_for_bandwidth: self.waiting_for_bandwidth,
+            start_at: self.start_at,
+            stop_at: self.stop_at,
         }
+    }
+
+    /// Its start time hasn't come yet.
+    fn held(&self, now: SystemTime) -> bool {
+        self.start_at.is_some_and(|at| at > now)
     }
 }
 
@@ -706,6 +744,8 @@ struct Actor<B> {
     views: BTreeMap<ViewId, ViewSettings>,
     /// How many times a retrying job has given way (see `Job::gave_way`).
     yields: u64,
+    /// The next start or stop time to come, if any (see `check_times`).
+    wake_at: Option<SystemTime>,
     ids: IdGenerator,
     events: broadcast::Sender<JobEvent>,
     /// Where players read; each running job gets its own.
@@ -722,9 +762,17 @@ impl<B: Backend> Actor<B> {
         mut commands: mpsc::Receiver<Command>,
         mut internal: mpsc::UnboundedReceiver<Internal>,
     ) {
+        self.check_times();
         self.schedule();
         let mut handles_alive = true;
         loop {
+            // Asked of the wall clock each time round, so a clock that
+            // changed meanwhile counts.
+            let wake = self.wake_at.map(|at| {
+                at.duration_since(SystemTime::now())
+                    .unwrap_or(Duration::ZERO)
+                    .min(CLOCK_CHECK)
+            });
             tokio::select! {
                 // The actor holds a sender itself, so this channel never closes.
                 Some(message) = internal.recv() => self.on_internal(message).await,
@@ -735,6 +783,10 @@ impl<B: Backend> Actor<B> {
                         self.begin_shutdown(None);
                     }
                 },
+                () = tokio::time::sleep(wake.unwrap_or(CLOCK_CHECK)), if wake.is_some() => {
+                    self.check_times();
+                    self.schedule();
+                }
             }
             if self.shutdown.is_some() && !self.any_task_running() {
                 self.store.flush().await;
@@ -960,6 +1012,7 @@ impl<B: Backend> Actor<B> {
         let id = self.insert(new)?;
         self.save(id);
         self.emit_changed(id);
+        self.check_times();
         self.schedule();
         Ok(id)
     }
@@ -976,6 +1029,7 @@ impl<B: Backend> Actor<B> {
         for &id in &added {
             self.emit_changed(id);
         }
+        self.check_times();
         self.schedule();
         Ok(results)
     }
@@ -1044,6 +1098,18 @@ impl<B: Backend> Actor<B> {
         if dest_dir.to_str().is_none() {
             return Err(Error::NonUtf8Path(dest_dir));
         }
+        // A start time already past means now.
+        let start_at = new.start_at.filter(|&at| at > SystemTime::now());
+        if let (Some(start), Some(stop)) = (start_at, new.stop_at)
+            && stop <= start
+        {
+            return Err(Error::StopBeforeStart);
+        }
+        let state = if start_at.is_some() {
+            JobState::Scheduled
+        } else {
+            JobState::Queued
+        };
         let streaming = new.streaming.unwrap_or_else(|| {
             self.settings.stream_media
                 && category::url_extension(&new.url).is_some_and(|ext| playback::is_media(&ext))
@@ -1054,7 +1120,7 @@ impl<B: Backend> Actor<B> {
         self.jobs.insert(
             id,
             Job {
-                state: JobState::Queued,
+                state,
                 download,
                 problem: None,
                 priority: Priority::default(),
@@ -1068,6 +1134,8 @@ impl<B: Backend> Actor<B> {
                 retry_at: None,
                 gave_way: 0,
                 waiting_for_bandwidth: false,
+                start_at,
+                stop_at: new.stop_at,
                 task: None,
                 moving: None,
                 last_saved: None,
@@ -1080,31 +1148,101 @@ impl<B: Backend> Actor<B> {
     /// subscribers. A queued job's new priority counts at the next `schedule`.
     /// Applies what differs from the job's settings, then tells the limiter.
     fn change_job(&mut self, id: JobId, change: JobChange) -> Result<(), Error> {
-        let job = self.jobs.get(&id).ok_or(Error::JobNotFound(id))?;
+        let job = self.jobs.get_mut(&id).ok_or(Error::JobNotFound(id))?;
         let JobChange {
             speed_limit,
             priority,
             streaming,
+            start_at,
+            stop_at,
         } = change;
         let speed_limit = speed_limit.filter(|&limit| limit != job.speed_limit);
         let priority = priority.filter(|&priority| priority != job.priority);
         // Chosen now, even if it stays as it was: the file type no longer decides.
         let streaming = streaming.filter(|&on| on != job.streaming || !job.streaming_chosen);
-        if speed_limit.is_none() && priority.is_none() && streaming.is_none() {
+        // A start time already past means now: none.
+        let now = SystemTime::now();
+        let start_at = start_at
+            .map(|at| at.filter(|&at| at > now))
+            .filter(|&at| at != job.start_at);
+        let stop_at = stop_at.filter(|&at| at != job.stop_at);
+        let times = start_at.is_some() || stop_at.is_some();
+        if times {
+            if job.state.is_finished() {
+                let to = if start_at.is_some() {
+                    JobState::Scheduled
+                } else {
+                    JobState::Paused
+                };
+                return Err(Error::InvalidTransition {
+                    from: job.state,
+                    to,
+                });
+            }
+            if job.moving.is_some() {
+                return Err(Error::JobMoving(id));
+            }
+            if let (Some(start), Some(stop)) = (
+                start_at.unwrap_or(job.start_at),
+                stop_at.unwrap_or(job.stop_at),
+            ) && stop <= start
+            {
+                return Err(Error::StopBeforeStart);
+            }
+        }
+        if speed_limit.is_none() && priority.is_none() && streaming.is_none() && !times {
             return Ok(());
         }
-        self.change(id, |job| {
-            if let Some(limit) = speed_limit {
-                job.speed_limit = limit;
+        if let Some(limit) = speed_limit {
+            job.speed_limit = limit;
+        }
+        if let Some(priority) = priority {
+            job.priority = priority;
+        }
+        if let Some(on) = streaming {
+            job.streaming = on;
+            job.streaming_chosen = true;
+        }
+        if let Some(at) = stop_at {
+            job.stop_at = at;
+        }
+        // What a new start time does to its state, if anything.
+        let mut next = None;
+        if let Some(at) = start_at {
+            job.start_at = at;
+            match (at, job.state) {
+                (Some(_), JobState::Paused | JobState::Failed) => {
+                    // Started again by hand, later: every retry is available.
+                    job.retries = 0;
+                    job.gave_way = 0;
+                    next = Some(JobState::Scheduled);
+                }
+                (Some(_), JobState::Queued | JobState::Retrying) => {
+                    next = Some(JobState::Scheduled);
+                }
+                (Some(_), _) => {
+                    // Running: it waits once it has stopped (see `on_ended`).
+                    if let Some(task) = &mut job.task {
+                        task.stop = task.stop.max(Some(Stop::Hold));
+                        task.cancel.cancel();
+                    }
+                }
+                (None, JobState::Scheduled) => next = Some(JobState::Queued),
+                (None, _) => {}
             }
-            if let Some(priority) = priority {
-                job.priority = priority;
+        }
+        // One save and one `Changed`, with the new state if it has one.
+        match next {
+            Some(state) => self.transition(id, state, None)?,
+            None => {
+                self.save(id);
+                self.emit_changed(id);
             }
-            if let Some(on) = streaming {
-                job.streaming = on;
-                job.streaming_chosen = true;
-            }
-        })?;
+        }
+        if times {
+            self.check_times();
+            self.schedule();
+        }
         if let Some(on) = streaming {
             // A running download changes its order at once.
             self.playbacks.of(id).set_streaming(on);
@@ -1493,6 +1631,8 @@ impl<B: Backend> Actor<B> {
             // Its wait may have ended while it was moving.
             self.retry_when_due(id);
         }
+        // Its times were left alone while it moved.
+        self.check_times();
         self.schedule();
     }
 
@@ -1769,6 +1909,68 @@ impl<B: Backend> Actor<B> {
             .map(|(id, _)| *id)
     }
 
+    /// Queues scheduled jobs whose start time has come and pauses those
+    /// whose stop time has (docs/decisions/0040), then notes the next time
+    /// to look. Jobs whose file is moving wait until it has. The caller
+    /// schedules.
+    fn check_times(&mut self) {
+        if self.shutdown.is_some() {
+            self.wake_at = None;
+            return;
+        }
+        let now = SystemTime::now();
+        let due: Vec<JobId> = self
+            .jobs
+            .iter()
+            .filter(|(_, job)| {
+                job.moving.is_none()
+                    && (job.stop_at.is_some_and(|at| at <= now)
+                        || (job.state == JobState::Scheduled && !job.held(now)))
+            })
+            .map(|(id, _)| *id)
+            .collect();
+        for id in due {
+            self.on_time(id, now);
+        }
+        self.wake_at = self
+            .jobs
+            .values()
+            .filter(|job| job.moving.is_none())
+            .flat_map(|job| {
+                let start = job.start_at.filter(|_| job.state == JobState::Scheduled);
+                [start, job.stop_at]
+            })
+            .flatten()
+            .min();
+    }
+
+    /// A job's start or stop time has come. A stop time comes after the
+    /// start time, so when both have, it pauses.
+    fn on_time(&mut self, id: JobId, now: SystemTime) {
+        let Some(job) = self.jobs.get_mut(&id) else {
+            return;
+        };
+        if job.stop_at.is_some_and(|at| at <= now) {
+            job.stop_at = None;
+            if let Some(task) = &mut job.task {
+                // Saved with the state it stops in (see `on_ended`).
+                task.stop = task.stop.max(Some(Stop::Pause));
+                task.cancel.cancel();
+            } else if matches!(
+                job.state,
+                JobState::Queued | JobState::Scheduled | JobState::Retrying
+            ) {
+                self.transition_or_log(id, JobState::Paused, None);
+            } else {
+                // Already stopped: only the time goes.
+                self.save(id);
+                self.emit_changed(id);
+            }
+        } else if job.state == JobState::Scheduled {
+            self.transition_or_log(id, JobState::Queued, None);
+        }
+    }
+
     fn has_room(&self, category: CategoryId, busy: &HashMap<CategoryId, usize>) -> bool {
         let cap = self
             .categories
@@ -1851,6 +2053,8 @@ impl<B: Backend> Actor<B> {
         let next = match (result, stop) {
             // Finished before it noticed the stop request: keep the file.
             (Ok(Outcome::Completed { .. }), _) => Some((JobState::Completed, None)),
+            // Its start time was taken away (or came) while it stopped.
+            (_, Some(Stop::Hold)) if !job.held(SystemTime::now()) => Some((JobState::Queued, None)),
             (_, Some(stop)) => stop.target().map(|state| (state, None)),
             // Only the manager cancels the token, so this means paused.
             (Ok(Outcome::Paused), None) => Some((JobState::Paused, None)),
@@ -1951,6 +2155,21 @@ impl<B: Backend> Actor<B> {
         if next != JobState::Retrying {
             job.retry_at = None;
         }
+        // A start time is over once the job is in the queue or stopped (a
+        // running or retrying one keeps it while it stops to wait for it).
+        if matches!(
+            next,
+            JobState::Queued
+                | JobState::Paused
+                | JobState::Failed
+                | JobState::Completed
+                | JobState::Cancelled
+        ) {
+            job.start_at = None;
+        }
+        if next.is_finished() {
+            job.stop_at = None;
+        }
         self.save(id);
         self.emit_changed(id);
         Ok(())
@@ -1989,6 +2208,8 @@ impl<B: Backend> Actor<B> {
             category_chosen: job.category_chosen,
             streaming: job.streaming,
             streaming_chosen: job.streaming_chosen,
+            start_at: job.start_at,
+            stop_at: job.stop_at,
         })
     }
 

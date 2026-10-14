@@ -10,7 +10,7 @@
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
 	import { confirmation, targets, type Action } from '#lib/bulk.js';
 	import { provideApp } from '#lib/context.js';
-	import { parseFilters, showsNewJobs } from '#lib/filters.js';
+	import { parseFilters, showsNewJobs, type Status } from '#lib/filters.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale, isLocale, locales, setLocale } from '#lib/paraglide/runtime.js';
 	import { Session, type Answer } from '#lib/session.svelte.js';
@@ -79,7 +79,8 @@
 	async function add(job: AddJob): Promise<boolean> {
 		const added = await session.add(job);
 		if (added) {
-			await showNewJobs();
+			const later = job.startAt !== undefined && job.startAt > Date.now();
+			await showNewJobs(later ? 'scheduled' : 'queued');
 		}
 		return added;
 	}
@@ -93,10 +94,10 @@
 	}
 
 	/** On a Downloads view that would hide new downloads, shows everything instead. */
-	async function showNewJobs() {
+	async function showNewJobs(state: Status = 'queued') {
 		const downloads = resolve('/downloads');
 		const filters = parseFilters(page.url.searchParams);
-		if (page.url.pathname === downloads && !showsNewJobs(filters)) {
+		if (page.url.pathname === downloads && !showsNewJobs(filters, state)) {
 			await goto(downloads, { replace: true, reset: false });
 		}
 	}

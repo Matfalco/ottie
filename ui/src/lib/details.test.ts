@@ -20,6 +20,17 @@ describe('details', () => {
 		});
 		expect(primaryAction(job({ state: 'paused' }), 'fr')?.action).toBe('resume');
 		expect(primaryAction(job({ state: 'completed' }), 'en')).toBeNull();
+		expect(primaryAction(job({ state: 'scheduled' }), 'en')).toEqual({
+			action: 'resume',
+			label: 'Start now'
+		});
+	});
+
+	it('say when a scheduled download starts', () => {
+		const tonight = new Date(2026, 9, 12, 23, 0).getTime();
+		const later = job({ state: 'scheduled', startAt: tonight });
+		const [starts] = facts(later, 0, new Date(2026, 9, 12, 9, 0).getTime(), null, 'en');
+		expect(starts).toEqual({ label: 'Starts', value: '11:00 PM' });
 	});
 
 	it('list what matters while downloading', () => {

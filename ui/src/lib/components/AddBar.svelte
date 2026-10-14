@@ -16,6 +16,7 @@
 	import { holdsSeveral } from '#lib/batch.js';
 	import { categoryName, type Categories } from '#lib/categories.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { fromField, inOrder } from '#lib/schedule.js';
 	import { canPickFolder, pickFolder } from '#lib/window.js';
 	import Switch from './Switch.svelte';
 
@@ -49,10 +50,15 @@
 	let folder = $state('');
 	/** Streaming mode as the user set it; null leaves it to the daemon. */
 	let streaming = $state<boolean | null>(null);
+	/** The start and stop time fields (`datetime-local`); empty: none. */
+	let start = $state('');
+	let stop = $state('');
 	let adding = $state(false);
 
 	let fallback = $derived(step && defaultFolder(choice, step.matched, categories));
 	let streams = $derived(streaming ?? streamsByDefault(step?.matched ?? null, streamMedia));
+	let times = $derived({ start: fromField(start), stop: fromField(stop) });
+	let ordered = $derived(inOrder(times.start, times.stop));
 	/** Other isn't picked: a folder of no category puts a download there. */
 	let choices = $derived(categoryList.filter((category) => category.builtIn !== 'other'));
 	let otherName = $derived.by(() => {
@@ -74,8 +80,11 @@
 			}
 			return;
 		}
+		if (!ordered) {
+			return;
+		}
 		adding = true;
-		const added = await onAdd(jobRequest(url, choice, folder, streaming));
+		const added = await onAdd(jobRequest(url, choice, folder, streaming, times));
 		adding = false;
 		if (added) {
 			url = '';
@@ -89,6 +98,8 @@
 		choice = 'auto';
 		folder = '';
 		streaming = null;
+		start = '';
+		stop = '';
 		await rematch();
 	}
 
@@ -244,9 +255,26 @@
 				</span>
 			</div>
 
+			<fieldset>
+				<legend>{m.add_when()}</legend>
+				<div class="times">
+					<label class="time">
+						<span class="sub">{m.add_start_at()}</span>
+						<input type="datetime-local" bind:value={start} />
+					</label>
+					<label class="time">
+						<span class="sub">{m.add_stop_at()}</span>
+						<input type="datetime-local" bind:value={stop} />
+					</label>
+				</div>
+				<small class:problem={!ordered}>
+					{ordered ? m.add_when_hint() : m.reason_stop_before_start()}
+				</small>
+			</fieldset>
+
 			<div class="buttons">
 				<button type="button" onclick={close}>{m.add_cancel()}</button>
-				<button class="primary" disabled={adding}>{m.add_button()}</button>
+				<button class="primary" disabled={adding || !ordered}>{m.add_button()}</button>
 			</div>
 		</div>
 	{/if}
@@ -406,6 +434,26 @@
 	.names {
 		display: grid;
 		gap: 0.1rem;
+	}
+
+	.times {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1rem;
+	}
+
+	.time {
+		display: grid;
+		gap: 0.2rem;
+	}
+
+	.sub {
+		color: var(--muted);
+		font-size: 0.8rem;
+	}
+
+	small.problem {
+		color: var(--danger);
 	}
 
 	.buttons {

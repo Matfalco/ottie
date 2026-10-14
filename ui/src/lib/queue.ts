@@ -16,9 +16,9 @@ export function byQueue(a: Job, b: Job): number {
 	return RANK[a.priority] - RANK[b.priority] || a.place - b.place;
 }
 
-/** Queued or paused: the downloads a move reorders. */
+/** Queued, scheduled or paused: the downloads a move reorders. */
 export function isWaiting(job: Job): boolean {
-	return job.state === 'queued' || job.state === 'paused';
+	return job.state === 'queued' || job.state === 'scheduled' || job.state === 'paused';
 }
 
 /** The queued downloads, in the order they will start. */

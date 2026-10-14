@@ -73,6 +73,7 @@ impl From<Error> for Failure {
                     to: (*to).into(),
                 },
             ),
+            Error::StopBeforeStart => (S::BAD_REQUEST, Reason::StopBeforeStart),
             Error::CategoryNameTaken(name) => (
                 S::CONFLICT,
                 Reason::CategoryNameTaken { name: name.clone() },

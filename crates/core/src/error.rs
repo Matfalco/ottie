@@ -52,6 +52,9 @@ pub enum Error {
     #[error("a {from:?} job can't become {to:?}")]
     InvalidTransition { from: JobState, to: JobState },
 
+    #[error("a download's stop time must be after its start time")]
+    StopBeforeStart,
+
     #[error("`{0}` is not a job ID (expected yyyy.mm.dd-hh.mm.ss-N)")]
     InvalidJobId(String),
 

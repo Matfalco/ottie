@@ -24,6 +24,7 @@
 	import { displayName, formatPercent } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { savePlaylist } from '#lib/playlist.js';
+	import { canSchedule, fromField, timeChange, toField, type TimeKey } from '#lib/schedule.js';
 	import { amount, fraction } from '#lib/status.js';
 	import { canChoosePlayer } from '#lib/window.js';
 	import LimitControl from './LimitControl.svelte';
@@ -121,6 +122,19 @@
 
 	function percent(fraction: number): string {
 		return `${fraction * 100}%`;
+	}
+
+	/** Sends a time once the field is left (typing a date fires `change` at
+	 * each part, which would stop and start a running download). A refused
+	 * or unfinished one shows the download's time again. */
+	async function commit(input: HTMLInputElement, key: TimeKey, current: number | null) {
+		if (input.value === toField(current)) {
+			return;
+		}
+		const ms = fromField(input.value);
+		if ((input.value !== '' && ms === null) || !(await onChange(timeChange(key, ms)))) {
+			input.value = toField(current);
+		}
 	}
 
 	function moved(event: Event & { currentTarget: HTMLSelectElement }) {
@@ -304,10 +318,39 @@
 						</span>
 					</div>
 				{/if}
+				{#if canSchedule(job)}
+					<div class="field wide">
+						<span class="label">{m.det_schedule()}</span>
+						<div class="times">
+							{@render timeField(m.det_start_at(), 'startAt', job.startAt)}
+							{@render timeField(m.det_stop_at(), 'stopAt', job.stopAt)}
+						</div>
+						<span class="hint">{m.det_schedule_hint()}</span>
+					</div>
+				{/if}
 			</div>
 		</div>
 	{/if}
 </section>
+
+{#snippet timeField(label: string, key: TimeKey, value: number | null)}
+	<label class="time">
+		<span class="sub">{label}</span>
+		<span class="time-row">
+			<input
+				type="datetime-local"
+				value={toField(value)}
+				onblur={(event) => commit(event.currentTarget, key, value)}
+				onkeydown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
+			/>
+			{#if value !== null}
+				<button type="button" onclick={() => onChange(timeChange(key, null))}>
+					{m.det_clear_time()}
+				</button>
+			{/if}
+		</span>
+	</label>
+{/snippet}
 
 <style>
 	/* Under the list, on the same card; scrolls by itself on small screens. */
@@ -515,6 +558,7 @@
 
 	.paused .fill,
 	.queued .fill,
+	.scheduled .fill,
 	.cancelled .fill {
 		background: var(--quiet);
 	}
@@ -591,6 +635,7 @@
 
 	.paused .key.done,
 	.queued .key.done,
+	.scheduled .key.done,
 	.cancelled .key.done {
 		background: var(--quiet);
 	}
@@ -658,6 +703,32 @@
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
+	}
+
+	.times {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1rem;
+	}
+
+	.time {
+		display: grid;
+		gap: 0.2rem;
+	}
+
+	.sub {
+		color: var(--muted);
+		font-size: 0.8rem;
+	}
+
+	.time-row {
+		display: flex;
+		gap: 0.35rem;
+	}
+
+	.time-row input,
+	.time-row button {
+		height: 2rem;
 	}
 
 	/* Radio buttons drawn as one row of segments (as in the filters). */

@@ -8,6 +8,7 @@ import { displayName, formatAdded, formatBytes, formatDuration, formatSpeed } fr
 import { addedAt } from './jobs';
 import { m } from './paraglide/messages.js';
 import { getLocale, type Locale } from './paraglide/runtime.js';
+import { formatWhenShort } from './schedule';
 import { canPause } from './status';
 
 /** In the order the panel offers them. */
@@ -33,6 +34,9 @@ export function primaryAction(
 	locale: Locale = getLocale()
 ): { action: Action; label: string } | null {
 	const options = { locale };
+	if (job.state === 'scheduled' && !job.moving) {
+		return { action: 'resume', label: m.det_start_now({}, options) };
+	}
 	if (canPause(job)) {
 		return { action: 'pause', label: m.pause({}, options) };
 	}
@@ -117,6 +121,16 @@ export function facts(
 		}
 		case 'queued':
 			return [
+				sizeFact,
+				fact(m.det_priority({}, options), priorityName(job.priority, locale)),
+				addedFact
+			];
+		case 'scheduled':
+			return [
+				fact(
+					m.det_starts({}, options),
+					job.startAt === null ? '—' : formatWhenShort(job.startAt, now, locale)
+				),
 				sizeFact,
 				fact(m.det_priority({}, options), priorityName(job.priority, locale)),
 				addedFact

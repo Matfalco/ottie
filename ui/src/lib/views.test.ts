@@ -25,7 +25,16 @@ describe('viewFilters', () => {
 	it('counts every status as any, and keeps an empty list empty', () => {
 		const every = viewFilters(
 			view(1, {
-				states: ['completed', 'cancelled', 'failed', 'paused', 'queued', 'retrying', 'downloading']
+				states: [
+					'completed',
+					'cancelled',
+					'failed',
+					'paused',
+					'queued',
+					'retrying',
+					'downloading',
+					'scheduled'
+				]
 			})
 		);
 		expect(every.statuses).toBeNull();

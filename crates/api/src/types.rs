@@ -11,7 +11,7 @@
 //! enums (`Problem`, `Reason`, `Event`) stay one word each; a test checks.
 
 use std::path::Path;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ottie_core::JobSnapshot;
 use serde::{Deserialize, Serialize};
@@ -69,6 +69,13 @@ pub struct Job {
     /// Downloading, but the speed limits give it no bandwidth for now: other
     /// downloads take it all (urgent ones first).
     pub waiting_for_bandwidth: bool,
+    /// While `scheduled`: when it joins the queue, in milliseconds since
+    /// 1970 (UTC).
+    #[ts(type = "number | null")]
+    pub start_at: Option<u64>,
+    /// When it pauses if it hasn't finished by then, the same way.
+    #[ts(type = "number | null")]
+    pub stop_at: Option<u64>,
 }
 
 /// A part of the file that one connection fetches.
@@ -108,6 +115,8 @@ pub enum JobState {
     Failed,
     Cancelled,
     Retrying,
+    /// Waiting for its start time (`startAt`), then it joins the queue.
+    Scheduled,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
@@ -140,6 +149,15 @@ pub struct AddJob {
     #[serde(default)]
     #[ts(optional)]
     pub streaming: Option<bool>,
+    /// Wait until then (`scheduled`), in milliseconds since 1970 (UTC).
+    /// Default, or a time already past: queued at once.
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    pub start_at: Option<u64>,
+    /// Pause then if it hasn't finished, the same way. After `startAt`.
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    pub stop_at: Option<u64>,
 }
 
 /// Answer to `POST /jobs`.
@@ -432,6 +450,45 @@ pub struct JobChange {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub streaming: Option<bool>,
+    /// Wait until then, in milliseconds since 1970 (UTC): a queued, paused,
+    /// failed or retrying download becomes `scheduled`; a running one stops
+    /// first. `null`: no start time (a scheduled download joins the queue
+    /// now, as it does for a time already past).
+    #[serde(default, with = "present", skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number | null")]
+    #[schema(value_type = Option<u64>)]
+    pub start_at: Option<Option<u64>>,
+    /// Pause then, wherever it is; `null`: no stop time. After the start time.
+    #[serde(default, with = "present", skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number | null")]
+    #[schema(value_type = Option<u64>)]
+    pub stop_at: Option<Option<u64>>,
+}
+
+/// A field that's there, even as `null` (`Some(None)`), as opposed to one
+/// left out (`None`, through `#[serde(default)]`).
+mod present {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub(super) fn deserialize<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        Option::<T>::deserialize(deserializer).map(Some)
+    }
+
+    /// `Some(None)` as `null`; `None` is skipped (`skip_serializing_if`).
+    pub(super) fn serialize<S, T>(
+        value: &Option<Option<T>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        value.serialize(serializer)
+    }
 }
 
 impl From<JobChange> for ottie_core::JobChange {
@@ -440,8 +497,21 @@ impl From<JobChange> for ottie_core::JobChange {
             speed_limit: change.speed_limit,
             priority: change.priority.map(Into::into),
             streaming: change.streaming,
+            start_at: change.start_at.map(|at| at.map(from_millis)),
+            stop_at: change.stop_at.map(|at| at.map(from_millis)),
         }
     }
+}
+
+/// A time on the wire: milliseconds since 1970 (UTC).
+pub(crate) fn millis(at: SystemTime) -> u64 {
+    at.duration_since(UNIX_EPOCH).map_or(0, |since| {
+        u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
+    })
+}
+
+pub(crate) fn from_millis(millis: u64) -> SystemTime {
+    UNIX_EPOCH + Duration::from_millis(millis)
 }
 
 /// Body of `POST /jobs/reorder`.
@@ -449,7 +519,7 @@ impl From<JobChange> for ottie_core::JobChange {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ReorderJobs {
-    /// The downloads to move. Those that aren't queued or paused stay as they are.
+    /// The downloads to move. Those that aren't queued, scheduled or paused stay as they are.
     pub ids: Vec<String>,
     pub to: Reorder,
 }
@@ -698,6 +768,8 @@ pub enum Reason {
         from: JobState,
         to: JobState,
     },
+    /// A download's stop time must come after its start time.
+    StopBeforeStart,
     CategoryNotFound {
         id: u32,
     },
@@ -829,13 +901,12 @@ impl From<JobSnapshot> for Job {
             streaming: job.streaming,
             category: job.category.0,
             retries: job.retries,
-            retry_at: job
-                .retry_at
-                .and_then(|at| at.duration_since(UNIX_EPOCH).ok())
-                .map(|since| u64::try_from(since.as_millis()).unwrap_or(u64::MAX)),
+            retry_at: job.retry_at.map(millis),
             ranges: job.segments.into_iter().map(ByteRange::from).collect(),
             moving: job.moving,
             waiting_for_bandwidth: job.waiting_for_bandwidth,
+            start_at: job.start_at.map(millis),
+            stop_at: job.stop_at.map(millis),
         }
     }
 }
@@ -1072,6 +1143,7 @@ impl From<JobState> for ottie_core::JobState {
             JobState::Failed => S::Failed,
             JobState::Cancelled => S::Cancelled,
             JobState::Retrying => S::Retrying,
+            JobState::Scheduled => S::Scheduled,
         }
     }
 }
@@ -1089,6 +1161,7 @@ impl From<ottie_core::JobState> for JobState {
             S::Failed => JobState::Failed,
             S::Cancelled => JobState::Cancelled,
             S::Retrying => JobState::Retrying,
+            S::Scheduled => JobState::Scheduled,
         }
     }
 }
@@ -1119,7 +1192,22 @@ impl From<ottie_core::Priority> for Priority {
 
 #[cfg(test)]
 mod tests {
-    use super::{ByteRange, Event};
+    use super::{ByteRange, Event, JobChange};
+
+    #[test]
+    fn a_time_left_out_is_not_a_time_taken_away() {
+        let change = |json| serde_json::from_value::<JobChange>(json).unwrap();
+        let left_out = change(serde_json::json!({ "priority": "high" }));
+        assert_eq!((left_out.start_at, left_out.stop_at), (None, None));
+        let taken_away = change(serde_json::json!({ "startAt": null, "stopAt": 5 }));
+        assert_eq!(
+            (taken_away.start_at, taken_away.stop_at),
+            (Some(None), Some(Some(5)))
+        );
+        // And back: only what was given.
+        let json = serde_json::to_value(&taken_away).unwrap();
+        assert_eq!(json, serde_json::json!({ "startAt": null, "stopAt": 5 }));
+    }
 
     #[test]
     fn progress_carries_each_connections_range() {

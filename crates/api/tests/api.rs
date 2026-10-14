@@ -104,6 +104,8 @@ impl Daemon {
             dest_dir: Some(self.dir.path().to_string_lossy().into_owned()),
             category: None,
             streaming: None,
+            start_at: None,
+            stop_at: None,
         }
     }
 
@@ -346,6 +348,58 @@ async fn a_jobs_own_settings_change_while_it_runs() {
     let missing = "2020.01.01-00.00.00-1";
     let response = patch(missing, serde_json::json!({})).await.unwrap();
     assert_eq!(error_of(response).await.0, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn a_download_waits_for_its_start_time() {
+    let d = start().await;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
+    let in_an_hour = u64::try_from(now.as_millis()).unwrap() + 3_600_000;
+    let later = AddJob {
+        start_at: Some(in_an_hour),
+        stop_at: Some(in_an_hour + 60_000),
+        ..d.new_job("file.bin")
+    };
+    let response = d.post("/jobs").json(&later).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let id = response.json::<Added>().await.unwrap().id;
+    let job = d.job(&id).await;
+    assert_eq!(job.state, JobState::Scheduled);
+    assert_eq!(
+        (job.start_at, job.stop_at),
+        (Some(in_an_hour), Some(in_an_hour + 60_000))
+    );
+
+    let patch = |change: serde_json::Value| {
+        let request = d.client.patch(d.url(&format!("/jobs/{id}")));
+        request.bearer_auth(TOKEN).json(&change).send()
+    };
+    let response = patch(serde_json::json!({ "stopAt": in_an_hour - 1 }))
+        .await
+        .unwrap();
+    let (status, error) = error_of(response).await;
+    assert_eq!(
+        (status, error.reason),
+        (StatusCode::BAD_REQUEST, Reason::StopBeforeStart)
+    );
+    // `null` takes a time away: it starts now.
+    let response = patch(serde_json::json!({ "startAt": null, "stopAt": null }))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    d.wait_until(&id, JobState::Completed).await;
+    let job = d.job(&id).await;
+    assert_eq!((job.start_at, job.stop_at), (None, None));
+
+    // A finished download takes no times.
+    let response = patch(serde_json::json!({ "startAt": in_an_hour }))
+        .await
+        .unwrap();
+    let (status, error) = error_of(response).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(matches!(error.reason, Reason::InvalidTransition { .. }));
 }
 
 #[tokio::test]
