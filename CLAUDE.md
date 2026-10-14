@@ -264,7 +264,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Shutdown keeps running jobs running** in the database (it doesn't mark them Paused), so the next start continues them; user-paused jobs stay paused.
 - **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Names come from `Content-Disposition` (`filename*`, then `filename`), else the final URL; chosen once at the first response. Sanitize them; never write outside the target folder; resolve collisions with ` (1)`, ` (2)`. Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files).
 - **Cancellation:** `tokio_util::sync::CancellationToken`, raced against network reads with `tokio::select! { biased; … }`. Pausing must stop all segments promptly and leave state consistent.
-- **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; aria2 (FTP, BitTorrent, Metalink) and yt-dlp may plug in later, so keep HTTP assumptions inside the HTTP backend.
+- **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; yt-dlp (step 6) and later native FTP/SFTP plug in beside it, so keep HTTP assumptions inside the HTTP backend.
 
 ## Platform gotchas
 
@@ -346,12 +346,18 @@ Done: ✅ and struck through.
    - ✅ ~~5j several links at once (`docs/decisions/0036`)~~
    - ✅ ~~5k sequences in one link (`[001-120]`, curl-style; `docs/decisions/0037`)~~
    - ✅ ~~5l starting at sign-in (`docs/decisions/0039`)~~
-6. Scheduler, clipboard monitoring, uGet import, aria2 / yt-dlp backends.
+6. Scheduler (time slots, start/stop at set times, a download's own start time, an action once everything has finished), clipboard monitoring, yt-dlp backend (its own updates, apart from the app's).
 7. Browser extension.
 8. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.
 
 ## Open decisions
 
-- Extension pairing: copy-paste token vs a native messaging host (zero-config, can also launch the daemon).
-- Whether to import uGet's existing queue and categories.
-- aria2 / yt-dlp backends: if and when.
+- Extension pairing: both, a native messaging host when installed (zero-config, can start the daemon) and the token as the fallback (remote daemon, portable setup). Details in step 7.
+- Scheduler: the shape of time slots (data model, overlaps, scope).
+- yt-dlp: bundled or found, how it updates, ffmpeg, format choice.
+
+Settled: no uGet import; no aria2 (its HTTP strengths are in our engine already) and no BitTorrent/magnet links.
+
+## Later (TODO)
+
+- FTP/SFTP as a native backend, maybe Metalink (one file from several mirrors, checked by checksum).

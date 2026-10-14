@@ -9,7 +9,7 @@ use crate::playback::Playback;
 use crate::throttle::Throttle;
 
 /// Something that can carry out a download. The manager only talks to this,
-/// so other protocols (aria2, yt-dlp…) can plug in later.
+/// so other protocols (yt-dlp, FTP…) can plug in later.
 pub trait Backend: Send + Sync + 'static {
     /// Same contract as [`crate::run`]: download until done or until `cancel`
     /// fires, keeping `dl` in step with what's on disk, and pass every
