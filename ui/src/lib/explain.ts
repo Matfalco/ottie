@@ -121,6 +121,11 @@ export function explainRefusal(
 			return m.reason_invalid_view_name({}, options);
 		case 'viewNameTaken':
 			return m.reason_view_name_taken({ name: body.name }, options);
+		case 'tooManyLinks':
+			return m.reason_too_many_links(
+				{ count: formatCount(body.count, locale), max: formatCount(body.max, locale) },
+				options
+			);
 		default:
 			// Codes for screens this UI doesn't have yet, internal errors, and
 			// codes from a newer daemon.
@@ -132,7 +137,8 @@ export function explainRefusal(
 const SETTING_NAMES: Record<string, typeof m.set_max_concurrent> = {
 	maxConcurrent: m.set_max_concurrent,
 	maxRetries: m.set_max_retries,
-	retriesBeforeYield: m.set_yield
+	retriesBeforeYield: m.set_yield,
+	maxBatch: m.set_max_batch
 };
 
 function outOfRange(setting: string, min: number, max: number, locale: Locale): string {

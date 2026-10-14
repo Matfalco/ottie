@@ -66,8 +66,9 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/category.rs    CategoryId (General = 1), CategorySettings, extension matching
   src/backend.rs     Backend trait, HttpBackend
   src/store.rs       SQLite on its own thread: schema migrations, save/load jobs and settings
-  src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media; SettingsChange (applied all at once)
+  src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media, max_batch; SettingsChange (applied all at once)
   src/view.rs        saved views: ViewSettings (filters + sort/grouping), ViewId, normalizing
+  src/links.rs       the links in pasted text (find), LinkPreview: for adding several at once
   src/throttle.rs    speed limits: per-job token buckets, refill task, priority-weighted sharing, category caps
   src/http.rs        HTTP transfer: first request, single-connection stream, resume, restart rules, stall timeout
   src/segmented.rs   multi-connection transfer: coordinator, connection tasks, dynamic splitting
@@ -89,10 +90,11 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
   src/types.rs       wire types (camelCase JSON) + ts-rs export, From<engine types>
   src/jobs.rs        GET/POST /jobs, POST /jobs/{id}/pause|resume|cancel|category,
                      PATCH /jobs/{id} (own speed limit, priority, streaming mode), DELETE /jobs/{id},
-                     POST /jobs/reorder (move waiting jobs in the queue)
+                     POST /jobs/reorder (move waiting jobs in the queue), POST /jobs/batch (several at
+                     once), POST /jobs/preview (the links in some text; both take bodies up to 64 MB)
   src/categories.rs  GET/POST /categories, PUT/DELETE /categories/{id}, POST /categories/match
   src/settings.rs    GET/PATCH /settings: max concurrent, global limit, retry policy, shared
-                     appearance + language, setupDone, streamMedia; the ranges people may choose (its tests
+                     appearance + language, setupDone, streamMedia, maxBatch; the ranges people may choose (its tests
                      write them to shared/api-types/Ranges.ts)
   src/views.rs       GET/POST /views, PUT/DELETE /views/{id} (saved views)
   src/stream.rs      play links: POST /jobs/{id}/stream → GET /stream/{ticket}/{name} (no token, Range)
@@ -154,7 +156,9 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      playlist.ts (a play link as a .m3u, saved through the browser, 0031),
                      tray.ts (the tray menu's status line, what Pause all / Resume all act on),
                      queue.ts (queue order, up next, whether up/down would move anything, what a drag
-                     carries and where it may drop, 0032)
+                     carries and where it may drop, 0032),
+                     batch.ts (several links at once: when a paste opens the list, its rows, what to
+                     add, what was refused, 0036)
                      plain logic, unit-tested (*.test.ts, Vitest)
   src/lib/appearance.svelte.ts  the appearance chosen on this device (state shared by layout, shell
                      (follows the shared one, docs/decisions/0022) and Settings)
@@ -172,7 +176,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        CategoriesPage (LinkTester, rows, CategoryEditor inline in place of a row),
                        SettingsPage (section list; appearance + sync, language: LanguagePicker; downloads;
                        desktop app, notifications + playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
-                       TitleBar (+ WindowControls), AddCard (AddBar: link, then category + folder step),
+                       TitleBar (+ WindowControls), AddCard (AddBar: link, then category + folder step;
+                       BatchDialog: several links, from a paste, the list button or a file),
                        FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu)
   messages/{en,fr}.json  every UI text, per language (Paraglide); project.inlang/ its settings
   src/app.css        the four themes as variables under [data-theme] (docs/decisions/0021), fonts, radii
@@ -235,6 +240,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Resume re-requests the original URL,** not the redirect target: signed CDN links expire, and `If-Range` still guards consistency.
 - **Request `Accept-Encoding: identity`** so byte ranges map to file offsets.
 - **Speed limits and priorities** (`docs/decisions/0010`): one token bucket per running job, shared by its connections, spent after each chunk (pause still interrupts the wait). A 50 ms refill task shares the global limit: Urgent first, then weights High 4 / Normal 2 / Low 1, capped by each job's own limit, unused share redistributed (`share()`). Per download, not per connection. A category's limit caps its running jobs together (`allocate()`). Limits change live; 0 = unlimited. A running job that owes budget and gets none for 1 s is reported to the manager (`Limiter::new`'s callback), which sends `waiting_for_bandwidth` in a `Changed` (not saved).
+- **Several at once** (`docs/decisions/0036`): `Manager::add_many` adds each job as `add` would (the good ones even if others are refused), saves them in one transaction and schedules once; more than `Settings::max_batch` refuses them all (`TooManyLinks`). `Manager::preview` finds the links in text (`links::find`, in the caller's task) and tells, for each, its name, the category it would get and whether a job has that URL already.
 - **Queue order** (`docs/decisions/0032`): highest priority first, then the lowest `place` (new jobs go last). Urgent waits for a free slot (no preemption). `Manager::reorder(ids, Reorder)` (up, down, top, bottom, before/after a job) moves waiting (queued/paused) jobs within their priority by swapping places among them, so other jobs keep theirs; each moved job is saved and gets a `Changed`.
 - **Retries** (`docs/decisions/0013`): only `Error::is_retryable()` errors (network, drop, stall, 5xx, 408, 429). A retrying job keeps its slot for `retries_before_yield` retries, then gives way if a queued job is waiting (queues behind every job that never gave way); fails after `max_retries`. Waits double from `first_wait` up to 60 s; `Retry-After` (seconds) can ask for up to 10 min. The count resets when bytes arrive or on a manual resume. Stalls: `tokio::time::timeout` around each network wait (`HttpConfig::stall_timeout`), never reqwest's `read_timeout` (it would fire while our throttle waits). Each run of a job (start, resume, retry) gets its own reqwest `Client` (`HttpBackend`), so it never reuses a pooled connection that died silently when the network changed (VPN, Wi-Fi); HTTP/2 connections are also pinged after 10 s of silence.
 - **Failures are `Problem`s** (`docs/decisions/0016`), never bare strings: a kind plus details, saved in the `problem_*` columns. Add a kind = a migration (CHECK list), a `Display` wording, an API `Problem` variant and UI messages.
@@ -324,7 +330,9 @@ Done: ✅ and struck through.
    - ✅ ~~5g queue reorder (`docs/decisions/0032`)~~
    - ✅ ~~5h tray (`docs/decisions/0034`)~~
    - ✅ ~~5i notifications (`docs/decisions/0035`)~~
-   - 5j autostart
+   - ✅ ~~5j several links at once (`docs/decisions/0036`)~~
+   - 5k sequences in one link (`[001-120]`, curl-style)
+   - 5l autostart
 6. Scheduler, clipboard monitoring, uGet import, aria2 / yt-dlp backends.
 7. Browser extension.
 8. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.

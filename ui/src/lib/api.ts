@@ -3,7 +3,9 @@
 // every path is relative to this page's own address.
 
 import type { AddJob } from '@ottie/api-types/AddJob';
+import type { AddJobs } from '@ottie/api-types/AddJobs';
 import type { Added } from '@ottie/api-types/Added';
+import type { AddedJobs } from '@ottie/api-types/AddedJobs';
 import type { AddedCategory } from '@ottie/api-types/AddedCategory';
 import type { Category } from '@ottie/api-types/Category';
 import type { CategoryBody } from '@ottie/api-types/CategoryBody';
@@ -12,6 +14,8 @@ import type { Matched } from '@ottie/api-types/Matched';
 import type { ApiError } from '@ottie/api-types/ApiError';
 import type { Job } from '@ottie/api-types/Job';
 import type { JobChange } from '@ottie/api-types/JobChange';
+import type { Preview } from '@ottie/api-types/Preview';
+import type { PreviewLinks } from '@ottie/api-types/PreviewLinks';
 import type { Reorder } from '@ottie/api-types/Reorder';
 import type { ReorderJobs } from '@ottie/api-types/ReorderJobs';
 import type { Settings } from '@ottie/api-types/Settings';
@@ -53,6 +57,19 @@ export class Api {
 
 	addJob(job: AddJob): Promise<Added> {
 		return this.request('POST', '/jobs', job);
+	}
+
+	/** Adds the jobs that can be, in order; says which were refused and why. */
+	addJobs(jobs: AddJob[]): Promise<AddedJobs> {
+		const body: AddJobs = { jobs };
+		return this.request('POST', '/jobs/batch', body);
+	}
+
+	/** The links in `text`, and what adding each would do (saved in
+	 * `destDir`, if given). Adds nothing. */
+	previewLinks(text: string, destDir?: string): Promise<Preview> {
+		const body: PreviewLinks = { text, destDir };
+		return this.request('POST', '/jobs/preview', body);
 	}
 
 	pause(id: string): Promise<void> {

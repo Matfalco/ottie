@@ -375,6 +375,18 @@
 						onChange={(streamMedia) => save({ streamMedia })}
 					/>
 				</div>
+				<div class="setting">
+					<span class="names">
+						<span>{m.set_max_batch()}</span>
+						<span class="hint">{m.set_max_batch_hint()}</span>
+					</span>
+					<NumberField
+						value={settings.maxBatch}
+						label={m.set_max_batch()}
+						parse={(text) => parseWhole(text, RANGES.maxBatch)}
+						onChange={(maxBatch) => save({ maxBatch })}
+					/>
+				</div>
 			{:else}
 				<p class="waiting">{m.connection_connecting()}</p>
 			{/if}

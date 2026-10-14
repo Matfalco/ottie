@@ -51,7 +51,7 @@ pub(crate) async fn change(
 /// What people may choose for each setting, by its field name, with the
 /// value `change` gives it. The UI gets the same ranges from
 /// `shared/api-types/Ranges.ts`, which the tests write from this list.
-fn ranged(change: &SettingsChange) -> [(&'static str, Option<u64>, RangeInclusive<u64>); 4] {
+fn ranged(change: &SettingsChange) -> [(&'static str, Option<u64>, RangeInclusive<u64>); 5] {
     [
         (
             "maxConcurrent",
@@ -70,6 +70,7 @@ fn ranged(change: &SettingsChange) -> [(&'static str, Option<u64>, RangeInclusiv
             change.first_retry_wait_ms,
             500..=3_600_000,
         ),
+        ("maxBatch", change.max_batch.map(u64::from), 10..=100_000),
     ]
 }
 

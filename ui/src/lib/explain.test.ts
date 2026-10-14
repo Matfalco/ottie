@@ -57,6 +57,16 @@ describe('explainRefusal', () => {
 		);
 	});
 
+	it('says how many links were too many', () => {
+		const body: ApiError = { error: '…', code: 'tooManyLinks', count: 12_000, max: 10_000 };
+		expect(explainRefusal(body, '', 'en')).toBe(
+			'That’s 12,000 links at once; the most is 10,000 (Settings, Downloads).'
+		);
+		expect(plain(explainRefusal(body, '', 'fr'))).toBe(
+			'Cela fait 12 000 liens d’un coup ; le maximum est 10 000 (Paramètres, Téléchargements).'
+		);
+	});
+
 	it('names the setting out of range, with its range', () => {
 		const say = (setting: string, min: number, max: number, locale: 'en' | 'fr') => {
 			const body: ApiError = { error: '…', code: 'outOfRange', setting, min, max };

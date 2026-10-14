@@ -2,9 +2,11 @@
 // updated by the events WebSocket, which reconnects on its own.
 
 import type { AddJob } from '@ottie/api-types/AddJob';
+import type { AddedJobs } from '@ottie/api-types/AddedJobs';
 import type { CategoryBody } from '@ottie/api-types/CategoryBody';
 import type { JobChange } from '@ottie/api-types/JobChange';
 import type { Matched } from '@ottie/api-types/Matched';
+import type { Preview } from '@ottie/api-types/Preview';
 import type { Reorder } from '@ottie/api-types/Reorder';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
@@ -20,6 +22,10 @@ import { addSample, totalSpeed } from './speed';
 import { applyViewEvent, sortedViews, type Views } from './views';
 
 export type Connection = 'connecting' | 'live' | 'offline';
+
+/** The daemon's answer, or why there is none (in the page's language; null
+ * once signed out). */
+export type Answer<T> = { ok: true; value: T } | { ok: false; why: string | null };
 
 const FIRST_RETRY_MS = 500;
 const LONGEST_RETRY_MS = 10_000;
@@ -77,6 +83,16 @@ export class Session {
 
 	async add(job: AddJob): Promise<boolean> {
 		return this.attempt(() => this.api.addJob(job));
+	}
+
+	/** Adds the jobs that can be, in order (docs/decisions/0036). */
+	addMany(jobs: AddJob[]): Promise<Answer<AddedJobs>> {
+		return this.answer(() => this.api.addJobs(jobs));
+	}
+
+	/** The links in `text`, and what adding each would do. */
+	preview(text: string, destDir?: string): Promise<Answer<Preview>> {
+		return this.answer(() => this.api.previewLinks(text, destDir));
 	}
 
 	/** The category a download of `url` (saved in `destDir`, if given)
@@ -226,6 +242,14 @@ export class Session {
 	}
 
 	/** What went wrong, for the page; null after signing out (a refused token). */
+	private async answer<T>(request: () => Promise<T>): Promise<Answer<T>> {
+		try {
+			return { ok: true, value: await request() };
+		} catch (error) {
+			return { ok: false, why: this.why(error) };
+		}
+	}
+
 	private why(error: unknown): string | null {
 		if (error instanceof Unauthorized) {
 			this.stop();

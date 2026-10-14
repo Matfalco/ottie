@@ -19,6 +19,7 @@ use crate::error::Error;
 use crate::filename;
 use crate::id::{IdGenerator, JobId};
 use crate::job::{JobChange, JobEvent, JobSnapshot, JobState, NewJob, Priority, Reorder};
+use crate::links::{self, Found, LinkPreview};
 use crate::playback::{self, Head, Playbacks};
 use crate::problem::Problem;
 use crate::settings::{RetryPolicy, Settings, SettingsChange};
@@ -121,6 +122,34 @@ impl Manager {
     /// in its category).
     pub async fn add(&self, job: NewJob) -> Result<JobId, Error> {
         self.request(|reply| Command::Add { job, reply }).await
+    }
+
+    /// Queues several downloads at once, in order (docs/decisions/0036):
+    /// each one's ID, or why it was refused, as [`Manager::add`] would. The
+    /// ones added are saved together. Refuses them all with
+    /// [`Error::TooManyLinks`] if there are more than
+    /// [`Settings::max_batch`].
+    pub async fn add_many(&self, jobs: Vec<NewJob>) -> Result<Vec<Result<JobId, Error>>, Error> {
+        self.request(|reply| Command::AddMany { jobs, reply }).await
+    }
+
+    /// The links in `text` (a list, an email, a page), in order and each
+    /// once, and what adding each without a category would do (saved in
+    /// `dest_dir`, if given). [`Error::TooManyLinks`] if there are more than
+    /// [`Settings::max_batch`].
+    pub async fn preview(
+        &self,
+        text: &str,
+        dest_dir: Option<PathBuf>,
+    ) -> Result<Vec<LinkPreview>, Error> {
+        // Read here, so the manager isn't kept from its jobs meanwhile.
+        let found = links::find(text);
+        self.request(|reply| Command::Preview {
+            found,
+            dest_dir,
+            reply,
+        })
+        .await
     }
 
     /// Returns once the job has actually stopped and its `.part.ottie` file is flushed.
@@ -386,6 +415,15 @@ enum Command {
     Add {
         job: NewJob,
         reply: Reply<JobId>,
+    },
+    AddMany {
+        jobs: Vec<NewJob>,
+        reply: Reply<Vec<Result<JobId, Error>>>,
+    },
+    Preview {
+        found: Vec<Found>,
+        dest_dir: Option<PathBuf>,
+        reply: Reply<Vec<LinkPreview>>,
     },
     Stop {
         id: JobId,
@@ -712,6 +750,16 @@ impl<B: Backend> Actor<B> {
             Command::Add { job, reply } => {
                 let _ = reply.send(self.add(job));
             }
+            Command::AddMany { jobs, reply } => {
+                let _ = reply.send(self.add_many(jobs));
+            }
+            Command::Preview {
+                found,
+                dest_dir,
+                reply,
+            } => {
+                let _ = reply.send(self.preview(found, dest_dir.as_deref()));
+            }
             Command::Stop { id, stop, reply } => self.stop(id, stop, reply).await,
             Command::Resume { id, reply } => {
                 let _ = reply.send(self.resume(id));
@@ -743,15 +791,7 @@ impl<B: Backend> Actor<B> {
                 dest_dir,
                 reply,
             } => {
-                let (category, by_folder) = match &dest_dir {
-                    Some(dir) => (self.category_of_folder(&url, dir), true),
-                    None => (self.match_category(&url), false),
-                };
-                let _ = reply.send(Ok(Matched {
-                    category,
-                    extension: category::url_extension(&url),
-                    by_folder,
-                }));
+                let _ = reply.send(Ok(self.matched(&url, dest_dir.as_deref())));
             }
             Command::AddCategory { settings, reply } => {
                 let _ = reply.send(self.add_category(settings));
@@ -914,6 +954,75 @@ impl<B: Backend> Actor<B> {
         if self.shutdown.is_some() {
             return Err(Error::ManagerStopped);
         }
+        let id = self.insert(new)?;
+        self.save(id);
+        self.emit_changed(id);
+        self.schedule();
+        Ok(id)
+    }
+
+    fn add_many(&mut self, jobs: Vec<NewJob>) -> Result<Vec<Result<JobId, Error>>, Error> {
+        if self.shutdown.is_some() {
+            return Err(Error::ManagerStopped);
+        }
+        self.check_batch(jobs.len())?;
+        let results: Vec<_> = jobs.into_iter().map(|new| self.insert(new)).collect();
+        let added: Vec<JobId> = results.iter().flatten().copied().collect();
+        let records = added.iter().filter_map(|&id| self.record(id)).collect();
+        self.store.save_jobs(records);
+        for &id in &added {
+            self.emit_changed(id);
+        }
+        self.schedule();
+        Ok(results)
+    }
+
+    fn check_batch(&self, count: usize) -> Result<(), Error> {
+        let max = self.settings.max_batch;
+        if count > max {
+            return Err(Error::TooManyLinks { count, max });
+        }
+        Ok(())
+    }
+
+    fn preview(
+        &self,
+        found: Vec<Found>,
+        dest_dir: Option<&Path>,
+    ) -> Result<Vec<LinkPreview>, Error> {
+        self.check_batch(found.len())?;
+        let known: HashSet<&str> = self
+            .jobs
+            .values()
+            .map(|job| job.download.url.as_str())
+            .collect();
+        let previews = found.into_iter().map(|found| match found {
+            Found::Link(url) => LinkPreview::Link {
+                name: filename::from_url(&url),
+                matched: self.matched(&url, dest_dir),
+                known: known.contains(url.as_str()),
+                url,
+            },
+            Found::Invalid { text, error } => LinkPreview::Invalid { text, error },
+        });
+        Ok(previews.collect())
+    }
+
+    /// Where a job for `url` would go if added without a category.
+    fn matched(&self, url: &Url, dest_dir: Option<&Path>) -> Matched {
+        let (category, by_folder) = match dest_dir {
+            Some(dir) => (self.category_of_folder(url, dir), true),
+            None => (self.match_category(url), false),
+        };
+        Matched {
+            category,
+            extension: category::url_extension(url),
+            by_folder,
+        }
+    }
+
+    /// Puts a new job in the list (not saved or announced yet).
+    fn insert(&mut self, new: NewJob) -> Result<JobId, Error> {
         // Fixed (never re-matched) when the user picked the category, or a
         // folder, which then decides it.
         let (category, fixed) = match (new.category, &new.dest_dir) {
@@ -961,9 +1070,6 @@ impl<B: Backend> Actor<B> {
                 last_saved: None,
             },
         );
-        self.save(id);
-        self.emit_changed(id);
-        self.schedule();
         Ok(id)
     }
 
@@ -1859,11 +1965,16 @@ impl<B: Backend> Actor<B> {
     }
 
     fn save(&mut self, id: JobId) {
-        let Some(job) = self.jobs.get_mut(&id) else {
-            return;
-        };
+        if let Some(record) = self.record(id) {
+            self.store.save(record);
+        }
+    }
+
+    /// What to save of the job, now.
+    fn record(&mut self, id: JobId) -> Option<JobRecord> {
+        let job = self.jobs.get_mut(&id)?;
         job.last_saved = Some(Instant::now());
-        self.store.save(JobRecord {
+        Some(JobRecord {
             id,
             state: job.state,
             download: job.download.clone(),
@@ -1875,7 +1986,7 @@ impl<B: Backend> Actor<B> {
             category_chosen: job.category_chosen,
             streaming: job.streaming,
             streaming_chosen: job.streaming_chosen,
-        });
+        })
     }
 
     /// Takes a stopped job off the list and out of the database.

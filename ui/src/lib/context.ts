@@ -4,9 +4,10 @@
 
 import { createContext } from 'svelte';
 import type { AddJob } from '@ottie/api-types/AddJob';
+import type { AddedJobs } from '@ottie/api-types/AddedJobs';
 import type { Job } from '@ottie/api-types/Job';
 import type { Action } from './bulk';
-import type { Session } from './session.svelte';
+import type { Answer, Session } from './session.svelte';
 
 export interface App {
 	session: Session;
@@ -19,6 +20,8 @@ export interface App {
 	ask: (message: string, confirmLabel: string) => Promise<boolean>;
 	/** Adds a download; resolves to true once the daemon has accepted it. */
 	add: (job: AddJob) => Promise<boolean>;
+	/** Adds several downloads at once: those that can be. */
+	addMany: (jobs: AddJob[]) => Promise<Answer<AddedJobs>>;
 }
 
 /** `useApp()` in any page or component inside the shell. */

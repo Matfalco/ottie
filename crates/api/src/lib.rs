@@ -28,6 +28,7 @@ mod views;
 use std::sync::Arc;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::http::{Method, Uri};
 use axum::middleware;
 use ottie_core::Manager;
@@ -37,10 +38,11 @@ use utoipa_axum::routes;
 
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
 pub use types::{
-    AddJob, Added, AddedCategory, AddedView, AddedWithin, ApiError, Appearance, AppearanceMode,
-    Arrangement, BuiltIn, ByteRange, Category, CategoryBody, Event, Job, JobChange, JobState,
-    MatchLink, Matched, MoveJob, Palette, Priority, Problem, Reason, Reorder, ReorderJobs,
-    Settings, SettingsChange, SortDirection, SortKey, StreamLink, View, ViewBody, ViewFilters,
+    AddJob, AddJobs, Added, AddedCategory, AddedJobs, AddedView, AddedWithin, ApiError, Appearance,
+    AppearanceMode, Arrangement, BuiltIn, ByteRange, Category, CategoryBody, Event, FoundLink, Job,
+    JobChange, JobState, MatchLink, Matched, MoveJob, Palette, Preview, PreviewLinks, Priority,
+    Problem, Reason, RefusedJob, Reorder, ReorderJobs, Settings, SettingsChange, SortDirection,
+    SortKey, StreamLink, View, ViewBody, ViewFilters,
 };
 pub use ui::UiSource;
 
@@ -56,10 +58,19 @@ struct AppState {
     spec: Arc<serde_json::Value>,
 }
 
+/// The largest body of a request that carries many links at once (the
+/// `maxBatch` setting allows up to 100,000); others keep axum's 2 MB.
+const BATCH_BODY_LIMIT: usize = 64 * 1024 * 1024;
+
 /// Everything that needs the token. Each handler's `#[utoipa::path]`
 /// gives both its route and its description.
 fn private_routes() -> OpenApiRouter<AppState> {
+    let batches = OpenApiRouter::new()
+        .routes(routes!(jobs::add_many))
+        .routes(routes!(jobs::preview))
+        .layer(DefaultBodyLimit::max(BATCH_BODY_LIMIT));
     OpenApiRouter::new()
+        .merge(batches)
         .routes(routes!(jobs::list, jobs::add))
         .routes(routes!(jobs::remove, jobs::change))
         .routes(routes!(jobs::pause))

@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use ottie_core::{
-    Error, HttpBackend, JobChange, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob,
-    Priority, Problem, Reorder, SettingsChange, Store,
+    CategoryId, Error, HttpBackend, JobChange, JobEvent, JobId, JobSnapshot, JobState, LinkPreview,
+    Manager, NewJob, Priority, Problem, Reorder, SettingsChange, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -561,4 +561,122 @@ async fn the_real_name_decides_streaming_mode_unless_chosen() {
         .await;
     assert!(s.job(guessed).await.streaming, "from .mkv");
     assert!(!s.job(chosen).await.streaming, "the choice stays");
+}
+
+#[tokio::test]
+async fn several_jobs_are_added_at_once_in_order() {
+    let mut s = setup(3, 0).await;
+    let new =
+        |name: &str| NewJob::new(s.server.url(&format!("/files/{name}"))).in_dir(s.dir.path());
+    let ftp: reqwest::Url = "ftp://example.com/file".parse().unwrap();
+    let results = s
+        .manager
+        .add_many(vec![
+            new("a.bin"),
+            NewJob::new(ftp).in_dir(s.dir.path()),
+            new("b.bin"),
+            new("c.bin").in_category(CategoryId(99)),
+            new("d.bin"),
+        ])
+        .await
+        .unwrap();
+
+    assert!(matches!(results[1], Err(Error::UnsupportedScheme(_))));
+    assert!(matches!(results[3], Err(Error::CategoryNotFound(_))));
+    let ids: Vec<JobId> = results.into_iter().flatten().collect();
+    assert_eq!(ids.len(), 3);
+    let listed: Vec<JobId> = s
+        .manager
+        .list()
+        .await
+        .unwrap()
+        .iter()
+        .map(|j| j.id)
+        .collect();
+    assert_eq!(listed, ids, "added in order, nothing else");
+    for job in s.wait_for_all(&ids, JobState::Completed).await {
+        s.assert_file(&job);
+    }
+}
+
+#[tokio::test]
+async fn too_many_links_at_once_are_all_refused() {
+    let s = setup(3, 0).await;
+    let change = SettingsChange {
+        max_batch: Some(2),
+        ..SettingsChange::default()
+    };
+    s.manager.change_settings(change).await.unwrap();
+    let jobs: Vec<NewJob> = ["a.bin", "b.bin", "c.bin"]
+        .iter()
+        .map(|name| NewJob::new(s.server.url(&format!("/files/{name}"))).in_dir(s.dir.path()))
+        .collect();
+    let text: Vec<String> = jobs.iter().map(|job| job.url.to_string()).collect();
+
+    assert!(matches!(
+        s.manager.add_many(jobs).await,
+        Err(Error::TooManyLinks { count: 3, max: 2 })
+    ));
+    assert!(s.manager.list().await.unwrap().is_empty());
+    assert!(matches!(
+        s.manager.preview(&text.join("\n"), None).await,
+        Err(Error::TooManyLinks { count: 3, max: 2 })
+    ));
+    assert_eq!(
+        s.manager
+            .preview(&text[..2].join("\n"), None)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[tokio::test]
+async fn a_preview_tells_each_link_found_and_those_already_listed() {
+    let s = setup(3, 0).await;
+    s.add("a.bin").await;
+    let a = s.server.url("/files/a.bin");
+    let b = s.server.url("/files/b%20c.mp4");
+    let text = format!("Get {a}, then {b} (not ftp://example.com/x.zip), and {a} again.");
+
+    let previews = s.manager.preview(&text, None).await.unwrap();
+    let [first, second, third] = &previews[..] else {
+        panic!("expected 3 links, got {previews:?}");
+    };
+    let LinkPreview::Link {
+        url,
+        name,
+        matched,
+        known,
+    } = first
+    else {
+        panic!("expected a link, got {first:?}");
+    };
+    assert_eq!((url, name.as_str(), *known), (&a, "a.bin", true));
+    assert_eq!(matched.category, CategoryId::GENERAL);
+    assert!(!matched.by_folder);
+    let LinkPreview::Link {
+        url, name, known, ..
+    } = second
+    else {
+        panic!("expected a link, got {second:?}");
+    };
+    assert_eq!((url, name.as_str(), *known), (&b, "b c.mp4", false));
+    assert!(matches!(
+        third,
+        LinkPreview::Invalid { text, error: Error::UnsupportedScheme(_) }
+            if text == "ftp://example.com/x.zip"
+    ));
+
+    // A folder of no category decides.
+    let previews = s
+        .manager
+        .preview(a.as_ref(), Some(s.dir.path().into()))
+        .await
+        .unwrap();
+    assert!(matches!(
+        &previews[..],
+        [LinkPreview::Link { matched, .. }] if matched.by_folder
+    ));
 }

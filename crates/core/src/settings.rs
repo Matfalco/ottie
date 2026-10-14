@@ -11,6 +11,8 @@ pub struct Settings {
     /// How many jobs may download at once. At least 1.
     pub max_concurrent: usize,
     pub retry: RetryPolicy,
+    /// The most links added at once (docs/decisions/0036). At least 1.
+    pub max_batch: usize,
     /// New video and music downloads start in streaming mode, unless the
     /// one adding them says otherwise (docs/decisions/0029).
     pub stream_media: bool,
@@ -31,6 +33,7 @@ impl Default for Settings {
             global_limit: 0,
             max_concurrent: 3,
             retry: RetryPolicy::default(),
+            max_batch: 10_000,
             stream_media: true,
             setup_done: false,
             appearance: None,
@@ -41,7 +44,8 @@ impl Default for Settings {
 
 impl Settings {
     /// Applies `change`. Values aren't checked against the ranges people may
-    /// choose (the API does that); a `max_concurrent` of 0 counts as 1.
+    /// choose (the API does that); a `max_concurrent` or `max_batch` of 0
+    /// counts as 1.
     pub(crate) fn apply(&mut self, change: SettingsChange) {
         let SettingsChange {
             global_limit,
@@ -49,6 +53,7 @@ impl Settings {
             max_retries,
             retries_before_yield,
             first_retry_wait,
+            max_batch,
             stream_media,
             setup_done,
             appearance,
@@ -68,6 +73,9 @@ impl Settings {
         }
         if let Some(wait) = first_retry_wait {
             self.retry.first_wait = wait;
+        }
+        if let Some(max) = max_batch {
+            self.max_batch = max.max(1);
         }
         if let Some(on) = stream_media {
             self.stream_media = on;
@@ -92,6 +100,7 @@ pub struct SettingsChange {
     pub max_retries: Option<u32>,
     pub retries_before_yield: Option<u32>,
     pub first_retry_wait: Option<Duration>,
+    pub max_batch: Option<usize>,
     pub stream_media: Option<bool>,
     pub setup_done: Option<bool>,
     pub appearance: Option<Appearance>,

@@ -123,11 +123,7 @@ pub(crate) async fn matching(
     let url = parse_url(&body.url)?;
     let dest_dir = body.dest_dir.map(absolute_folder).transpose()?;
     let matched = state.manager.match_category(url, dest_dir).await?;
-    Ok(Json(Matched {
-        category: matched.category.0,
-        extension: matched.extension,
-        by_folder: matched.by_folder,
-    }))
+    Ok(Json(matched.into()))
 }
 
 pub(crate) fn parse_url(url: &str) -> Result<Url, Failure> {

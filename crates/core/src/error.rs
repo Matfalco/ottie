@@ -13,6 +13,15 @@ pub enum Error {
     #[error("unsupported URL scheme `{0}` (only http and https are supported)")]
     UnsupportedScheme(String),
 
+    /// Something that starts like a link but isn't one. The text isn't
+    /// kept: it may hold credentials.
+    #[error("not a valid link")]
+    InvalidUrl,
+
+    /// More links at once than [`crate::Settings::max_batch`] allows.
+    #[error("{count} links at once; the most is {max}")]
+    TooManyLinks { count: usize, max: usize },
+
     /// Network or protocol failure, with its causes. The URL is stripped so
     /// query strings never end up in logs or error messages.
     #[error("HTTP request failed: {}", with_causes(.0))]

@@ -1,5 +1,6 @@
-//! `/jobs`: list, add, pause, resume, cancel, remove, change a job's own
-//! settings, reorder the queue, change category.
+//! `/jobs`: list, add (one or several), pause, resume, cancel, remove,
+//! change a job's own settings, reorder the queue, change category, and
+//! which links some text holds.
 
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
@@ -10,7 +11,10 @@ use ottie_core::{CategoryId, JobId, NewJob};
 use crate::AppState;
 use crate::categories::{absolute_folder, parse_url};
 use crate::error::Failure;
-use crate::types::{AddJob, Added, ApiError, Job, JobChange, MoveJob, ReorderJobs};
+use crate::types::{
+    AddJob, AddJobs, Added, AddedJobs, ApiError, Job, JobChange, MoveJob, Preview, PreviewLinks,
+    RefusedJob, ReorderJobs,
+};
 
 /// Every job, oldest first.
 #[utoipa::path(
@@ -44,6 +48,11 @@ pub(crate) async fn add(
     body: Result<Json<AddJob>, JsonRejection>,
 ) -> Result<(StatusCode, Json<Added>), Failure> {
     let Json(body) = body?;
+    let id = state.manager.add(new_job(body)?).await?;
+    Ok((StatusCode::CREATED, Json(Added { id: id.to_string() })))
+}
+
+fn new_job(body: AddJob) -> Result<NewJob, Failure> {
     let mut job = NewJob::new(parse_url(&body.url)?);
     if let Some(dir) = body.dest_dir {
         job = job.in_dir(absolute_folder(dir)?);
@@ -54,8 +63,95 @@ pub(crate) async fn add(
     if let Some(on) = body.streaming {
         job = job.streaming(on);
     }
-    let id = state.manager.add(job).await?;
-    Ok((StatusCode::CREATED, Json(Added { id: id.to_string() })))
+    Ok(job)
+}
+
+/// Queues several downloads at once, in order, each as `POST /jobs` would.
+/// Those that can be added are, even if others are refused: the answer
+/// gives each one's ID or why it was refused. Clients hear of each one added
+/// through a `changed` event (many at once may come as a `resync`).
+#[utoipa::path(
+    post,
+    path = "/jobs/batch",
+    operation_id = "addJobs",
+    tag = "jobs",
+    request_body = AddJobs,
+    responses(
+        (status = OK, description = "Each one's ID, or why it was refused", body = AddedJobs),
+        (status = BAD_REQUEST, description = "`tooManyLinks`: more than the setting `maxBatch`; none added", body = ApiError),
+        (status = UNPROCESSABLE_ENTITY, description = "`invalidBody`", body = ApiError),
+    )
+)]
+pub(crate) async fn add_many(
+    State(state): State<AppState>,
+    body: Result<Json<AddJobs>, JsonRejection>,
+) -> Result<Json<AddedJobs>, Failure> {
+    let Json(body) = body?;
+    let count = body.jobs.len();
+    let mut refused = Vec::new();
+    // The jobs to add, and the place of each in the request.
+    let (places, jobs): (Vec<usize>, Vec<NewJob>) = body
+        .jobs
+        .into_iter()
+        .enumerate()
+        .filter_map(|(place, job)| match new_job(job) {
+            Ok(job) => Some((place, job)),
+            Err(failure) => {
+                refused.push((place, failure));
+                None
+            }
+        })
+        .unzip();
+    let results = state.manager.add_many(jobs).await?;
+    let mut ids = vec![None; count];
+    for (place, result) in places.into_iter().zip(results) {
+        match result {
+            Ok(id) => {
+                if let Some(slot) = ids.get_mut(place) {
+                    *slot = Some(id.to_string());
+                }
+            }
+            Err(err) => refused.push((place, err.into())),
+        }
+    }
+    refused.sort_by_key(|(place, _)| *place);
+    let refused = refused
+        .into_iter()
+        .map(|(place, failure)| RefusedJob {
+            index: u32::try_from(place).unwrap_or(u32::MAX),
+            error: failure.into(),
+        })
+        .collect();
+    Ok(Json(AddedJobs { ids, refused }))
+}
+
+/// The links in some text (one per line, an email, a web page): in order,
+/// each once, with what adding each would do. Anything of the form
+/// `scheme://…` counts, so links that can't be added are listed too, with
+/// why. Nothing is added. A POST, so links, which may carry tokens, never
+/// sit in an address or a log.
+#[utoipa::path(
+    post,
+    path = "/jobs/preview",
+    operation_id = "previewLinks",
+    tag = "jobs",
+    request_body = PreviewLinks,
+    responses(
+        (status = OK, description = "The links found", body = Preview),
+        (status = BAD_REQUEST, description = "`tooManyLinks` (more than the setting `maxBatch`) or `relativeFolder`", body = ApiError),
+        (status = UNPROCESSABLE_ENTITY, description = "`invalidBody`", body = ApiError),
+    )
+)]
+pub(crate) async fn preview(
+    State(state): State<AppState>,
+    body: Result<Json<PreviewLinks>, JsonRejection>,
+) -> Result<Json<Preview>, Failure> {
+    let Json(body) = body?;
+    let dest_dir = body.dest_dir.map(absolute_folder).transpose()?;
+    let links = state.manager.preview(&body.text, dest_dir).await?;
+    Ok(Json(Preview {
+        links: links.into_iter().map(Into::into).collect(),
+    }))
 }
 
 /// Pauses a download. Answers once it has really stopped and its file is flushed.

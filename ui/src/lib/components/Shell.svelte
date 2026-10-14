@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack, type Snippet } from 'svelte';
 	import type { AddJob } from '@ottie/api-types/AddJob';
+	import type { AddedJobs } from '@ottie/api-types/AddedJobs';
 	import type { Job } from '@ottie/api-types/Job';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -12,7 +13,7 @@
 	import { parseFilters, showsNewJobs } from '#lib/filters.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale, isLocale, locales, setLocale } from '#lib/paraglide/runtime.js';
-	import { Session } from '#lib/session.svelte.js';
+	import { Session, type Answer } from '#lib/session.svelte.js';
 	import { syncSteps } from '#lib/sync.js';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import NavMenu from './NavMenu.svelte';
@@ -44,7 +45,7 @@
 	let settingUp = $derived(session.settings?.setupDone === false);
 
 	// svelte-ignore state_referenced_locally
-	provideApp({ session, token, run, ask, add });
+	provideApp({ session, token, run, ask, add, addMany });
 
 	// A device that follows the shared look and language takes them on
 	// whenever they change, and shares its own while none are shared. (Only
@@ -77,13 +78,27 @@
 
 	async function add(job: AddJob): Promise<boolean> {
 		const added = await session.add(job);
-		// On a Downloads view that would hide it, show everything instead.
-		const downloads = resolve('/downloads');
-		const filters = parseFilters(page.url.searchParams);
-		if (added && page.url.pathname === downloads && !showsNewJobs(filters)) {
-			await goto(downloads, { replace: true, reset: false });
+		if (added) {
+			await showNewJobs();
 		}
 		return added;
+	}
+
+	async function addMany(jobs: AddJob[]): Promise<Answer<AddedJobs>> {
+		const answer = await session.addMany(jobs);
+		if (answer.ok && answer.value.ids.some((id) => id !== null)) {
+			await showNewJobs();
+		}
+		return answer;
+	}
+
+	/** On a Downloads view that would hide new downloads, shows everything instead. */
+	async function showNewJobs() {
+		const downloads = resolve('/downloads');
+		const filters = parseFilters(page.url.searchParams);
+		if (page.url.pathname === downloads && !showsNewJobs(filters)) {
+			await goto(downloads, { replace: true, reset: false });
+		}
 	}
 
 	async function run(action: Action, jobs: Job[]): Promise<void> {

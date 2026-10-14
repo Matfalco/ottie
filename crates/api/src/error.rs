@@ -93,6 +93,14 @@ impl From<Error> for Failure {
                     category: category.clone(),
                 },
             ),
+            Error::InvalidUrl => (S::BAD_REQUEST, Reason::InvalidUrl),
+            Error::TooManyLinks { count, max } => (
+                S::BAD_REQUEST,
+                Reason::TooManyLinks {
+                    count: u64::try_from(*count).unwrap_or(u64::MAX),
+                    max: u64::try_from(*max).unwrap_or(u64::MAX),
+                },
+            ),
             Error::UnsupportedScheme(scheme) => (
                 S::BAD_REQUEST,
                 Reason::UnsupportedScheme {
@@ -153,12 +161,19 @@ impl From<JsonRejection> for Failure {
     }
 }
 
+/// The body alone, for an answer that holds several (`POST /jobs/batch`).
+impl From<Failure> for ApiError {
+    fn from(failure: Failure) -> Self {
+        ApiError {
+            error: failure.message,
+            reason: failure.reason,
+        }
+    }
+}
+
 impl IntoResponse for Failure {
     fn into_response(self) -> Response {
-        let body = ApiError {
-            error: self.message,
-            reason: self.reason,
-        };
-        (self.status, Json(body)).into_response()
+        let status = self.status;
+        (status, Json(ApiError::from(self))).into_response()
     }
 }

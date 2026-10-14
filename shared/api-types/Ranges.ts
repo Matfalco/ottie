@@ -9,4 +9,5 @@ export const RANGES = {
 	maxRetries: { min: 0, max: 1000 },
 	retriesBeforeYield: { min: 0, max: 100 },
 	firstRetryWaitMs: { min: 500, max: 3600000 },
+	maxBatch: { min: 10, max: 100000 },
 } as const;

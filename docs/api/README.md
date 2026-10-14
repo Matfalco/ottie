@@ -80,6 +80,30 @@ curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH \
 
 A download's `state` is one of `queued`, `connecting`, `downloading`, `paused`, `completed`, `failed`, `cancelled` and `retrying`. Downloads wait in `queued` until a slot is free: the highest `priority` first, then the lowest `place` (new downloads go last; `POST /jobs/reorder` moves them among the queued and paused ones of their priority). `failed` and `paused` downloads can be resumed. `completed` and `cancelled` are final. A `downloading` job with `waitingForBandwidth: true` is running but gets no bandwidth for now: the speed limits give it all to others (urgent ones first).
 
+## Several links at once
+
+`POST /jobs/preview` finds the links in any text (one per line, an email, a web page) and says what adding each would do, without adding anything. `POST /jobs/batch` then adds several downloads in one request: each one as `POST /jobs` would, in order. Those that can be added are, even if others are refused; the answer gives each one's ID (or `null`) and why the others were refused.
+
+```bash
+curl -H "$AUTH" -H "Content-Type: application/json" \
+     -d '{"text": "Get https://example.com/a.zip, then https://example.com/b.iso.\nftp://example.com/c"}' \
+     $API/jobs/preview
+# → {"links": [
+#      {"kind": "link", "url": "https://example.com/a.zip", "name": "a.zip",
+#       "matched": {"category": 1, "extension": "zip", "byFolder": false}, "known": false},
+#      {"kind": "link", "url": "https://example.com/b.iso", …},
+#      {"kind": "invalid", "text": "ftp://example.com/c",
+#       "refused": {"error": "…", "code": "unsupportedScheme", "scheme": "ftp"}}]}
+
+curl -H "$AUTH" -H "Content-Type: application/json" \
+     -d '{"jobs": [{"url": "https://example.com/a.zip"}, {"url": "https://example.com/b.iso", "category": 3}]}' \
+     $API/jobs/batch
+# → 200 {"ids": ["2026.10.14-09.12.30-1", null],
+#        "refused": [{"index": 1, "error": "…", "code": "categoryNotFound", "id": 3}]}
+```
+
+`known: true` means a download of that same link is already on the list. Both endpoints refuse more links than the setting `maxBatch` allows (10,000 by default) with `tooManyLinks`, adding none.
+
 ## Live events
 
 `GET /api/v1/events` is a WebSocket that pushes every change as a JSON message. Browsers can't set headers on a WebSocket, so the token travels as an offered **protocol**: offer both `ottie.v1` and `ottie.token.<token>`, and the server picks `ottie.v1`.

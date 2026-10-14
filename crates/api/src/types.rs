@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use utoipa::ToSchema;
 
+use crate::error::Failure;
+
 /// One download, as listed by `GET /jobs` and sent in `changed` events.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -146,6 +148,84 @@ pub struct AddJob {
 #[ts(export)]
 pub struct Added {
     pub id: String,
+}
+
+/// Body of `POST /jobs/batch`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AddJobs {
+    /// Added in this order, each as `POST /jobs` would.
+    pub jobs: Vec<AddJob>,
+}
+
+/// Answer to `POST /jobs/batch`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AddedJobs {
+    /// One per job sent, in the same order: its new ID, or null if it was
+    /// refused.
+    pub ids: Vec<Option<String>>,
+    /// Why each refused one was, by its place in `jobs`.
+    pub refused: Vec<RefusedJob>,
+}
+
+/// A job of `POST /jobs/batch` that wasn't added, and why: the error
+/// `POST /jobs` would have answered.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RefusedJob {
+    /// Its place in `jobs`, from 0.
+    pub index: u32,
+    #[serde(flatten)]
+    pub error: ApiError,
+}
+
+/// Body of `POST /jobs/preview`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct PreviewLinks {
+    /// Any text: one link per line, an email, a web page.
+    pub text: String,
+    /// The folder they would be saved in, if not their categories': then
+    /// the folder decides their category.
+    #[serde(default)]
+    #[ts(optional)]
+    pub dest_dir: Option<String>,
+}
+
+/// Answer to `POST /jobs/preview`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Preview {
+    /// In the order found, each once.
+    pub links: Vec<FoundLink>,
+}
+
+/// Something in the text that looks like a link (`scheme://…`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export)]
+pub enum FoundLink {
+    /// A link that can be added.
+    Link {
+        /// As it would be added (normalized: `HTTPS://Example.com` is
+        /// `https://example.com/`).
+        url: String,
+        /// The file name the link suggests; the server may give another.
+        name: String,
+        /// The category it would get without one chosen.
+        matched: Matched,
+        /// A download of this same link is already on the list.
+        known: bool,
+    },
+    /// One that can't: `refused` says why (`invalidUrl` or
+    /// `unsupportedScheme`).
+    Invalid { text: String, refused: ApiError },
 }
 
 /// Answer to `POST /jobs/{id}/stream`.
@@ -441,6 +521,9 @@ pub struct Settings {
     /// twice as long, up to a minute.
     #[ts(type = "number")]
     pub first_retry_wait_ms: u64,
+    /// The most links added at once (`POST /jobs/batch`) or looked at
+    /// (`POST /jobs/preview`).
+    pub max_batch: u32,
     /// New video and music downloads start in streaming mode, unless the
     /// one adding them says otherwise.
     pub stream_media: bool,
@@ -477,6 +560,9 @@ pub struct SettingsChange {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub first_retry_wait_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub max_batch: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub stream_media: Option<bool>,
@@ -669,6 +755,13 @@ pub enum Reason {
     FileChanged {
         id: String,
     },
+    /// More links at once than the setting `maxBatch` allows.
+    TooManyLinks {
+        #[ts(type = "number")]
+        count: u64,
+        #[ts(type = "number")]
+        max: u64,
+    },
     /// The daemon is shutting down.
     Stopping,
     /// A bug or an unexpected failure; `error` has the details.
@@ -746,6 +839,38 @@ impl From<JobSnapshot> for Job {
     }
 }
 
+impl From<ottie_core::Matched> for Matched {
+    fn from(matched: ottie_core::Matched) -> Self {
+        Matched {
+            category: matched.category.0,
+            extension: matched.extension,
+            by_folder: matched.by_folder,
+        }
+    }
+}
+
+impl From<ottie_core::LinkPreview> for FoundLink {
+    fn from(preview: ottie_core::LinkPreview) -> Self {
+        match preview {
+            ottie_core::LinkPreview::Link {
+                url,
+                name,
+                matched,
+                known,
+            } => FoundLink::Link {
+                url: url.to_string(),
+                name,
+                matched: matched.into(),
+                known,
+            },
+            ottie_core::LinkPreview::Invalid { text, error } => FoundLink::Invalid {
+                text,
+                refused: Failure::from(error).into(),
+            },
+        }
+    }
+}
+
 impl From<ottie_core::Settings> for Settings {
     fn from(settings: ottie_core::Settings) -> Self {
         let retry = settings.retry;
@@ -756,6 +881,7 @@ impl From<ottie_core::Settings> for Settings {
             max_retries: retry.max_retries,
             retries_before_yield: retry.retries_before_yield,
             first_retry_wait_ms: u64::try_from(retry.first_wait.as_millis()).unwrap_or(u64::MAX),
+            max_batch: u32::try_from(settings.max_batch).unwrap_or(u32::MAX),
             stream_media: settings.stream_media,
             appearance: settings.appearance.map(Appearance::from),
             language: settings.language,
@@ -773,6 +899,9 @@ impl From<SettingsChange> for ottie_core::SettingsChange {
             max_retries: change.max_retries,
             retries_before_yield: change.retries_before_yield,
             first_retry_wait: change.first_retry_wait_ms.map(Duration::from_millis),
+            max_batch: change
+                .max_batch
+                .map(|max| usize::try_from(max).unwrap_or(usize::MAX)),
             stream_media: change.stream_media,
             setup_done: change.setup_done,
             appearance: change.appearance.map(ottie_core::Appearance::from),

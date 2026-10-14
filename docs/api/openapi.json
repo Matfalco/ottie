@@ -536,6 +536,148 @@
         }
       }
     },
+    "/api/v1/jobs/batch": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Queues several downloads at once, in order, each as `POST /jobs` would.\nThose that can be added are, even if others are refused: the answer\ngives each one's ID or why it was refused. Clients hear of each one added\nthrough a `changed` event (many at once may come as a `resync`).",
+        "operationId": "addJobs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddJobs"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Each one's ID, or why it was refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddedJobs"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`tooManyLinks`: more than the setting `maxBatch`; none added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/preview": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "The links in some text (one per line, an email, a web page): in order,\neach once, with what adding each would do. Anything of the form\n`scheme://…` counts, so links that can't be added are listed too, with\nwhy. Nothing is added. A POST, so links, which may carry tokens, never\nsit in an address or a log.",
+        "operationId": "previewLinks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewLinks"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The links found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`tooManyLinks` (more than the setting `maxBatch`) or `relativeFolder`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/jobs/reorder": {
       "post": {
         "tags": [
@@ -1765,6 +1907,22 @@
           }
         }
       },
+      "AddJobs": {
+        "type": "object",
+        "description": "Body of `POST /jobs/batch`.",
+        "required": [
+          "jobs"
+        ],
+        "properties": {
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AddJob"
+            },
+            "description": "Added in this order, each as `POST /jobs` would."
+          }
+        }
+      },
       "Added": {
         "type": "object",
         "description": "Answer to `POST /jobs`.",
@@ -1788,6 +1946,33 @@
             "type": "integer",
             "format": "int32",
             "minimum": 0
+          }
+        }
+      },
+      "AddedJobs": {
+        "type": "object",
+        "description": "Answer to `POST /jobs/batch`.",
+        "required": [
+          "ids",
+          "refused"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "One per job sent, in the same order: its new ID, or null if it was\nrefused."
+          },
+          "refused": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RefusedJob"
+            },
+            "description": "Why each refused one was, by its place in `jobs`."
           }
         }
       },
@@ -2211,6 +2396,69 @@
         ],
         "description": "A message on the `GET /events` WebSocket. Connect first, then fetch\n`GET /jobs`, then apply events in order (insert-or-replace by `id`, or\ndrop on `removed`)."
       },
+      "FoundLink": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A link that can be added.",
+            "required": [
+              "url",
+              "name",
+              "matched",
+              "known",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "link"
+                ]
+              },
+              "known": {
+                "type": "boolean",
+                "description": "A download of this same link is already on the list."
+              },
+              "matched": {
+                "$ref": "#/components/schemas/Matched",
+                "description": "The category it would get without one chosen."
+              },
+              "name": {
+                "type": "string",
+                "description": "The file name the link suggests; the server may give another."
+              },
+              "url": {
+                "type": "string",
+                "description": "As it would be added (normalized: `HTTPS://Example.com` is\n`https://example.com/`)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One that can't: `refused` says why (`invalidUrl` or\n`unsupportedScheme`).",
+            "required": [
+              "text",
+              "refused",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "invalid"
+                ]
+              },
+              "refused": {
+                "$ref": "#/components/schemas/ApiError"
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "description": "Something in the text that looks like a link (`scheme://…`)."
+      },
       "Job": {
         "type": "object",
         "description": "One download, as listed by `GET /jobs` and sent in `changed` events.",
@@ -2455,6 +2703,42 @@
           "sea",
           "neutral"
         ]
+      },
+      "Preview": {
+        "type": "object",
+        "description": "Answer to `POST /jobs/preview`.",
+        "required": [
+          "links"
+        ],
+        "properties": {
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FoundLink"
+            },
+            "description": "In the order found, each once."
+          }
+        }
+      },
+      "PreviewLinks": {
+        "type": "object",
+        "description": "Body of `POST /jobs/preview`.",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "destDir": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The folder they would be saved in, if not their categories': then\nthe folder decides their category."
+          },
+          "text": {
+            "type": "string",
+            "description": "Any text: one link per line, an email, a web page."
+          }
+        }
       },
       "Priority": {
         "type": "string",
@@ -3135,6 +3419,33 @@
           },
           {
             "type": "object",
+            "description": "More links at once than the setting `maxBatch` allows.",
+            "required": [
+              "count",
+              "max",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "tooManyLinks"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "max": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "The daemon is shutting down.",
             "required": [
               "code"
@@ -3165,6 +3476,28 @@
           }
         ],
         "description": "Why a request was refused."
+      },
+      "RefusedJob": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiError"
+          },
+          {
+            "type": "object",
+            "required": [
+              "index"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Its place in `jobs`, from 0.",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "A job of `POST /jobs/batch` that wasn't added, and why: the error\n`POST /jobs` would have answered."
       },
       "Reorder": {
         "oneOf": [
@@ -3255,6 +3588,7 @@
           "maxRetries",
           "retriesBeforeYield",
           "firstRetryWaitMs",
+          "maxBatch",
           "streamMedia"
         ],
         "properties": {
@@ -3287,6 +3621,12 @@
               "null"
             ],
             "description": "The language those devices show, as a tag like `en` or `pt-BR`; null\nuntil one shares its own. A device without it keeps its own."
+          },
+          "maxBatch": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The most links added at once (`POST /jobs/batch`) or looked at\n(`POST /jobs/preview`).",
+            "minimum": 0
           },
           "maxConcurrent": {
             "type": "integer",
@@ -3351,6 +3691,14 @@
               "string",
               "null"
             ]
+          },
+          "maxBatch": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
           },
           "maxConcurrent": {
             "type": [

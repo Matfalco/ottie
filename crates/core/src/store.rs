@@ -196,6 +196,9 @@ const MIGRATIONS: &[&str] = &[
      UPDATE jobs SET queue_place = (SELECT COUNT(*) FROM jobs AS older
         WHERE older.id_secs < jobs.id_secs
            OR (older.id_secs = jobs.id_secs AND older.id_seq <= jobs.id_seq));",
+    // 13: the most links added at once.
+    "ALTER TABLE settings ADD COLUMN max_batch INTEGER NOT NULL DEFAULT 10000
+        CHECK (max_batch >= 1);",
 ];
 
 /// Everything saved about one job.
@@ -241,6 +244,7 @@ pub struct Store {
 enum Op {
     Load(oneshot::Sender<Result<Loaded, Error>>),
     Save(Box<JobRecord>),
+    SaveJobs(Vec<JobRecord>),
     SaveSettings(Settings),
     SaveCategory(Category),
     RemoveCategory(CategoryId),
@@ -304,6 +308,13 @@ impl Store {
         }
     }
 
+    /// Queued like `save`, and written in one transaction: all or none.
+    pub(crate) fn save_jobs(&self, records: Vec<JobRecord>) {
+        if self.ops.send(Op::SaveJobs(records)).is_err() {
+            tracing::error!("database thread has stopped; jobs not saved");
+        }
+    }
+
     /// Queued like `save`.
     pub(crate) fn save_settings(&self, settings: Settings) {
         if self.ops.send(Op::SaveSettings(settings)).is_err() {
@@ -364,8 +375,14 @@ fn serve(mut conn: Connection, requests: std_mpsc::Receiver<Op>) {
                 let _ = reply.send(load_all(&conn));
             }
             Op::Save(record) => {
-                if let Err(err) = save(&mut conn, &record) {
+                if let Err(err) = save(&mut conn, std::slice::from_ref(&*record)) {
                     tracing::error!(id = %record.id, error = %err, "could not save job");
+                }
+            }
+            Op::SaveJobs(records) => {
+                if let Err(err) = save(&mut conn, &records) {
+                    let count = records.len();
+                    tracing::error!(count, error = %err, "could not save jobs");
                 }
             }
             Op::SaveSettings(settings) => {
@@ -440,9 +457,19 @@ fn migrate(conn: &mut Connection) -> Result<(), Error> {
     Ok(())
 }
 
-/// Upserts the job and replaces its segments, in one transaction so a crash
-/// can't leave the two out of step.
-fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
+/// Upserts the jobs and replaces their segments, in one transaction so a
+/// crash can't leave a job and its segments out of step, nor save only some
+/// of the jobs.
+fn save(conn: &mut Connection, records: &[JobRecord]) -> Result<(), Error> {
+    let tx = conn.transaction()?;
+    for record in records {
+        write_job(&tx, record)?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
     let dl = &record.download;
     let dest_dir = dl
         .dest_dir
@@ -461,7 +488,6 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
         }
         None => (None, None, None, None),
     };
-    let tx = conn.transaction()?;
     tx.prepare_cached(
         "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, file_name, state, total,
                            downloaded, validator_kind, validator_value, resumable, error,
@@ -520,7 +546,6 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
             insert.execute(params![secs, seq, s.start, s.end, s.done])?;
         }
     }
-    tx.commit()?;
     Ok(())
 }
 
@@ -698,7 +723,8 @@ fn problem_from_row(row: &Row) -> rusqlite::Result<Option<Problem>> {
 fn load_settings(conn: &Connection) -> Result<Settings, Error> {
     Ok(conn.query_row(
         "SELECT global_limit, max_concurrent, max_retries, retries_before_yield, retry_wait_ms,
-                setup_done, appearance_mode, appearance_palette, language, stream_media
+                setup_done, appearance_mode, appearance_palette, language, stream_media,
+                max_batch
          FROM settings WHERE id = 1",
         [],
         |row| {
@@ -719,6 +745,7 @@ fn load_settings(conn: &Connection) -> Result<Settings, Error> {
                     retries_before_yield: row.get(3)?,
                     first_wait: Duration::from_millis(row.get(4)?),
                 },
+                max_batch: row.get(10)?,
                 stream_media: row.get(9)?,
                 setup_done: row.get(5)?,
                 appearance,
@@ -735,7 +762,7 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
         "UPDATE settings SET global_limit = ?1, max_concurrent = ?2, max_retries = ?3,
                 retries_before_yield = ?4, retry_wait_ms = ?5, setup_done = ?6,
                 appearance_mode = ?7, appearance_palette = ?8, language = ?9,
-                stream_media = ?10
+                stream_media = ?10, max_batch = ?11
          WHERE id = 1",
         params![
             settings.global_limit,
@@ -748,6 +775,7 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
             settings.appearance.map(|a| a.palette.as_str()),
             settings.language,
             settings.stream_media,
+            settings.max_batch,
         ],
     )?;
     Ok(())
@@ -1100,6 +1128,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn several_jobs_are_saved_at_once() {
+        let store = Store::open_in_memory().await.unwrap();
+        let mut first = record(1);
+        first.download.segments = vec![Segment {
+            start: 0,
+            end: 50,
+            done: 5,
+        }];
+        let jobs = vec![first, record(2), record(3)];
+        store.save_jobs(jobs.clone());
+        assert_eq!(store.load().await.unwrap().jobs, jobs);
+    }
+
+    #[tokio::test]
     async fn segments_are_saved_and_replaced() {
         let store = Store::open_in_memory().await.unwrap();
         let mut job = record(1);
@@ -1152,6 +1194,7 @@ mod tests {
                 retries_before_yield: 0,
                 first_wait: Duration::from_millis(250),
             },
+            max_batch: 500,
             stream_media: false,
             setup_done: true,
             appearance: Some(Appearance {

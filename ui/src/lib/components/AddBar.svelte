@@ -4,6 +4,7 @@
 	import type { Matched } from '@ottie/api-types/Matched';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
 	import Link from '@lucide/svelte/icons/link';
+	import ListPlus from '@lucide/svelte/icons/list-plus';
 	import Plus from '@lucide/svelte/icons/plus';
 	import {
 		automaticLabel,
@@ -12,6 +13,7 @@
 		streamsByDefault,
 		type Choice
 	} from '#lib/adding.js';
+	import { holdsSeveral } from '#lib/batch.js';
 	import { categoryName, type Categories } from '#lib/categories.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { canPickFolder, pickFolder } from '#lib/window.js';
@@ -28,6 +30,8 @@
 		onMatch: (url: string, folder?: string) => Promise<Matched | null>;
 		/** Resolves to true once the daemon has accepted the download. */
 		onAdd: (job: AddJob) => Promise<boolean>;
+		/** Opens the list for adding several links, starting from `text`. */
+		onSeveral: (text: string) => void;
 	}
 
 	interface Step {
@@ -35,7 +39,7 @@
 		matched: Matched | null;
 	}
 
-	let { categories, categoryList, streamMedia, onMatch, onAdd }: Props = $props();
+	let { categories, categoryList, streamMedia, onMatch, onAdd, onSeveral }: Props = $props();
 	let form: HTMLFormElement;
 	let link: HTMLInputElement;
 	let url = $state('');
@@ -125,6 +129,25 @@
 		}
 	}
 
+	/** Several links pasted at once go to the list instead (the field would
+	 * run them together on one line). */
+	function pasted(event: ClipboardEvent) {
+		const text = event.clipboardData?.getData('text') ?? '';
+		if (holdsSeveral(text)) {
+			event.preventDefault();
+			step = null;
+			onSeveral(text);
+		}
+	}
+
+	/** The list, starting from what's in the field. */
+	function several() {
+		const text = url;
+		url = '';
+		step = null;
+		onSeveral(text);
+	}
+
 	async function browse() {
 		const chosen = await pickFolder(folder || fallback || undefined);
 		if (chosen) {
@@ -143,12 +166,22 @@
 			bind:this={link}
 			bind:value={url}
 			oninput={() => (step = null)}
+			onpaste={pasted}
 			type="url"
 			placeholder={m.add_placeholder()}
 			aria-label={m.add_label()}
 			required
 		/>
 	</label>
+	<button
+		type="button"
+		class="several"
+		onclick={several}
+		title={m.add_several()}
+		aria-label={m.add_several()}
+	>
+		<ListPlus size={16} aria-hidden="true" />
+	</button>
 	<button class="primary" disabled={adding || !url.trim()} aria-label={m.add_button()}>
 		<Plus size={16} aria-hidden="true" />
 		<span>{m.add_button()}</span>
@@ -256,6 +289,10 @@
 		gap: 0.35rem;
 		height: 2.1rem;
 		white-space: nowrap;
+	}
+
+	.several {
+		padding: 0 0.55rem;
 	}
 
 	.step {

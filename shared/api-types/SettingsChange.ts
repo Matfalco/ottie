@@ -6,4 +6,4 @@ import type { Appearance } from "./Appearance";
  * A value out of its range (see `crates/api/src/settings.rs`) refuses the
  * whole change with `outOfRange`.
  */
-export type SettingsChange = { setupDone?: boolean, maxConcurrent?: number, globalLimit?: number, maxRetries?: number, retriesBeforeYield?: number, firstRetryWaitMs?: number, streamMedia?: boolean, appearance?: Appearance, language?: string, };
+export type SettingsChange = { setupDone?: boolean, maxConcurrent?: number, globalLimit?: number, maxRetries?: number, retriesBeforeYield?: number, firstRetryWaitMs?: number, maxBatch?: number, streamMedia?: boolean, appearance?: Appearance, language?: string, };

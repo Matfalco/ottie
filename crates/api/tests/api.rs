@@ -10,11 +10,11 @@ use axum::body::{Body, Bytes};
 use axum::routing::get;
 use futures_util::StreamExt;
 use ottie_api::{
-    AddJob, Added, AddedCategory, AddedView, AddedWithin, ApiError, Appearance, AppearanceMode,
-    Arrangement, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL, Event, Job, JobState, Matched,
-    Palette, Priority, Problem, Reason, Reorder, ReorderJobs, Settings, SettingsChange,
-    SortDirection, SortKey, StreamLink, TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody,
-    ViewFilters,
+    AddJob, AddJobs, Added, AddedCategory, AddedJobs, AddedView, AddedWithin, ApiError, Appearance,
+    AppearanceMode, Arrangement, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL, Event,
+    FoundLink, Job, JobState, Matched, Palette, Preview, PreviewLinks, Priority, Problem, Reason,
+    Reorder, ReorderJobs, Settings, SettingsChange, SortDirection, SortKey, StreamLink,
+    TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
 };
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
@@ -460,6 +460,125 @@ async fn remove_takes_a_job_off_the_list() {
 }
 
 #[tokio::test]
+async fn several_downloads_are_added_at_once() {
+    let d = start().await;
+    let mut ftp = d.new_job("file.bin");
+    ftp.url = "ftp://example.com/file.bin".into();
+    let mut relative = d.new_job("file.bin");
+    relative.dest_dir = Some("downloads".into());
+    let jobs = vec![d.new_job("file.bin"), ftp, relative, d.new_job("slow.bin")];
+
+    let response = d.post("/jobs/batch").json(&AddJobs { jobs }).send().await;
+    let response = response.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let added: AddedJobs = response.json().await.unwrap();
+    let [Some(first), None, None, Some(last)] = &added.ids[..] else {
+        panic!("expected the first and last added, got {:?}", added.ids);
+    };
+    let refused: Vec<(u32, Reason)> = added
+        .refused
+        .into_iter()
+        .map(|refused| (refused.index, refused.error.reason))
+        .collect();
+    assert_eq!(
+        refused,
+        [
+            (
+                1,
+                Reason::UnsupportedScheme {
+                    scheme: "ftp".into()
+                }
+            ),
+            (2, Reason::RelativeFolder),
+        ]
+    );
+    let jobs: Vec<Job> = d.get("/jobs").send().await.unwrap().json().await.unwrap();
+    let listed: Vec<&str> = jobs.iter().map(|job| job.id.as_str()).collect();
+    assert_eq!(listed, [first.as_str(), last.as_str()]);
+    d.wait_until(first, JobState::Completed).await;
+
+    // More than the setting allows: none.
+    let request = d.client.patch(d.url("/settings")).bearer_auth(TOKEN);
+    let response = request
+        .json(&serde_json::json!({ "maxBatch": 10 }))
+        .send()
+        .await;
+    assert_eq!(response.unwrap().status(), StatusCode::NO_CONTENT);
+    let jobs = vec![d.new_job("file.bin"); 11];
+    let response = d.post("/jobs/batch").json(&AddJobs { jobs }).send().await;
+    let (status, error) = error_of(response.unwrap()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(error.reason, Reason::TooManyLinks { count: 11, max: 10 });
+    let jobs: Vec<Job> = d.get("/jobs").send().await.unwrap().json().await.unwrap();
+    assert_eq!(jobs.len(), 2);
+}
+
+#[tokio::test]
+async fn a_preview_lists_the_links_in_some_text() {
+    let d = start().await;
+    let id = d.add("file.bin").await;
+    let known = d.job(&id).await.url;
+    let other = format!("{}/clip%20one.mp4", d.files);
+    let text = format!("Here: {known}\n{other}, and ftp://example.com/x.zip.\n{known}");
+    let preview = |text: String, dest_dir: Option<String>| {
+        d.post("/jobs/preview")
+            .json(&PreviewLinks { text, dest_dir })
+            .send()
+    };
+
+    let response = preview(text, None).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let links = response.json::<Preview>().await.unwrap().links;
+    let general = Matched {
+        category: 1,
+        extension: Some("bin".into()),
+        by_folder: false,
+    };
+    assert_eq!(
+        links[0],
+        FoundLink::Link {
+            url: known.clone(),
+            name: "file.bin".into(),
+            matched: general,
+            known: true,
+        }
+    );
+    let FoundLink::Link {
+        name, known: false, ..
+    } = &links[1]
+    else {
+        panic!("expected a new link, got {:?}", links[1]);
+    };
+    assert_eq!(name, "clip one.mp4");
+    let FoundLink::Invalid { text, refused } = &links[2] else {
+        panic!("expected an invalid link, got {:?}", links[2]);
+    };
+    assert_eq!(text, "ftp://example.com/x.zip");
+    assert_eq!(
+        refused.reason,
+        Reason::UnsupportedScheme {
+            scheme: "ftp".into()
+        }
+    );
+    assert_eq!(links.len(), 3);
+
+    let response = preview(known, Some("downloads".into())).await.unwrap();
+    let (status, error) = error_of(response).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(error.reason, Reason::RelativeFolder);
+
+    // Big lists fit (axum takes only 2 MB by default).
+    let long = format!("{}/{}.bin", d.files, "x".repeat(400));
+    let text = (0..9_000)
+        .map(|i| format!("{long}?{i}\n"))
+        .collect::<String>();
+    assert!(text.len() > 3_000_000);
+    let response = preview(text, None).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.json::<Preview>().await.unwrap().links.len(), 9_000);
+}
+
+#[tokio::test]
 async fn bad_requests_say_what_is_wrong() {
     let d = start().await;
     let add = |job: &AddJob| d.post("/jobs").json(job).send();
@@ -631,6 +750,7 @@ async fn settings_are_read_and_changed() {
         max_retries: 10,
         retries_before_yield: 3,
         first_retry_wait_ms: 2000,
+        max_batch: 10_000,
         stream_media: true,
         appearance: None,
         language: None,
@@ -646,6 +766,7 @@ async fn settings_are_read_and_changed() {
         "maxConcurrent": 5,
         "globalLimit": 4_000_000,
         "firstRetryWaitMs": 500,
+        "maxBatch": 500,
         "streamMedia": false,
         "appearance": { "mode": "dark", "palette": "neutral" },
         "language": "fr",
@@ -657,6 +778,7 @@ async fn settings_are_read_and_changed() {
         max_concurrent: 5,
         global_limit: 4_000_000,
         first_retry_wait_ms: 500,
+        max_batch: 500,
         stream_media: false,
         appearance: Some(Appearance {
             mode: AppearanceMode::Dark,

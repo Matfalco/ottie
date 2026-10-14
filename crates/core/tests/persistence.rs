@@ -247,6 +247,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         palette: Palette::Neutral,
     };
     let change = SettingsChange {
+        max_batch: Some(500),
         stream_media: Some(false),
         setup_done: Some(true),
         appearance: Some(appearance),
@@ -270,6 +271,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         global_limit: 5_000_000,
         max_concurrent: 2,
         retry,
+        max_batch: 500,
         stream_media: false,
         setup_done: true,
         appearance: Some(appearance),

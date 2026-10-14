@@ -35,6 +35,11 @@ retriesBeforeYield: number,
  */
 firstRetryWaitMs: number, 
 /**
+ * The most links added at once (`POST /jobs/batch`) or looked at
+ * (`POST /jobs/preview`).
+ */
+maxBatch: number, 
+/**
  * New video and music downloads start in streaming mode, unless the
  * one adding them says otherwise.
  */
