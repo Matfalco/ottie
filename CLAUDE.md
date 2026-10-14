@@ -50,7 +50,7 @@ Android app (Tauri) ──────┘    (on Android, core + api run inside 
 
 - **The HTTP API is the only contract.** Every client talks to the engine through it. It's documented in `docs/api/` (`docs/decisions/0030`): a guide, and `openapi.json` generated from the handlers. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart, the player), never for download operations. The app's own commands are listed in `app/build.rs` and granted to the daemon's pages in `PAGE_PERMISSIONS`; a page never passes a program or path to run.
 - **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
-- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable) and the tooltip, with its own texts in `app/messages/`. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
+- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable), the tooltip and notifications (finished: all at once by default, or each, or never; failed: a switch; `docs/decisions/0035`), with its own texts in `app/messages/`. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
 - **Headless:** the daemon runs standalone (systemd user service, Docker) and serves the built web UI itself.
 
@@ -115,18 +115,21 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
                      started on exit
   src/daemon.rs      find or start `ottie serve --managed` (the sidecar next to the app), ready / stop
   src/client.rs      the app as an API client: events WebSocket, jobs, settings, pause/resume, limit
-  src/status.rs      follows the events (reconnects), sums them up once a second for the tray (counts, speed)
+  src/status.rs      follows the events (reconnects), sums them up once a second for the tray (counts, speed),
+                     and passes downloads that finished or failed to notify.rs
+  src/notify.rs      notifications (0035): what to tell (each, all at once, failed), a click opens the window
   src/tray.rs        tray icon (white/black by taskbar, size by scale), clicks, the system's menu and its
                      actions (Linux, or while the daemon is unreachable) (0034)
   src/popup.rs       Ottie's own tray menu: the /tray page in a borderless window beside the click, hidden
                      on blur; commands menu_ready / show_main / quit_app
-  src/texts.rs       the tray's texts from messages/{en,fr}.json, speeds and counts per language
-  src/prefs.rs       app.json: close to tray, the page's language, last total limit; commands
-                     desktop / set_close_to_tray / set_language
+  src/texts.rs       the tray's and notifications' texts from messages/{en,fr}.json, speeds, counts and
+                     failure reasons per language
+  src/prefs.rs       app.json: close to tray, notifications, the page's language, last total limit; commands
+                     desktop / set_close_to_tray / set_notify / set_notify_failed / set_language
   src/config.rs      load/save the app's JSON settings files in its config folder
   src/player.rs      "Play with" (0031): system's player via a .m3u, browser, or a picked program;
                      saved in the app's config folder; commands player / set_play_with / choose_player
-  messages/          the tray's texts, one JSON file per language
+  messages/          the tray's and notifications' texts, one JSON file per language
   build.rs           lists the app's commands, so Tauri generates their permissions (allow-…)
   tauri.conf.json    product, identifier, icons; tauri.bundle.json adds the sidecar for installers only
   scripts/          sidecar.mjs (UI + release ottie → binaries/), ico.mjs (icons/icon.ico from res/icons)
@@ -168,7 +171,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        JobDetails under it for the one selected download (its bar maps the file)),
                        CategoriesPage (LinkTester, rows, CategoryEditor inline in place of a row),
                        SettingsPage (section list; appearance + sync, language: LanguagePicker; downloads;
-                       desktop app + playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
+                       desktop app, notifications + playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
                        TitleBar (+ WindowControls), AddCard (AddBar: link, then category + folder step),
                        FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu)
   messages/{en,fr}.json  every UI text, per language (Paraglide); project.inlang/ its settings
@@ -320,7 +323,7 @@ Done: ✅ and struck through.
      - ✅ ~~5f3 streaming mode per download (on by itself for videos and music, a setting turns that off)~~
    - ✅ ~~5g queue reorder (`docs/decisions/0032`)~~
    - ✅ ~~5h tray (`docs/decisions/0034`)~~
-   - 5i notifications
+   - ✅ ~~5i notifications (`docs/decisions/0035`)~~
    - 5j autostart
 6. Scheduler, clipboard monitoring, uGet import, aria2 / yt-dlp backends.
 7. Browser extension.

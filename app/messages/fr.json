@@ -13,5 +13,23 @@
 	"decimal": ",",
 	"group": "\u202f",
 	"speed": "{number}\u00a0{unit}",
-	"units": ["o/s", "ko/s", "Mo/s", "Go/s", "To/s"]
+	"units": ["o/s", "ko/s", "Mo/s", "Go/s", "To/s"],
+	"finished": "Téléchargement terminé",
+	"allFinished": "Tous les téléchargements sont terminés",
+	"files": "{count} fichiers téléchargés",
+	"failed": "Échec du téléchargement",
+	"problems": {
+		"network": "Erreur réseau ({detail})",
+		"redirect": "Redirection invalide ({detail})",
+		"http403": "Le serveur a refusé l’accès (403)",
+		"http404": "Introuvable sur le serveur (404)",
+		"http410": "N’existe plus sur le serveur (410)",
+		"http429": "Le serveur signale trop de requêtes (429)",
+		"http5xx": "Le serveur a un problème ({status})",
+		"http": "Le serveur a répondu {status}",
+		"stalled": "Le serveur a cessé d’envoyer des données",
+		"incomplete": "La connexion s’est fermée trop tôt",
+		"remoteChanging": "Le fichier changeait sans cesse sur le serveur",
+		"disk": "Impossible d’écrire le fichier ({detail})"
+	}
 }

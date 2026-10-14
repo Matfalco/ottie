@@ -1,5 +1,6 @@
 //! What the tray shows (docs/decisions/0034): the daemon's downloads,
-//! followed through its events stream and summed up once a second.
+//! followed through its events stream and summed up once a second. Their
+//! changes are also what notifications tell (docs/decisions/0035).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -12,7 +13,9 @@ use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::client::{Daemon, Event, Job};
+use crate::notify::{self, News, Notifier};
 use crate::prefs;
+use crate::texts::Texts;
 
 /// How often the summary is refreshed.
 const EVERY: Duration = Duration::from_secs(1);
@@ -25,6 +28,9 @@ const SMOOTHING: f64 = 0.3;
 const MIN_INTERVAL: Duration = Duration::from_millis(200);
 /// No progress for this long: the download's speed is 0.
 const STALE_AFTER: Duration = Duration::from_secs(3);
+
+/// The states of a running download.
+const RUNNING: [&str; 3] = ["connecting", "downloading", "retrying"];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Summary {
@@ -44,10 +50,13 @@ pub struct Summary {
 /// Follows the daemon for as long as the app runs, sending a summary every
 /// second; reconnects when the stream ends (the daemon restarted or stopped).
 pub async fn follow(app: AppHandle, daemon: Arc<Daemon>, out: watch::Sender<Summary>) {
+    // Both outlive a connection: downloads that finish or fail while the
+    // daemon can't be reached are told once it's back.
     let mut model = Model::default();
+    let mut notifier = Notifier::default();
     loop {
         // Either way it ended, the tray says it's connecting again.
-        let _ = session(&app, &daemon, &mut model, &out).await;
+        let _ = session(&app, &daemon, &mut model, &mut notifier, &out).await;
         out.send_replace(Summary::default());
         tokio::time::sleep(RECONNECT).await;
     }
@@ -58,10 +67,12 @@ async fn session(
     app: &AppHandle,
     daemon: &Daemon,
     model: &mut Model,
+    notifier: &mut Notifier,
     out: &watch::Sender<Summary>,
 ) -> Result<()> {
     let mut events = daemon.events().await?;
     load(app, daemon, model).await?;
+    tell(app, model, notifier);
     let mut tick = tokio::time::interval(EVERY);
     loop {
         tokio::select! {
@@ -80,8 +91,13 @@ async fn session(
                 if let Event::SettingsChanged { settings } = &event {
                     remember_limit(app, settings.global_limit);
                 }
+                // Progress changes no state, and comes often.
+                let progress = matches!(event, Event::Progress { .. });
                 if model.apply(event, Instant::now()) {
                     load(app, daemon, model).await?;
+                }
+                if !progress {
+                    tell(app, model, notifier);
                 }
             }
             _ = tick.tick() => {
@@ -102,6 +118,19 @@ async fn load(app: &AppHandle, daemon: &Daemon, model: &mut Model) -> Result<()>
     Ok(())
 }
 
+/// Notifies what the last changes call for.
+fn tell(app: &AppHandle, model: &mut Model, notifier: &mut Notifier) {
+    let news = std::mem::take(&mut model.news);
+    let busy = model.busy();
+    // Nothing new, and nothing waiting for the downloads still running.
+    if news.is_empty() && (busy || !notifier.waiting()) {
+        return;
+    }
+    let prefs = app.state::<prefs::Saved>().get();
+    let texts = Texts::for_language(prefs.language.as_deref());
+    notify::show(app, notifier.notes(news, busy, &prefs, &texts));
+}
+
 /// The tray's "Limit speed" switches the last limit back on.
 fn remember_limit(app: &AppHandle, limit: u64) {
     if limit > 0 {
@@ -117,6 +146,8 @@ fn remember_limit(app: &AppHandle, limit: u64) {
 struct Model {
     jobs: HashMap<String, Tracked>,
     global_limit: u64,
+    /// Downloads that finished or failed since notifications last looked.
+    news: Vec<News>,
 }
 
 #[derive(Debug)]
@@ -126,39 +157,41 @@ struct Tracked {
 }
 
 impl Model {
-    /// A fresh list; downloads still there keep their measured speed.
+    /// A fresh list; downloads still there keep their measured speed, and
+    /// those that finished or failed in between are news. The first list
+    /// isn't: what had finished before the app looked is old.
     fn reset(&mut self, jobs: Vec<Job>, now: Instant) {
         let mut old = std::mem::take(&mut self.jobs);
         for job in jobs {
-            let rate = match old.remove(&job.id) {
-                Some(tracked) => tracked.rate.next(job.downloaded, now),
-                None => Rate::first(job.downloaded, now),
-            };
-            self.jobs.insert(
-                job.id,
-                Tracked {
-                    state: job.state,
-                    rate,
-                },
-            );
+            let tracked = old.remove(&job.id);
+            self.track(job, tracked, now);
         }
+    }
+
+    /// A download's new snapshot, `tracked` as it was.
+    fn track(&mut self, job: Job, tracked: Option<Tracked>, now: Instant) {
+        let rate = match tracked {
+            Some(tracked) => {
+                self.news.extend(News::of(&tracked.state, &job));
+                tracked.rate.next(job.downloaded, now)
+            }
+            None => Rate::first(job.downloaded, now),
+        };
+        self.jobs.insert(
+            job.id,
+            Tracked {
+                state: job.state,
+                rate,
+            },
+        );
     }
 
     /// Applies an event; true if the whole list must be fetched again.
     fn apply(&mut self, event: Event, now: Instant) -> bool {
         match event {
             Event::Changed { job } => {
-                let rate = match self.jobs.get(&job.id) {
-                    Some(tracked) => tracked.rate.next(job.downloaded, now),
-                    None => Rate::first(job.downloaded, now),
-                };
-                self.jobs.insert(
-                    job.id,
-                    Tracked {
-                        state: job.state,
-                        rate,
-                    },
-                );
+                let tracked = self.jobs.remove(&job.id);
+                self.track(job, tracked, now);
             }
             Event::Progress { id, downloaded } => {
                 if let Some(tracked) = self.jobs.get_mut(&id) {
@@ -175,6 +208,13 @@ impl Model {
         false
     }
 
+    /// Whether downloads are running or waiting to.
+    fn busy(&self) -> bool {
+        self.jobs
+            .values()
+            .any(|tracked| RUNNING.contains(&tracked.state.as_str()) || tracked.state == "queued")
+    }
+
     fn summary(&self, now: Instant) -> Summary {
         let mut summary = Summary {
             connected: true,
@@ -184,7 +224,7 @@ impl Model {
         let mut speed = 0.0;
         for tracked in self.jobs.values() {
             match tracked.state.as_str() {
-                "connecting" | "downloading" | "retrying" => {
+                state if RUNNING.contains(&state) => {
                     summary.running += 1;
                     speed += tracked.rate.current(now);
                 }
@@ -255,10 +295,42 @@ mod tests {
     fn job(id: &str, state: &str, downloaded: u64) -> Job {
         Job {
             id: id.to_owned(),
+            url: format!("https://example.org/{id}"),
+            file_name: Some(format!("{id}.zip")),
             state: state.to_owned(),
             downloaded,
             moving: false,
+            problem: None,
+            error: None,
         }
+    }
+
+    #[test]
+    fn finishing_and_failing_are_news_except_in_the_first_list() {
+        let now = Instant::now();
+        let mut model = Model::default();
+        model.reset(
+            vec![job("a", "completed", 0), job("b", "downloading", 0)],
+            now,
+        );
+        assert!(model.news.is_empty());
+        assert!(model.busy());
+        let done = Event::Changed {
+            job: job("b", "completed", 0),
+        };
+        model.apply(done, now);
+        assert_eq!(
+            model.news,
+            [News::Finished {
+                name: "b.zip".to_owned()
+            }]
+        );
+        assert!(!model.busy());
+        // Missed while the daemon was away, seen in the next list.
+        model.news.clear();
+        model.reset(vec![job("c", "queued", 0)], now);
+        model.reset(vec![job("c", "failed", 0)], now);
+        assert!(matches!(model.news.as_slice(), [News::Failed { name, .. }] if name == "c.zip"));
     }
 
     #[test]

@@ -1,8 +1,9 @@
-//! The tray's texts, in the page's language: one file per language in
-//! `app/messages/`, like the page's own (docs/decisions/0016).
+//! The tray's and the notifications' texts, in the page's language: one file
+//! per language in `app/messages/`, like the page's own (docs/decisions/0016).
 
 use serde::Deserialize;
 
+use crate::client::Problem;
 use crate::status::Summary;
 
 /// Each language's texts, by its tag. The first is the fallback.
@@ -41,6 +42,35 @@ pub struct Texts {
     speed: String,
     /// Bytes, kB… per second.
     units: [String; 5],
+    /// A notification's title: one download finished…
+    pub finished: String,
+    /// …or several, once nothing runs or waits any more.
+    pub all_finished: String,
+    /// `{count}` downloads finished, at least 2.
+    files: String,
+    pub failed: String,
+    problems: Problems,
+}
+
+/// Why a download failed, as the page says it (`problem_…` in
+/// `ui/messages/`), less the sizes and times.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Problems {
+    /// `{detail}`, as for `redirect` and `disk`.
+    network: String,
+    redirect: String,
+    http403: String,
+    http404: String,
+    http410: String,
+    http429: String,
+    /// `{status}`, as for `http`.
+    http5xx: String,
+    http: String,
+    stalled: String,
+    incomplete: String,
+    remote_changing: String,
+    disk: String,
 }
 
 impl Texts {
@@ -125,6 +155,37 @@ impl Texts {
             .replace("{unit}", &self.units[unit])
     }
 
+    /// "3 files downloaded".
+    pub fn files(&self, count: usize) -> String {
+        self.files.replace("{count}", &self.count(count))
+    }
+
+    /// Why a download failed; the daemon's English for codes this app
+    /// doesn't know.
+    pub fn reason(&self, problem: Option<&Problem>, english: Option<&str>) -> String {
+        let texts = &self.problems;
+        let detail = |text: &str, detail: &str| text.replace("{detail}", detail);
+        let status = |text: &str, status: u16| text.replace("{status}", &status.to_string());
+        match problem {
+            Some(Problem::Network { detail: d }) => detail(&texts.network, d),
+            Some(Problem::Redirect { detail: d }) => detail(&texts.redirect, d),
+            Some(Problem::HttpStatus { status: s }) => match s {
+                403 => texts.http403.clone(),
+                404 => texts.http404.clone(),
+                410 => texts.http410.clone(),
+                429 => texts.http429.clone(),
+                500.. => status(&texts.http5xx, *s),
+                _ => status(&texts.http, *s),
+            },
+            Some(Problem::Stalled) => texts.stalled.clone(),
+            Some(Problem::Incomplete) => texts.incomplete.clone(),
+            Some(Problem::RemoteChanging) => texts.remote_changing.clone(),
+            Some(Problem::Disk { detail: d }) => detail(&texts.disk, d),
+            Some(Problem::Other { detail }) => detail.clone(),
+            Some(Problem::Unknown) | None => english.unwrap_or_default().to_owned(),
+        }
+    }
+
     fn count(&self, count: usize) -> String {
         self.grouped(count as u64)
     }
@@ -178,6 +239,37 @@ mod tests {
             fr.limit(10 * 1024 * 1024),
             "Limiter la vitesse à 10\u{a0}Mo/s"
         );
+    }
+
+    #[test]
+    fn reasons_read_as_on_the_page() {
+        let en = Texts::for_language(Some("en"));
+        let fr = Texts::for_language(Some("fr"));
+        let status = |status| Some(Problem::HttpStatus { status });
+        assert_eq!(
+            en.reason(status(404).as_ref(), None),
+            "Not found on the server (404)"
+        );
+        assert_eq!(
+            fr.reason(status(503).as_ref(), None),
+            "Le serveur a un problème (503)"
+        );
+        assert_eq!(
+            en.reason(status(401).as_ref(), None),
+            "The server answered 401"
+        );
+        let disk = Problem::Disk {
+            detail: "disk full".to_owned(),
+        };
+        assert_eq!(
+            en.reason(Some(&disk), None),
+            "Couldn’t write the file (disk full)"
+        );
+        assert_eq!(
+            en.reason(Some(&Problem::Unknown), Some("Something new")),
+            "Something new"
+        );
+        assert_eq!(fr.files(1234), "1\u{202f}234 fichiers téléchargés");
     }
 
     #[test]

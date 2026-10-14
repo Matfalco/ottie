@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 	import AppWindow from '@lucide/svelte/icons/app-window';
+	import Bell from '@lucide/svelte/icons/bell';
 	import Copy from '@lucide/svelte/icons/copy';
 	import Download from '@lucide/svelte/icons/download';
 	import Paintbrush from '@lucide/svelte/icons/palette';
@@ -29,8 +30,11 @@
 		desktop as desktopSetting,
 		player as playerSetting,
 		setCloseToTray,
+		setNotify,
+		setNotifyFailed,
 		setPlayWith,
 		type Desktop,
+		type Notify,
 		type PlayWith,
 		type Player
 	} from '#lib/window.js';
@@ -61,8 +65,16 @@
 		browser: { name: m.set_play_browser, hint: m.set_play_browser_hint }
 	};
 
-	/** Only the desktop app can start a player (docs/decisions/0031) or
-	 * stay in the tray (0034). */
+	/** When finished downloads are notified, in the order shown. */
+	const NOTIFY_NAMES: Record<Notify, { name: () => string; hint: () => string }> = {
+		all: { name: m.set_notify_all, hint: m.set_notify_all_hint },
+		each: { name: m.set_notify_each, hint: m.set_notify_each_hint },
+		never: { name: m.set_notify_never, hint: m.set_notify_never_hint }
+	};
+	const NOTIFY_CHOICES = Object.keys(NOTIFY_NAMES) as Notify[];
+
+	/** Only the desktop app can start a player (docs/decisions/0031), stay
+	 * in the tray (0034) or notify (0035). */
 	const inApp = canChoosePlayer();
 
 	/** The sections, top to bottom, for the list on the left. */
@@ -72,6 +84,7 @@
 		...(inApp
 			? [
 					{ id: 'set-app', label: m.set_app },
+					{ id: 'set-notifications', label: m.set_notifications },
 					{ id: 'set-playing', label: m.set_playing }
 				]
 			: []),
@@ -95,20 +108,25 @@
 
 	/** The desktop app's own settings; null until it has answered (or in a browser). */
 	let desktop: Desktop | null = $state(null);
+	/** The notify choice shown, put back if a change doesn't happen. */
+	let notify: Notify = $state('all');
 
 	if (inApp) {
 		playerSetting().then(showPlayer, () => (problem = m.set_play_failed()));
-		desktopSetting().then(
-			(answer) => (desktop = answer),
-			() => (problem = m.set_app_failed())
-		);
+		desktopSetting().then(showDesktop, () => (problem = m.set_app_failed()));
 	}
 
-	async function changeCloseToTray(on: boolean) {
+	function showDesktop(answer: Desktop) {
+		desktop = answer;
+		notify = answer.notify;
+	}
+
+	async function changeDesktop(change: () => Promise<Desktop>) {
 		try {
-			desktop = await setCloseToTray(on);
+			showDesktop(await change());
 		} catch {
 			problem = m.set_app_failed();
+			notify = desktop?.notify ?? 'all';
 		}
 	}
 
@@ -378,7 +396,50 @@
 						<Switch
 							on={desktop.closeToTray}
 							label={m.set_close_to_tray()}
-							onChange={changeCloseToTray}
+							onChange={(on) => changeDesktop(() => setCloseToTray(on))}
+						/>
+					</div>
+				{:else}
+					<p class="waiting">{m.connection_connecting()}</p>
+				{/if}
+			</section>
+
+			<section id="set-notifications" class="card" aria-labelledby="notifications-title">
+				<header>
+					<span class="icon" aria-hidden="true"><Bell size={16} /></span>
+					<h2 id="notifications-title">{m.set_notifications()}</h2>
+					<p class="hint">{m.set_notifications_hint()}</p>
+				</header>
+				{#if desktop}
+					<fieldset>
+						<legend>{m.set_notify()}</legend>
+						<div class="options notifies">
+							{#each NOTIFY_CHOICES as choice (choice)}
+								<label class="option row" class:chosen={notify === choice}>
+									<input
+										type="radio"
+										name="notify"
+										value={choice}
+										bind:group={notify}
+										onchange={() => changeDesktop(() => setNotify(choice))}
+									/>
+									<span class="names">
+										<span>{NOTIFY_NAMES[choice].name()}</span>
+										<span class="hint">{NOTIFY_NAMES[choice].hint()}</span>
+									</span>
+								</label>
+							{/each}
+						</div>
+					</fieldset>
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_notify_failed()}</span>
+							<span class="hint">{m.set_notify_failed_hint()}</span>
+						</span>
+						<Switch
+							on={desktop.notifyFailed}
+							label={m.set_notify_failed()}
+							onChange={(on) => changeDesktop(() => setNotifyFailed(on))}
 						/>
 					</div>
 				{:else}
@@ -863,7 +924,8 @@
 		background: var(--danger);
 	}
 
-	.plays {
+	.plays,
+	.notifies {
 		grid-template-columns: minmax(0, 1fr);
 	}
 

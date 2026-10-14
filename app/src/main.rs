@@ -7,6 +7,7 @@
 mod client;
 mod config;
 mod daemon;
+mod notify;
 mod player;
 mod popup;
 mod prefs;
@@ -31,10 +32,11 @@ const PLAY_PATH: &str = "/api/v1/stream/";
 /// What the page may do in the app: control its window, since it draws its
 /// own title bar (docs/decisions/0019), open the system folder picker, which
 /// only hands back the path the user chose, choose how to play
-/// (docs/decisions/0031), set what closing does and the tray's language, and,
-/// in Ottie's tray menu, open the window, quit, and hide the menu
-/// (docs/decisions/0034). Only these, and only for the daemon's pages.
-const PAGE_PERMISSIONS: [&str; 19] = [
+/// (docs/decisions/0031), set what closing does, when to notify
+/// (docs/decisions/0035) and the tray's language, and, in Ottie's tray menu,
+/// open the window, quit, and hide the menu (docs/decisions/0034). Only
+/// these, and only for the daemon's pages.
+const PAGE_PERMISSIONS: [&str; 21] = [
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
@@ -51,9 +53,12 @@ const PAGE_PERMISSIONS: [&str; 19] = [
     "allow-player",
     "allow-set-play-with",
     "allow-choose-player",
-    // Settings → Desktop app, and the page's language for the tray.
+    // Settings → Desktop app and Notifications, and the page's language
+    // for the tray.
     "allow-desktop",
     "allow-set-close-to-tray",
+    "allow-set-notify",
+    "allow-set-notify-failed",
     "allow-set-language",
     // Ottie's tray menu (`popup.rs`).
     "core:window:allow-hide",
@@ -72,6 +77,7 @@ fn main() -> tauri::Result<()> {
         // can't stop the daemon under it when it quits).
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(Owned::default())
         .invoke_handler(tauri::generate_handler![
             player::player,
@@ -79,6 +85,8 @@ fn main() -> tauri::Result<()> {
             player::choose_player,
             prefs::desktop,
             prefs::set_close_to_tray,
+            prefs::set_notify,
+            prefs::set_notify_failed,
             prefs::set_language,
             popup::menu_ready,
             popup::show_main,
@@ -87,6 +95,7 @@ fn main() -> tauri::Result<()> {
         .setup(|app| {
             app.manage(player::Chosen::load(app.handle()));
             app.manage(prefs::Saved::load(app.handle()));
+            notify::listen(app.handle());
             let app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(err) = start(&app).await {

@@ -92,10 +92,17 @@ export function choosePlayer(title: string, programs: string): Promise<Player> {
 	return invoke<Player>('choose_player', { title, programs });
 }
 
-/** The desktop app's own settings (docs/decisions/0034). */
+/** When the desktop app notifies finished downloads (docs/decisions/0035):
+ * as each one finishes, once nothing runs or waits any more, or never. */
+export type Notify = 'each' | 'all' | 'never';
+
+/** The desktop app's own settings (docs/decisions/0034, 0035). */
 export interface Desktop {
 	/** Closing the window keeps Ottie running in the tray. */
 	closeToTray: boolean;
+	notify: Notify;
+	/** A failed download is notified (after its last retry). */
+	notifyFailed: boolean;
 }
 
 export function desktop(): Promise<Desktop> {
@@ -104,6 +111,14 @@ export function desktop(): Promise<Desktop> {
 
 export function setCloseToTray(on: boolean): Promise<Desktop> {
 	return invoke<Desktop>('set_close_to_tray', { on });
+}
+
+export function setNotify(notify: Notify): Promise<Desktop> {
+	return invoke<Desktop>('set_notify', { notify });
+}
+
+export function setNotifyFailed(on: boolean): Promise<Desktop> {
+	return invoke<Desktop>('set_notify_failed', { on });
 }
 
 /** Tells the desktop app which language the page shows, for the tray's

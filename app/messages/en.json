@@ -13,5 +13,23 @@
 	"decimal": ".",
 	"group": ",",
 	"speed": "{number} {unit}",
-	"units": ["B/s", "kB/s", "MB/s", "GB/s", "TB/s"]
+	"units": ["B/s", "kB/s", "MB/s", "GB/s", "TB/s"],
+	"finished": "Download finished",
+	"allFinished": "All downloads finished",
+	"files": "{count} files downloaded",
+	"failed": "Download failed",
+	"problems": {
+		"network": "Network error ({detail})",
+		"redirect": "Bad redirect ({detail})",
+		"http403": "The server refused access (403)",
+		"http404": "Not found on the server (404)",
+		"http410": "No longer on the server (410)",
+		"http429": "The server says: too many requests (429)",
+		"http5xx": "The server has a problem ({status})",
+		"http": "The server answered {status}",
+		"stalled": "The server stopped sending data",
+		"incomplete": "The connection closed early",
+		"remoteChanging": "The file kept changing on the server",
+		"disk": "Couldn’t write the file ({detail})"
+	}
 }

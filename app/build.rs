@@ -9,6 +9,8 @@ fn main() {
         "choose_player",
         "desktop",
         "set_close_to_tray",
+        "set_notify",
+        "set_notify_failed",
         "set_language",
         "menu_ready",
         "show_main",

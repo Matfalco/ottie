@@ -1,6 +1,6 @@
 //! The app as a client of the daemon's HTTP API, like every other front end
-//! (CLAUDE.md, Architecture): what the tray reads and does. Only the fields
-//! it needs are read; the rest of each answer is ignored.
+//! (CLAUDE.md, Architecture): what the tray and notifications read and do.
+//! Only the fields they need are read; the rest of each answer is ignored.
 
 use std::time::Duration;
 
@@ -21,12 +21,48 @@ const TOKEN_PROTOCOL: &str = "ottie.token.";
 pub type Events = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Job {
     pub id: String,
+    pub url: String,
+    /// Known once the server has answered.
+    pub file_name: Option<String>,
     pub state: String,
     pub downloaded: u64,
     /// Its file is moving: it can't be paused or resumed until it's done.
     pub moving: bool,
+    /// Why it failed, as a code to translate…
+    pub problem: Option<Problem>,
+    /// …and in English, for codes this app doesn't know.
+    pub error: Option<String>,
+}
+
+/// Why a download failed (`Problem` in the API), with what the
+/// notification says.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "code", rename_all = "camelCase")]
+pub enum Problem {
+    Network {
+        detail: String,
+    },
+    Redirect {
+        detail: String,
+    },
+    HttpStatus {
+        status: u16,
+    },
+    Stalled,
+    Incomplete,
+    RemoteChanging,
+    Disk {
+        detail: String,
+    },
+    Other {
+        detail: String,
+    },
+    /// From a newer daemon.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -35,7 +71,7 @@ pub struct Settings {
     pub global_limit: u64,
 }
 
-/// A message on the events stream; the others don't matter to the tray.
+/// A message on the events stream; the others don't matter to the app.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Event {
@@ -160,7 +196,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn events_read_only_what_the_tray_needs() {
+    fn problems_read_their_code_and_only_the_details_used() {
+        let problem = |json: &str| serde_json::from_str::<Problem>(json).unwrap();
+        assert_eq!(
+            problem(r#"{"code":"httpStatus","status":404}"#),
+            Problem::HttpStatus { status: 404 }
+        );
+        assert_eq!(
+            problem(r#"{"code":"stalled","seconds":30}"#),
+            Problem::Stalled
+        );
+        assert_eq!(problem(r#"{"code":"someday"}"#), Problem::Unknown);
+    }
+
+    #[test]
+    fn events_read_only_what_the_app_needs() {
         let progress: Event = serde_json::from_str(
             r#"{"type":"progress","id":"a","downloaded":5,"total":null,"ranges":[]}"#,
         )
