@@ -26,6 +26,22 @@ describe('file map', () => {
 		expect(received(job({ total: null }))).toEqual([]);
 	});
 
+	it('leaves out empty ranges', () => {
+		// A connection stopped before its first byte: nothing where the next starts.
+		const stopped = job({
+			state: 'downloading',
+			total: 400,
+			downloaded: 100,
+			ranges: [
+				{ start: 0, end: 200, done: 100 },
+				{ start: 200, end: 200, done: 0 },
+				{ start: 200, end: 400, done: 0 }
+			]
+		});
+		expect(received(stopped).map((part) => part.start)).toEqual([0, 200]);
+		expect(strip(stopped, true)?.map((part) => part.start)).toEqual([0, 0.5]);
+	});
+
 	it('shows neighbouring finished pieces as one', () => {
 		const streamed = job({
 			state: 'downloading',

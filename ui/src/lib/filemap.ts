@@ -11,7 +11,8 @@ import { getLocale, type Locale } from './paraglide/runtime.js';
  * One connection is one part from the start; empty while the size is
  * unknown. Neighbouring parts that have both fully arrived are one:
  * streaming mode fetches the file in many small pieces, which would
- * otherwise show as a dashed bar. */
+ * otherwise show as a dashed bar. Empty ranges are left out (older daemons
+ * can send one where another range starts). */
 export function received(job: Job): ByteRange[] {
 	if (job.total === null) {
 		return job.state === 'completed'
@@ -21,8 +22,9 @@ export function received(job: Job): ByteRange[] {
 	if (job.state === 'completed') {
 		return [{ start: 0, end: job.total, done: job.total }];
 	}
-	if (job.ranges.length > 0) {
-		return merged([...job.ranges].sort((a, b) => a.start - b.start));
+	const ranges = job.ranges.filter((range) => range.end > range.start);
+	if (ranges.length > 0) {
+		return merged(ranges.sort((a, b) => a.start - b.start));
 	}
 	return [{ start: 0, end: job.total, done: Math.min(job.downloaded, job.total) }];
 }

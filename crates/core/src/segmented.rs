@@ -296,7 +296,7 @@ pub(crate) async fn run(
                     on_event(Event::Progress {
                         downloaded: now,
                         total: Some(total),
-                        segments: parts.iter().map(Part::received).collect(),
+                        segments: covering(&parts).map(Part::received).collect(),
                     });
                 }
                 if last_checkpoint.0.elapsed() >= FLUSH_INTERVAL {
@@ -741,14 +741,21 @@ fn written(parts: &[Part]) -> u64 {
     parts.iter().map(|p| p.pos() - p.start).sum()
 }
 
+/// The ranges that cover part of the file. A connection made to stop before
+/// it wrote anything (`make_room`) leaves an empty range, starting where the
+/// rest of it now does: shown or saved, that would be two ranges in one place.
+fn covering(parts: &[Part]) -> impl Iterator<Item = &Part> {
+    parts.iter().filter(|p| p.end() > p.start)
+}
+
 /// The ranges as flushed to disk, sorted, ready to save.
 fn segments(parts: &[Part]) -> Vec<Segment> {
-    sorted(parts.iter().map(Part::segment).collect())
+    sorted(covering(parts).map(Part::segment).collect())
 }
 
 /// The ranges as players can read them, sorted.
 fn shown(parts: &[Part]) -> Vec<Segment> {
-    sorted(parts.iter().map(Part::shown).collect())
+    sorted(covering(parts).map(Part::shown).collect())
 }
 
 fn sorted(mut segments: Vec<Segment>) -> Vec<Segment> {
@@ -865,6 +872,19 @@ mod tests {
         make_room(&mut parts, &[600], 100);
         assert_eq!(parts.len(), 4);
         assert!(!parts[0].stopping);
+    }
+
+    #[test]
+    fn a_connection_stopped_before_its_first_byte_leaves_no_empty_range() {
+        // The second connection waits for bandwidth: nothing written yet.
+        let mut parts = two_busy(100, 1000);
+        follow(&mut parts, &[600], 100);
+        make_room(&mut parts, &[600], 100);
+        assert!(parts[1].stopping);
+        assert_eq!((parts[1].start, parts[1].end()), (1000, 1000));
+        let starts: Vec<u64> = segments(&parts).iter().map(|s| s.start).collect();
+        assert_eq!(starts, [0, 600, 1000]);
+        assert_eq!(shown(&parts).len(), 3);
     }
 
     #[test]
