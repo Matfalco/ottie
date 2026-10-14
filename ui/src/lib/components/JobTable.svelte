@@ -9,6 +9,7 @@
 	import { formatCount } from '#lib/format.js';
 	import { currentSpeed, type Rate } from '#lib/jobs.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { canDrop, carried, type Reorder } from '#lib/queue.js';
 	import { NOTHING, click, selectAll, type Selection } from '#lib/selection.js';
 	import JobRow from './JobRow.svelte';
 
@@ -26,6 +27,8 @@
 		onRun: (action: Action, jobs: Job[]) => void;
 		/** A click on a sortable column's header. */
 		onSort: (sort: SortKey) => void;
+		/** Moves downloads in the queue (dragged, or the arrow keys on a grip). */
+		onReorder: (ids: string[], to: Reorder) => void;
 	}
 
 	let {
@@ -38,11 +41,71 @@
 		note,
 		onSelect,
 		onRun,
-		onSort
+		onSort,
+		onReorder
 	}: Props = $props();
-	let order = $derived(sections.flatMap((section) => section.jobs.map((job) => job.id)));
+	let rows = $derived(sections.flatMap((section) => section.jobs));
+	let order = $derived(rows.map((job) => job.id));
+	let byId = $derived(new Map(rows.map((job) => [job.id, job])));
 	let all = $derived(order.length > 0 && selection.ids.size === order.length);
 	let some = $derived(selection.ids.size > 0 && !all);
+
+	/** A drag in the queue under way: what it carries, and where it would
+	 * drop (next to a waiting download of the same priority). */
+	let drag: { jobs: Job[]; over: { id: string; after: boolean } | null } | null = $state.raw(null);
+	let scroller: HTMLDivElement | undefined = $state();
+	/** Near the list's top or bottom edge, a drag scrolls it. */
+	const EDGE = 40;
+
+	function grab(job: Job, event: PointerEvent) {
+		if (event.button !== 0) {
+			return;
+		}
+		event.preventDefault();
+		const selected = rows.filter((row) => selection.ids.has(row.id));
+		drag = { jobs: carried(job, selected), over: null };
+	}
+
+	function move(event: PointerEvent) {
+		if (drag === null) {
+			return;
+		}
+		if (scroller) {
+			const box = scroller.getBoundingClientRect();
+			if (event.clientY < box.top + EDGE) {
+				scroller.scrollBy(0, -12);
+			} else if (event.clientY > box.bottom - EDGE) {
+				scroller.scrollBy(0, 12);
+			}
+		}
+		const row = document
+			.elementFromPoint(event.clientX, event.clientY)
+			?.closest<HTMLElement>('tr[data-id]');
+		const target = row ? byId.get(row.dataset.id ?? '') : undefined;
+		if (!row || target === undefined || !canDrop(drag.jobs, target)) {
+			drag = { ...drag, over: null };
+			return;
+		}
+		const box = row.getBoundingClientRect();
+		const after = event.clientY > box.top + box.height / 2;
+		drag = { ...drag, over: { id: target.id, after } };
+	}
+
+	function drop() {
+		if (drag?.over) {
+			const { id, after } = drag.over;
+			const ids = drag.jobs.map((job) => job.id);
+			onReorder(ids, after ? { after: id } : { before: id });
+		}
+		drag = null;
+	}
+
+	function landing(id: string): 'before' | 'after' | null {
+		if (drag?.over?.id !== id) {
+			return null;
+		}
+		return drag.over.after ? 'after' : 'before';
+	}
 
 	function sorted(sort: SortKey): 'ascending' | 'descending' | undefined {
 		if (arrangement.sort !== sort) {
@@ -65,10 +128,15 @@
 	</button>
 {/snippet}
 
-<div class="scroller">
+<svelte:window onpointermove={move} onpointerup={drop} onpointercancel={() => (drag = null)} />
+
+<div class="scroller" class:dragging={drag !== null} bind:this={scroller}>
 	<table>
 		<thead>
 			<tr>
+				{#if arrangement.grouped}
+					<th class="grip"></th>
+				{/if}
 				<th class="check">
 					<input
 						type="checkbox"
@@ -96,7 +164,7 @@
 			<tbody>
 				{#if section.group !== null}
 					<tr class="group {section.group}">
-						<th colspan="9" scope="rowgroup">
+						<th colspan="10" scope="rowgroup">
 							<span class="heading">
 								<span class="dot" aria-hidden="true"></span>
 								<span class="title">{groupName(section.group)}</span>
@@ -115,6 +183,12 @@
 						{now}
 						onClick={(keys) => onSelect(click(selection, job.id, keys, order))}
 						onRun={(action) => onRun(action, [job])}
+						grip={arrangement.grouped}
+						movable={section.group === 'waiting'}
+						carried={drag?.jobs.some((each) => each.id === job.id) ?? false}
+						drop={landing(job.id)}
+						onGrab={(event) => grab(job, event)}
+						onStep={(to) => onReorder([job.id], to)}
 					/>
 				{/each}
 			</tbody>
@@ -127,6 +201,11 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
+	}
+
+	.scroller.dragging,
+	.scroller.dragging :global(*) {
+		cursor: grabbing;
 	}
 
 	table {
@@ -220,6 +299,11 @@
 		margin-left: auto;
 	}
 
+	.grip {
+		width: 1.6rem;
+		padding: 0;
+	}
+
 	.check {
 		width: 2.4rem;
 		padding-right: 0;
@@ -251,7 +335,7 @@
 	}
 
 	.added {
-		width: 6.5rem;
+		width: 10.5rem;
 		text-align: right;
 	}
 
@@ -260,13 +344,13 @@
 	}
 
 	/* Less room beside the menu: fewer columns. */
-	@container page (max-width: 60rem) {
+	@container page (max-width: 66rem) {
 		.category {
 			display: none;
 		}
 	}
 
-	@container page (max-width: 52rem) {
+	@container page (max-width: 58rem) {
 		.added {
 			display: none;
 		}

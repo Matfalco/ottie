@@ -24,6 +24,7 @@
 	} from '#lib/filters.js';
 	import { currentSpeed } from '#lib/jobs.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { canReorder, type Reorder } from '#lib/queue.js';
 	import { NOTHING, keepShown, selectAll, type Selection } from '#lib/selection.js';
 	import { isFinished } from '#lib/status.js';
 	import { viewBody } from '#lib/views.js';
@@ -61,6 +62,9 @@
 	let current = $derived(keepShown(selection, order));
 	let selected = $derived(shown.filter((job) => current.ids.has(job.id)));
 	let finished = $derived(shown.filter(isFinished));
+	// Against every download, as the daemon moves them, not only those shown.
+	let canUp = $derived(canReorder(session.list, selected, 'up'));
+	let canDown = $derived(canReorder(session.list, selected, 'down'));
 	// The panel under the list shows the one selected download.
 	let picked = $derived(selected.length === 1 ? selected[0] : null);
 	let detailsOpen = $state(true);
@@ -93,6 +97,14 @@
 	function setArrangement(next: Arrangement) {
 		arrangement = next;
 		saveArrangement(next);
+	}
+
+	/** Moves the selection in the queue (the waiting group shows it). */
+	function reorder(to: Reorder) {
+		void session.reorder(
+			selected.map((job) => job.id),
+			to
+		);
 	}
 
 	/** Saves what's shown as a new view, or renames one (keeping what it shows). */
@@ -146,6 +158,9 @@
 					selected.map((job) => job.id),
 					category
 				)}
+			onReorder={reorder}
+			{canUp}
+			{canDown}
 			shown={shown.length}
 			total={session.list.length}
 			active={activeCount(filters)}
@@ -204,6 +219,7 @@
 			onSelect={(chosen) => (selection = chosen)}
 			onRun={run}
 			onSort={(sort) => setArrangement(sortBy(arrangement, sort))}
+			onReorder={(ids, to) => void session.reorder(ids, to)}
 		/>
 	{/if}
 

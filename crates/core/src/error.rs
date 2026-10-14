@@ -13,9 +13,9 @@ pub enum Error {
     #[error("unsupported URL scheme `{0}` (only http and https are supported)")]
     UnsupportedScheme(String),
 
-    /// Network or protocol failure. The URL is stripped so query strings never
-    /// end up in logs or error messages.
-    #[error("HTTP request failed: {0}")]
+    /// Network or protocol failure, with its causes. The URL is stripped so
+    /// query strings never end up in logs or error messages.
+    #[error("HTTP request failed: {}", with_causes(.0))]
     Http(reqwest::Error),
 
     /// `retry_after` is the server's `Retry-After`, if it sent one in seconds.
@@ -148,6 +148,24 @@ impl Error {
             _ => None,
         }
     }
+}
+
+/// `err`, then each error that caused it. reqwest's own message is often
+/// only a label over the real cause ("error decoding response body" for any
+/// failure while reading a body, say a connection closed by the server).
+pub(crate) fn with_causes(err: &dyn std::error::Error) -> String {
+    let mut text = err.to_string();
+    let mut source = err.source();
+    while let Some(cause) = source {
+        let cause_text = cause.to_string();
+        // Some errors already end with their cause's message.
+        if !text.ends_with(&cause_text) {
+            text.push_str(": ");
+            text.push_str(&cause_text);
+        }
+        source = cause.source();
+    }
+    text
 }
 
 impl From<reqwest::Error> for Error {

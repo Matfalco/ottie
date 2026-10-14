@@ -42,6 +42,10 @@ pub struct Job {
     /// The same, as a code to translate (see `Problem`).
     pub problem: Option<Problem>,
     pub priority: Priority,
+    /// Its place in the queue: among the waiting downloads of its priority,
+    /// lower places start first. Only the order means something.
+    #[ts(type = "number")]
+    pub place: u64,
     /// Bytes per second; 0 = no limit of its own.
     #[ts(type = "number")]
     pub speed_limit: u64,
@@ -60,6 +64,9 @@ pub struct Job {
     /// Its file is moving to another category's folder. Until it's done, it
     /// can't be paused, resumed, cancelled, removed or moved again.
     pub moving: bool,
+    /// Downloading, but the speed limits give it no bandwidth for now: other
+    /// downloads take it all (urgent ones first).
+    pub waiting_for_bandwidth: bool,
 }
 
 /// A part of the file that one connection fetches.
@@ -353,6 +360,52 @@ impl From<JobChange> for ottie_core::JobChange {
             priority: change.priority.map(Into::into),
             streaming: change.streaming,
         }
+    }
+}
+
+/// Body of `POST /jobs/reorder`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ReorderJobs {
+    /// The downloads to move. Those that aren't queued or paused stay as they are.
+    pub ids: Vec<String>,
+    pub to: Reorder,
+}
+
+/// Where to move downloads in the queue, among the waiting downloads of
+/// their priority: `"up"`, `"down"`, `"top"`, `"bottom"`, or next to a
+/// download, `{ "before": id }` or `{ "after": id }` (where it was dropped).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum Reorder {
+    /// One place earlier.
+    Up,
+    /// One place later.
+    Down,
+    /// Before all the others.
+    Top,
+    /// After all the others.
+    Bottom,
+    /// Just before this download. Only those of its priority move.
+    Before(String),
+    /// Just after this download.
+    After(String),
+}
+
+impl TryFrom<Reorder> for ottie_core::Reorder {
+    type Error = ottie_core::Error;
+
+    fn try_from(to: Reorder) -> Result<Self, Self::Error> {
+        Ok(match to {
+            Reorder::Up => ottie_core::Reorder::Up,
+            Reorder::Down => ottie_core::Reorder::Down,
+            Reorder::Top => ottie_core::Reorder::Top,
+            Reorder::Bottom => ottie_core::Reorder::Bottom,
+            Reorder::Before(id) => ottie_core::Reorder::Before(id.parse()?),
+            Reorder::After(id) => ottie_core::Reorder::After(id.parse()?),
+        })
     }
 }
 
@@ -677,6 +730,7 @@ impl From<JobSnapshot> for Job {
             error: job.problem.as_ref().map(ToString::to_string),
             problem: job.problem.map(Problem::from),
             priority: job.priority.into(),
+            place: job.place,
             speed_limit: job.speed_limit,
             streaming: job.streaming,
             category: job.category.0,
@@ -687,6 +741,7 @@ impl From<JobSnapshot> for Job {
                 .map(|since| u64::try_from(since.as_millis()).unwrap_or(u64::MAX)),
             ranges: job.segments.into_iter().map(ByteRange::from).collect(),
             moving: job.moving,
+            waiting_for_bandwidth: job.waiting_for_bandwidth,
         }
     }
 }

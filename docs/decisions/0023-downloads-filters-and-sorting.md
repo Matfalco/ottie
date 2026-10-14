@@ -9,7 +9,7 @@ Accepted 2026-10-13.
 - **Category** lists IDs. **Name contains** matches the shown name, in any case. **Added** is `today` (since local midnight) or `week` (the past 7 days), read from the job's ID.
 - **Quick filters** are fixed presets: All, Active (downloading or retrying), Needs attention (retrying or failed), Queued, Completed. Behind "…" are Paused, Added today and one pill per category that has downloads. A pill is lit when the filters are exactly its preset. Saved views (later, stored in the daemon) will add pills of their own; until then "Save as view…" is shown, disabled.
 
-**Sorting and grouping are kept per device** (browser storage), so they stick between visits. Sort by date added (default, newest first), name (natural order, any case), size or progress. Each key starts in its own direction, and clicking a column header again turns it around. Unknown sizes and progress go last in both directions. Ties go to the newest.
+**Sorting and grouping are kept per device** (browser storage), so they stick between visits. Sort by date added (default, newest first; oldest first since `docs/decisions/0032`, where the Waiting group also keeps queue order), name (natural order, any case), size or progress. Each key starts in its own direction, and clicking a column header again turns it around. Unknown sizes and progress go last in both directions. Ties go to the newest.
 
 **Four status groups**, on by default: Downloading, Needs attention (retrying, failed), Waiting (queued, paused) and Finished (completed, cancelled). The Dashboard's tiles are the same four, in the mockup's order, and link to them. That replaces the old All / Active / Queued / Stopped / Completed filters.
 

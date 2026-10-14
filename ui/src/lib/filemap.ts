@@ -9,7 +9,9 @@ import { getLocale, type Locale } from './paraglide/runtime.js';
 
 /** The parts of the file and how much of each has arrived, in file order.
  * One connection is one part from the start; empty while the size is
- * unknown. */
+ * unknown. Neighbouring parts that have both fully arrived are one:
+ * streaming mode fetches the file in many small pieces, which would
+ * otherwise show as a dashed bar. */
 export function received(job: Job): ByteRange[] {
 	if (job.total === null) {
 		return job.state === 'completed'
@@ -20,9 +22,24 @@ export function received(job: Job): ByteRange[] {
 		return [{ start: 0, end: job.total, done: job.total }];
 	}
 	if (job.ranges.length > 0) {
-		return [...job.ranges].sort((a, b) => a.start - b.start);
+		return merged([...job.ranges].sort((a, b) => a.start - b.start));
 	}
 	return [{ start: 0, end: job.total, done: Math.min(job.downloaded, job.total) }];
+}
+
+/** `ranges` (in file order), with each run of neighbouring finished ones as one. */
+function merged(ranges: ByteRange[]): ByteRange[] {
+	const full = (range: ByteRange) => range.done >= range.end - range.start;
+	const parts: ByteRange[] = [];
+	for (const range of ranges) {
+		const last = parts.at(-1);
+		if (last !== undefined && full(last) && full(range) && last.end === range.start) {
+			parts[parts.length - 1] = { start: last.start, end: range.end, done: last.done + range.done };
+		} else {
+			parts.push(range);
+		}
+	}
+	return parts;
 }
 
 /** A row's bar, one piece per connection: its share of the file, and how
@@ -66,9 +83,10 @@ export function strip(job: Job, running: boolean): StripPart[] | null {
 	}));
 }
 
-/** "4 ranges" or "One connection", above the file map. */
+/** "4 ranges" or "One connection", above the file map: the parts it shows. */
 export function connections(job: Job, locale: Locale = getLocale()): string {
-	return job.ranges.length > 1
-		? m.det_ranges({ count: formatCount(job.ranges.length, locale) }, { locale })
+	const count = job.ranges.length > 1 ? received(job).length : 1;
+	return count > 1
+		? m.det_ranges({ count: formatCount(count, locale) }, { locale })
 		: m.det_one_connection({}, { locale });
 }

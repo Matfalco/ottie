@@ -536,6 +536,80 @@
         }
       }
     },
+    "/api/v1/jobs/reorder": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Moves downloads in the queue, among the waiting (queued or paused)\ndownloads of their priority: priority comes first, the place only orders\ndownloads of the same one. Those moved keep their order among themselves,\nso neighbours move as a block. Downloads that aren't waiting stay as they\nare; next to a download (`before`, `after`), so do those of another\npriority than it. Every client hears of each one that moved through a\n`changed` event (its new `place`).",
+        "operationId": "reorderJobs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderJobs"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Moved (or already there)"
+          },
+          "400": {
+            "description": "`invalidJobId`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`jobNotFound`: nothing moved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/jobs/{id}": {
       "delete": {
         "tags": [
@@ -2148,12 +2222,14 @@
           "downloaded",
           "resumable",
           "priority",
+          "place",
           "speedLimit",
           "streaming",
           "category",
           "retries",
           "ranges",
-          "moving"
+          "moving",
+          "waitingForBandwidth"
         ],
         "properties": {
           "category": {
@@ -2190,6 +2266,12 @@
           "moving": {
             "type": "boolean",
             "description": "Its file is moving to another category's folder. Until it's done, it\ncan't be paused, resumed, cancelled, removed or moved again."
+          },
+          "place": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Its place in the queue: among the waiting downloads of its priority,\nlower places start first. Only the order means something.",
+            "minimum": 0
           },
           "priority": {
             "$ref": "#/components/schemas/Priority"
@@ -2255,6 +2337,10 @@
           },
           "url": {
             "type": "string"
+          },
+          "waitingForBandwidth": {
+            "type": "boolean",
+            "description": "Downloading, but the speed limits give it no bandwidth for now: other\ndownloads take it all (urgent ones first)."
           }
         }
       },
@@ -3079,6 +3165,85 @@
           }
         ],
         "description": "Why a request was refused."
+      },
+      "Reorder": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "One place earlier.",
+            "enum": [
+              "up"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "One place later.",
+            "enum": [
+              "down"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "Before all the others.",
+            "enum": [
+              "top"
+            ]
+          },
+          {
+            "type": "string",
+            "description": "After all the others.",
+            "enum": [
+              "bottom"
+            ]
+          },
+          {
+            "type": "object",
+            "description": "Just before this download. Only those of its priority move.",
+            "required": [
+              "before"
+            ],
+            "properties": {
+              "before": {
+                "type": "string",
+                "description": "Just before this download. Only those of its priority move."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Just after this download.",
+            "required": [
+              "after"
+            ],
+            "properties": {
+              "after": {
+                "type": "string",
+                "description": "Just after this download."
+              }
+            }
+          }
+        ],
+        "description": "Where to move downloads in the queue, among the waiting downloads of\ntheir priority: `\"up\"`, `\"down\"`, `\"top\"`, `\"bottom\"`, or next to a\ndownload, `{ \"before\": id }` or `{ \"after\": id }` (where it was dropped)."
+      },
+      "ReorderJobs": {
+        "type": "object",
+        "description": "Body of `POST /jobs/reorder`.",
+        "required": [
+          "ids",
+          "to"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The downloads to move. Those that aren't queued or paused stay as they are."
+          },
+          "to": {
+            "$ref": "#/components/schemas/Reorder"
+          }
+        }
       },
       "Settings": {
         "type": "object",

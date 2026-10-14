@@ -22,6 +22,9 @@ const BURST_SECS: f64 = 0.25;
 const MIN_CAPACITY: f64 = 64.0 * 1024.0;
 /// Ticks longer than this (the computer slept) don't hand out a huge budget.
 const MAX_TICK_SECS: f64 = 0.2;
+/// A job that waits for budget and gets none for this long is reported as
+/// waiting for bandwidth (docs/decisions/0033).
+const STARVED_SECS: f64 = 1.0;
 
 /// Shared between the refill task and every [`Throttle`]. Only short,
 /// non-async code runs while it's locked.
@@ -43,6 +46,10 @@ struct Bucket {
     /// Bytes that may be downloaded now. Goes negative when a chunk was
     /// bigger than the budget; the job then waits until it's paid back.
     tokens: f64,
+    /// How long it has waited for budget without getting any.
+    held_for: f64,
+    /// Reported as waiting for bandwidth.
+    starved: bool,
 }
 
 /// Owns the speed limits. Cheap to clone. The refill task stops once every
@@ -53,13 +60,15 @@ pub(crate) struct Limiter {
 }
 
 impl Limiter {
-    /// Must be called inside a tokio runtime.
-    pub(crate) fn new(global: u64) -> Self {
+    /// Must be called inside a tokio runtime. `on_starved` hears when a
+    /// running job starts or stops waiting for bandwidth: it wants some, but
+    /// the limits give it none (others take it all, Urgent jobs first).
+    pub(crate) fn new(global: u64, on_starved: impl Fn(JobId, bool) + Send + 'static) -> Self {
         let state = Arc::new(Mutex::new(State {
             global,
             ..State::default()
         }));
-        tokio::spawn(refill_forever(Arc::downgrade(&state)));
+        tokio::spawn(refill_forever(Arc::downgrade(&state), on_starved));
         Limiter { state }
     }
 
@@ -93,6 +102,8 @@ impl Limiter {
                 priority,
                 category,
                 tokens: 0.0,
+                held_for: 0.0,
+                starved: false,
             },
         );
         Throttle {
@@ -188,7 +199,7 @@ fn lock(state: &Mutex<State>) -> MutexGuard<'_, State> {
     state.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-async fn refill_forever(state: Weak<Mutex<State>>) {
+async fn refill_forever(state: Weak<Mutex<State>>, on_starved: impl Fn(JobId, bool)) {
     let mut ticker = tokio::time::interval(TICK);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
     let mut last = Instant::now();
@@ -200,7 +211,10 @@ async fn refill_forever(state: Weak<Mutex<State>>) {
         let now = Instant::now();
         let secs = (now - last).as_secs_f64().min(MAX_TICK_SECS);
         last = now;
-        lock(&state).refill(secs);
+        let changed = lock(&state).refill(secs);
+        for (id, starved) in changed {
+            on_starved(id, starved);
+        }
     }
 }
 
@@ -215,17 +229,13 @@ struct Claim {
 impl State {
     /// Hands out `secs` worth of budget: Urgent jobs first, then everyone
     /// else by weight, each capped by its own limit and bucket size, and each
-    /// category's jobs together by the category's limit.
-    fn refill(&mut self, secs: f64) {
+    /// category's jobs together by the category's limit. Returns the jobs
+    /// that started or stopped waiting for bandwidth.
+    fn refill(&mut self, secs: f64) -> Vec<(JobId, bool)> {
         let mut claims = Vec::new();
         for (&id, bucket) in &self.buckets {
-            let category_limit = self.category_limits.get(&bucket.category).copied();
             // The tightest limit that applies sets the bucket's size.
-            let Some(rate) = [bucket.limit, category_limit.unwrap_or(0), self.global]
-                .into_iter()
-                .filter(|&limit| limit > 0)
-                .min()
-            else {
+            let Some(rate) = rate(self.global, &self.category_limits, bucket) else {
                 continue; // Unlimited: no budget to track.
             };
             let capacity = (rate as f64 * BURST_SECS).max(MIN_CAPACITY);
@@ -252,12 +262,38 @@ impl State {
             .iter()
             .map(|(&category, &limit)| (category, limit as f64 * secs))
             .collect();
-        for (claim, gift) in claims.iter().zip(allocate(budget, &claims, &caps)) {
-            if let Some(bucket) = self.buckets.get_mut(&claim.id) {
-                bucket.tokens += gift;
+        let gifts: HashMap<JobId, f64> = claims
+            .iter()
+            .map(|claim| claim.id)
+            .zip(allocate(budget, &claims, &caps))
+            .collect();
+        let mut changed = Vec::new();
+        for (&id, bucket) in &mut self.buckets {
+            let gift = gifts.get(&id).copied().unwrap_or(0.0);
+            if rate(self.global, &self.category_limits, bucket).is_none() {
+                bucket.tokens = 0.0; // No limit any more: nothing is owed.
+            }
+            bucket.tokens += gift;
+            // It owes bytes (a connection waits) and got nothing to pay them.
+            let held = bucket.tokens < 0.0 && gift < 1.0;
+            bucket.held_for = if held { bucket.held_for + secs } else { 0.0 };
+            let starved = bucket.held_for >= STARVED_SECS;
+            if starved != bucket.starved {
+                bucket.starved = starved;
+                changed.push((id, starved));
             }
         }
+        changed
     }
+}
+
+/// The tightest limit on `bucket` in bytes per second; `None` if unlimited.
+fn rate(global: u64, category_limits: &HashMap<CategoryId, u64>, bucket: &Bucket) -> Option<u64> {
+    let category_limit = category_limits.get(&bucket.category).copied();
+    [bucket.limit, category_limit.unwrap_or(0), global]
+        .into_iter()
+        .filter(|&limit| limit > 0)
+        .min()
 }
 
 /// Shares `budget` (infinite = no global limit) by priority, keeping each
@@ -430,6 +466,8 @@ mod tests {
                     category,
                     // Deep in debt, so each wants more than a tick's budget.
                     tokens: -1e9,
+                    held_for: 0.0,
+                    starved: false,
                 },
             );
         }
@@ -438,6 +476,21 @@ mod tests {
 
     fn tokens(state: &State, id: JobId) -> f64 {
         state.buckets[&id].tokens + 1e9
+    }
+
+    #[test]
+    fn a_job_that_gets_nothing_for_a_second_is_starved() {
+        let (mut state, ids) = state(1000, &[(0, Priority::Urgent), (0, Priority::Normal)]);
+        // The urgent job takes everything; quarter-second ticks add up exactly.
+        for _ in 0..3 {
+            assert!(state.refill(0.25).is_empty());
+        }
+        assert_eq!(state.refill(0.25), [(ids[1], true)]);
+        assert!(state.refill(0.25).is_empty(), "said once");
+        // Without a limit, nothing is owed: it goes on at once.
+        state.global = 0;
+        assert_eq!(state.refill(0.25), [(ids[1], false)]);
+        assert_eq!(tokens(&state, ids[1]), 1e9);
     }
 
     #[test]
@@ -462,10 +515,8 @@ mod tests {
         let (mut state, ids) = state(0, &[(500, Priority::Normal), (0, Priority::Normal)]);
         state.refill(0.1);
         assert!(close(tokens(&state, ids[0]), 50.0));
-        assert!(
-            close(tokens(&state, ids[1]), 0.0),
-            "unlimited jobs aren't tracked"
-        );
+        // Unlimited jobs get no budget, and owe nothing.
+        assert!(close(tokens(&state, ids[1]), 1e9));
     }
 
     const VIDEOS: CategoryId = CategoryId(2);
@@ -483,10 +534,8 @@ mod tests {
         state.refill(1.0);
         assert!(close(tokens(&state, ids[0]), 150.0));
         assert!(close(tokens(&state, ids[1]), 150.0));
-        assert!(
-            close(tokens(&state, ids[2]), 0.0),
-            "unlimited jobs aren't tracked"
-        );
+        // Unlimited jobs get no budget, and owe nothing.
+        assert!(close(tokens(&state, ids[2]), 1e9));
     }
 
     #[test]

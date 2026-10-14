@@ -12,6 +12,8 @@ import type { Matched } from '@ottie/api-types/Matched';
 import type { ApiError } from '@ottie/api-types/ApiError';
 import type { Job } from '@ottie/api-types/Job';
 import type { JobChange } from '@ottie/api-types/JobChange';
+import type { Reorder } from '@ottie/api-types/Reorder';
+import type { ReorderJobs } from '@ottie/api-types/ReorderJobs';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 import type { StreamLink } from '@ottie/api-types/StreamLink';
@@ -73,6 +75,12 @@ export class Api {
 	/** Changes the job's own settings given (speed limit, priority). */
 	changeJob(id: string, change: JobChange): Promise<void> {
 		return this.request('PATCH', `/jobs/${encodeURIComponent(id)}`, change);
+	}
+
+	/** Moves the jobs in the queue, among the waiting ones of their priority. */
+	reorder(ids: string[], to: Reorder): Promise<void> {
+		const body: ReorderJobs = { ids, to };
+		return this.request('POST', '/jobs/reorder', body);
 	}
 
 	/** A link that plays the job's file, even unfinished, without the token

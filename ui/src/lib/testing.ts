@@ -17,6 +17,7 @@ export function job(overrides: Partial<Job> = {}): Job {
 		error: null,
 		problem: null,
 		priority: 'normal',
+		place: 1,
 		speedLimit: 0,
 		streaming: false,
 		category: 1,
@@ -24,6 +25,7 @@ export function job(overrides: Partial<Job> = {}): Job {
 		retryAt: null,
 		ranges: [],
 		moving: false,
+		waitingForBandwidth: false,
 		...overrides
 	};
 }

@@ -7,11 +7,17 @@
 //! they read, and to the end of the file, before anything else. In streaming
 //! mode, the same happens as if a player read from the start, and the file
 //! comes in order: each connection takes the next piece after the others.
+//!
+//! A connection that fails with an error that may go away doesn't stop the
+//! others: its range waits for another connection, and the run goes on with
+//! one connection fewer. The run fails only when no connection is left. A
+//! connection the speed limit starves lets go of its request, and the next
+//! one waits for bandwidth before asking. See docs/decisions/0033.
 
 use std::io::{self, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering::SeqCst};
 use std::time::{Duration, Instant};
 
 use reqwest::{Client, Response, StatusCode, Url};
@@ -163,10 +169,13 @@ impl Part {
     }
 }
 
-/// What every connection needs, shared read-only.
+/// What every connection needs, shared read-only (but for `connections`).
 struct Context {
     client: Client,
     stall: Duration,
+    starved_after: Duration,
+    /// How many connections this run may have: one fewer after each that failed.
+    connections: AtomicUsize,
     url: Url,
     validator: Validator,
     path: PathBuf,
@@ -179,6 +188,8 @@ struct Context {
 enum Ended {
     /// Reached the end of its range.
     Done,
+    /// The speed limit held it back too long: it let go of its request.
+    Starved,
     Cancelled,
     Changed(RestartReason),
 }
@@ -200,6 +211,8 @@ pub(crate) async fn run(
     let context = Arc::new(Context {
         client: env.client.clone(),
         stall: config.stall_timeout,
+        starved_after: config.starved_after,
+        connections: AtomicUsize::new(config.connections.max(1)),
         url: dl.url.clone(),
         validator,
         path: path.to_owned(),
@@ -239,16 +252,26 @@ pub(crate) async fn run(
                 parts[index].busy = false;
                 parts[index].stopping = false;
                 match result {
-                    Ok(Ended::Done) if !stop.is_cancelled() => {
+                    Ok(Ended::Done | Ended::Starved) if !stop.is_cancelled() => {
                         fill(&mut parts, &mut tasks, &context, &stop, &mut first, config, &order);
                     }
-                    Ok(Ended::Done | Ended::Cancelled) => {}
+                    Ok(Ended::Done | Ended::Starved | Ended::Cancelled) => {}
                     Ok(Ended::Changed(reason)) => {
                         restart.get_or_insert(reason);
                         stop.cancel();
                     }
+                    // Others still work: carry on without this one (the
+                    // server may allow fewer connections). Its range waits
+                    // for the next connection that's free.
+                    Err(err) if err.is_retryable() && parts.iter().any(|p| p.busy) => {
+                        let left = context.connections.load(SeqCst).saturating_sub(1).max(1);
+                        context.connections.store(left, SeqCst);
+                        tracing::debug!(error = %err, connections = left, "a connection failed; going on without it");
+                        failure = Some(err);
+                    }
                     Err(err) => {
-                        failure.get_or_insert(err);
+                        // Report this one: an earlier failure was got over.
+                        failure = Some(err);
                         stop.cancel();
                     }
                 }
@@ -353,7 +376,8 @@ fn steer(parts: &mut Vec<Part>, heads: &[u64], piece: Option<u64>, total: u64, l
     }
 }
 
-/// Starts connections until `config.connections` are busy: first on ranges
+/// Starts connections until as many are busy as this run may have
+/// (`config.connections`, fewer after failures): first on ranges
 /// that lead to a point players need, then on ranges nobody is working on
 /// (in streaming mode, the next one in order, cut to a piece), then by
 /// splitting the busy range with the most left.
@@ -366,7 +390,7 @@ fn fill(
     config: &HttpConfig,
     order: &Order,
 ) {
-    while parts.iter().filter(|p| p.busy).count() < config.connections.max(1) {
+    while parts.iter().filter(|p| p.busy).count() < context.connections.load(SeqCst) {
         let idle = |p: &Part| !p.busy && p.left() > 0;
         let next = parts
             .iter()
@@ -586,6 +610,13 @@ async fn connection(
     let mut response = match response {
         Some(response) => response,
         None => {
+            // Not before there's bandwidth, so the server never waits on a
+            // request we don't read.
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return Ok(Ended::Cancelled),
+                () = context.throttle.spend(0) => {}
+            }
             let asked = Instant::now();
             let answer = request(context, pos, shared.end.load(SeqCst), stop).await?;
             let waited = asked.elapsed();
@@ -639,11 +670,17 @@ async fn connection(
                 shared.shown.store(pos, SeqCst);
                 last_shown = Instant::now();
             }
-            // Every connection spends from the same job budget.
+            // Every connection spends from the same job budget. Held back
+            // too long, it lets go of the request (what was spent stays owed).
             tokio::select! {
                 biased;
                 _ = stop.cancelled() => return Ok(Ended::Cancelled),
-                () = context.throttle.spend(bytes.len()) => {}
+                paid = tokio::time::timeout(context.starved_after, context.throttle.spend(bytes.len())) => {
+                    if paid.is_err() {
+                        tracing::debug!(at = pos, "no bandwidth for a while; letting the request go");
+                        return Ok(Ended::Starved);
+                    }
+                }
             }
         }
     }

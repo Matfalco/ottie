@@ -12,8 +12,9 @@ use futures_util::StreamExt;
 use ottie_api::{
     AddJob, Added, AddedCategory, AddedView, AddedWithin, ApiError, Appearance, AppearanceMode,
     Arrangement, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL, Event, Job, JobState, Matched,
-    Palette, Priority, Problem, Reason, Settings, SettingsChange, SortDirection, SortKey,
-    StreamLink, TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
+    Palette, Priority, Problem, Reason, Reorder, ReorderJobs, Settings, SettingsChange,
+    SortDirection, SortKey, StreamLink, TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody,
+    ViewFilters,
 };
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
@@ -345,6 +346,60 @@ async fn a_jobs_own_settings_change_while_it_runs() {
     let missing = "2020.01.01-00.00.00-1";
     let response = patch(missing, serde_json::json!({})).await.unwrap();
     assert_eq!(error_of(response).await.0, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn waiting_jobs_are_reordered() {
+    let d = start().await;
+    let first = d.add("slow.bin").await;
+    let second = d.add("slow.bin").await;
+    for id in [&first, &second] {
+        let paused = d.post(&format!("/jobs/{id}/pause")).send().await.unwrap();
+        assert_eq!(paused.status(), StatusCode::NO_CONTENT);
+    }
+    let reorder = |ids: &[&str], to: Reorder| {
+        let body = ReorderJobs {
+            ids: ids.iter().map(|id| (*id).to_owned()).collect(),
+            to,
+        };
+        d.post("/jobs/reorder").json(&body).send()
+    };
+    let (before, after) = (d.job(&first).await.place, d.job(&second).await.place);
+    assert!(before < after, "new jobs go last");
+
+    let response = reorder(&[&second], Reorder::Top).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(d.job(&second).await.place, before);
+    assert_eq!(d.job(&first).await.place, after);
+    // Dragged back below the other one.
+    let dropped = serde_json::json!({ "ids": [second], "to": { "after": first } });
+    let response = d.post("/jobs/reorder").json(&dropped).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(d.job(&second).await.place, after);
+    let response = reorder(&[&second], Reorder::Before(first.clone()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(d.job(&second).await.place, before);
+
+    for (ids, to) in [
+        (vec!["soon"], Reorder::Up),
+        (vec![first.as_str()], Reorder::After("soon".into())),
+    ] {
+        let response = reorder(&ids, to).await.unwrap();
+        let (status, error) = error_of(response).await;
+        let invalid = Reason::InvalidJobId { id: "soon".into() };
+        assert_eq!((status, error.reason), (StatusCode::BAD_REQUEST, invalid));
+    }
+    let missing = "2020.01.01-00.00.00-1";
+    let response = reorder(&[&first, missing], Reorder::Top).await.unwrap();
+    let (status, error) = error_of(response).await;
+    let not_found = Reason::JobNotFound { id: missing.into() };
+    assert_eq!((status, error.reason), (StatusCode::NOT_FOUND, not_found));
+    assert_eq!(d.job(&first).await.place, after, "nothing moved");
+    let wrong = serde_json::json!({ "ids": [first], "to": "sideways" });
+    let response = d.post("/jobs/reorder").json(&wrong).send().await.unwrap();
+    assert_eq!(error_of(response).await.0, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]

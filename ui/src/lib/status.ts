@@ -35,7 +35,9 @@ export function describe(
 			return m.status_connecting({}, options);
 		case 'downloading': {
 			const parts = [amount(job, locale)];
-			if (bytesPerSec > 0) {
+			if (job.waitingForBandwidth) {
+				parts.push(m.status_bandwidth({}, options));
+			} else if (bytesPerSec > 0) {
 				parts.push(formatSpeed(bytesPerSec, locale));
 				if (job.total !== null) {
 					const time = formatDuration((job.total - job.downloaded) / bytesPerSec, locale);
@@ -82,6 +84,9 @@ export function motion(
 	}
 	switch (job.state) {
 		case 'downloading': {
+			if (job.waitingForBandwidth) {
+				return { status: m.status_bandwidth({}, options) };
+			}
 			if (bytesPerSec <= 0) {
 				return { speed: '—', left: '—' };
 			}

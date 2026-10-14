@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use ottie_core::{
     Error, HttpBackend, JobChange, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob,
-    Priority, Problem, SettingsChange, Store,
+    Priority, Problem, Reorder, SettingsChange, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -414,6 +414,109 @@ async fn a_job_change_is_announced_once() {
         s.manager.change_job(id, change).await,
         Err(Error::JobNotFound(_))
     ));
+}
+
+#[tokio::test]
+async fn reordering_changes_which_job_starts_next() {
+    let mut s = setup(1, 5).await;
+    let a = s.add("a.bin").await; // starts at once
+    let b = s.add("b.bin").await;
+    let c = s.add("c.bin").await;
+    let d = s.add("d.bin").await;
+    s.manager.reorder(vec![d], Reorder::Top).await.unwrap();
+    s.manager.reorder(vec![b], Reorder::Down).await.unwrap();
+
+    let mut finished = Vec::new();
+    tokio::time::timeout(TIMEOUT, async {
+        while finished.len() < 4 {
+            if let JobEvent::Changed(job) = s.events.recv().await.unwrap()
+                && job.state == JobState::Completed
+            {
+                finished.push(job.id);
+            }
+        }
+    })
+    .await
+    .expect("not all jobs finished");
+    assert_eq!(finished, [a, d, c, b]);
+}
+
+#[tokio::test]
+async fn reordering_moves_waiting_jobs_within_their_priority() {
+    let mut s = setup(1, 50).await;
+    let running = s.add("a.bin").await;
+    let high = s.add("b.bin").await;
+    let queued = s.add("c.bin").await;
+    let paused = s.add("d.bin").await;
+    s.manager.set_priority(high, Priority::High).await.unwrap();
+    s.manager.pause(paused).await.unwrap();
+    while s.events.try_recv().is_ok() {} // What came before.
+    let place = |jobs: &[JobSnapshot], id| jobs.iter().find(|j| j.id == id).unwrap().place;
+    let before = s.manager.list().await.unwrap();
+
+    // First of the Normal ones (the High one is in a lane of its own), and
+    // a running job has no place to move to.
+    s.manager
+        .reorder(vec![queued, running], Reorder::Up)
+        .await
+        .unwrap();
+    assert!(s.events.try_recv().is_err(), "nothing moved");
+
+    // A paused job moves too; the two swap places, and both are announced.
+    s.manager.reorder(vec![paused], Reorder::Up).await.unwrap();
+    let mut moved = Vec::new();
+    while let Ok(JobEvent::Changed(job)) = s.events.try_recv() {
+        moved.push((job.id, job.place));
+    }
+    let expected = [
+        (queued, place(&before, paused)),
+        (paused, place(&before, queued)),
+    ];
+    assert_eq!(moved, expected);
+
+    // Dropped after the queued one: back where it was.
+    s.manager
+        .reorder(vec![paused], Reorder::After(queued))
+        .await
+        .unwrap();
+    let places: Vec<(JobId, u64)> = s
+        .manager
+        .list()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|j| [queued, paused].contains(&j.id))
+        .map(|j| (j.id, j.place))
+        .collect();
+    assert_eq!(
+        places,
+        [
+            (queued, place(&before, queued)),
+            (paused, place(&before, paused))
+        ]
+    );
+    // Next to a job of another priority, or one that isn't waiting: nothing moves.
+    while s.events.try_recv().is_ok() {}
+    for to in [Reorder::Before(high), Reorder::After(running)] {
+        s.manager.reorder(vec![paused], to).await.unwrap();
+    }
+    assert!(s.events.try_recv().is_err(), "nothing moved");
+
+    // An unknown job: nothing moves.
+    s.manager.remove(high).await.unwrap();
+    while s.events.try_recv().is_ok() {}
+    for to in [Reorder::Top, Reorder::Before(high)] {
+        let ids = if to == Reorder::Top {
+            vec![queued, high]
+        } else {
+            vec![queued]
+        };
+        assert!(matches!(
+            s.manager.reorder(ids, to).await,
+            Err(Error::JobNotFound(id)) if id == high
+        ));
+    }
+    assert!(s.events.try_recv().is_err());
 }
 
 #[tokio::test]

@@ -8,7 +8,7 @@ use std::time::Duration;
 use ottie_core::{
     Appearance, AppearanceMode, CategoryId, CategorySettings, Error, HttpBackend, HttpConfig,
     JobChange, JobId, JobSnapshot, JobState, Manager, NewJob, PART_SUFFIX, Palette, Priority,
-    RetryPolicy, Settings, SettingsChange, Store,
+    Reorder, RetryPolicy, Settings, SettingsChange, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -279,6 +279,31 @@ async fn settings_priorities_and_limits_survive_a_restart() {
     let job = &manager.list().await.unwrap()[0];
     assert_eq!((job.priority, job.speed_limit), (Priority::High, 123_456));
     assert!(job.streaming);
+}
+
+#[tokio::test]
+async fn places_in_the_queue_survive_a_restart() {
+    let s = setup().await;
+    let manager = s.launch().await;
+    let first = s.add(&manager).await;
+    let second = s.add(&manager).await;
+    for id in [first, second] {
+        manager.pause(id).await.unwrap();
+    }
+    manager.reorder(vec![second], Reorder::Top).await.unwrap();
+    manager.shutdown().await.unwrap();
+
+    let manager = s.launch().await;
+    let third = s.add(&manager).await;
+    let places: Vec<(JobId, u64)> = manager
+        .list()
+        .await
+        .unwrap()
+        .iter()
+        .map(|job| (job.id, job.place))
+        .collect();
+    // A new job still goes after every other.
+    assert_eq!(places, [(first, 2), (second, 1), (third, 3)]);
 }
 
 #[tokio::test]

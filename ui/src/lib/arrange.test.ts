@@ -72,10 +72,19 @@ describe('arrangement', () => {
 	it('groups by status, leaving empty groups out', () => {
 		const sections = arrange([a, c, b], DEFAULT_ARRANGEMENT, 'en');
 		expect(sections.map((section) => section.group)).toEqual(['waiting', 'finished']);
-		expect(names(sections[0].jobs)).toEqual(['B-file 9.iso', 'b-file 10.iso']);
+		expect(names(sections[0].jobs)).toEqual(['b-file 10.iso', 'B-file 9.iso']);
 		const flat = arrange([a, c, b], { ...DEFAULT_ARRANGEMENT, grouped: false }, 'en');
-		expect(flat).toEqual([{ group: null, jobs: [c, b, a] }]);
+		expect(flat).toEqual([{ group: null, jobs: [a, b, c] }]);
 		expect(arrange([], { ...DEFAULT_ARRANGEMENT, grouped: false }, 'en')).toEqual([]);
+	});
+
+	it('shows the waiting group in queue order, whatever the sort', () => {
+		const later = { ...a, place: 5 };
+		const urgent = { ...b, priority: 'urgent' as const, place: 9 };
+		const next = job({ id: '2026.10.12-13.00.00-4', fileName: 'next', place: 2 });
+		const byName = { sort: 'name' as const, direction: 'asc' as const, grouped: true };
+		const [waiting] = arrange([later, next, urgent, c], byName, 'en');
+		expect(names(waiting.jobs)).toEqual(['B-file 9.iso', 'next', 'b-file 10.iso']);
 	});
 
 	it('notes the speed and the slots in group headers', () => {

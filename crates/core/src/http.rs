@@ -24,6 +24,10 @@ use crate::throttle::Throttle;
 
 const MAX_REDIRECTS: usize = 10;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+/// An HTTP/2 connection is pinged after this long without hearing from the
+/// server, and dropped if the answer takes longer than this too: one that
+/// died silently (the network changed) is noticed sooner than a stall.
+const PING_AFTER: Duration = Duration::from_secs(10);
 
 /// How HTTP downloads are split across connections.
 #[derive(Debug, Clone)]
@@ -40,6 +44,10 @@ pub struct HttpConfig {
     /// 4 × `min_split` bytes. Longer means fewer requests, shorter a file
     /// more in order.
     pub piece_time: Duration,
+    /// Over several connections, a connection the speed limit holds back
+    /// this long lets go of its request, and asks again once there is
+    /// bandwidth: servers drop a request that isn't read for long.
+    pub starved_after: Duration,
 }
 
 impl Default for HttpConfig {
@@ -49,11 +57,14 @@ impl Default for HttpConfig {
             min_split: 1024 * 1024,
             stall_timeout: Duration::from_secs(60),
             piece_time: Duration::from_secs(2),
+            starved_after: Duration::from_secs(20),
         }
     }
 }
 
 /// HTTP client with our redirect rules: at most 10 hops, http/https only.
+/// It keeps connections open to use them again, so the manager's downloads
+/// take a new one for each run (see [`crate::HttpBackend`]).
 pub fn build_client() -> Result<Client, Error> {
     let policy = redirect::Policy::custom(|attempt| {
         if attempt.previous().len() >= MAX_REDIRECTS {
@@ -68,6 +79,9 @@ pub fn build_client() -> Result<Client, Error> {
     Ok(Client::builder()
         .redirect(policy)
         .connect_timeout(CONNECT_TIMEOUT)
+        .http2_keep_alive_interval(PING_AFTER)
+        .http2_keep_alive_timeout(PING_AFTER)
+        .http2_keep_alive_while_idle(true)
         .user_agent(concat!(
             env!("CARGO_PKG_NAME"),
             "/",

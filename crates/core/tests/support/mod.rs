@@ -1,6 +1,7 @@
 //! In-process HTTP server for engine tests, with fault injection.
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -8,7 +9,7 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::body::{Body, Bytes};
-use axum::extract::State;
+use axum::extract::{ConnectInfo, Path, State};
 use axum::http::header::{
     ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, ETAG, IF_RANGE, LOCATION,
     RANGE, RETRY_AFTER,
@@ -53,6 +54,14 @@ pub struct RecordedRequest {
 struct Shared {
     behavior: Behavior,
     requests: Vec<RecordedRequest>,
+    /// Every client connection so far, by its address.
+    connections: HashSet<SocketAddr>,
+    /// Connections that went silent in [`TestServer::unplug`].
+    dead: HashSet<SocketAddr>,
+    /// Requests that arrived on one of them (and got no answer).
+    on_dead: usize,
+    /// By file name: answers the client stopped reading before their end.
+    abandoned: HashMap<String, usize>,
 }
 
 type AppState = Arc<Mutex<Shared>>;
@@ -79,6 +88,10 @@ impl TestServer {
                 stall_after: None,
             },
             requests: Vec::new(),
+            connections: HashSet::new(),
+            dead: HashSet::new(),
+            on_dead: 0,
+            abandoned: HashMap::new(),
         }));
         let app = Router::new()
             .route("/files/{name}", get(serve_file))
@@ -86,6 +99,7 @@ impl TestServer {
             .with_state(state.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
+        let app = app.into_make_service_with_connect_info::<SocketAddr>();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         Self { addr, state }
     }
@@ -101,9 +115,44 @@ impl TestServer {
     pub fn requests(&self) -> Vec<RecordedRequest> {
         self.state.lock().unwrap().requests.clone()
     }
+
+    /// As when the network changes (a VPN goes up or down): every connection
+    /// open now goes silent without closing, mid-answer or idle. New ones work.
+    pub fn unplug(&self) {
+        let mut shared = self.state.lock().unwrap();
+        shared.dead = shared.connections.clone();
+    }
+
+    /// How many requests came over a connection that [`TestServer::unplug`]
+    /// had silenced: a client that reuses one waits until it gives up.
+    pub fn requests_on_dead_connections(&self) -> usize {
+        self.state.lock().unwrap().on_dead
+    }
+
+    /// How many answers for `/files/<name>` the client let go of before
+    /// their end (dropped connections injected here count too).
+    pub fn abandoned(&self, name: &str) -> usize {
+        let shared = self.state.lock().unwrap();
+        shared.abandoned.get(name).copied().unwrap_or(0)
+    }
 }
 
-async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Response {
+async fn serve_file(
+    State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Path(name): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let dead = {
+        let mut shared = state.lock().unwrap();
+        shared.connections.insert(peer);
+        let dead = shared.dead.contains(&peer);
+        shared.on_dead += usize::from(dead);
+        dead
+    };
+    if dead {
+        std::future::pending::<()>().await;
+    }
     let text = |name| headers.get(name).map(|v| v.to_str().unwrap().to_owned());
     let range = text(RANGE);
     let if_range = text(IF_RANGE);
@@ -187,7 +236,18 @@ async fn serve_file(State(state): State<AppState>, headers: HeaderMap) -> Respon
     }
     let data = body.slice(start..end);
     response
-        .body(Body::from_stream(chunked(data, start, pacing, drop_after)))
+        .body(Body::from_stream(chunked(
+            data,
+            start,
+            pacing,
+            drop_after,
+            Watch {
+                state,
+                peer,
+                name,
+                finished: false,
+            },
+        )))
         .unwrap()
 }
 
@@ -206,6 +266,24 @@ async fn redirect_to_ftp() -> Response {
         .unwrap()
 }
 
+/// One answer being sent: goes silent if its connection is unplugged, and
+/// counts as abandoned if dropped before its end.
+struct Watch {
+    state: AppState,
+    peer: SocketAddr,
+    name: String,
+    finished: bool,
+}
+
+impl Drop for Watch {
+    fn drop(&mut self) {
+        if !self.finished {
+            let mut shared = self.state.lock().unwrap();
+            *shared.abandoned.entry(self.name.clone()).or_default() += 1;
+        }
+    }
+}
+
 /// Sends `data` (which starts at file offset `offset`) in 16 KiB chunks,
 /// optionally slowly, optionally failing midway.
 fn chunked(
@@ -213,32 +291,41 @@ fn chunked(
     offset: usize,
     pacing: Pacing,
     drop_after: Option<usize>,
+    watch: Watch,
 ) -> impl Stream<Item = io::Result<Bytes>> {
-    futures_util::stream::unfold((data, 0usize), move |(mut data, sent)| async move {
-        if data.is_empty() {
-            return None;
-        }
-        let mut len = CHUNK.min(data.len());
-        if let Some(limit) = drop_after {
-            if sent >= limit {
-                let err = io::Error::other("injected connection drop");
-                return Some((Err(err), (Bytes::new(), sent)));
+    futures_util::stream::unfold((data, 0usize, watch), move |(mut data, sent, mut watch)| {
+        async move {
+            if data.is_empty() {
+                return None;
             }
-            len = len.min(limit - sent);
+            let dead = watch.state.lock().unwrap().dead.contains(&watch.peer);
+            if dead {
+                std::future::pending::<()>().await;
+            }
+            let mut len = CHUNK.min(data.len());
+            if let Some(limit) = drop_after {
+                if sent >= limit {
+                    let err = io::Error::other("injected connection drop");
+                    return Some((Err(err), (Bytes::new(), sent, watch)));
+                }
+                len = len.min(limit - sent);
+            }
+            if pacing.stall_after.is_some_and(|limit| sent >= limit) {
+                // Keep the connection open but send nothing more.
+                std::future::pending::<()>().await;
+            }
+            let delay = match pacing.slow_from {
+                Some((from, slow)) if offset + sent >= from => Some(slow),
+                _ => pacing.delay,
+            };
+            if let Some(delay) = delay {
+                tokio::time::sleep(delay).await;
+            }
+            let chunk = data.split_to(len);
+            // With a known length, the server may never ask past the last chunk.
+            watch.finished = data.is_empty();
+            Some((Ok(chunk), (data, sent + len, watch)))
         }
-        if pacing.stall_after.is_some_and(|limit| sent >= limit) {
-            // Keep the connection open but send nothing more.
-            std::future::pending::<()>().await;
-        }
-        let delay = match pacing.slow_from {
-            Some((from, slow)) if offset + sent >= from => Some(slow),
-            _ => pacing.delay,
-        };
-        if let Some(delay) = delay {
-            tokio::time::sleep(delay).await;
-        }
-        let chunk = data.split_to(len);
-        Some((Ok(chunk), (data, sent + len)))
     })
 }
 

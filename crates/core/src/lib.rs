@@ -29,7 +29,7 @@ pub use error::Error;
 pub use filename::PART_SUFFIX;
 pub use http::{HttpConfig, build_client, run};
 pub use id::JobId;
-pub use job::{JobChange, JobEvent, JobSnapshot, JobState, NewJob, Priority};
+pub use job::{JobChange, JobEvent, JobSnapshot, JobState, NewJob, Priority, Reorder};
 pub use manager::Manager;
 pub use playback::Playback;
 pub use problem::Problem;

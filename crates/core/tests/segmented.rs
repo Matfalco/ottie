@@ -5,6 +5,7 @@ mod support;
 use std::collections::HashSet;
 use std::time::Duration;
 
+use axum::http::StatusCode;
 use ottie_core::{
     Download, Error, Event, HttpConfig, Outcome, PART_SUFFIX, RestartReason, Segment, Throttle,
     build_client, run,
@@ -20,6 +21,7 @@ const CONFIG: HttpConfig = HttpConfig {
     min_split: 64 * 1024,
     stall_timeout: Duration::from_secs(60),
     piece_time: Duration::from_secs(2),
+    starved_after: Duration::from_secs(20),
 };
 
 struct Setup {
@@ -80,6 +82,11 @@ impl Setup {
         assert!(std::fs::read(&path).unwrap() == expected, "content differs");
         let part = self.dir.path().join(format!("big.bin{PART_SUFFIX}"));
         assert!(!part.exists());
+    }
+
+    /// What the saved ranges say has arrived.
+    fn part_ranges_done(&self, dl: &Download) -> u64 {
+        dl.segments.iter().map(|segment| segment.done).sum()
     }
 
     fn part_len(&self) -> u64 {
@@ -231,16 +238,43 @@ async fn file_changing_mid_download_restarts_cleanly() {
 }
 
 #[tokio::test]
-async fn a_dropped_connection_is_resumable() {
+async fn a_dropped_connection_doesnt_stop_the_others() {
     let s = setup(SIZE, 1).await;
     // Kills the first request (the range starting at 0) partway.
     s.server.configure(|b| b.drop_after = Some(100_000));
     let mut dl = s.download();
-    let (result, _) = s.run(&mut dl, None, || {}).await;
-    assert!(matches!(result, Err(Error::Http(_))), "got {result:?}");
-    assert!(!dl.segments.is_empty());
-    assert!(dl.segments[0].done <= 100_000);
+    let (result, events) = s.run(&mut dl, None, || {}).await;
+    s.assert_complete(result.unwrap(), &s.data);
+    assert!(restarts(&events).is_empty());
+    // What the dropped connection didn't get was asked for again.
+    let again = s.server.requests()[1..].iter().any(|request| {
+        let from = request
+            .range
+            .as_deref()
+            .and_then(|r| r.strip_prefix("bytes="));
+        let from: u64 = from.unwrap().split('-').next().unwrap().parse().unwrap();
+        from <= 100_000
+    });
+    assert!(again, "{:?}", s.server.requests());
+}
 
+#[tokio::test]
+async fn when_every_connection_fails_the_download_fails_and_resumes() {
+    let s = setup(SIZE, 1).await;
+    let mut dl = s.download();
+    // The first answer comes; every request after it is refused.
+    let refuse = || {
+        s.server
+            .configure(|b| b.fail_next = Some((StatusCode::SERVICE_UNAVAILABLE, usize::MAX)));
+    };
+    let (result, _) = s.run(&mut dl, None, refuse).await;
+    assert!(
+        matches!(result, Err(Error::Status { .. })),
+        "got {result:?}"
+    );
+    assert_eq!(dl.downloaded, s.part_ranges_done(&dl));
+
+    s.server.configure(|b| b.fail_next = None);
     let (result, events) = s.run(&mut dl, None, || {}).await;
     s.assert_complete(result.unwrap(), &s.data);
     assert!(restarts(&events).is_empty());

@@ -79,7 +79,7 @@ pub struct ViewSettings {
 }
 
 impl ViewSettings {
-    /// A view of every download, newest first, grouped by status (the
+    /// A view of every download, oldest first, grouped by status (the
     /// downloads list's defaults).
     pub fn named(name: impl Into<String>) -> Self {
         Self {
@@ -89,7 +89,7 @@ impl ViewSettings {
             name_contains: String::new(),
             added: AddedWithin::Any,
             sort: SortKey::Added,
-            direction: SortDirection::Descending,
+            direction: SortDirection::Ascending,
             grouped: true,
         }
     }

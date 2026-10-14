@@ -65,6 +65,11 @@ curl -H "$AUTH" -X POST $API/jobs/2026.10.13-14.28.59-1/resume
 curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH \
      -d '{"speedLimit": 1048576, "priority": "high"}' $API/jobs/2026.10.13-14.28.59-1
 
+# Move it (and any others listed) one place up in the queue; also "down", "top", "bottom",
+# or next to another download: {"before": id} or {"after": id}
+curl -H "$AUTH" -H "Content-Type: application/json" \
+     -d '{"ids": ["2026.10.13-14.28.59-1"], "to": "up"}' $API/jobs/reorder
+
 # Take it off the list (a finished file stays on disk)
 curl -H "$AUTH" -X DELETE $API/jobs/2026.10.13-14.28.59-1
 
@@ -73,7 +78,7 @@ curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH \
      -d '{"globalLimit": 5242880, "maxConcurrent": 3}' $API/settings
 ```
 
-A download's `state` is one of `queued`, `connecting`, `downloading`, `paused`, `completed`, `failed`, `cancelled` and `retrying`. Downloads wait in `queued` until a slot is free. `failed` and `paused` downloads can be resumed. `completed` and `cancelled` are final.
+A download's `state` is one of `queued`, `connecting`, `downloading`, `paused`, `completed`, `failed`, `cancelled` and `retrying`. Downloads wait in `queued` until a slot is free: the highest `priority` first, then the lowest `place` (new downloads go last; `POST /jobs/reorder` moves them among the queued and paused ones of their priority). `failed` and `paused` downloads can be resumed. `completed` and `cancelled` are final. A `downloading` job with `waitingForBandwidth: true` is running but gets no bandwidth for now: the speed limits give it all to others (urgent ones first).
 
 ## Live events
 

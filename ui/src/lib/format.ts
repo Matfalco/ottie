@@ -54,17 +54,10 @@ export function formatPercent(fraction: number, locale: Locale = getLocale()): s
 	return new Intl.NumberFormat(locale, { style: 'percent' }).format(whole);
 }
 
-/** When a job was added: the time if it was today, else the date (with the
- * year only if it isn't this year). In the page's time zone. */
-export function formatAdded(added: Date, now: Date, locale: Locale = getLocale()): string {
-	if (added.toDateString() === now.toDateString()) {
-		return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(added);
-	}
-	const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-	if (added.getFullYear() !== now.getFullYear()) {
-		options.year = 'numeric';
-	}
-	return new Intl.DateTimeFormat(locale, options).format(added);
+/** When a job was added: the date and the time to the second, in the
+ * page's time zone. */
+export function formatAdded(added: Date, locale: Locale = getLocale()): string {
+	return new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' }).format(added);
 }
 
 /** The two largest units: "45 sec", "3 min 20 sec", "2 hr 5 min" (French: "2 h 5 min"). */

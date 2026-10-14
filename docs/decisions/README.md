@@ -20,7 +20,7 @@ Each accepted decision has its own short file here (`NNNN-title.md`): what was d
 | [0007](0007-partial-file-extension.md) | Unfinished downloads are written to `<name>.part.ottie` and renamed when complete. |
 | [0008](0008-persistence.md) | SQLite with `STRICT` tables and numbered migrations; data is flushed before the progress covering it is saved; running downloads continue after a restart. |
 | [0009](0009-multi-connection.md) | Multi-connection downloads with dynamic splitting: an idle connection takes an unfinished range or half of the busiest one. Only with a `206` and a validator. |
-| [0010](0010-speed-limits-and-priorities.md) | Speed limits per download, per category and in total, changeable live; four priorities that order the queue and share the bandwidth (Urgent first, then High 4 / Normal 2 / Low 1). |
+| [0010](0010-speed-limits-and-priorities.md) | Speed limits per download, per category and in total, changeable live; four priorities that order the queue and share the bandwidth (Urgent first, then High 4 / Normal 2 / Low 1). Amended by 0032. |
 | [0011](0011-categories.md) | Every download has a category (folder, extensions, limits); the built-in General takes what matches nothing. Amended by 0020 and 0028. |
 | [0012](0012-content-disposition-names.md) | File names come from `Content-Disposition`, else the final URL; a category matched automatically is matched again by the real name. |
 | [0013](0013-retries.md) | Errors that may go away are retried with growing waits; a retrying download gives its slot away after a few tries if another is waiting. |
@@ -28,6 +28,8 @@ Each accepted decision has its own short file here (`NNNN-title.md`): what was d
 | [0025](0025-ranges-in-progress.md) | Progress events carry each connection's range, so clients can show where every connection is. |
 | [0028](0028-moving-files-with-their-category.md) | Moving a download to another category moves its file to that category's folder, even while it runs. |
 | [0029](0029-play-while-downloading.md) | Play while downloading through short-lived play links that need no token; the download order follows the player, and a streaming mode (on by itself for videos and music) keeps it in order. |
+| [0032](0032-queue-order.md) | Each download has a place in the queue; buttons and drag and drop move waiting downloads within their priority (`POST /jobs/reorder`); the Waiting group shows the queue. |
+| [0033](0033-connection-failures-and-starved-downloads.md) | One connection's failure no longer stops a multi-connection download; a connection the speed limit starves lets go of its request; a download that gets no bandwidth says so (`waitingForBandwidth`). |
 
 ## API and daemon
 
@@ -49,6 +51,6 @@ Each accepted decision has its own short file here (`NNNN-title.md`): what was d
 | [0019](0019-own-title-bar.md) | The desktop window draws its own title bar, with its own window buttons. |
 | [0020](0020-first-start-setup.md) | A first-start setup offers starter categories; a built-in Other category holds folders of no category; adding a download has a category step. |
 | [0021](0021-themes-and-layout.md) | The UI follows the chosen mockups: four themes (Sea and Neutral palettes, each light and dark), tabs in the title bar. |
-| [0023](0023-downloads-filters-and-sorting.md) | The Downloads page has quick-filter pills, a filters and sorting panel, and a list grouped by status. |
+| [0023](0023-downloads-filters-and-sorting.md) | The Downloads page has quick-filter pills, a filters and sorting panel, and a list grouped by status. Amended by 0032 (oldest first by default). |
 | [0027](0027-file-map-in-the-bar.md) | The detail panel's progress bar is the file map, showing each range where it lies in the file. Replaces 0025's separate map. |
 | [0031](0031-opening-a-player.md) | Play opens a media player: in the desktop app as set in Settings (the system's player through a playlist, the browser, or a picked program); in a browser, "Open in player" saves a playlist. |

@@ -25,6 +25,17 @@ group('describe', () => {
 		expect(describe(unknownSize, MB, 0, 'en')).toBe('3.0 MB · 1.0 MB/s');
 	});
 
+	it('says when the speed limit gives a download no bandwidth', () => {
+		const held = job({
+			state: 'downloading',
+			downloaded: 10 * MB,
+			total: 30 * MB,
+			waitingForBandwidth: true
+		});
+		expect(describe(held, 0, 0, 'en')).toBe('10 MB of 30 MB · Waiting for bandwidth');
+		expect(motion(held, 0, 0, 'fr')).toEqual({ status: 'En attente de bande passante' });
+	});
+
 	it('explains waiting, failing and retrying from the problem code', () => {
 		expect(describe(job(), 0, 0, 'en')).toBe('Waiting for a free slot');
 		const failed = job({

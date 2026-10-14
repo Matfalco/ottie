@@ -90,10 +90,7 @@ export function facts(
 			: m.det_of({ count: String(job.retries), max: String(maxRetries) }, options)
 	);
 	const added = addedAt(job.id);
-	const addedFact = fact(
-		m.col_added({}, options),
-		added ? formatAdded(added, new Date(now), locale) : unknown
-	);
+	const addedFact = fact(m.col_added({}, options), added ? formatAdded(added, locale) : unknown);
 
 	switch (job.state) {
 		case 'connecting':
@@ -102,8 +99,13 @@ export function facts(
 				speed > 0 && job.total !== null
 					? formatDuration((job.total - job.downloaded) / speed, locale)
 					: '—';
+			const current = job.waitingForBandwidth
+				? m.det_no_bandwidth({}, options)
+				: speed > 0
+					? formatSpeed(speed, locale)
+					: '—';
 			return [
-				fact(m.col_speed({}, options), speed > 0 ? formatSpeed(speed, locale) : '—'),
+				fact(m.col_speed({}, options), current),
 				fact(m.col_left({}, options), left),
 				sizeFact,
 				addedFact

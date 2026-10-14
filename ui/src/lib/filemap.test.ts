@@ -26,6 +26,30 @@ describe('file map', () => {
 		expect(received(job({ total: null }))).toEqual([]);
 	});
 
+	it('shows neighbouring finished pieces as one', () => {
+		const streamed = job({
+			state: 'downloading',
+			total: 500,
+			downloaded: 260,
+			ranges: [
+				{ start: 0, end: 100, done: 100 },
+				{ start: 100, end: 200, done: 100 },
+				{ start: 200, end: 300, done: 50 },
+				{ start: 300, end: 400, done: 0 },
+				{ start: 400, end: 450, done: 50 },
+				{ start: 450, end: 500, done: 10 }
+			]
+		});
+		expect(received(streamed)).toEqual([
+			{ start: 0, end: 200, done: 200 },
+			{ start: 200, end: 300, done: 50 },
+			{ start: 300, end: 400, done: 0 },
+			{ start: 400, end: 450, done: 50 },
+			{ start: 450, end: 500, done: 10 }
+		]);
+		expect(connections(streamed, 'en')).toBe('5 ranges');
+	});
+
 	it('splits the bar by connection, sized by share', () => {
 		expect(barParts(split)).toEqual([
 			{ share: 0.5, fill: 0.5 },

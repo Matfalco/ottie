@@ -45,11 +45,10 @@ describe('formatPercent', () => {
 });
 
 describe('formatAdded', () => {
-	const now = new Date(2026, 9, 12, 18, 0);
-	it('shows the time for today, else the date', () => {
-		expect(formatAdded(new Date(2026, 9, 12, 14, 3), now, 'fr')).toBe('14:03');
-		expect(plain(formatAdded(new Date(2026, 9, 3, 9, 0), now, 'en'))).toBe('Oct 3');
-		expect(plain(formatAdded(new Date(2025, 0, 5), now, 'fr'))).toBe('5 janv. 2025');
+	it('shows the date and the time to the second', () => {
+		const added = new Date(2026, 9, 3, 14, 3, 9);
+		expect(formatAdded(added, 'fr')).toBe('03/10/2026 14:03:09');
+		expect(plain(formatAdded(added, 'en'))).toBe('10/3/26, 2:03:09 PM');
 	});
 });
 

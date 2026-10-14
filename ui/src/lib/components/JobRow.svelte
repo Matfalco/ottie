@@ -1,9 +1,16 @@
 <script lang="ts">
+	import type { Component } from 'svelte';
 	import type { Job } from '@ottie/api-types/Job';
+	import type { Priority } from '@ottie/api-types/Priority';
+	import ArrowBigDown from '@lucide/svelte/icons/arrow-big-down';
+	import ArrowBigUp from '@lucide/svelte/icons/arrow-big-up';
+	import Flame from '@lucide/svelte/icons/flame';
+	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import Pause from '@lucide/svelte/icons/pause';
 	import Play from '@lucide/svelte/icons/play';
 	import Trash from '@lucide/svelte/icons/trash';
 	import type { Action } from '#lib/bulk.js';
+	import { priorityName } from '#lib/details.js';
 	import { barParts } from '#lib/filemap.js';
 	import { displayName, formatAdded, formatBytes, formatPercent } from '#lib/format.js';
 	import { addedAt } from '#lib/jobs.js';
@@ -22,9 +29,41 @@
 		now: number;
 		onClick: (keys: Keys) => void;
 		onRun: (action: Action) => void;
+		/** The table has a column of grips (grouped by status). */
+		grip: boolean;
+		/** It can be dragged in the queue (it's waiting). */
+		movable: boolean;
+		/** It's being dragged. */
+		carried: boolean;
+		/** Where a drag would drop, next to this row. */
+		drop: 'before' | 'after' | null;
+		onGrab: (event: PointerEvent) => void;
+		/** The arrow keys on its grip. */
+		onStep: (to: 'up' | 'down') => void;
 	}
 
-	let { job, selected, category, speed, now, onClick, onRun }: Props = $props();
+	let {
+		job,
+		selected,
+		category,
+		speed,
+		now,
+		onClick,
+		onRun,
+		grip,
+		movable,
+		carried,
+		drop,
+		onGrab,
+		onStep
+	}: Props = $props();
+
+	/** Normal has none. */
+	const PRIORITY_ICONS: Record<Exclude<Priority, 'normal'>, Component> = {
+		urgent: Flame,
+		high: ArrowBigUp,
+		low: ArrowBigDown
+	};
 
 	let name = $derived(displayName(job));
 	let done = $derived(fraction(job));
@@ -40,6 +79,13 @@
 				: '—'
 	);
 
+	function step(event: KeyboardEvent) {
+		if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+			event.preventDefault();
+			onStep(event.key === 'ArrowUp' ? 'up' : 'down');
+		}
+	}
+
 	function click(event: MouseEvent) {
 		onClick({ toggle: event.ctrlKey || event.metaKey, range: event.shiftKey });
 	}
@@ -54,7 +100,31 @@
 <!-- Clicking the row selects it, as in a file manager; from the keyboard the
      row's checkbox does the same. -->
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-<tr class={job.state} class:selected onclick={click}>
+<tr
+	class={job.state}
+	class:selected
+	class:carried
+	class:drop-before={drop === 'before'}
+	class:drop-after={drop === 'after'}
+	data-id={job.id}
+	onclick={click}
+>
+	{#if grip}
+		<td class="grip">
+			{#if movable}
+				<button
+					class="handle"
+					aria-label={m.queue_drag({ name })}
+					title={m.queue_drag({ name })}
+					onpointerdown={onGrab}
+					onclick={(event) => event.stopPropagation()}
+					onkeydown={step}
+				>
+					<GripVertical size={14} aria-hidden="true" />
+				</button>
+			{/if}
+		</td>
+	{/if}
 	<td class="check">
 		<input
 			type="checkbox"
@@ -73,6 +143,13 @@
 				<span class="title">{name}</span>
 				<span class="line">{describe(job, speed, now)}</span>
 			</span>
+			{#if job.priority !== 'normal'}
+				{@const Icon = PRIORITY_ICONS[job.priority]}
+				{@const label = m.priority_icon({ priority: priorityName(job.priority) })}
+				<span class="priority {job.priority}" role="img" aria-label={label} title={label}>
+					<Icon size={14} aria-hidden="true" />
+				</span>
+			{/if}
 		</div>
 	</td>
 	<td class="size">{size}</td>
@@ -108,7 +185,7 @@
 		<td class="left">{moving.left}</td>
 	{/if}
 	<td class="category" title={category}>{category}</td>
-	<td class="added">{added ? formatAdded(added, new Date(now)) : ''}</td>
+	<td class="added">{added ? formatAdded(added) : ''}</td>
 	<td class="actions">
 		{#if canPause(job)}
 			<button
@@ -152,6 +229,43 @@
 		background: var(--selected);
 	}
 
+	tr.carried {
+		opacity: 0.5;
+	}
+
+	/* Where a dragged download would land. */
+	tr.drop-before td {
+		box-shadow: inset 0 2px 0 var(--accent);
+	}
+
+	tr.drop-after td {
+		box-shadow: inset 0 -2px 0 var(--accent);
+	}
+
+	.grip {
+		padding: 0;
+		text-align: center;
+	}
+
+	.handle {
+		display: inline-grid;
+		place-items: center;
+		width: 1.4rem;
+		height: 1.9rem;
+		padding: 0;
+		border-color: transparent;
+		background: none;
+		color: var(--faint);
+		cursor: grab;
+		/* A touch drag moves the download rather than scrolling the list. */
+		touch-action: none;
+	}
+
+	.handle:hover,
+	.handle:focus-visible {
+		color: var(--text);
+	}
+
 	td {
 		padding: 0 0.5rem;
 		border-bottom: 1px solid var(--border-soft);
@@ -186,6 +300,23 @@
 	.text {
 		display: grid;
 		min-width: 0;
+	}
+
+	.priority {
+		display: grid;
+		flex: none;
+	}
+
+	.priority.urgent {
+		color: var(--warn);
+	}
+
+	.priority.high {
+		color: var(--accent);
+	}
+
+	.priority.low {
+		color: var(--faint);
 	}
 
 	.title {
@@ -328,13 +459,13 @@
 	}
 
 	/* Less room beside the menu: fewer columns. */
-	@container page (max-width: 60rem) {
+	@container page (max-width: 66rem) {
 		.category {
 			display: none;
 		}
 	}
 
-	@container page (max-width: 52rem) {
+	@container page (max-width: 58rem) {
 		.added {
 			display: none;
 		}
@@ -392,6 +523,7 @@
 			padding-top: 0.35rem;
 		}
 
+		.grip,
 		.percent,
 		.category,
 		.status,

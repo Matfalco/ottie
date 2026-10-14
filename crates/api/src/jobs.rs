@@ -1,5 +1,5 @@
 //! `/jobs`: list, add, pause, resume, cancel, remove, change a job's own
-//! settings, change category.
+//! settings, reorder the queue, change category.
 
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
@@ -10,7 +10,7 @@ use ottie_core::{CategoryId, JobId, NewJob};
 use crate::AppState;
 use crate::categories::{absolute_folder, parse_url};
 use crate::error::Failure;
-use crate::types::{AddJob, Added, ApiError, Job, JobChange, MoveJob};
+use crate::types::{AddJob, Added, ApiError, Job, JobChange, MoveJob, ReorderJobs};
 
 /// Every job, oldest first.
 #[utoipa::path(
@@ -176,6 +176,40 @@ pub(crate) async fn change(
         .manager
         .change_job(id.parse::<JobId>()?, change.into())
         .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Moves downloads in the queue, among the waiting (queued or paused)
+/// downloads of their priority: priority comes first, the place only orders
+/// downloads of the same one. Those moved keep their order among themselves,
+/// so neighbours move as a block. Downloads that aren't waiting stay as they
+/// are; next to a download (`before`, `after`), so do those of another
+/// priority than it. Every client hears of each one that moved through a
+/// `changed` event (its new `place`).
+#[utoipa::path(
+    post,
+    path = "/jobs/reorder",
+    operation_id = "reorderJobs",
+    tag = "jobs",
+    request_body = ReorderJobs,
+    responses(
+        (status = NO_CONTENT, description = "Moved (or already there)"),
+        (status = BAD_REQUEST, description = "`invalidJobId`", body = ApiError),
+        (status = NOT_FOUND, description = "`jobNotFound`: nothing moved", body = ApiError),
+        (status = UNPROCESSABLE_ENTITY, description = "`invalidBody`", body = ApiError),
+    )
+)]
+pub(crate) async fn reorder(
+    State(state): State<AppState>,
+    body: Result<Json<ReorderJobs>, JsonRejection>,
+) -> Result<StatusCode, Failure> {
+    let Json(body) = body?;
+    let ids = body
+        .ids
+        .iter()
+        .map(|id| id.parse::<JobId>())
+        .collect::<Result<Vec<_>, _>>()?;
+    state.manager.reorder(ids, body.to.try_into()?).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

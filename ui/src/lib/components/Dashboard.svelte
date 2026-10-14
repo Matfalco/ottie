@@ -11,6 +11,7 @@
 	} from '#lib/filters.js';
 	import { formatCount, formatSpeed } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { upNext } from '#lib/queue.js';
 	import AddCard from './AddCard.svelte';
 	import JobSummary from './JobSummary.svelte';
 	import RunningList from './RunningList.svelte';
@@ -34,14 +35,8 @@
 	let attention = $derived(
 		session.list.filter((job) => job.state === 'failed' || job.state === 'retrying')
 	);
-	// The list is newest first: the queue serves the oldest first.
 	let running = $derived(session.list.filter((job) => job.state === 'downloading'));
-	let next = $derived(
-		session.list
-			.filter((job) => job.state === 'queued')
-			.reverse()
-			.slice(0, NEXT)
-	);
+	let next = $derived(upNext(session.list).slice(0, NEXT));
 	let latest = $derived(session.list.filter((job) => job.state === 'completed').slice(0, LATEST));
 	let speed = $derived(session.history.at(-1) ?? 0);
 	let peak = $derived(Math.max(0, ...session.history));

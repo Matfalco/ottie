@@ -5,6 +5,7 @@ import type { AddJob } from '@ottie/api-types/AddJob';
 import type { CategoryBody } from '@ottie/api-types/CategoryBody';
 import type { JobChange } from '@ottie/api-types/JobChange';
 import type { Matched } from '@ottie/api-types/Matched';
+import type { Reorder } from '@ottie/api-types/Reorder';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
@@ -97,6 +98,12 @@ export class Session {
 			remove: (id: string) => this.api.remove(id)
 		}[action];
 		await Promise.all(ids.map((id) => this.attempt(() => request(id))));
+	}
+
+	/** Moves the jobs in the queue; every page hears of it through `changed`
+	 * events. A failure shows on the page. */
+	async reorder(ids: string[], to: Reorder): Promise<void> {
+		await this.attempt(() => this.api.reorder(ids, to));
 	}
 
 	/** The job's play link as a full address; null if the daemon can't give one. */

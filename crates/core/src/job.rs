@@ -47,6 +47,12 @@ impl JobState {
     pub fn is_running(self) -> bool {
         matches!(self, JobState::Connecting | JobState::Downloading)
     }
+
+    /// Queued or paused: in the queue, or back in it at its place once
+    /// resumed. These are the jobs [`crate::Manager::reorder`] moves.
+    pub fn is_waiting(self) -> bool {
+        matches!(self, JobState::Queued | JobState::Paused)
+    }
 }
 
 /// Decides which queued job starts next and how the global speed limit is
@@ -61,6 +67,96 @@ pub enum Priority {
     High,
     /// Served before everything else: others only get what Urgent jobs can't use.
     Urgent,
+}
+
+/// Where [`crate::Manager::reorder`] moves jobs: among the waiting jobs of
+/// their priority (docs/decisions/0032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reorder {
+    /// One place earlier.
+    Up,
+    /// One place later.
+    Down,
+    /// Before all the others.
+    Top,
+    /// After all the others.
+    Bottom,
+    /// Just before this job (dragged there). Only moves jobs of its priority.
+    Before(JobId),
+    /// Just after this job.
+    After(JobId),
+}
+
+impl Reorder {
+    /// Moves the chosen jobs of `order` (one priority's waiting jobs, in
+    /// queue order), keeping their order among themselves: a chosen job
+    /// never passes another, so a block moves as one. With `Before` or
+    /// `After` a job that isn't in `order`, nothing moves.
+    pub(crate) fn apply(self, order: &mut Vec<JobId>, chosen: impl Fn(&JobId) -> bool) {
+        match self {
+            Reorder::Up => step_up(order, chosen),
+            Reorder::Down => step_down(order, chosen),
+            Reorder::Top => gather(order, chosen, 0),
+            Reorder::Bottom => {
+                let end = order.len();
+                gather(order, chosen, end);
+            }
+            Reorder::Before(target) | Reorder::After(target) => {
+                if let Some(i) = order.iter().position(|&id| id == target) {
+                    let at = if matches!(self, Reorder::After(_)) {
+                        i + 1
+                    } else {
+                        i
+                    };
+                    gather(order, chosen, at);
+                }
+            }
+        }
+    }
+
+    /// The job to go next to, when there is one.
+    pub(crate) fn target(self) -> Option<JobId> {
+        match self {
+            Reorder::Before(target) | Reorder::After(target) => Some(target),
+            _ => None,
+        }
+    }
+}
+
+/// Moves each chosen item one step earlier, past an item that isn't chosen.
+fn step_up<T>(order: &mut [T], chosen: impl Fn(&T) -> bool) {
+    for i in 1..order.len() {
+        if chosen(&order[i]) && !chosen(&order[i - 1]) {
+            order.swap(i - 1, i);
+        }
+    }
+}
+
+/// Moves each chosen item one step later, past an item that isn't chosen.
+fn step_down<T>(order: &mut [T], chosen: impl Fn(&T) -> bool) {
+    for i in (1..order.len()).rev() {
+        if chosen(&order[i - 1]) && !chosen(&order[i]) {
+            order.swap(i - 1, i);
+        }
+    }
+}
+
+/// Puts the chosen items together where the gap before `order[at]` was (at
+/// the end if `at` is the length); the others keep their order around them.
+fn gather<T>(order: &mut Vec<T>, chosen: impl Fn(&T) -> bool, at: usize) {
+    let (mut before, mut moving, mut after) = (Vec::new(), Vec::new(), Vec::new());
+    for (i, item) in order.drain(..).enumerate() {
+        if chosen(&item) {
+            moving.push(item);
+        } else if i < at {
+            before.push(item);
+        } else {
+            after.push(item);
+        }
+    }
+    order.extend(before);
+    order.extend(moving);
+    order.extend(after);
 }
 
 /// What [`crate::Manager::add`] needs to know about a new download.
@@ -133,6 +229,9 @@ pub struct JobSnapshot {
     /// `Queued` after giving its slot away). `Display` gives English text.
     pub problem: Option<Problem>,
     pub priority: Priority,
+    /// Its place in the queue: among the jobs of its priority, lower places
+    /// start first. New jobs go last; see [`crate::Manager::reorder`].
+    pub place: u64,
     /// This job's own limit in bytes per second; 0 = none.
     pub speed_limit: u64,
     /// Streaming mode (docs/decisions/0029): over several connections, the
@@ -150,6 +249,9 @@ pub struct JobSnapshot {
     /// Its file is moving to another category's folder. Until it's done,
     /// the job can't be paused, resumed, cancelled, removed or moved again.
     pub moving: bool,
+    /// Running, but the speed limits give it no bandwidth for now: other
+    /// downloads take it all (Urgent ones first). See docs/decisions/0033.
+    pub waiting_for_bandwidth: bool,
 }
 
 /// Broadcast to every subscriber of the manager.
@@ -222,6 +324,62 @@ mod tests {
         assert!(Retrying.can_become(Paused));
         assert!(!Retrying.can_become(Downloading));
         assert!(!Queued.can_become(Retrying));
+    }
+
+    /// Moves the upper-case letters of `order`.
+    fn moved(order: &str, step: impl Fn(&mut Vec<char>, &dyn Fn(&char) -> bool)) -> String {
+        let mut order: Vec<char> = order.chars().collect();
+        step(&mut order, &|c| c.is_uppercase());
+        order.into_iter().collect()
+    }
+
+    fn up(order: &str) -> String {
+        moved(order, |order, chosen| step_up(order, chosen))
+    }
+
+    fn down(order: &str) -> String {
+        moved(order, |order, chosen| step_down(order, chosen))
+    }
+
+    fn gathered(order: &str, at: usize) -> String {
+        moved(order, |order, chosen| gather(order, chosen, at))
+    }
+
+    #[test]
+    fn reorder_moves_one_step_as_a_block() {
+        assert_eq!(up("abCd"), "aCbd");
+        assert_eq!(up("aBCd"), "BCad");
+        assert_eq!(up("AbCd"), "ACbd");
+        assert_eq!(down("abCd"), "abdC");
+        assert_eq!(down("aBCd"), "adBC");
+        assert_eq!(down("aBcD"), "acBD");
+    }
+
+    #[test]
+    fn reorder_stops_at_the_ends() {
+        assert_eq!(up("ABc"), "ABc");
+        assert_eq!(down("aBC"), "aBC");
+        assert_eq!(up(""), "");
+    }
+
+    #[test]
+    fn gathering_puts_the_chosen_ones_in_the_gap() {
+        assert_eq!(gathered("aBcDe", 0), "BDace");
+        assert_eq!(gathered("aBcDe", 5), "aceBD");
+        // Before `e`, after `a`, and next to a chosen one: its gap.
+        assert_eq!(gathered("aBcDe", 4), "acBDe");
+        assert_eq!(gathered("aBcDe", 1), "aBDce");
+        assert_eq!(gathered("aBcDe", 3), "acBDe");
+    }
+
+    #[test]
+    fn dropping_next_to_a_job_of_another_lane_moves_nothing() {
+        let id = |seq| JobId::from_parts(1, seq);
+        let mut order = vec![id(1), id(2), id(3)];
+        Reorder::Before(id(9)).apply(&mut order, |&job| job == id(3));
+        assert_eq!(order, [id(1), id(2), id(3)]);
+        Reorder::After(id(1)).apply(&mut order, |&job| job == id(3));
+        assert_eq!(order, [id(1), id(3), id(2)]);
     }
 
     #[test]

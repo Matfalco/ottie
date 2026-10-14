@@ -209,6 +209,12 @@ async fn dropped_connection_can_be_resumed() {
 
     let (result, _) = run_collect(&s.client, &mut dl, None).await;
     assert!(matches!(result, Err(Error::Http(_))), "got {result:?}");
+    // It says what went wrong under reqwest's label.
+    let message = result.unwrap_err().to_string();
+    assert!(
+        message.starts_with("HTTP request failed: error decoding response body: "),
+        "{message}"
+    );
     // Bytes in flight when the connection died are lost, so expect up to 300 000.
     let offset = dl.downloaded;
     assert!(offset > 0 && offset <= 300_000, "downloaded {offset}");

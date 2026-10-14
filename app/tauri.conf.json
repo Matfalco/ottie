@@ -4,7 +4,7 @@
   "mainBinaryName": "ottie-app",
   "identifier": "io.github.matfalco.ottie",
   "build": {
-    "beforeDevCommand": { "script": "cargo build -p ottie", "wait": true },
+    "beforeDevCommand": { "script": "pnpm --filter ui build && cargo build -p ottie", "wait": true },
     "beforeBuildCommand": "node scripts/sidecar.mjs"
   },
   "app": {

@@ -33,6 +33,11 @@ error: string | null,
  */
 problem: Problem | null, priority: Priority, 
 /**
+ * Its place in the queue: among the waiting downloads of its priority,
+ * lower places start first. Only the order means something.
+ */
+place: number, 
+/**
  * Bytes per second; 0 = no limit of its own.
  */
 speedLimit: number, 
@@ -58,4 +63,9 @@ ranges: Array<ByteRange>,
  * Its file is moving to another category's folder. Until it's done, it
  * can't be paused, resumed, cancelled, removed or moved again.
  */
-moving: boolean, };
+moving: boolean, 
+/**
+ * Downloading, but the speed limits give it no bandwidth for now: other
+ * downloads take it all (urgent ones first).
+ */
+waitingForBandwidth: boolean, };

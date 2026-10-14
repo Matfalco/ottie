@@ -190,6 +190,12 @@ const MIGRATIONS: &[&str] = &[
         CHECK (streaming_chosen IN (0, 1));
      ALTER TABLE settings ADD COLUMN stream_media INTEGER NOT NULL DEFAULT 1
         CHECK (stream_media IN (0, 1));",
+    // 12: each job's place in the queue, at first in the order they were added.
+    "ALTER TABLE jobs ADD COLUMN queue_place INTEGER NOT NULL DEFAULT 0
+        CHECK (queue_place >= 0);
+     UPDATE jobs SET queue_place = (SELECT COUNT(*) FROM jobs AS older
+        WHERE older.id_secs < jobs.id_secs
+           OR (older.id_secs = jobs.id_secs AND older.id_seq <= jobs.id_seq));",
 ];
 
 /// Everything saved about one job.
@@ -200,6 +206,8 @@ pub(crate) struct JobRecord {
     pub download: Download,
     pub problem: Option<Problem>,
     pub priority: Priority,
+    /// Its place in the queue, among the jobs of its priority.
+    pub place: u64,
     pub speed_limit: u64,
     pub category: CategoryId,
     /// The user picked the category (or a folder, which decided it), rather
@@ -459,9 +467,9 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
                            downloaded, validator_kind, validator_value, resumable, error,
                            priority, speed_limit, category_id, category_chosen,
                            problem_kind, problem_number, problem_total, problem_detail,
-                           streaming, streaming_chosen)
+                           streaming, streaming_chosen, queue_place)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                 ?17, ?18, ?19, ?20, ?21, ?22)
+                 ?17, ?18, ?19, ?20, ?21, ?22, ?23)
          ON CONFLICT (id_secs, id_seq) DO UPDATE SET
              url = excluded.url, dest_dir = excluded.dest_dir,
              file_name = excluded.file_name, state = excluded.state,
@@ -473,7 +481,8 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
              category_id = excluded.category_id, category_chosen = excluded.category_chosen,
              problem_kind = excluded.problem_kind, problem_number = excluded.problem_number,
              problem_total = excluded.problem_total, problem_detail = excluded.problem_detail,
-             streaming = excluded.streaming, streaming_chosen = excluded.streaming_chosen",
+             streaming = excluded.streaming, streaming_chosen = excluded.streaming_chosen,
+             queue_place = excluded.queue_place",
     )?
     .execute(params![
         secs,
@@ -498,6 +507,7 @@ fn save(conn: &mut Connection, record: &JobRecord) -> Result<(), Error> {
         detail,
         record.streaming,
         record.streaming_chosen,
+        record.place,
     ])?;
     tx.prepare_cached("DELETE FROM segments WHERE job_secs = ?1 AND job_seq = ?2")?
         .execute(params![secs, seq])?;
@@ -554,7 +564,7 @@ fn load_jobs(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
                 validator_kind, validator_value, resumable, error, priority, speed_limit,
                 category_id, category_chosen,
                 problem_kind, problem_number, problem_total, problem_detail,
-                streaming, streaming_chosen
+                streaming, streaming_chosen, queue_place
          FROM jobs ORDER BY id_secs, id_seq",
     )?;
     let mut rows = stmt.query([])?;
@@ -633,6 +643,7 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         category_chosen: row.get(15)?,
         streaming: row.get(20)?,
         streaming_chosen: row.get(21)?,
+        place: row.get(22)?,
     }))
 }
 
@@ -999,6 +1010,7 @@ mod tests {
             category_chosen: false,
             streaming: true,
             streaming_chosen: true,
+            place: u64::from(seq) * 10,
         }
     }
 
@@ -1329,6 +1341,26 @@ mod tests {
                 (CategoryId(id), name)
             );
         }
+    }
+
+    #[test]
+    fn older_jobs_queue_in_the_order_they_were_added() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (i, sql) in MIGRATIONS[..11].iter().enumerate() {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", i + 1).unwrap();
+        }
+        conn.execute_batch(
+            "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, state)
+             VALUES (2, 1, 'https://example.com/c', '/d', 'queued'),
+                    (1, 2, 'https://example.com/b', '/d', 'queued'),
+                    (1, 1, 'https://example.com/a', '/d', 'paused');",
+        )
+        .unwrap();
+        prepare(&mut conn).unwrap();
+
+        let places: Vec<u64> = load_jobs(&conn).unwrap().iter().map(|j| j.place).collect();
+        assert_eq!(places, [1, 2, 3]);
     }
 
     #[test]

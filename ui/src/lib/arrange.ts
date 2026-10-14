@@ -10,6 +10,7 @@ import { GROUPS, groupOf, type Group } from './filters';
 import { displayName, formatCount, formatSpeed } from './format';
 import { m } from './paraglide/messages.js';
 import { getLocale, type Locale } from './paraglide/runtime.js';
+import { byQueue } from './queue';
 import { fraction } from './status';
 
 // The same types as a saved view's, so a view can hold an arrangement.
@@ -18,12 +19,12 @@ export type Direction = SortDirection;
 
 export const SORT_KEYS: SortKey[] = ['added', 'name', 'size', 'progress'];
 
-export const DEFAULT_ARRANGEMENT: Arrangement = { sort: 'added', direction: 'desc', grouped: true };
+export const DEFAULT_ARRANGEMENT: Arrangement = { sort: 'added', direction: 'asc', grouped: true };
 
-/** The direction a key starts in when picked: newest, largest and most done
+/** The direction a key starts in when picked: oldest, largest and most done
  * first, names from A. */
 export const FIRST_DIRECTION: Record<SortKey, Direction> = {
-	added: 'desc',
+	added: 'asc',
 	name: 'asc',
 	size: 'desc',
 	progress: 'desc'
@@ -83,7 +84,9 @@ export interface Section {
 	jobs: Job[];
 }
 
-/** The rows to show, in order. Empty groups are left out. */
+/** The rows to show, in order. Empty groups are left out. The waiting group
+ * is the queue: it's always in queue order, the next to start on top
+ * (docs/decisions/0032). */
 export function arrange(
 	jobs: Job[],
 	arrangement: Arrangement,
@@ -93,10 +96,10 @@ export function arrange(
 	if (!arrangement.grouped) {
 		return sorted.length === 0 ? [] : [{ group: null, jobs: sorted }];
 	}
-	return GROUPS.map((group) => ({
-		group,
-		jobs: sorted.filter((job) => groupOf(job) === group)
-	})).filter((section) => section.jobs.length > 0);
+	return GROUPS.map((group) => {
+		const jobs = sorted.filter((job) => groupOf(job) === group);
+		return { group, jobs: group === 'waiting' ? jobs.sort(byQueue) : jobs };
+	}).filter((section) => section.jobs.length > 0);
 }
 
 /** What a group's header says on its right: the total speed of the running

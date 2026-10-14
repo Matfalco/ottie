@@ -219,6 +219,34 @@ async fn a_stalled_connection_is_retried() {
 }
 
 #[tokio::test]
+async fn after_a_network_change_downloads_use_new_connections() {
+    let mut s = setup(policy(10, 3), 3).await;
+    let server = server().await;
+    // One download is running when the network changes...
+    server.configure(|b| b.chunk_delay = Some(Duration::from_millis(50)));
+    let running = s.add(&server, "running.bin").await;
+    s.wait_until(running, JobState::Downloading).await;
+    // ...and a finished one left its connection open, to be used again.
+    server.configure(|b| b.chunk_delay = None);
+    let finished = s.add(&server, "finished.bin").await;
+    s.wait_until(finished, JobState::Completed).await;
+
+    server.unplug();
+    let next = s.add(&server, "next.bin").await;
+    let log = s.run_to_end(&[running, next]).await;
+
+    assert_eq!(
+        server.requests_on_dead_connections(),
+        0,
+        "a request went over a connection from before the change"
+    );
+    assert_eq!(count(&log, next, JobState::Retrying), 0);
+    assert_eq!(count(&log, running, JobState::Retrying), 1);
+    s.assert_file("running.bin");
+    s.assert_file("next.bin");
+}
+
+#[tokio::test]
 async fn retry_after_sets_the_wait() {
     let mut s = setup(policy(10, 3), 3).await;
     let server = server().await;

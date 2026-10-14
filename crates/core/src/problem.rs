@@ -6,7 +6,7 @@ use std::fmt;
 
 use reqwest::StatusCode;
 
-use crate::error::Error;
+use crate::error::{Error, with_causes};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Problem {
@@ -33,10 +33,10 @@ impl From<&Error> for Problem {
     fn from(err: &Error) -> Self {
         match err {
             Error::Http(e) if e.is_redirect() => Problem::Redirect {
-                detail: e.to_string(),
+                detail: with_causes(e),
             },
             Error::Http(e) => Problem::Network {
-                detail: e.to_string(),
+                detail: with_causes(e),
             },
             Error::Status { status, .. } => Problem::HttpStatus {
                 status: status.as_u16(),

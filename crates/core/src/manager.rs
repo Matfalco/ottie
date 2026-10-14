@@ -2,7 +2,7 @@
 //! sends it commands through a [`Manager`] handle and listens to [`JobEvent`]s.
 
 use std::cmp::Reverse;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -18,7 +18,7 @@ use crate::download::{Download, Event, Outcome, Placement};
 use crate::error::Error;
 use crate::filename;
 use crate::id::{IdGenerator, JobId};
-use crate::job::{JobChange, JobEvent, JobSnapshot, JobState, NewJob, Priority};
+use crate::job::{JobChange, JobEvent, JobSnapshot, JobState, NewJob, Priority, Reorder};
 use crate::playback::{self, Head, Playbacks};
 use crate::problem::Problem;
 use crate::settings::{RetryPolicy, Settings, SettingsChange};
@@ -60,11 +60,18 @@ impl Manager {
     pub async fn start(backend: impl Backend, store: Store) -> Result<Manager, Error> {
         let loaded = store.load().await?;
         let mut jobs = BTreeMap::new();
+        let mut last_place = 0;
         for record in loaded.jobs {
+            last_place = last_place.max(record.place);
             jobs.insert(record.id, Job::restore(record).await);
         }
         let settings = loaded.settings;
-        let limiter = Limiter::new(settings.global_limit);
+        let (internal, internal_rx) = mpsc::unbounded_channel();
+        let starved = internal.clone();
+        let limiter = Limiter::new(settings.global_limit, move |id, waiting| {
+            // Fails only once the manager has stopped.
+            let _ = starved.send(Internal::Bandwidth { id, waiting });
+        });
         let mut categories = BTreeMap::new();
         // The database always has it (migration 8); General would do otherwise.
         let other = loaded
@@ -82,7 +89,6 @@ impl Manager {
             .map(|view| (view.id, view.settings))
             .collect();
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
-        let (internal, internal_rx) = mpsc::unbounded_channel();
         let (events, _) = broadcast::channel(EVENT_BUFFER);
         let playbacks = Playbacks::default();
         let actor = Actor {
@@ -93,6 +99,7 @@ impl Manager {
             // A removed job's ID may be higher than any left (`None` < `Some`).
             ids: IdGenerator::after(jobs.keys().next_back().copied().max(loaded.last_id)),
             jobs,
+            last_place,
             categories,
             other,
             views,
@@ -247,6 +254,18 @@ impl Manager {
         self.change_job(id, change).await
     }
 
+    /// Moves jobs in the queue, among the waiting (queued or paused) jobs of
+    /// their priority: priority still comes first, the place only orders jobs
+    /// of the same one. Chosen jobs keep their order among themselves, so
+    /// neighbours move as a block. Jobs that aren't waiting stay as they are;
+    /// with `Before`/`After`, so do those of another priority than the target
+    /// (and every job, if the target isn't waiting). Each job that moved is
+    /// saved and announced with a `Changed`. An unknown ID moves nothing.
+    pub async fn reorder(&self, ids: Vec<JobId>, to: Reorder) -> Result<(), Error> {
+        self.request(|reply| Command::Reorder { ids, to, reply })
+            .await
+    }
+
     /// Every category, by ID. General (ID 1) is always first; Other is
     /// always there too.
     pub async fn categories(&self) -> Result<Vec<Category>, Error> {
@@ -396,6 +415,11 @@ enum Command {
         change: JobChange,
         reply: Reply<()>,
     },
+    Reorder {
+        ids: Vec<JobId>,
+        to: Reorder,
+        reply: Reply<()>,
+    },
     Categories {
         reply: Reply<Vec<Category>>,
     },
@@ -464,6 +488,11 @@ enum Internal {
         id: JobId,
         due: Instant,
     },
+    /// A running job started or stopped getting no bandwidth from the limits.
+    Bandwidth {
+        id: JobId,
+        waiting: bool,
+    },
 }
 
 /// Why a running job is being stopped. Later variants win: a user's pause or
@@ -497,6 +526,8 @@ struct Job {
     /// Why it failed, or the last failure while retrying.
     problem: Option<Problem>,
     priority: Priority,
+    /// Its place in the queue among the jobs of its priority: lower starts first.
+    place: u64,
     /// Bytes per second; 0 = no limit of its own.
     speed_limit: u64,
     category: CategoryId,
@@ -515,6 +546,8 @@ struct Job {
     /// 0, or the order in which it gave its slot away to a waiting job: such
     /// jobs queue behind every job that didn't (not saved).
     gave_way: u64,
+    /// Running, but the speed limits give it no bandwidth (not saved).
+    waiting_for_bandwidth: bool,
     /// Present while a task is downloading this job.
     task: Option<Task>,
     /// Present while its category is changing and its file moving there.
@@ -556,6 +589,7 @@ impl Job {
             download,
             problem: record.problem,
             priority: record.priority,
+            place: record.place,
             speed_limit: record.speed_limit,
             category: record.category,
             category_chosen: record.category_chosen,
@@ -564,6 +598,7 @@ impl Job {
             retries: 0,
             retry_at: None,
             gave_way: 0,
+            waiting_for_bandwidth: false,
             task: None,
             moving: None,
             last_saved: None,
@@ -591,6 +626,7 @@ impl Job {
             resumable: dl.resumable,
             problem: self.problem.clone(),
             priority: self.priority,
+            place: self.place,
             speed_limit: self.speed_limit,
             streaming: self.streaming,
             category: self.category,
@@ -598,6 +634,7 @@ impl Job {
             retry_at: self.retry_at.map(|(_, at)| at),
             segments: dl.segments.clone(),
             moving: self.moving.is_some(),
+            waiting_for_bandwidth: self.waiting_for_bandwidth,
         }
     }
 }
@@ -618,6 +655,8 @@ struct Actor<B> {
     limiter: Limiter,
     /// Sorted by ID, which means by creation time.
     jobs: BTreeMap<JobId, Job>,
+    /// The highest place in the queue handed out; new jobs go after it.
+    last_place: u64,
     /// Always holds General and Other. Saved whenever one changes.
     categories: BTreeMap<CategoryId, CategorySettings>,
     /// The ID of the built-in Other category.
@@ -692,6 +731,9 @@ impl<B: Backend> Actor<B> {
             }
             Command::ChangeJob { id, change, reply } => {
                 let _ = reply.send(self.change_job(id, change));
+            }
+            Command::Reorder { ids, to, reply } => {
+                let _ = reply.send(self.reorder(&ids, to));
             }
             Command::Categories { reply } => {
                 let _ = reply.send(Ok(self.categories()));
@@ -769,6 +811,16 @@ impl<B: Backend> Actor<B> {
                 // Not if it was paused, cancelled or gave way meanwhile.
                 if waiting && self.shutdown.is_none() {
                     self.start_job(id);
+                }
+            }
+            Internal::Bandwidth { id, waiting } => {
+                // Not saved: it only means something while the job runs.
+                if let Some(job) = self.jobs.get_mut(&id)
+                    && job.task.is_some()
+                    && job.waiting_for_bandwidth != waiting
+                {
+                    job.waiting_for_bandwidth = waiting;
+                    self.emit_changed(id);
                 }
             }
         }
@@ -886,6 +938,7 @@ impl<B: Backend> Actor<B> {
         });
         let download = Download::new(new.url, dest_dir)?;
         let id = self.ids.next(unix_now());
+        self.last_place += 1;
         self.jobs.insert(
             id,
             Job {
@@ -893,6 +946,7 @@ impl<B: Backend> Actor<B> {
                 download,
                 problem: None,
                 priority: Priority::default(),
+                place: self.last_place,
                 speed_limit: 0,
                 category,
                 category_chosen: fixed,
@@ -901,6 +955,7 @@ impl<B: Backend> Actor<B> {
                 retries: 0,
                 retry_at: None,
                 gave_way: 0,
+                waiting_for_bandwidth: false,
                 task: None,
                 moving: None,
                 last_saved: None,
@@ -950,6 +1005,46 @@ impl<B: Backend> Actor<B> {
         }
         if let Some(priority) = priority {
             self.limiter.set_priority(id, priority);
+        }
+        Ok(())
+    }
+
+    /// See [`Manager::reorder`]. Each priority's waiting jobs swap places
+    /// among themselves, so every other job keeps its own.
+    fn reorder(&mut self, ids: &[JobId], to: Reorder) -> Result<(), Error> {
+        let known = |id: &JobId| self.jobs.contains_key(id);
+        if let Some(id) = ids.iter().copied().chain(to.target()).find(|id| !known(id)) {
+            return Err(Error::JobNotFound(id));
+        }
+        let chosen: HashSet<JobId> = ids.iter().copied().collect();
+        let mut lanes: HashMap<Priority, Vec<(u64, JobId)>> = HashMap::new();
+        for (&id, job) in &self.jobs {
+            if job.state.is_waiting() {
+                lanes.entry(job.priority).or_default().push((job.place, id));
+            }
+        }
+        let mut moved = Vec::new();
+        for mut lane in lanes.into_values() {
+            if !lane.iter().any(|(_, id)| chosen.contains(id)) {
+                continue;
+            }
+            lane.sort_unstable();
+            let (places, mut order): (Vec<u64>, Vec<JobId>) = lane.into_iter().unzip();
+            to.apply(&mut order, |id| chosen.contains(id));
+            for (place, id) in places.into_iter().zip(order) {
+                if let Some(job) = self.jobs.get_mut(&id)
+                    && job.place != place
+                {
+                    job.place = place;
+                    moved.push(id);
+                }
+            }
+        }
+        // In ID order, so the events always come in the same order.
+        moved.sort_unstable();
+        for id in moved {
+            self.save(id);
+            self.emit_changed(id);
         }
         Ok(())
     }
@@ -1483,8 +1578,8 @@ impl<B: Backend> Actor<B> {
     }
 
     /// Starts queued jobs until `max_concurrent` are running, skipping jobs
-    /// whose category is at its own cap: the highest priority first, and the
-    /// oldest first within a priority.
+    /// whose category is at its own cap: the highest priority first, and by
+    /// place in the queue within a priority.
     ///
     /// When every slot is taken, a `Retrying` job that has used its in-slot
     /// retries gives its slot to a queued job, and queues behind the others.
@@ -1522,7 +1617,8 @@ impl<B: Backend> Actor<B> {
 
     /// The queued job to start next, among those whose category has room:
     /// jobs that gave their slot away come last (whatever their priority, or
-    /// they would take it straight back); then the highest priority, the oldest.
+    /// they would take it straight back); then the highest priority, the
+    /// lowest place.
     fn next_queued(&self, busy: &HashMap<CategoryId, usize>) -> Option<JobId> {
         self.jobs
             .iter()
@@ -1531,14 +1627,14 @@ impl<B: Backend> Actor<B> {
                     && job.moving.is_none()
                     && self.has_room(job.category, busy)
             })
-            // `Reverse`: the smallest `gave_way` and ID win.
-            .max_by_key(|(id, job)| {
+            // `Reverse`: the smallest `gave_way` and place win.
+            .max_by_key(|(_, job)| {
                 let never_gave_way = job.gave_way == 0;
                 (
                     never_gave_way,
                     job.priority,
                     Reverse(job.gave_way),
-                    Reverse(**id),
+                    Reverse(job.place),
                 )
             })
             .map(|(id, _)| *id)
@@ -1638,6 +1734,7 @@ impl<B: Backend> Actor<B> {
             return;
         };
         let task = job.task.take();
+        job.waiting_for_bandwidth = false;
         job.download = *download;
         job.download.placement = None;
         let stop = task.as_ref().and_then(|t| t.stop);
@@ -1772,6 +1869,7 @@ impl<B: Backend> Actor<B> {
             download: job.download.clone(),
             problem: job.problem.clone(),
             priority: job.priority,
+            place: job.place,
             speed_limit: job.speed_limit,
             category: job.category,
             category_chosen: job.category_chosen,

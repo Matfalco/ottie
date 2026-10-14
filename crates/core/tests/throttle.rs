@@ -238,6 +238,73 @@ async fn limits_change_while_downloading() {
 }
 
 #[tokio::test]
+async fn a_download_without_bandwidth_lets_go_of_its_requests_and_says_so() {
+    let config = HttpConfig {
+        connections: 4,
+        min_split: 128 * KIB,
+        starved_after: Duration::from_millis(200),
+        ..HttpConfig::default()
+    };
+    let store = Store::open_in_memory().await.unwrap();
+    let manager = Manager::start(HttpBackend::with_config(config).unwrap(), store)
+        .await
+        .unwrap();
+    let s = Setup {
+        manager,
+        dir: tempfile::tempdir().unwrap(),
+    };
+    s.manager.set_global_limit(256 * KIB).await.unwrap();
+    // 1 MiB takes 4 s at the limit; each answer comes at 320 KiB/s at most.
+    let server = server(1024 * KIB).await;
+    server.configure(|b| b.chunk_delay = Some(Duration::from_millis(50)));
+    let mut events = s.manager.subscribe();
+    let urgent = s.add(&server, "urgent.bin").await;
+    s.manager
+        .set_priority(urgent, Priority::Urgent)
+        .await
+        .unwrap();
+    let starved = s.add(&server, "starved.bin").await;
+
+    // The urgent download takes the whole limit: the other one says it waits...
+    let mut states = Vec::new();
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            if let ottie_core::JobEvent::Changed(job) = events.recv().await.unwrap()
+                && job.id == starved
+            {
+                states.push(job.state);
+                if job.waiting_for_bandwidth {
+                    return;
+                }
+            }
+        }
+    })
+    .await
+    .expect("never said it waits for bandwidth");
+    assert_eq!(s.job(urgent).await.state, JobState::Downloading);
+    // ...and has let go of its requests rather than leaving them unread.
+    assert!(server.abandoned("starved.bin") > 0, "it held its requests");
+
+    s.manager.set_global_limit(0).await.unwrap();
+    for id in [urgent, starved] {
+        s.wait_until(id, JobState::Completed).await;
+    }
+    while let Ok(event) = events.try_recv() {
+        if let ottie_core::JobEvent::Changed(job) = event
+            && job.id == starved
+        {
+            states.push(job.state);
+        }
+    }
+    assert!(!states.contains(&JobState::Retrying), "{states:?}");
+    assert!(!s.job(starved).await.waiting_for_bandwidth);
+    let data = test_data(1024 * 1024, 3);
+    for name in ["urgent.bin", "starved.bin"] {
+        assert!(std::fs::read(s.dir.path().join(name)).unwrap() == data);
+    }
+}
+
+#[tokio::test]
 async fn the_queue_starts_higher_priorities_first() {
     let s = setup().await;
     s.manager.set_max_concurrent(1).await.unwrap();

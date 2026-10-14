@@ -39,8 +39,8 @@ pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
 pub use types::{
     AddJob, Added, AddedCategory, AddedView, AddedWithin, ApiError, Appearance, AppearanceMode,
     Arrangement, BuiltIn, ByteRange, Category, CategoryBody, Event, Job, JobChange, JobState,
-    MatchLink, Matched, MoveJob, Palette, Priority, Problem, Reason, Settings, SettingsChange,
-    SortDirection, SortKey, StreamLink, View, ViewBody, ViewFilters,
+    MatchLink, Matched, MoveJob, Palette, Priority, Problem, Reason, Reorder, ReorderJobs,
+    Settings, SettingsChange, SortDirection, SortKey, StreamLink, View, ViewBody, ViewFilters,
 };
 pub use ui::UiSource;
 
@@ -66,6 +66,7 @@ fn private_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(jobs::resume))
         .routes(routes!(jobs::cancel))
         .routes(routes!(jobs::set_category))
+        .routes(routes!(jobs::reorder))
         .routes(routes!(stream::link))
         .routes(routes!(categories::list, categories::add))
         .routes(routes!(categories::matching))

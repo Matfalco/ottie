@@ -13,6 +13,7 @@
 	import { targets, type Action } from '#lib/bulk.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import type { Reorder } from '#lib/queue.js';
 	import MoveMenu from './MoveMenu.svelte';
 
 	interface Props {
@@ -24,6 +25,11 @@
 		categories: Category[];
 		/** Moves the selected downloads to that category. */
 		onMove: (category: number) => void;
+		/** Moves the selected downloads in the queue. */
+		onReorder: (to: Reorder) => void;
+		/** Whether that would change anything, each way. */
+		canUp: boolean;
+		canDown: boolean;
 		/** Downloads shown, of `total`. */
 		shown: number;
 		total: number;
@@ -40,6 +46,9 @@
 		onRun,
 		categories,
 		onMove,
+		onReorder,
+		canUp,
+		canDown,
 		shown,
 		total,
 		active,
@@ -69,11 +78,20 @@
 	{/each}
 	<MoveMenu {categories} disabled={selected.length === 0} {onMove} />
 	<span class="separator" aria-hidden="true"></span>
-	<!-- Not in the daemon yet (docs/decisions/0021): shown, but disabled. -->
-	<button disabled aria-label={m.queue_up()} title={m.coming_later()}>
+	<button
+		disabled={!canUp}
+		onclick={() => onReorder('up')}
+		aria-label={m.queue_up()}
+		title={m.queue_up()}
+	>
 		<ChevronUp size={15} aria-hidden="true" />
 	</button>
-	<button disabled aria-label={m.queue_down()} title={m.coming_later()}>
+	<button
+		disabled={!canDown}
+		onclick={() => onReorder('down')}
+		aria-label={m.queue_down()}
+		title={m.queue_down()}
+	>
 		<ChevronDown size={15} aria-hidden="true" />
 	</button>
 	{#if selected.length > 0}
