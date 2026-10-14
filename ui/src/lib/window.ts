@@ -7,6 +7,7 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
+import type { Sound, SoundKind, Sounds } from './sounds.js';
 
 export interface AppWindow {
 	minimize(): Promise<void>;
@@ -96,13 +97,21 @@ export function choosePlayer(title: string, programs: string): Promise<Player> {
  * as each one finishes, once nothing runs or waits any more, or never. */
 export type Notify = 'each' | 'all' | 'never';
 
-/** The desktop app's own settings (docs/decisions/0034, 0035). */
+/** The desktop app's own settings (docs/decisions/0034, 0035, 0038). */
 export interface Desktop {
 	/** Closing the window keeps Ottie running in the tray. */
 	closeToTray: boolean;
 	notify: Notify;
 	/** A failed download is notified (after its last retry). */
 	notifyFailed: boolean;
+	sounds: Sounds;
+	/** With `custom` sounds: one for each kind. */
+	soundFinished: Sound;
+	soundFailed: Sound;
+	/** Ottie's sound sets, by ID, to choose from. */
+	sets: string[];
+	/** The system's sound can be played to hear it (on Windows). */
+	systemSound: boolean;
 }
 
 export function desktop(): Promise<Desktop> {
@@ -119,6 +128,20 @@ export function setNotify(notify: Notify): Promise<Desktop> {
 
 export function setNotifyFailed(on: boolean): Promise<Desktop> {
 	return invoke<Desktop>('set_notify_failed', { on });
+}
+
+export function setSounds(sounds: Sounds): Promise<Desktop> {
+	return invoke<Desktop>('set_sounds', { sounds });
+}
+
+/** With `custom` sounds: the sound of one kind. */
+export function setSound(kind: SoundKind, sound: Sound): Promise<Desktop> {
+	return invoke<Desktop>('set_sound', { kind, sound });
+}
+
+/** Plays a sound to hear it (see `canPreview`). A failure stays quiet. */
+export function playSound(sound: Sound): void {
+	invoke('play_sound', { sound }).catch(() => {});
 }
 
 /** Tells the desktop app which language the page shows, for the tray's

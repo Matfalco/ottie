@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ottie sound pairs</title>
+<style>
+:root {
+	--bg: #f4f1ea; --panel: #fbf9f4; --card: #fff; --text: #1d2a2c; --soft: #5f6d6e; --line: #ddd5c6;
+	--accent: #0f6e74; --accent-soft: #d8ecec; --success: #2f7d4a; --failure: #a33b3b; --maybe: #a26a0c;
+	--playing: #fff4d6;
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #0e1a1c; --panel: #132427; --card: #182e31; --text: #e5eeed; --soft: #9fb2b1; --line: #26403f;
+		--accent: #f2b544; --accent-soft: #3a3320; --success: #6cc58d; --failure: #ef8080; --maybe: #e8b04c;
+		--playing: #3a3320;
+	}
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--accent); }
+header { padding: 16px 16px 8px; display: grid; gap: 10px; max-width: 1400px; margin: auto; }
+h1 { margin: 0; font-size: 20px; }
+h1 a { font-size: 14px; font-weight: 400; margin-left: 12px; }
+h2 { margin: 0 0 8px; font-size: 15px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.intro { margin: 0; color: var(--soft); max-width: 980px; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.chip { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+.chip:hover { border-color: var(--accent); }
+.status { color: var(--soft); }
+.status.bad { color: var(--failure); font-weight: 600; }
+kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--card); font: 12px ui-monospace, monospace; }
+textarea { width: 100%; max-width: 980px; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); resize: vertical; }
+main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; padding: 8px 16px 32px; max-width: 1400px; margin: auto; }
+@media (max-width: 1000px) { main { grid-template-columns: minmax(0, 1fr); } }
+.panel { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); min-width: 0; }
+.count { color: var(--soft); font-weight: 400; font-size: 12px; }
+
+/* Pairs */
+.pairs { display: flex; flex-direction: column; gap: 8px; }
+.pair { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr) minmax(0, 1fr) auto; grid-template-areas: "num name name tools" "num success failure tools"; gap: 6px 8px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.pair.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.pair .num { grid-area: num; color: var(--soft); font-weight: 600; text-align: center; }
+.pair .name { grid-area: name; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; }
+.pair .slot.success { grid-area: success; } .pair .slot.failure { grid-area: failure; }
+.pair .tools { grid-area: tools; display: flex; flex-direction: column; gap: 4px; }
+.pair .tools button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; white-space: nowrap; }
+.pair .tools button:hover { border-color: var(--accent); }
+.pair .tools .both { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
+.slot { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 6px; border: 1px dashed var(--line); border-radius: 8px; min-width: 0; }
+.slot.filled { border-style: solid; }
+.slot.over { border-color: var(--accent); background: var(--accent-soft); }
+.slot.success .label { color: var(--success); } .slot.failure .label { color: var(--failure); }
+.slot .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; flex: none; }
+.slot .sound { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot .empty { flex: 1; color: var(--soft); font-size: 12px; }
+.slot button { flex: none; width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 11px; }
+.slot .clear { background: transparent; color: var(--soft); }
+.add { margin-top: 4px; padding: 8px; border: 1px dashed var(--line); border-radius: 10px; background: transparent; color: var(--accent); }
+.add:hover { border-color: var(--accent); }
+
+/* Library */
+.library { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-content: start; }
+@media (max-width: 560px) {
+	.library { grid-template-columns: minmax(0, 1fr); }
+	.pair { grid-template-columns: 1.6rem minmax(0, 1fr); grid-template-areas: "num name" "num success" "num failure" "num tools"; }
+	.pair .tools { flex-direction: row; }
+}
+.column h3 { margin: 0 2px 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; display: flex; justify-content: space-between; }
+.column.success h3 { color: var(--success); } .column.failure h3 { color: var(--failure); }
+.list { display: flex; flex-direction: column; gap: 6px; }
+.card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0 8px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); cursor: grab; }
+.card.playing { background: var(--playing); }
+/* Already in a pair: greyed out, still usable in another. */
+.card.used { opacity: .5; }
+.card.used:hover, .card.used.current { opacity: 1; }
+.card.current { border-color: var(--accent); }
+.card .play { width: 28px; height: 28px; border: none; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12px; }
+.card .text { min-width: 0; }
+.card b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card small { display: block; color: var(--soft); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .maybe { color: var(--maybe); font-weight: 600; }
+.card .use { padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; }
+.card .use:hover { border-color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+	<h1>Ottie sound pairs <a href="sort.html">← Back to sorting</a></h1>
+	<p class="intro">Build matching pairs: one <b>success</b> sound and the <b>failure</b> sound that goes with it. Select a pair (click it), then press <b>Use</b> on a sound below, or drag a sound onto a slot. <b>▶ Both</b> plays the success sound, then the failure one. A sound can be in several pairs. Everything is saved as you go, for Claude to read.</p>
+	<div class="bar">
+		<button class="chip" id="system">▶ Windows’ notification sound</button>
+		<label>Gap between the two <input type="range" id="gap" min="200" max="2000" step="100" value="900"> <span id="gapText"></span></label>
+		<span class="status" id="status">Loading…</span>
+	</div>
+	<div class="bar intro">Keys: <kbd>Space</kbd> replay the last sound · <kbd>B</kbd> play the selected pair · <kbd>↑</kbd><kbd>↓</kbd> select the previous / next pair</div>
+	<textarea id="notes" placeholder="Notes for Claude (optional)"></textarea>
+</header>
+<main>
+	<section class="panel">
+		<h2>Pairs <span class="count" id="pairCount"></span></h2>
+		<div class="pairs" id="pairs"></div>
+		<button class="add" id="add" style="width:100%">+ New pair</button>
+	</section>
+	<section class="panel">
+		<h2>Your sounds <span class="count">from Yes and Maybe in the sorting</span></h2>
+		<div class="library" id="library"></div>
+	</section>
+</main>
+<script>
+let sounds = [];
+const byId = {};
+/** id → 'yes' | 'maybe', and its kind from the sorting. */
+const sorted = {};
+/** [{ name, success, failure }] */
+let pairs = [];
+let active = 0;
+let last = null;
+const audio = new Audio();
+let sequence = null;
+const statusLine = document.getElementById('status');
+const notes = document.getElementById('notes');
+const gap = document.getElementById('gap');
+
+function setStatus(text, bad = false) {
+	statusLine.textContent = text;
+	statusLine.classList.toggle('bad', bad);
+}
+
+async function load() {
+	sounds = await (await fetch('sounds.json')).json();
+	for (const sound of sounds) byId[sound.id] = sound;
+	let saved = {};
+	try {
+		const answer = await fetch('choices.json');
+		if (answer.ok) saved = await answer.json();
+	} catch {}
+	for (const pool of ['yes', 'maybe']) {
+		for (const kind of ['success', 'failure']) {
+			for (const id of saved.summary?.[pool]?.[kind] ?? []) if (byId[id]) sorted[id] = { pool, kind };
+		}
+	}
+	pairs = (saved.pairs ?? []).map((p) => ({ name: p.name ?? '', success: byId[p.success] ? p.success : null, failure: byId[p.failure] ? p.failure : null }));
+	if (!pairs.length) pairs.push(empty());
+	notes.value = saved.notes ?? '';
+	gap.value = saved.pairGap ?? 900;
+	showGap();
+	renderPairs();
+	renderLibrary();
+	setStatus(saved.pairs ? 'Pairs loaded' : 'No pairs yet');
+}
+
+function empty() {
+	return { name: '', success: null, failure: null };
+}
+
+function showGap() {
+	document.getElementById('gapText').textContent = `${(gap.value / 1000).toFixed(1)} s`;
+}
+
+function renderPairs() {
+	const box = document.getElementById('pairs');
+	box.replaceChildren();
+	pairs.forEach((pair, index) => {
+		const row = document.createElement('div');
+		row.className = 'pair' + (index === active ? ' active' : '');
+		row.innerHTML = `
+			<span class="num">${index + 1}</span>
+			<input class="name" placeholder="Name this pair (optional)">
+			<span class="tools">
+				<button class="both">▶ Both</button>
+				<button class="remove">Remove</button>
+			</span>`;
+		const name = row.querySelector('.name');
+		name.value = pair.name;
+		name.addEventListener('input', () => {
+			pair.name = name.value;
+			save();
+		});
+		row.insertBefore(slot(pair, 'success'), row.querySelector('.tools'));
+		row.insertBefore(slot(pair, 'failure'), row.querySelector('.tools'));
+		row.querySelector('.both').addEventListener('click', (event) => {
+			event.stopPropagation();
+			select(index);
+			playPair(pair);
+		});
+		row.querySelector('.remove').addEventListener('click', (event) => {
+			event.stopPropagation();
+			pairs.splice(index, 1);
+			if (!pairs.length) pairs.push(empty());
+			active = Math.min(active, pairs.length - 1);
+			renderPairs();
+			renderLibrary();
+			save();
+		});
+		row.addEventListener('click', () => select(index));
+		box.append(row);
+	});
+	const done = pairs.filter((p) => p.success && p.failure).length;
+	document.getElementById('pairCount').textContent = `${done} complete`;
+}
+
+function slot(pair, kind) {
+	const el = document.createElement('div');
+	const id = pair[kind];
+	el.className = `slot ${kind}` + (id ? ' filled' : '');
+	el.innerHTML = `<span class="label">${kind === 'success' ? 'Success' : 'Failure'}</span>`;
+	if (id) {
+		const play = document.createElement('button');
+		play.textContent = '▶';
+		play.title = 'Play';
+		play.addEventListener('click', (event) => {
+			event.stopPropagation();
+			playOne(id);
+		});
+		const text = document.createElement('span');
+		text.className = 'sound';
+		text.textContent = byId[id].name;
+		text.title = `${byId[id].description} · ${byId[id].source}`;
+		const clear = document.createElement('button');
+		clear.className = 'clear';
+		clear.textContent = '✕';
+		clear.title = 'Empty this slot';
+		clear.addEventListener('click', (event) => {
+			event.stopPropagation();
+			pair[kind] = null;
+			renderPairs();
+			renderLibrary();
+			save();
+		});
+		el.append(play, text, clear);
+	} else {
+		el.insertAdjacentHTML('beforeend', `<span class="empty">Drop or “Use” a ${kind} sound</span>`);
+	}
+	el.addEventListener('dragover', (event) => {
+		event.preventDefault();
+		el.classList.add('over');
+	});
+	el.addEventListener('dragleave', () => el.classList.remove('over'));
+	el.addEventListener('drop', (event) => {
+		event.preventDefault();
+		const dropped = event.dataTransfer.getData('text/plain');
+		if (!byId[dropped]) return;
+		pair[kind] = dropped;
+		active = pairs.indexOf(pair);
+		renderPairs();
+		renderLibrary();
+		save();
+	});
+	return el;
+}
+
+function renderLibrary() {
+	const box = document.getElementById('library');
+	box.replaceChildren();
+	for (const kind of ['success', 'failure']) {
+		const column = document.createElement('div');
+		column.className = `column ${kind}`;
+		const ids = sounds.filter((s) => sorted[s.id]?.kind === kind).map((s) => s.id);
+		// Yes first, then Maybe.
+		ids.sort((a, b) => (sorted[a].pool === sorted[b].pool ? 0 : sorted[a].pool === 'yes' ? -1 : 1));
+		column.innerHTML = `<h3>${kind === 'success' ? 'Success' : 'Failure'}<span class="count">${ids.length}</span></h3>`;
+		const list = document.createElement('div');
+		list.className = 'list';
+		for (const id of ids) list.append(card(id, kind));
+		column.append(list);
+		box.append(column);
+	}
+}
+
+function card(id, kind) {
+	const sound = byId[id];
+	const used = pairs.map((p, i) => (p[kind] === id ? i + 1 : null)).filter(Boolean);
+	const el = document.createElement('div');
+	el.className = 'card' + (id === last ? ' current' : '') + (used.length ? ' used' : '');
+	el.dataset.id = id;
+	el.draggable = true;
+	el.title = `${sound.description}\n${sound.source} · ${sound.licence} · ${sound.seconds} s`;
+	el.innerHTML = `<button class="play" aria-label="Play">▶</button><span class="text"><b></b><small></small></span><button class="use">Use</button>`;
+	el.querySelector('b').textContent = sound.name;
+	const small = el.querySelector('small');
+	if (sorted[id].pool === 'maybe') small.innerHTML = '<span class="maybe">Maybe</span> · ';
+	small.append(used.length ? `in pair ${used.join(', ')}` : sound.source);
+	el.querySelector('.use').addEventListener('click', (event) => {
+		event.stopPropagation();
+		if (!pairs[active]) pairs.push(empty());
+		pairs[active][kind] = id;
+		renderPairs();
+		renderLibrary();
+		save();
+		if (pairs[active].success && pairs[active].failure) playPair(pairs[active]);
+	});
+	el.addEventListener('click', () => playOne(id));
+	el.addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain', id));
+	return el;
+}
+
+function select(index) {
+	if (index === active) return;
+	active = index;
+	renderPairs();
+}
+
+function mark(id) {
+	last = id;
+	document.querySelectorAll('.card.current, .card.playing').forEach((c) => c.classList.remove('current', 'playing'));
+	const el = document.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
+	el?.classList.add('current', 'playing');
+	audio.onended = () => el?.classList.remove('playing');
+}
+
+function playOne(id) {
+	clearTimeout(sequence);
+	mark(id);
+	audio.src = id === 'windows-system' ? 'sounds/windows-system.wav' : `sounds/${id}.wav`;
+	audio.currentTime = 0;
+	audio.play().catch(() => {});
+}
+
+function playPair(pair) {
+	clearTimeout(sequence);
+	if (pair.success && pair.failure) {
+		playOne(pair.success);
+		const failure = pair.failure;
+		audio.onended = () => {
+			sequence = setTimeout(() => playOne(failure), Number(gap.value));
+		};
+	} else if (pair.success || pair.failure) {
+		playOne(pair.success || pair.failure);
+	}
+}
+
+let timer = null;
+function save() {
+	clearTimeout(timer);
+	setStatus('Saving…');
+	timer = setTimeout(async () => {
+		const readable = pairs
+			.filter((p) => p.success || p.failure)
+			.map((p, i) => `${i + 1}. ${p.name || '(no name)'}: ${p.success ? byId[p.success].name : '—'} / ${p.failure ? byId[p.failure].name : '—'}`);
+		const body = JSON.stringify({
+			updated: new Date().toISOString(),
+			notes: notes.value,
+			pairGap: Number(gap.value),
+			pairs: pairs.filter((p) => p.success || p.failure || p.name),
+			pairsReadable: readable
+		});
+		try {
+			const answer = await fetch('choices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+			if (!answer.ok) throw new Error(answer.status);
+			setStatus(`Saved at ${new Date().toLocaleTimeString()}`);
+		} catch {
+			setStatus('Not saved: is the picker’s server still running?', true);
+		}
+	}, 300);
+}
+
+document.getElementById('add').addEventListener('click', () => {
+	pairs.push(empty());
+	active = pairs.length - 1;
+	renderPairs();
+	document.querySelectorAll('.pair')[active]?.scrollIntoView({ block: 'nearest' });
+});
+document.getElementById('system').addEventListener('click', () => playOne('windows-system'));
+notes.addEventListener('input', save);
+gap.addEventListener('input', () => {
+	showGap();
+	save();
+});
+document.addEventListener('keydown', (event) => {
+	if (event.target.matches('input, textarea') || event.ctrlKey || event.metaKey || event.altKey) return;
+	const key = event.key.toLowerCase();
+	if (key === ' ' && last) playOne(last);
+	else if (key === 'b' && pairs[active]) playPair(pairs[active]);
+	else if (key === 'arrowdown' && active < pairs.length - 1) select(active + 1);
+	else if (key === 'arrowup' && active > 0) select(active - 1);
+	else return;
+	event.preventDefault();
+});
+
+load().catch(() => setStatus('Couldn’t load the sounds: is the picker’s server running?', true));
+</script>
+</body>
+</html>

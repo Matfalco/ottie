@@ -50,7 +50,7 @@ Android app (Tauri) ──────┘    (on Android, core + api run inside 
 
 - **The HTTP API is the only contract.** Every client talks to the engine through it. It's documented in `docs/api/` (`docs/decisions/0030`): a guide, and `openapi.json` generated from the handlers. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart, the player), never for download operations. The app's own commands are listed in `app/build.rs` and granted to the daemon's pages in `PAGE_PERMISSIONS`; a page never passes a program or path to run.
 - **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
-- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable), the tooltip and notifications (finished: all at once by default, or each, or never; failed: a switch; `docs/decisions/0035`), with its own texts in `app/messages/`. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
+- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable), the tooltip and notifications (finished: all at once by default, or each, or never; failed: a switch; `docs/decisions/0035`; with their sounds: the system's, silent, a set of Ottie's or one for each kind, `0038`), with its own texts in `app/messages/`. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
 - **Headless:** the daemon runs standalone (systemd user service, Docker) and serves the built web UI itself.
 
@@ -120,19 +120,27 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
   src/client.rs      the app as an API client: events WebSocket, jobs, settings, pause/resume, limit
   src/status.rs      follows the events (reconnects), sums them up once a second for the tray (counts, speed, progress of those of known size),
                      and passes downloads that finished or failed to notify.rs
-  src/notify.rs      notifications (0035): what to tell (each, all at once, failed), a click opens the window
+  src/notify.rs      notifications (0035): what to tell (each, all at once, failed), with which sound, a click
+                     opens the window
+  src/sound.rs       notification sounds (0038): the system's, silent, one of Ottie's sets (sounds/, played with
+                     rodio) or one for each kind
   src/tray.rs        tray icon (white/black by taskbar, size by scale), clicks, the system's menu and its
                      actions (Linux, or while the daemon is unreachable) (0034)
   src/popup.rs       Ottie's own tray menu: the /tray page in a borderless window beside the click, hidden
                      on blur; commands menu_ready / show_main / quit_app
   src/texts.rs       the tray's and notifications' texts from messages/{en,fr}.json, speeds, counts and
                      failure reasons per language
-  src/prefs.rs       app.json: close to tray, notifications, the page's language, last total limit; commands
-                     desktop / set_close_to_tray / set_notify / set_notify_failed / set_language
+  src/prefs.rs       app.json: close to tray, notifications and their sounds, the page's language, last total
+                     limit; commands desktop / set_close_to_tray / set_notify / set_notify_failed / set_sounds /
+                     set_sound / play_sound / set_language
   src/config.rs      load/save the app's JSON settings files in its config folder
   src/player.rs      "Play with" (0031): system's player via a .m3u, browser, or a picked program;
                      saved in the app's config folder; commands player / set_play_with / choose_player
   messages/          the tray's and notifications' texts, one JSON file per language
+  sounds/            Ottie's notification sound sets (Ogg), built into the app; README.md: how each was made,
+                     its licence, and how loud a new one should be
+  sounds/tools/      Python scripts that made them (synthesis, CC0 sources, loudness, a local page to choose
+                     pairs by ear, Ogg export); tools for the maintainer, not part of the build
   build.rs           lists the app's commands, so Tauri generates their permissions (allow-…)
   tauri.conf.json    product, identifier, icons; tauri.bundle.json adds the sidecar for installers only
   scripts/          sidecar.mjs (UI + release ottie → binaries/), ico.mjs (icons/icon.ico from res/icons)
@@ -159,7 +167,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      queue.ts (queue order, up next, whether up/down would move anything, what a drag
                      carries and where it may drop, 0032),
                      batch.ts (several links at once: when a paste opens the list, its rows, what to
-                     add, what was refused, 0036)
+                     add, what was refused, 0036), sounds.ts (the notification sounds' choices: sets, or one for each kind, 0038)
                      plain logic, unit-tested (*.test.ts, Vitest)
   src/lib/appearance.svelte.ts  the appearance chosen on this device (state shared by layout, shell
                      (follows the shared one, docs/decisions/0022) and Settings)
@@ -226,7 +234,7 @@ pnpm --filter app tauri android dev  # Android device/emulator
 
 Before calling a task done: fmt, clippy, tests for the crates you touched; for TS packages you touched, `check`, `test` and `lint`. A release builds the UI before the Rust binary. Update this section when a part comes to exist.
 
-Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed. The workspace includes the Tauri app, so `cargo build/test/clippy --workspace` compile Tauri too (WebView2 comes with Windows 11; Linux needs the webkit2gtk 4.1 dev packages, and libayatana-appindicator3 for the tray). In a dev run, set `OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` to keep away from your real downloads: the app passes them on to the daemon.
+Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed. The workspace includes the Tauri app, so `cargo build/test/clippy --workspace` compile Tauri too (WebView2 comes with Windows 11; Linux needs the webkit2gtk 4.1 dev packages, libayatana-appindicator3 for the tray, and libasound2 (ALSA) dev for notification sounds). In a dev run, set `OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` to keep away from your real downloads: the app passes them on to the daemon.
 
 ## Engine rules (crates/core)
 

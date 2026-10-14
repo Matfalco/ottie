@@ -1,12 +1,15 @@
 //! Notifications (docs/decisions/0035): downloads finished, one by one or all
-//! together, and downloads that failed. The app sees the changes as it follows
-//! the daemon for the tray (`status.rs`).
+//! together, and downloads that failed, with the sound chosen for each (0038).
+//! The app sees the changes as it follows the daemon for the tray
+//! (`status.rs`).
 
+use serde::Deserialize;
 use tauri::{AppHandle, Url};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::client::{Job, Problem};
 use crate::prefs::{Notify, Prefs};
+use crate::sound::{self, Sound};
 use crate::texts::Texts;
 
 /// What happened to a download, seen as its state changed.
@@ -57,9 +60,18 @@ fn name(job: &Job) -> String {
     last.or(url.host_str()).unwrap_or(&job.url).to_owned()
 }
 
+/// What a notification tells, which chooses its sound.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Kind {
+    Finished,
+    Failed,
+}
+
 /// A notification to show.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Note {
+    pub kind: Kind,
     pub title: String,
     pub body: String,
 }
@@ -91,6 +103,7 @@ impl Notifier {
             match item {
                 News::Finished { name } => match prefs.notify {
                     Notify::Each => notes.push(Note {
+                        kind: Kind::Finished,
                         title: texts.finished.clone(),
                         body: name,
                     }),
@@ -109,6 +122,7 @@ impl Notifier {
                         format!("{name}\n{reason}")
                     };
                     notes.push(Note {
+                        kind: Kind::Failed,
                         title: texts.failed.clone(),
                         body,
                     });
@@ -124,10 +138,12 @@ impl Notifier {
             match self.finished.as_slice() {
                 [] => {}
                 [name] => notes.push(Note {
+                    kind: Kind::Finished,
                     title: texts.finished.clone(),
                     body: name.clone(),
                 }),
                 names => notes.push(Note {
+                    kind: Kind::Finished,
                     title: texts.all_finished.clone(),
                     body: texts.files(names.len()),
                 }),
@@ -138,16 +154,42 @@ impl Notifier {
     }
 }
 
-/// Shows the notifications, as the system does.
-pub fn show(app: &AppHandle, notes: Vec<Note>) {
+/// Which of Ottie's sounds goes with `notes`: one for them all, a failure's
+/// first. Their toasts are silent.
+fn ottie_sound(notes: &[Note], prefs: &Prefs) -> Option<Sound> {
+    let kind = if notes.iter().any(|note| note.kind == Kind::Failed) {
+        Kind::Failed
+    } else {
+        notes.first()?.kind
+    };
+    match prefs.sound(kind) {
+        sound @ Sound::Ottie(..) => Some(sound),
+        Sound::System | Sound::Silent => None,
+    }
+}
+
+/// Shows the notifications, as the system does, with their sounds.
+pub fn show(app: &AppHandle, notes: Vec<Note>, prefs: &Prefs) {
+    if let Some(sound) = ottie_sound(&notes, prefs) {
+        sound::play(sound);
+    }
     for note in notes {
-        // Best effort: the download list says the same.
-        let _ = app
+        let builder = app
             .notification()
             .builder()
             .title(note.title)
-            .body(note.body)
-            .show();
+            .body(note.body);
+        // On Windows, a toast without a sound name is silent (notify-rust):
+        // "Default" asks for the system's own sound. Elsewhere the
+        // notification server decides.
+        #[cfg(windows)]
+        let builder = if prefs.sound(note.kind) == Sound::System {
+            builder.sound("Default")
+        } else {
+            builder
+        };
+        // Best effort: the download list says the same.
+        let _ = builder.show();
     }
 }
 
@@ -161,6 +203,7 @@ pub fn listen(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sound::Sounds;
 
     fn job(state: &str, file_name: Option<&str>, url: &str) -> Job {
         Job {
@@ -219,6 +262,7 @@ mod tests {
         assert_eq!(
             notes,
             [Note {
+                kind: Kind::Finished,
                 title: "Download finished".to_owned(),
                 body: "a.zip".to_owned()
             }]
@@ -241,6 +285,7 @@ mod tests {
         assert_eq!(
             notes,
             [Note {
+                kind: Kind::Finished,
                 title: "All downloads finished".to_owned(),
                 body: "2 files downloaded".to_owned()
             }]
@@ -272,6 +317,7 @@ mod tests {
         assert_eq!(
             notes,
             [Note {
+                kind: Kind::Failed,
                 title: "Échec du téléchargement".to_owned(),
                 body: "a.zip\nIntrouvable sur le serveur (404)".to_owned()
             }]
@@ -292,5 +338,36 @@ mod tests {
                 .notes(vec![finished("b.zip")], false, &never, &texts)
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn one_of_ottie_s_sounds_plays_for_them_all_a_failure_s_first() {
+        let note = |kind| Note {
+            kind,
+            title: String::new(),
+            body: String::new(),
+        };
+        let prefs = Prefs {
+            sounds: Sounds::Custom,
+            sound_finished: Sound::Ottie("shell", Kind::Finished),
+            sound_failed: Sound::Ottie("kelp", Kind::Failed),
+            ..Prefs::default()
+        };
+        assert_eq!(ottie_sound(&[], &prefs), None);
+        assert_eq!(
+            ottie_sound(&[note(Kind::Finished)], &prefs),
+            Some(Sound::Ottie("shell", Kind::Finished))
+        );
+        let both = [note(Kind::Finished), note(Kind::Failed)];
+        assert_eq!(
+            ottie_sound(&both, &prefs),
+            Some(Sound::Ottie("kelp", Kind::Failed))
+        );
+        // The failure's sound is the system's: its toast plays it.
+        let system = Prefs {
+            sound_failed: Sound::System,
+            ..prefs
+        };
+        assert_eq!(ottie_sound(&both, &system), None);
     }
 }

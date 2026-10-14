@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const app = dirname(dirname(fileURLToPath(import.meta.url)));
 const pngs = join(dirname(app), 'res', 'icons', 'png', 'app');
 const sizes = [16, 32, 48, 64, 128, 256];
-const images = sizes.map((size) => readFileSync(join(pngs, `ottie-icon-${size}.png`)));
+const images = sizes.map((size) => readFileSync(join(pngs, `ottie-icon-rounded-${size}.png`)));
 
 // ICO: a 6-byte header, a 16-byte entry per image, then the PNG files as is.
 const header = Buffer.alloc(6 + 16 * images.length);
@@ -19,7 +19,7 @@ images.forEach((png, i) => {
 	const entry = 6 + 16 * i;
 	const size = png.readUInt32BE(16); // the PNG's width, from its IHDR chunk
 	if (size !== sizes[i] || png.readUInt32BE(20) !== size) {
-		throw new Error(`ottie-icon-${sizes[i]}.png is ${size} pixels wide, or not square`);
+		throw new Error(`ottie-icon-rounded-${sizes[i]}.png is ${size} pixels wide, or not square`);
 	}
 	header.writeUInt8(size % 256, entry); // 0 means 256
 	header.writeUInt8(size % 256, entry + 1);

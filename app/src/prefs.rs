@@ -1,8 +1,8 @@
 //! What this app remembers on this computer besides the player
 //! (docs/decisions/0034): whether closing the window keeps Ottie in the tray,
-//! when to notify (docs/decisions/0035), the language the page shows (for
-//! the tray's texts and notifications), and the last total speed limit (for
-//! the tray's "Limit speed").
+//! when to notify (docs/decisions/0035) and with which sounds (0038), the
+//! language the page shows (for the tray's texts and notifications), and the
+//! last total speed limit (for the tray's "Limit speed").
 
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
 use crate::config;
+use crate::notify::Kind;
+use crate::sound::{self, Sound, Sounds};
 
 const FILE: &str = "app.json";
 /// A language tag (`en`, `pt-BR`) is never this long.
@@ -24,6 +26,13 @@ pub struct Prefs {
     pub notify: Notify,
     /// A failed download is notified (after its last retry).
     pub notify_failed: bool,
+    /// The notifications' sounds: the system's, none, a set of Ottie's, or
+    /// the two below.
+    pub sounds: Sounds,
+    /// With `Sounds::Custom`, a finished download's sound…
+    pub sound_finished: Sound,
+    /// …and a failed one's.
+    pub sound_failed: Sound,
     /// The page's language, as it said last.
     pub language: Option<String>,
     /// The total limit last set (bytes per second), by anyone.
@@ -36,8 +45,24 @@ impl Default for Prefs {
             close_to_tray: true,
             notify: Notify::default(),
             notify_failed: true,
+            sounds: Sounds::System,
+            sound_finished: Sound::System,
+            sound_failed: Sound::System,
             language: None,
             last_limit: None,
+        }
+    }
+}
+
+impl Prefs {
+    /// What a notification of this kind sounds like.
+    pub fn sound(&self, kind: Kind) -> Sound {
+        match (self.sounds, kind) {
+            (Sounds::System, _) => Sound::System,
+            (Sounds::Silent, _) => Sound::Silent,
+            (Sounds::Set(id), kind) => Sound::Ottie(id, kind),
+            (Sounds::Custom, Kind::Finished) => self.sound_finished,
+            (Sounds::Custom, Kind::Failed) => self.sound_failed,
         }
     }
 }
@@ -62,6 +87,13 @@ pub struct Desktop {
     pub close_to_tray: bool,
     pub notify: Notify,
     pub notify_failed: bool,
+    pub sounds: Sounds,
+    pub sound_finished: Sound,
+    pub sound_failed: Sound,
+    /// Ottie's sound sets, to choose from.
+    pub sets: Vec<&'static str>,
+    /// The system's sound can be played to hear it (Windows).
+    pub system_sound: bool,
 }
 
 impl From<Prefs> for Desktop {
@@ -70,6 +102,11 @@ impl From<Prefs> for Desktop {
             close_to_tray: prefs.close_to_tray,
             notify: prefs.notify,
             notify_failed: prefs.notify_failed,
+            sounds: prefs.sounds,
+            sound_finished: prefs.sound_finished,
+            sound_failed: prefs.sound_failed,
+            sets: sound::sets(),
+            system_sound: sound::system_previews(),
         }
     }
 }
@@ -140,6 +177,60 @@ pub fn set_notify_failed(
     change_desktop(&app, &saved, |prefs| prefs.notify_failed = on)
 }
 
+/// The notifications' sounds; `sounds` is a name: `system`, `silent`, a
+/// set's ID or `custom`.
+#[tauri::command]
+pub fn set_sounds(
+    app: AppHandle,
+    saved: State<'_, Saved>,
+    sounds: String,
+) -> Result<Desktop, String> {
+    let sounds = Sounds::named(&sounds).ok_or("no such sounds")?;
+    change_desktop(&app, &saved, |prefs| {
+        // Mixing starts from what was heard until now.
+        if sounds == Sounds::Custom && prefs.sounds != Sounds::Custom {
+            prefs.sound_finished = prefs.sound(Kind::Finished);
+            prefs.sound_failed = prefs.sound(Kind::Failed);
+        }
+        prefs.sounds = sounds;
+    })
+}
+
+/// With `Sounds::Custom`: the sound of the notifications of this kind;
+/// `sound` is a name: `system`, `silent` or a set's (`kelp-failed`).
+#[tauri::command]
+pub fn set_sound(
+    app: AppHandle,
+    saved: State<'_, Saved>,
+    kind: Kind,
+    sound: String,
+) -> Result<Desktop, String> {
+    let sound = Sound::named(&sound).ok_or("no such sound")?;
+    change_desktop(&app, &saved, |prefs| match kind {
+        Kind::Finished => prefs.sound_finished = sound,
+        Kind::Failed => prefs.sound_failed = sound,
+    })
+}
+
+/// Plays a sound to hear it before choosing it: one of Ottie's, a set's
+/// two (by the set's ID), or the system's where it can.
+#[tauri::command]
+pub fn play_sound(sound: String) -> Result<(), String> {
+    let played = match (Sound::named(&sound), Sounds::named(&sound)) {
+        (Some(sound), _) => sound::preview(sound),
+        (None, Some(Sounds::Set(id))) => {
+            sound::preview_set(id);
+            true
+        }
+        _ => return Err("no such sound".to_owned()),
+    };
+    if played {
+        Ok(())
+    } else {
+        Err("nothing to play".to_owned())
+    }
+}
+
 fn change_desktop(
     app: &AppHandle,
     saved: &Saved,
@@ -178,7 +269,24 @@ mod tests {
         assert!(prefs.close_to_tray);
         assert_eq!(prefs.notify, Notify::All);
         assert!(prefs.notify_failed);
+        assert_eq!(prefs.sounds, Sounds::System);
         assert_eq!(prefs.language.as_deref(), Some("fr"));
         assert_eq!(prefs.last_limit, None);
+    }
+
+    #[test]
+    fn a_set_gives_both_sounds_unless_mixed() {
+        let mut prefs = Prefs {
+            sounds: Sounds::Set("kelp"),
+            sound_finished: Sound::Silent,
+            ..Prefs::default()
+        };
+        assert_eq!(
+            prefs.sound(Kind::Failed),
+            Sound::Ottie("kelp", Kind::Failed)
+        );
+        prefs.sounds = Sounds::Custom;
+        assert_eq!(prefs.sound(Kind::Finished), Sound::Silent);
+        assert_eq!(prefs.sound(Kind::Failed), Sound::System);
     }
 }

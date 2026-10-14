@@ -11,6 +11,7 @@ mod notify;
 mod player;
 mod popup;
 mod prefs;
+mod sound;
 mod status;
 mod texts;
 mod tray;
@@ -36,7 +37,7 @@ const PLAY_PATH: &str = "/api/v1/stream/";
 /// (docs/decisions/0035) and the tray's language, and, in Ottie's tray menu,
 /// open the window, quit, and hide the menu (docs/decisions/0034). Only
 /// these, and only for the daemon's pages.
-const PAGE_PERMISSIONS: [&str; 21] = [
+const PAGE_PERMISSIONS: [&str; 24] = [
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
@@ -59,6 +60,9 @@ const PAGE_PERMISSIONS: [&str; 21] = [
     "allow-set-close-to-tray",
     "allow-set-notify",
     "allow-set-notify-failed",
+    "allow-set-sounds",
+    "allow-set-sound",
+    "allow-play-sound",
     "allow-set-language",
     // Ottie's tray menu (`popup.rs`).
     "core:window:allow-hide",
@@ -87,6 +91,9 @@ fn main() -> tauri::Result<()> {
             prefs::set_close_to_tray,
             prefs::set_notify,
             prefs::set_notify_failed,
+            prefs::set_sounds,
+            prefs::set_sound,
+            prefs::play_sound,
             prefs::set_language,
             popup::menu_ready,
             popup::show_main,

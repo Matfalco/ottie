@@ -140,7 +140,7 @@ fn tell(app: &AppHandle, model: &mut Model, notifier: &mut Notifier) {
     }
     let prefs = app.state::<prefs::Saved>().get();
     let texts = Texts::for_language(prefs.language.as_deref());
-    notify::show(app, notifier.notes(news, busy, &prefs, &texts));
+    notify::show(app, notifier.notes(news, busy, &prefs, &texts), &prefs);
 }
 
 /// The tray's "Limit speed" switches the last limit back on.

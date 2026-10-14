@@ -23,16 +23,27 @@
 		type Mode,
 		type Palette
 	} from '#lib/theme.js';
+	import {
+		canPreview,
+		soundChoices,
+		soundsChoices,
+		type ChoiceGroup,
+		type Sound,
+		type SoundKind
+	} from '#lib/sounds.js';
 	import { signInLink } from '#lib/token.js';
 	import {
 		canChoosePlayer,
 		choosePlayer,
 		desktop as desktopSetting,
 		player as playerSetting,
+		playSound,
 		setCloseToTray,
 		setNotify,
 		setNotifyFailed,
 		setPlayWith,
+		setSound,
+		setSounds,
 		type Desktop,
 		type Notify,
 		type PlayWith,
@@ -72,6 +83,13 @@
 		never: { name: m.set_notify_never, hint: m.set_notify_never_hint }
 	};
 	const NOTIFY_CHOICES = Object.keys(NOTIFY_NAMES) as Notify[];
+
+	/** With custom sounds, one per kind of notification (docs/decisions/0038). */
+	const SOUND_NAMES: Record<SoundKind, () => string> = {
+		finished: m.set_sound_finished,
+		failed: m.set_sound_failed
+	};
+	const SOUND_KINDS = Object.keys(SOUND_NAMES) as SoundKind[];
 
 	/** Only the desktop app can start a player (docs/decisions/0031), stay
 	 * in the tray (0034) or notify (0035). */
@@ -127,6 +145,28 @@
 		} catch {
 			problem = m.set_app_failed();
 			notify = desktop?.notify ?? 'all';
+		}
+	}
+
+	function soundOf(desktop: Desktop, kind: SoundKind): Sound {
+		return kind === 'finished' ? desktop.soundFinished : desktop.soundFailed;
+	}
+
+	/** A set or a sound plays as it's chosen; `saved` says what's saved. */
+	async function chooseSound(
+		event: Event & { currentTarget: HTMLSelectElement },
+		change: (value: string) => Promise<Desktop>,
+		saved: (desktop: Desktop) => string
+	) {
+		const select = event.currentTarget;
+		const value = select.value;
+		if (desktop && canPreview(value, desktop.systemSound)) {
+			playSound(value);
+		}
+		await changeDesktop(() => change(value));
+		// Shows what's saved, even if the change didn't happen.
+		if (desktop) {
+			select.value = saved(desktop);
 		}
 	}
 
@@ -215,6 +255,34 @@
 		}
 	}
 </script>
+
+{#snippet options(groups: ChoiceGroup[])}
+	{#each groups as group, index (index)}
+		{#if group.label}
+			<optgroup label={group.label}>
+				{#each group.choices as choice (choice.value)}
+					<option value={choice.value}>{choice.name}</option>
+				{/each}
+			</optgroup>
+		{:else}
+			{#each group.choices as choice (choice.value)}
+				<option value={choice.value}>{choice.name}</option>
+			{/each}
+		{/if}
+	{/each}
+{/snippet}
+
+{#snippet listen(value: string, systemSound: boolean)}
+	<button
+		class="listen"
+		disabled={!canPreview(value, systemSound)}
+		aria-label={m.set_sound_play()}
+		title={m.set_sound_play()}
+		onclick={() => playSound(value)}
+	>
+		<Play size={14} aria-hidden="true" />
+	</button>
+{/snippet}
 
 <div class="settings" bind:this={page} onscroll={scrolled}>
 	<nav aria-label={m.set_sections()}>
@@ -454,6 +522,47 @@
 							onChange={(on) => changeDesktop(() => setNotifyFailed(on))}
 						/>
 					</div>
+					<div class="setting">
+						<label for="sounds" class="names">
+							<span>{m.set_sounds()}</span>
+							<span class="hint">{m.set_sounds_hint()}</span>
+						</label>
+						<span class="sound">
+							<select
+								id="sounds"
+								value={desktop.sounds}
+								onchange={(event) => chooseSound(event, setSounds, (saved) => saved.sounds)}
+							>
+								{@render options(soundsChoices(desktop.sets))}
+							</select>
+							{@render listen(desktop.sounds, desktop.systemSound)}
+						</span>
+					</div>
+					{#if desktop.sounds === 'custom'}
+						{#each SOUND_KINDS as kind (kind)}
+							{@const sound = soundOf(desktop, kind)}
+							<div class="setting">
+								<label for="sound-{kind}" class="names">
+									<span>{SOUND_NAMES[kind]()}</span>
+								</label>
+								<span class="sound">
+									<select
+										id="sound-{kind}"
+										value={sound}
+										onchange={(event) =>
+											chooseSound(
+												event,
+												(value) => setSound(kind, value),
+												(saved) => soundOf(saved, kind)
+											)}
+									>
+										{@render options(soundChoices(desktop.sets, kind))}
+									</select>
+									{@render listen(sound, desktop.systemSound)}
+								</span>
+							</div>
+						{/each}
+					{/if}
 				{:else}
 					<p class="waiting">{m.connection_connecting()}</p>
 				{/if}
@@ -868,6 +977,25 @@
 	header + .setting,
 	fieldset + .setting {
 		border-top: none;
+	}
+
+	.sound {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.sound select {
+		min-width: 10rem;
+		padding: 0.35rem 0.6rem;
+	}
+
+	.listen {
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		padding: 0;
 	}
 
 	.waiting {

@@ -14,9 +14,9 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "../res/icons/png/app/ottie-icon-32.png",
-      "../res/icons/png/app/ottie-icon-128.png",
-      "../res/icons/png/app/ottie-icon-256.png",
+      "../res/icons/png/app/ottie-icon-rounded-32.png",
+      "../res/icons/png/app/ottie-icon-rounded-128.png",
+      "../res/icons/png/app/ottie-icon-rounded-256.png",
       "icons/icon.ico"
     ]
   }
