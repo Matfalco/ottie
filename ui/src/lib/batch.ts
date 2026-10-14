@@ -25,10 +25,15 @@ export interface Row {
  * of thousands would take a while to draw. */
 export const SHOWN_AT_ONCE = 300;
 
-/** Whether pasted text holds more than one link, so it opens the list
- * rather than going in the link field. */
+/** A sequence in a link, as the daemon reads them (docs/decisions/0037):
+ * `[001-120]`, `[a-z]`, `[0-100:10]`, `{small,large}`, not after `\`. */
+const SEQUENCE = /(?<!\\)(\[(\d+-\d+|[a-z]-[a-z]|[A-Z]-[A-Z])(:\d+)?\]|\{[^{}[\]]*,[^{}[\]]*\})/;
+
+/** Whether text holds more than one link, or a link with a sequence, so it
+ * opens the list rather than going in the link field. */
 export function holdsSeveral(text: string): boolean {
-	return text.split(/\s+/).filter((word) => word.includes('://')).length > 1;
+	const links = text.split(/\s+/).filter((word) => word.includes('://'));
+	return links.length > 1 || links.some((link) => SEQUENCE.test(link));
 }
 
 /** Rows for the links found. A link already listed keeps how it was set;

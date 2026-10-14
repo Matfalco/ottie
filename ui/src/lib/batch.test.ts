@@ -39,6 +39,25 @@ describe('batch', () => {
 		expect(holdsSeveral('a: https://example.com/a.zip, b: http://example.com/b.zip')).toBe(true);
 	});
 
+	it('opens the list for a link with a sequence', () => {
+		for (const sequence of [
+			'[1-3]',
+			'[001-120]',
+			'[a-z]',
+			'[A-C:2]',
+			'[0-100:10]',
+			'{a,b}',
+			'{,_hd}'
+		]) {
+			expect(holdsSeveral(`https://example.com/img${sequence}.jpg`), sequence).toBe(true);
+		}
+		for (const notOne of ['[::1]', '[]', '[0]', '[a-Z]', '{id}', '\\[1-3]', '\\{a,b}']) {
+			expect(holdsSeveral(`https://example.com/a${notOne}`), notOne).toBe(false);
+		}
+		expect(holdsSeveral('http://[::1]:8080/a.zip')).toBe(false);
+		expect(holdsSeveral('[1-3] is not a link')).toBe(false);
+	});
+
 	it('ticks the links that can be added and aren’t listed yet', () => {
 		const rows = rowsOf([link('a.zip'), link('b.zip', true), ftp], [], 'auto');
 		expect(rows.map((row) => row.chosen)).toEqual([true, false, false]);

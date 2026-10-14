@@ -384,7 +384,7 @@
 	"batch_title": "Add several downloads",
 	"batch_text": "Links",
 	"batch_text_placeholder": "Paste links, one per line, or any text that contains them: an email, a web page…",
-	"batch_text_hint": "Links start with http:// or https://. Each one is downloaded on its own.",
+	"batch_text_hint": "Links start with http:// or https://. Each one is downloaded on its own. A numbered series fits in one link: [001-120], [a-z], [0-100:10], \\{small,large\\}.",
 	"batch_import": "Import a file",
 	"batch_import_failed": "That file couldn’t be read.",
 	"batch_looking": "Looking for links…",

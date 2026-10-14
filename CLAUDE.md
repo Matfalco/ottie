@@ -69,6 +69,7 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media, max_batch; SettingsChange (applied all at once)
   src/view.rs        saved views: ViewSettings (filters + sort/grouping), ViewId, normalizing
   src/links.rs       the links in pasted text (find), LinkPreview: for adding several at once
+  src/sequence.rs    sequences in one link, curl-style ([001-120], [a-z], {a,b}): count, then expand
   src/throttle.rs    speed limits: per-job token buckets, refill task, priority-weighted sharing, category caps
   src/http.rs        HTTP transfer: first request, single-connection stream, resume, restart rules, stall timeout
   src/segmented.rs   multi-connection transfer: coordinator, connection tasks, dynamic splitting
@@ -240,7 +241,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Resume re-requests the original URL,** not the redirect target: signed CDN links expire, and `If-Range` still guards consistency.
 - **Request `Accept-Encoding: identity`** so byte ranges map to file offsets.
 - **Speed limits and priorities** (`docs/decisions/0010`): one token bucket per running job, shared by its connections, spent after each chunk (pause still interrupts the wait). A 50 ms refill task shares the global limit: Urgent first, then weights High 4 / Normal 2 / Low 1, capped by each job's own limit, unused share redistributed (`share()`). Per download, not per connection. A category's limit caps its running jobs together (`allocate()`). Limits change live; 0 = unlimited. A running job that owes budget and gets none for 1 s is reported to the manager (`Limiter::new`'s callback), which sends `waiting_for_bandwidth` in a `Changed` (not saved).
-- **Several at once** (`docs/decisions/0036`): `Manager::add_many` adds each job as `add` would (the good ones even if others are refused), saves them in one transaction and schedules once; more than `Settings::max_batch` refuses them all (`TooManyLinks`). `Manager::preview` finds the links in text (`links::find`, in the caller's task) and tells, for each, its name, the category it would get and whether a job has that URL already.
+- **Several at once** (`docs/decisions/0036`): `Manager::add_many` adds each job as `add` would (the good ones even if others are refused), saves them in one transaction and schedules once; more than `Settings::max_batch` refuses them all (`TooManyLinks`). `Manager::preview` finds the links in text (`links::find`, in the caller's task) and tells, for each, its name, the category it would get and whether a job has that URL already. Sequences in a link (`docs/decisions/0037`, `sequence.rs`) give each link they hold; `find` counts them before making any, so the cap refuses a huge one at once.
 - **Queue order** (`docs/decisions/0032`): highest priority first, then the lowest `place` (new jobs go last). Urgent waits for a free slot (no preemption). `Manager::reorder(ids, Reorder)` (up, down, top, bottom, before/after a job) moves waiting (queued/paused) jobs within their priority by swapping places among them, so other jobs keep theirs; each moved job is saved and gets a `Changed`.
 - **Retries** (`docs/decisions/0013`): only `Error::is_retryable()` errors (network, drop, stall, 5xx, 408, 429). A retrying job keeps its slot for `retries_before_yield` retries, then gives way if a queued job is waiting (queues behind every job that never gave way); fails after `max_retries`. Waits double from `first_wait` up to 60 s; `Retry-After` (seconds) can ask for up to 10 min. The count resets when bytes arrive or on a manual resume. Stalls: `tokio::time::timeout` around each network wait (`HttpConfig::stall_timeout`), never reqwest's `read_timeout` (it would fire while our throttle waits). Each run of a job (start, resume, retry) gets its own reqwest `Client` (`HttpBackend`), so it never reuses a pooled connection that died silently when the network changed (VPN, Wi-Fi); HTTP/2 connections are also pinged after 10 s of silence.
 - **Failures are `Problem`s** (`docs/decisions/0016`), never bare strings: a kind plus details, saved in the `problem_*` columns. Add a kind = a migration (CHECK list), a `Display` wording, an API `Problem` variant and UI messages.
@@ -331,7 +332,7 @@ Done: ✅ and struck through.
    - ✅ ~~5h tray (`docs/decisions/0034`)~~
    - ✅ ~~5i notifications (`docs/decisions/0035`)~~
    - ✅ ~~5j several links at once (`docs/decisions/0036`)~~
-   - 5k sequences in one link (`[001-120]`, curl-style)
+   - ✅ ~~5k sequences in one link (`[001-120]`, curl-style; `docs/decisions/0037`)~~
    - 5l autostart
 6. Scheduler, clipboard monitoring, uGet import, aria2 / yt-dlp backends.
 7. Browser extension.

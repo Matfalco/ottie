@@ -579,6 +579,52 @@ async fn a_preview_lists_the_links_in_some_text() {
 }
 
 #[tokio::test]
+async fn a_preview_gives_each_link_of_a_sequence() {
+    let d = start().await;
+    let preview = |text: String| {
+        d.post("/jobs/preview")
+            .json(&PreviewLinks {
+                text,
+                dest_dir: None,
+            })
+            .send()
+    };
+
+    let response = preview(format!("{}/part[08-10].{{zip,rar}}", d.files)).await;
+    let links = response.unwrap().json::<Preview>().await.unwrap().links;
+    let names: Vec<&str> = links
+        .iter()
+        .map(|link| match link {
+            FoundLink::Link { name, .. } => name.as_str(),
+            FoundLink::Invalid { text, .. } => panic!("expected a link, got {text}"),
+        })
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "part08.zip",
+            "part08.rar",
+            "part09.zip",
+            "part09.rar",
+            "part10.zip",
+            "part10.rar"
+        ]
+    );
+
+    // Refused at once, counted before making them.
+    let response = preview(format!("{}/[1-999999999999]", d.files)).await;
+    let (status, error) = error_of(response.unwrap()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        error.reason,
+        Reason::TooManyLinks {
+            count: 999_999_999_999,
+            max: 10_000
+        }
+    );
+}
+
+#[tokio::test]
 async fn bad_requests_say_what_is_wrong() {
     let d = start().await;
     let add = |job: &AddJob| d.post("/jobs").json(job).send();

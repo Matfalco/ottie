@@ -134,16 +134,19 @@ impl Manager {
     }
 
     /// The links in `text` (a list, an email, a page), in order and each
-    /// once, and what adding each without a category would do (saved in
-    /// `dest_dir`, if given). [`Error::TooManyLinks`] if there are more than
+    /// once, with those of each sequence (docs/decisions/0037), and what
+    /// adding each without a category would do (saved in `dest_dir`, if
+    /// given). [`Error::TooManyLinks`] if there are more than
     /// [`Settings::max_batch`].
     pub async fn preview(
         &self,
         text: &str,
         dest_dir: Option<PathBuf>,
     ) -> Result<Vec<LinkPreview>, Error> {
-        // Read here, so the manager isn't kept from its jobs meanwhile.
-        let found = links::find(text);
+        // Read here, so the manager isn't kept from its jobs meanwhile. The
+        // cap is checked here too, before a sequence makes its links.
+        let max = self.settings().await?.max_batch;
+        let found = links::find(text, max)?;
         self.request(|reply| Command::Preview {
             found,
             dest_dir,

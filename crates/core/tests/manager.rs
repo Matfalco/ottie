@@ -633,6 +633,40 @@ async fn too_many_links_at_once_are_all_refused() {
 }
 
 #[tokio::test]
+async fn a_sequence_counts_each_link_against_the_cap() {
+    let s = setup(3, 0).await;
+    let change = SettingsChange {
+        max_batch: Some(10),
+        ..SettingsChange::default()
+    };
+    s.manager.change_settings(change).await.unwrap();
+    s.add("a2.bin").await;
+    let text = s.server.url("/files/a[1-3].bin").to_string();
+
+    let previews = s.manager.preview(&text, None).await.unwrap();
+    let found: Vec<(String, bool)> = previews
+        .iter()
+        .map(|preview| match preview {
+            LinkPreview::Link { name, known, .. } => (name.clone(), *known),
+            LinkPreview::Invalid { .. } => panic!("expected links, got {preview:?}"),
+        })
+        .collect();
+    assert_eq!(
+        found,
+        [
+            ("a1.bin".into(), false),
+            ("a2.bin".into(), true),
+            ("a3.bin".into(), false)
+        ]
+    );
+    let text = s.server.url("/files/[a-z].bin").to_string();
+    assert!(matches!(
+        s.manager.preview(&text, None).await,
+        Err(Error::TooManyLinks { count: 26, max: 10 })
+    ));
+}
+
+#[tokio::test]
 async fn a_preview_tells_each_link_found_and_those_already_listed() {
     let s = setup(3, 0).await;
     s.add("a.bin").await;

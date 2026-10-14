@@ -384,7 +384,7 @@
 	"batch_title": "Ajouter plusieurs téléchargements",
 	"batch_text": "Liens",
 	"batch_text_placeholder": "Collez des liens, un par ligne, ou tout texte qui en contient : un e-mail, une page web…",
-	"batch_text_hint": "Les liens commencent par http:// ou https://. Chacun est téléchargé séparément.",
+	"batch_text_hint": "Les liens commencent par http:// ou https://. Chacun est téléchargé séparément. Une série numérotée tient en un seul lien : [001-120], [a-z], [0-100:10], \\{small,large\\}.",
 	"batch_import": "Importer un fichier",
 	"batch_import_failed": "Ce fichier n’a pas pu être lu.",
 	"batch_looking": "Recherche des liens…",

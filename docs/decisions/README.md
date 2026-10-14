@@ -41,7 +41,8 @@ Each accepted decision has its own short file here (`NNNN-title.md`): what was d
 | [0024](0024-changing-a-download.md) | `PATCH /jobs/{id}` changes a download's own speed limit and priority, live. |
 | [0026](0026-saved-views.md) | Saved views (name, filters, sorting) are kept by the daemon, so every device has the same ones. |
 | [0030](0030-api-documentation.md) | The API is documented in `docs/api/`: a written guide, and an OpenAPI description generated from the handlers (utoipa), also served at `/api/v1/openapi.json`. |
-| [0036](0036-several-links-at-once.md) | Several links at once, each its own download: the daemon finds the links in any text (`POST /jobs/preview`), a dialog lists them (tick boxes, a category each), and those that can be are added together (`POST /jobs/batch`); a setting caps how many. Sequences in one link (`[001-120]`, curl-style) come next. |
+| [0036](0036-several-links-at-once.md) | Several links at once, each its own download: the daemon finds the links in any text (`POST /jobs/preview`), a dialog lists them (tick boxes, a category each), and those that can be are added together (`POST /jobs/batch`); a setting caps how many. Sequences in one link come in 0037. |
+| [0037](0037-sequences-in-one-link.md) | Sequences in one link, curl-style (`[001-120]`, `[a-z]`, `[0-100:10]`, `{small,large}`, every combination): the daemon expands them in the same preview, counting first so the cap refuses a huge one at once; only well-formed ones count, `\[` escapes. |
 
 ## Front ends
 

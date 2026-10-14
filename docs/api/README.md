@@ -104,6 +104,8 @@ curl -H "$AUTH" -H "Content-Type: application/json" \
 
 `known: true` means a download of that same link is already on the list. Both endpoints refuse more links than the setting `maxBatch` allows (10,000 by default) with `tooManyLinks`, adding none.
 
+A link in the text can hold **sequences**, curl-style, and the preview lists every link they give: `[1-120]` (a leading zero pads: `[001-120]`), `[a-z]`, a step (`[0-100:10]`), a list (`{small,large}`, two items or more). Several in one link give every combination, the last changing fastest: `https://example.com/s[1-2]/{a,b}.jpg` gives `s1/a.jpg`, `s1/b.jpg`, `s2/a.jpg`, `s2/b.jpg`. Anything not well-formed stays as written (`http://[::1]/`, `a[]=1`, `{id}`), and `\[`, `\]`, `\{`, `\}` (and `\,` in a list) are the character itself. The cap counts a sequence as all the links it gives, before making any: `tooManyLinks` comes at once, with that count. `POST /jobs` and `POST /jobs/batch` take links as they are.
+
 ## Live events
 
 `GET /api/v1/events` is a WebSocket that pushes every change as a JSON message. Browsers can't set headers on a WebSocket, so the token travels as an offered **protocol**: offer both `ottie.v1` and `ottie.token.<token>`, and the server picks `ottie.v1`.

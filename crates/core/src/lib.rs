@@ -17,6 +17,7 @@ mod manager;
 mod playback;
 mod problem;
 mod segmented;
+mod sequence;
 mod settings;
 mod store;
 mod stream;

@@ -1,5 +1,6 @@
 //! Links in text someone pasted or imported (a list, an email, a web page),
-//! for adding several downloads at once (docs/decisions/0036).
+//! for adding several downloads at once (docs/decisions/0036), and the
+//! sequences in them (0037).
 
 use std::collections::HashSet;
 
@@ -8,6 +9,7 @@ use reqwest::Url;
 use crate::category::Matched;
 use crate::download::check_scheme;
 use crate::error::Error;
+use crate::sequence::Sequence;
 
 /// Something in the text that looks like a link (`scheme://…`).
 #[derive(Debug)]
@@ -41,10 +43,34 @@ pub enum LinkPreview {
 
 /// Every link in `text`, in order, each once: anything of the form
 /// `scheme://…` up to a space, a quote or an angle bracket, without the
-/// punctuation that ends a sentence around it.
-pub fn find(text: &str) -> Vec<Found> {
+/// punctuation that ends a sentence around it. A sequence in a link gives
+/// each link it holds (docs/decisions/0037). [`Error::TooManyLinks`] if
+/// there would be more than `max`, counted before making them.
+pub fn find(text: &str, max: usize) -> Result<Vec<Found>, Error> {
+    let mut candidates = Vec::new();
+    let mut seen = HashSet::new();
+    let mut count: usize = 0;
+    for candidate in candidates_in(text) {
+        if seen.insert(candidate) {
+            let sequence = Sequence::parse(candidate);
+            count = count.saturating_add(sequence.count());
+            candidates.push((candidate, sequence));
+        }
+    }
+    if count > max {
+        return Err(Error::TooManyLinks { count, max });
+    }
     let mut found = Vec::new();
     let mut seen = HashSet::new();
+    for (candidate, sequence) in &candidates {
+        expand(candidate, sequence, &mut found, &mut seen);
+    }
+    Ok(found)
+}
+
+/// What looks like a link in `text`, as written, in order.
+fn candidates_in(text: &str) -> Vec<&str> {
+    let mut candidates = Vec::new();
     let mut rest = 0;
     while let Some(at) = text[rest..].find("://") {
         let separator = rest + at;
@@ -57,26 +83,55 @@ pub fn find(text: &str) -> Vec<Found> {
             .find(is_boundary)
             .map_or(text.len(), |len| separator + len);
         rest = end;
-        if start == separator {
-            continue; // No scheme.
-        }
-        let candidate = trim_end(&text[start..end]);
-        let one = match Url::parse(candidate) {
-            Ok(url) => match check_scheme(&url) {
-                Ok(()) => Found::Link(url),
-                Err(error) => invalid(candidate, error),
-            },
-            Err(_) => invalid(candidate, Error::InvalidUrl),
-        };
-        let key = match &one {
-            Found::Link(url) => url.as_str(),
-            Found::Invalid { text, .. } => text.as_str(),
-        };
-        if seen.insert(key.to_owned()) {
-            found.push(one);
+        if start != separator {
+            candidates.push(trim_end(&text[start..end]));
         }
     }
-    found
+    candidates
+}
+
+/// Each link of a sequence (just one, without the escapes, if it holds
+/// none). If its scheme can't be downloaded, it's reported once, as written.
+fn expand(
+    candidate: &str,
+    sequence: &Sequence,
+    found: &mut Vec<Found>,
+    seen: &mut HashSet<String>,
+) {
+    for (n, link) in sequence.links().enumerate() {
+        let one = check(&link);
+        if n == 0
+            && let Found::Invalid {
+                error: error @ Error::UnsupportedScheme(_),
+                ..
+            } = one
+        {
+            // The scheme is the same in every link (no sequence before "://").
+            push_once(invalid(candidate, error), found, seen);
+            return;
+        }
+        push_once(one, found, seen);
+    }
+}
+
+fn check(link: &str) -> Found {
+    match Url::parse(link) {
+        Ok(url) => match check_scheme(&url) {
+            Ok(()) => Found::Link(url),
+            Err(error) => invalid(link, error),
+        },
+        Err(_) => invalid(link, Error::InvalidUrl),
+    }
+}
+
+fn push_once(one: Found, found: &mut Vec<Found>, seen: &mut HashSet<String>) {
+    let key = match &one {
+        Found::Link(url) => url.as_str(),
+        Found::Invalid { text, .. } => text.as_str(),
+    };
+    if seen.insert(key.to_owned()) {
+        found.push(one);
+    }
 }
 
 fn invalid(text: &str, error: Error) -> Found {
@@ -121,7 +176,8 @@ mod tests {
 
     /// The links found, as text; invalid ones as "invalid: …".
     fn found(text: &str) -> Vec<String> {
-        find(text)
+        find(text, usize::MAX)
+            .unwrap()
             .into_iter()
             .map(|found| match found {
                 Found::Link(url) => url.to_string(),
@@ -209,6 +265,77 @@ mod tests {
         assert_eq!(
             found("Link:https://example.com/a.zip é.http://example.com/b.zip"),
             ["https://example.com/a.zip", "http://example.com/b.zip"]
+        );
+    }
+
+    #[test]
+    fn a_sequence_gives_each_link() {
+        assert_eq!(
+            found(
+                "Pages https://example.com/p[1-3].jpg, then https://img{1,2}.example.com/{a,b}.png."
+            ),
+            [
+                "https://example.com/p1.jpg",
+                "https://example.com/p2.jpg",
+                "https://example.com/p3.jpg",
+                "https://img1.example.com/a.png",
+                "https://img1.example.com/b.png",
+                "https://img2.example.com/a.png",
+                "https://img2.example.com/b.png",
+            ]
+        );
+        // Each once, a sequence or not.
+        assert_eq!(
+            found("https://example.com/[1-2] https://example.com/1 https://example.com/{2,1,3}"),
+            [
+                "https://example.com/1",
+                "https://example.com/2",
+                "https://example.com/3",
+            ]
+        );
+    }
+
+    #[test]
+    fn what_isnt_a_sequence_stays_and_escapes_go() {
+        assert_eq!(
+            found(r"http://[::1]/a[]=1&b[0]=2&c={id} https://example.com/a\[1-2\].jpg"),
+            [
+                "http://[::1]/a[]=1&b[0]=2&c=%7Bid%7D",
+                "https://example.com/a[1-2].jpg",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_sequence_that_cant_be_downloaded_is_reported_once() {
+        assert_eq!(
+            found("ftp://example.com/[1-100].zip"),
+            [
+                "invalid: ftp://example.com/[1-100].zip (unsupported URL scheme `ftp` (only http and https are supported))"
+            ]
+        );
+    }
+
+    #[test]
+    fn too_many_are_counted_before_making_them() {
+        let text = "https://example.com/[1-3] https://example.com/[1-3] https://example.com/{a,b}[0-999999999999]";
+        assert!(matches!(
+            find(text, 1000),
+            Err(Error::TooManyLinks { count, max: 1000 }) if count > 1_000_000_000_000
+        ));
+        // Each link as written counts once.
+        assert!(matches!(
+            find(
+                "https://example.com/[1-3] https://example.com/[1-3] https://example.com/x",
+                3
+            ),
+            Err(Error::TooManyLinks { count: 4, max: 3 })
+        ));
+        assert_eq!(
+            find("https://example.com/[1-3] https://example.com/[1-3]", 3)
+                .unwrap()
+                .len(),
+            3
         );
     }
 

@@ -188,7 +188,8 @@ pub struct RefusedJob {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct PreviewLinks {
-    /// Any text: one link per line, an email, a web page.
+    /// Any text: one link per line, an email, a web page. A sequence in a
+    /// link (`[001-120]`, `[a-z]`, `{small,large}`) gives each link it holds.
     pub text: String,
     /// The folder they would be saved in, if not their categories': then
     /// the folder decides their category.

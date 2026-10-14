@@ -66,7 +66,12 @@
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
 		if (!step) {
-			await open();
+			// A sequence gives several links: the list shows them.
+			if (holdsSeveral(url)) {
+				several();
+			} else {
+				await open();
+			}
 			return;
 		}
 		adding = true;

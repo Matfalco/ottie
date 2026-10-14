@@ -5,7 +5,8 @@
  */
 export type PreviewLinks = { 
 /**
- * Any text: one link per line, an email, a web page.
+ * Any text: one link per line, an email, a web page. A sequence in a
+ * link (`[001-120]`, `[a-z]`, `{small,large}`) gives each link it holds.
  */
 text: string, 
 /**

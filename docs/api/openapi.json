@@ -2736,7 +2736,7 @@
           },
           "text": {
             "type": "string",
-            "description": "Any text: one link per line, an email, a web page."
+            "description": "Any text: one link per line, an email, a web page. A sequence in a\nlink (`[001-120]`, `[a-z]`, `{small,large}`) gives each link it holds."
           }
         }
       },
