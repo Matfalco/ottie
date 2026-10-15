@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatLimit } from '#lib/format.js';
+	import { formatLimit, monoWidth } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { LIMIT_PRESETS } from '#lib/settings.js';
 
@@ -15,8 +15,9 @@
 
 	// The language only changes with a reload, so the labels are fixed.
 	const labels = LIMIT_PRESETS.map((preset) => formatLimit(preset));
-	/** In mono characters, so every column fits the longest ("20 MB/δευτ."). */
-	const widest = Math.max(...labels.map((label) => label.length));
+	/** In mono characters, so every column fits the longest ("20 MB/δευτ.",
+	 * "256 KB/秒": 秒 takes two). */
+	const widest = Math.max(...labels.map(monoWidth));
 </script>
 
 <!-- Common limits, one click each; the one in force is lit. -->

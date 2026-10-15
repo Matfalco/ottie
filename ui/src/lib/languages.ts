@@ -32,7 +32,15 @@ export const NAMES: Record<Locale, string> = {
 	mt: 'Malti',
 	el: 'Ελληνικά',
 	bg: 'Български',
-	uk: 'Українська'
+	uk: 'Українська',
+	'zh-Hans': '简体中文',
+	'zh-Hant': '繁體中文',
+	ja: '日本語',
+	ko: '한국어',
+	id: 'Bahasa Indonesia',
+	hi: 'हिन्दी',
+	vi: 'Tiếng Việt',
+	tr: 'Türkçe'
 };
 
 /** Checked by a native speaker; the others say so under the picker. */

@@ -14,7 +14,8 @@
 		"format": "prettier --write .",
 		"test:unit": "vitest",
 		"test": "vitest --run",
-		"i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide"
+		"i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
+		"fonts": "node scripts/fonts.mjs"
 	},
 	"devDependencies": {
 		"@inlang/paraglide-js": "2.27.0",
@@ -25,6 +26,7 @@
 		"@types/node": "^26.6.5",
 		"prettier": "^3.8.3",
 		"prettier-plugin-svelte": "^4.1.0",
+		"subset-font": "2.9.0",
 		"svelte": "^5.57.1",
 		"svelte-check": "^4.6.0",
 		"typescript": "^6.0.3",

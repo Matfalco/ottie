@@ -93,6 +93,15 @@ export function formatDuration(seconds: number, locale: Locale = getLocale()): s
 	return rest ? `${part(hours, 'hour')} ${part(rest, 'minute')}` : part(hours, 'hour');
 }
 
+/** Characters drawn twice as wide as others in a mono line: Hangul, CJK,
+ * kana, full-width forms ("秒", "초"). */
+const WIDE = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/;
+
+/** How many mono characters (CSS `ch`) `text` takes: "256 KB/秒" is 9. */
+export function monoWidth(text: string): number {
+	return [...text].reduce((width, c) => width + (WIDE.test(c) ? 2 : 1), 0);
+}
+
 /** The file name once known, else the last part of the URL, else its host. */
 export function displayName(job: Job): string {
 	if (job.fileName) {

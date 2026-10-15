@@ -6,7 +6,8 @@ import {
 	formatCount,
 	formatDuration,
 	formatPercent,
-	formatSpeed
+	formatSpeed,
+	monoWidth
 } from './format';
 import { job, plain } from './testing';
 
@@ -59,6 +60,14 @@ describe('formatDuration', () => {
 		expect(formatDuration(180, 'en')).toBe('3 min');
 		expect(formatDuration(-3, 'en')).toBe('0 sec');
 		expect(plain(formatDuration(7500, 'fr'))).toBe('2 h 5 min');
+	});
+});
+
+describe('monoWidth', () => {
+	it('counts wide characters twice', () => {
+		expect(monoWidth('20 MB/δευτ.')).toBe(11);
+		expect(monoWidth('256 KB/秒')).toBe(9);
+		expect(monoWidth('1MB/초')).toBe(6);
 	});
 });
 

@@ -51,4 +51,19 @@
 		max-width: 100%;
 		padding: 0.35rem 0.6rem;
 	}
+
+	/* Each name in its own language's letterforms: Chinese, Japanese and
+	   Korean draw some of the same characters differently (日本語, 繁體中文). */
+	option[lang='zh-Hans'] {
+		font-family: 'Ottie Noto Sans SC', var(--font);
+	}
+	option[lang='zh-Hant'] {
+		font-family: 'Ottie Noto Sans TC', var(--font);
+	}
+	option[lang='ja'] {
+		font-family: 'Ottie Noto Sans JP', var(--font);
+	}
+	option[lang='ko'] {
+		font-family: 'Ottie Noto Sans KR', var(--font);
+	}
 </style>

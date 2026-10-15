@@ -8,7 +8,7 @@ use crate::status::{Progress, Summary};
 
 /// Each language's texts, by its tag, as the page names them
 /// (`ui/project.inlang/settings.json`). The first is the fallback.
-const LANGUAGES: [(&str, &str); 27] = [
+const LANGUAGES: [(&str, &str); 35] = [
     ("en", include_str!("../messages/en.json")),
     ("fr", include_str!("../messages/fr.json")),
     ("de", include_str!("../messages/de.json")),
@@ -36,6 +36,14 @@ const LANGUAGES: [(&str, &str); 27] = [
     ("el", include_str!("../messages/el.json")),
     ("bg", include_str!("../messages/bg.json")),
     ("uk", include_str!("../messages/uk.json")),
+    ("zh-Hans", include_str!("../messages/zh-Hans.json")),
+    ("zh-Hant", include_str!("../messages/zh-Hant.json")),
+    ("ja", include_str!("../messages/ja.json")),
+    ("ko", include_str!("../messages/ko.json")),
+    ("id", include_str!("../messages/id.json")),
+    ("hi", include_str!("../messages/hi.json")),
+    ("vi", include_str!("../messages/vi.json")),
+    ("tr", include_str!("../messages/tr.json")),
 ];
 
 /// Units count in 1024s, as on the page (`ui/src/lib/format.ts`).
@@ -341,7 +349,7 @@ mod tests {
     #[test]
     fn a_language_falls_back_to_english() {
         assert_eq!(Texts::for_language(Some("fr-CA")).quit, "Quitter Ottie");
-        assert_eq!(Texts::for_language(Some("ja")).quit, "Quit Ottie");
+        assert_eq!(Texts::for_language(Some("ru")).quit, "Quit Ottie");
         assert_eq!(Texts::for_language(None).quit, "Quit Ottie");
     }
 
@@ -349,6 +357,8 @@ mod tests {
     fn a_language_with_countries_is_found_by_its_full_tag() {
         assert_eq!(Texts::for_language(Some("pt-BR")).quit, "Sair do Ottie");
         assert_eq!(Texts::for_language(Some("es-419")).quit, "Salir de Ottie");
+        assert_eq!(Texts::for_language(Some("zh-Hans")).quit, "退出 Ottie");
+        assert_eq!(Texts::for_language(Some("zh-Hant")).quit, "結束 Ottie");
     }
 
     #[test]
@@ -445,5 +455,13 @@ mod tests {
         assert_eq!(en.progress(&progress(5000, 1)), "50% · 1 hr 23 min left");
         assert_eq!(en.progress(&progress(9000, 100)), "90% · 10 sec left");
         assert_eq!(en.progress(&progress(4000, 50)), "40% · 2 min left");
+        // Turkish writes the sign first, as Intl does ("%45"); Chinese and
+        // Korean put no space before the unit.
+        let tr = Texts::for_language(Some("tr"));
+        assert_eq!(tr.progress(&progress(4599, 0)), "%45");
+        let zh = Texts::for_language(Some("zh-Hans"));
+        assert_eq!(zh.progress(&progress(5000, 10)), "50% · 剩余 8分钟 20秒");
+        let ko = Texts::for_language(Some("ko"));
+        assert_eq!(ko.speed(1536 * 1024), "1.5MB/s");
     }
 }

@@ -28,7 +28,15 @@
 		"mt",
 		"el",
 		"bg",
-		"uk"
+		"uk",
+		"zh-Hans",
+		"zh-Hant",
+		"ja",
+		"ko",
+		"id",
+		"hi",
+		"vi",
+		"tr"
 	],
 	"modules": ["./node_modules/@inlang/plugin-message-format/dist/index.js"],
 	"plugin.inlang.messageFormat": {
