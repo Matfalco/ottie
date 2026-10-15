@@ -93,6 +93,30 @@ A download can wait for a start time and pause at a stop time (`startAt`, `stopA
 curl -H "$AUTH" -H "Content-Type: application/json"      -d '{"url": "https://example.com/file.iso", "startAt": 1792018800000, "stopAt": 1792047600000}' $API/jobs
 ```
 
+## Time slots
+
+Time slots say when downloads run, stop or slow down, by the daemon's own clock and time zone (`GET /slots` tells which, as `timeZone`). Each applies to every download (`category` null) or to one category, every week on some `days` or once on a `date`, from one time to another (`HH:MM`; an end before the start runs into the next day, the same time twice is a whole day). While it lasts it does any of:
+
+- `downloads`: `"stop"` (running downloads stop, or with `letFinish` they finish and only new ones wait; when it ends, those it held carry on, or with `stayPaused` they're paused, to be resumed by hand), or `"allow"` (over a lower slot that stops them);
+- `speedLimit`: the total limit (or the category's) in bytes per second, 0 for none;
+- `maxConcurrent`: how many may run at once.
+
+Where two apply to the same thing at once, the one higher in the list (lower `place`) wins, for each of the three. Outside every slot the usual settings apply; a slot never changes them. A download a slot stops is `scheduled`, with `heldBy` the slot's ID; resuming it (`POST /jobs/{id}/resume`) runs it anyway until it pauses, fails or ends. With `stayPaused`, the downloads it held become `paused` when it ends at its time, even if the daemon wasn't running then; switching the slot off or removing it lets them carry on instead. A slot that happens once is removed once it's over, and a category's slots go with it.
+
+```bash
+# Every night from 23:00 to 07:00, stop downloads
+curl -H "$AUTH" -H "Content-Type: application/json"      -d '{"name": "Night", "days": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+          "from": "23:00", "to": "07:00", "downloads": "stop"}' $API/slots
+# → 201 {"id": 1}
+
+# Weekdays 09:00-18:00, 2 MiB/s at most; then put it first in the list
+curl -H "$AUTH" -H "Content-Type: application/json"      -d '{"name": "Work", "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+          "from": "09:00", "to": "18:00", "speedLimit": 2097152}' $API/slots
+curl -H "$AUTH" -H "Content-Type: application/json" -d '{"ids": [2, 1]}' $API/slots/reorder
+```
+
+`PUT /slots/{id}` replaces one (switch it off with `"enabled": false`), `DELETE /slots/{id}` removes it. Every change, and every slot starting or stopping to apply, comes as a `slotChanged` event (`slotRemoved` when one goes).
+
 ## Several links at once
 
 `POST /jobs/preview` finds the links in any text (one per line, an email, a web page) and says what adding each would do, without adding anything. `POST /jobs/batch` then adds several downloads in one request: each one as `POST /jobs` would, in order. Those that can be added are, even if others are refused; the answer gives each one's ID (or `null`) and why the others were refused.

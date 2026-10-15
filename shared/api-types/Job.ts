@@ -77,4 +77,8 @@ startAt: number | null,
 /**
  * When it pauses if it hasn't finished by then, the same way.
  */
-stopAt: number | null, };
+stopAt: number | null, 
+/**
+ * While `scheduled`: the time slot that keeps it from running, if one does.
+ */
+heldBy: number | null, };

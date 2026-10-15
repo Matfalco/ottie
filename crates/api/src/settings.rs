@@ -48,6 +48,9 @@ pub(crate) async fn change(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// How many downloads may run at once: the setting, and a time slot's.
+pub(crate) const MAX_CONCURRENT: RangeInclusive<u64> = 1..=50;
+
 /// What people may choose for each setting, by its field name, with the
 /// value `change` gives it. The UI gets the same ranges from
 /// `shared/api-types/Ranges.ts`, which the tests write from this list.
@@ -56,7 +59,7 @@ fn ranged(change: &SettingsChange) -> [(&'static str, Option<u64>, RangeInclusiv
         (
             "maxConcurrent",
             change.max_concurrent.map(u64::from),
-            1..=50,
+            MAX_CONCURRENT,
         ),
         ("maxRetries", change.max_retries.map(u64::from), 0..=1000),
         (

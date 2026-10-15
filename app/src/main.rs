@@ -184,7 +184,9 @@ fn open_window(app: &AppHandle, link: Url, shown: bool) -> tauri::Result<()> {
         // No system title bar: the page draws its own.
         .decorations(false)
         .inner_size(960.0, 680.0)
-        .min_inner_size(400.0, 320.0)
+        // Room for the title bar folded as far as it goes (tabs as icons)
+        // beside the window's buttons, and for a page under it.
+        .min_inner_size(720.0, 480.0)
         .visible(shown)
         // Only the daemon's pages: a link to elsewhere must not turn this
         // window into a browser.

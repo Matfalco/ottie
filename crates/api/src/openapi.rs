@@ -30,6 +30,7 @@ const TOKEN: &str = "token";
         (name = "play", description = "Play while downloading: play links that need no token"),
         (name = "categories", description = "Where downloads go, by file extension or folder"),
         (name = "views", description = "Saved views of the downloads list"),
+        (name = "schedule", description = "Time slots: when downloads run, stop or are limited"),
         (name = "settings", description = "What applies to the whole daemon"),
         (name = "events", description = "Live changes over a WebSocket"),
         (name = "meta", description = "About the API itself"),

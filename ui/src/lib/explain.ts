@@ -90,6 +90,16 @@ export function explainRefusal(
 			return m.reason_invalid_transition({}, options);
 		case 'stopBeforeStart':
 			return m.reason_stop_before_start({}, options);
+		case 'slotNotFound':
+			return m.reason_slot_not_found({}, options);
+		case 'slotWithoutDays':
+			return m.reason_slot_without_days({}, options);
+		case 'slotWithoutEffect':
+			return m.reason_slot_without_effect({}, options);
+		case 'invalidTime':
+			return m.reason_invalid_time({ text: body.text }, options);
+		case 'invalidSlotOrder':
+			return m.reason_invalid_slot_order({}, options);
 		case 'stopping':
 			return m.reason_stopping({}, options);
 		case 'categoryNotFound':

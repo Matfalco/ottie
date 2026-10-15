@@ -11,6 +11,7 @@ import type { Reorder } from '@ottie/api-types/Reorder';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
+import type { SlotBody } from '@ottie/api-types/SlotBody';
 import type { ViewBody } from '@ottie/api-types/ViewBody';
 import { Api, ApiFailure, Unauthorized } from './api';
 import type { Action } from './bulk';
@@ -18,6 +19,7 @@ import { GENERAL, applyCategoryEvent, sorted, type Categories } from './categori
 import { explainRefusal } from './explain';
 import { m } from './paraglide/messages.js';
 import { applyEvent, newestFirst, nextRate, type Jobs, type Rate } from './jobs';
+import { applySlotEvent, slotNames, sortedSlots, type Slots } from './slots';
 import { addSample, totalSpeed } from './speed';
 import { applyViewEvent, sortedViews, type Views } from './views';
 
@@ -50,6 +52,13 @@ export class Session {
 	views: Views = $state({});
 	/** Oldest first. */
 	viewList = $derived(sortedViews(this.views));
+	slots: Slots = $state({});
+	/** In the order of the list: the higher one wins. */
+	slotList = $derived(sortedSlots(this.slots));
+	/** Each slot's name (or when it is), for "Held by …". */
+	slotNames = $derived(slotNames(this.slotList));
+	/** The time zone the slots follow (the daemon's), if it has a name. */
+	timeZone: string | null = $state(null);
 
 	private readonly api: Api;
 	private socket: WebSocket | null = null;
@@ -178,6 +187,27 @@ export class Session {
 
 	removeView(id: number): Promise<boolean> {
 		return this.attempt(() => this.api.removeView(id));
+	}
+
+	/** Adds a time slot (`id` null) or replaces one; every page hears of it
+	 * through a `slotChanged` event. Resolves to null once saved, else to
+	 * why not. */
+	async saveSlot(id: number | null, body: SlotBody): Promise<string | null> {
+		try {
+			await (id === null ? this.api.addSlot(body) : this.api.updateSlot(id, body));
+			return null;
+		} catch (error) {
+			return this.why(error);
+		}
+	}
+
+	removeSlot(id: number): Promise<boolean> {
+		return this.attempt(() => this.api.removeSlot(id));
+	}
+
+	/** Every slot's ID in the new order; a failure shows on the page. */
+	async reorderSlots(ids: number[]): Promise<void> {
+		await this.attempt(() => this.api.reorderSlots(ids));
 	}
 
 	/** Changes the daemon's settings; every page (here and on other devices)
@@ -312,6 +342,7 @@ export class Session {
 		}
 		applyCategoryEvent(this.categories, event);
 		applyViewEvent(this.views, event);
+		applySlotEvent(this.slots, event);
 		if (applyEvent(this.jobs, event)) {
 			void this.resync();
 		}
@@ -325,16 +356,19 @@ export class Session {
 		}
 		this.pending = [];
 		try {
-			const [jobs, categories, settings, views] = await Promise.all([
+			const [jobs, categories, settings, views, slots] = await Promise.all([
 				this.api.listJobs(),
 				this.api.listCategories(),
 				this.api.getSettings(),
-				this.api.listViews()
+				this.api.listViews(),
+				this.api.listSlots()
 			]);
 			this.jobs = Object.fromEntries(jobs.map((job) => [job.id, job]));
 			this.categories = Object.fromEntries(categories.map((category) => [category.id, category]));
 			this.settings = settings;
 			this.views = Object.fromEntries(views.map((view) => [view.id, view]));
+			this.slots = Object.fromEntries(slots.slots.map((slot) => [slot.id, slot]));
+			this.timeZone = slots.timeZone;
 			this.connection = 'live';
 		} catch (error) {
 			this.fail(error);

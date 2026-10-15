@@ -68,6 +68,9 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/store.rs       SQLite on its own thread: schema migrations, save/load jobs and settings
   src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media, max_batch; SettingsChange (applied all at once)
   src/view.rs        saved views: ViewSettings (filters + sort/grouping), ViewId, normalizing
+  src/slot.rs        time slots: SlotSettings (target, days or date, hours, effects), whether one covers
+                     a moment and its next change (jiff, the system's time zone), Effects (what the
+                     active ones change, highest first)
   src/links.rs       the links in pasted text (find), LinkPreview: for adding several at once
   src/sequence.rs    sequences in one link, curl-style ([001-120], [a-z], {a,b}): count, then expand
   src/throttle.rs    speed limits: per-job token buckets, refill task, priority-weighted sharing, category caps
@@ -99,6 +102,7 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
                      appearance + language, setupDone, streamMedia, maxBatch; the ranges people may choose (its tests
                      write them to shared/api-types/Ranges.ts)
   src/views.rs       GET/POST /views, PUT/DELETE /views/{id} (saved views)
+  src/slots.rs       GET/POST /slots (with the time zone), PUT/DELETE /slots/{id}, POST /slots/reorder
   src/stream.rs      play links: POST /jobs/{id}/stream → GET /stream/{ticket}/{name} (no token, Range)
   src/events.rs      GET /events WebSocket: changed / progress / removed / categoryChanged /
                      categoryRemoved / settingsChanged / viewChanged / viewRemoved / resync
@@ -152,8 +156,8 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
 ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [exists]
   src/routes/        +layout.svelte (fonts, app.css, theme, favicon, token → Login | Shell; /tray without),
                      +layout.ts (ssr = false), +page.svelte (Dashboard), downloads/+page.svelte
-                     (Downloads, ?status= filter), categories/+page.svelte, settings/+page.svelte,
-                     tray/+page.svelte (the desktop app's tray menu: TrayMenu)
+                     (Downloads, ?status= filter), categories/+page.svelte, schedule/+page.svelte,
+                     settings/+page.svelte, tray/+page.svelte (the desktop app's tray menu: TrayMenu)
   src/lib/api.ts     fetch + WebSocket client for /api/v1 (Unauthorized, ApiFailure)
   src/lib/session.svelte.ts  live job list: events WebSocket, reconnect, buffered resync
   src/lib/context.ts what every page shares (session, run): Svelte createContext
@@ -173,6 +177,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      startup.ts (the sign-in choices, for Settings and Setup, 0039),
                      schedule.ts (a download's start and stop time: date-and-time fields ↔
                      milliseconds, "today at 23:00", 0040),
+                     slots.ts (time slots: their order, in words, the week view's blocks and drags, conflicts,
+                     what applies to all downloads now, the editor's draft ↔ body, 0040),
                      batch.ts (several links at once: when a paste opens the list, its rows, what to
                      add, what was refused, 0036), sounds.ts (the notification sounds' choices: sets, or one for each kind, 0038)
                      plain logic, unit-tested (*.test.ts, Vitest)
@@ -188,11 +194,14 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        Downloads (AddCard, then one pane: Toolbar + MoveMenu, QuickFilters (with the
                        saved views' pills + their menu) or FilterPanel, ViewDialog (name a view),
                        JobTable (group rows, sortable headers, drag in the Waiting group) + JobRow,
-                       JobDetails under it for the one selected download (its bar maps the file)),
+                       JobDetails under it for the one selected download (its bar maps the file), or
+                       DetailsEmpty in its place for none or several),
                        CategoriesPage (LinkTester, rows, CategoryEditor inline in place of a row),
+                       SchedulePage (WeekView: drag a slot or its edges, click to edit; then the
+                       slots' rows with SlotEditor inline),
                        SettingsPage (section list; appearance + sync, language: LanguagePicker; downloads;
                        desktop app (sign-in, closing), notifications + playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
-                       TitleBar (+ WindowControls), AddCard (AddBar: link, then category + folder step;
+                       TitleBar (+ WindowControls; folds to fit: tab icons, slot chip, logo name), AddCard (AddBar: link, then category + folder step;
                        BatchDialog: several links, from a paste, the list button or a file),
                        FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu)
   messages/{en,fr}.json  every UI text, per language (Paraglide); project.inlang/ its settings
@@ -259,6 +268,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Several at once** (`docs/decisions/0036`): `Manager::add_many` adds each job as `add` would (the good ones even if others are refused), saves them in one transaction and schedules once; more than `Settings::max_batch` refuses them all (`TooManyLinks`). `Manager::preview` finds the links in text (`links::find`, in the caller's task) and tells, for each, its name, the category it would get and whether a job has that URL already. Sequences in a link (`docs/decisions/0037`, `sequence.rs`) give each link they hold; `find` counts them before making any, so the cap refuses a huge one at once.
 - **Queue order** (`docs/decisions/0032`): highest priority first, then the lowest `place` (new jobs go last). Urgent waits for a free slot (no preemption). `Manager::reorder(ids, Reorder)` (up, down, top, bottom, before/after a job) moves waiting (queued/scheduled/paused) jobs within their priority by swapping places among them, so other jobs keep theirs; each moved job is saved and gets a `Changed`.
 - **Start and stop times** (`docs/decisions/0040`): a job's own `start_at`/`stop_at` (`NewJob`, `JobChange`; saved in ms since 1970, UTC). A start time to come makes it `Scheduled`; a running job stops first (`Stop::Hold`). At its start time it joins the queue at its place; at its stop time it pauses wherever it is. Each time is used once, then cleared (`transition` clears the start time on leaving for the queue or a stop). The actor's loop sleeps until the next time (`Actor::wake_at`, `check_times`), at most `CLOCK_CHECK` (30 s), and compares with the wall clock, so sleep or a clock change can't make it miss one. Resume on a scheduled job queues it now.
+- **Time slots** (`docs/decisions/0040`, `slot.rs`): kept by the actor like views (`Manager::add_slot` …, `SlotChanged`/`SlotRemoved`, also when one starts or stops applying), in list order (`place`). `check_times` works out the active ones (`update_slots`; a slot that happens once is removed once over) and what they change (`Effects`: per effect, the highest slot that sets it, for the queue and each category), then applies it: limits through the limiter (`apply_limits`: a slot's, else the setting's), caps in `schedule`/`has_room`, and holds in `settle` (a queued job a slot stops becomes `Scheduled` with `held_by`; a running one gets `Stop::Hold` unless the slot lets it finish; released when no slot holds it and its start time has passed: to the queue, or `Paused` if the slot that held it (`held_by`, saved) ended at its time and keeps them paused (`stay_paused`; `keeps_paused`, `Actor::ended` for one that happened once). Settings are never changed by a slot. A job resumed by hand while held gets `ignores_slots` (saved) until it pauses, fails or ends. Wake-ups include the slots' next changes.
 - **Retries** (`docs/decisions/0013`): only `Error::is_retryable()` errors (network, drop, stall, 5xx, 408, 429). A retrying job keeps its slot for `retries_before_yield` retries, then gives way if a queued job is waiting (queues behind every job that never gave way); fails after `max_retries`. Waits double from `first_wait` up to 60 s; `Retry-After` (seconds) can ask for up to 10 min. The count resets when bytes arrive or on a manual resume. Stalls: `tokio::time::timeout` around each network wait (`HttpConfig::stall_timeout`), never reqwest's `read_timeout` (it would fire while our throttle waits). Each run of a job (start, resume, retry) gets its own reqwest `Client` (`HttpBackend`), so it never reuses a pooled connection that died silently when the network changed (VPN, Wi-Fi); HTTP/2 connections are also pinged after 10 s of silence.
 - **Failures are `Problem`s** (`docs/decisions/0016`), never bare strings: a kind plus details, saved in the `problem_*` columns. Add a kind = a migration (CHECK list), a `Display` wording, an API `Problem` variant and UI messages.
 - **Settings** live in the single-row `settings` table; `Manager::start(backend, store)` loads them. They change through `Manager::change_settings` (several at once): one save and one `JobEvent::SettingsChanged` per change, none if nothing changed (`docs/decisions/0022`). A job's own settings (speed limit, priority) change the same way through `Manager::change_job(id, JobChange)`: one save and one `Changed` (`docs/decisions/0024`).
@@ -293,7 +303,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - New crates inherit `edition`, `license`, `repository` and `publish` (false) from `[workspace.package]`, and set `[lints] workspace = true`. `ottie`, `ottie-core` and `ottie-api` set `publish = true` (the binary depends on the other two, so they're published first); their dependencies on each other need `path` + `version`. The Tauri app stays unpublished.
 - License header: published crates' entry files carry the MPL "Exhibit A" notice, because the root `LICENSE` file isn't packaged.
 - TypeScript: `strict`, no `any`. API types come only from `shared/api-types/` (`import type { Job } from '@ottie/api-types/Job'`). In the UI, `#lib/…` imports of TS files end in `.js` (`#lib/format.js`). Logic lives in plain `.ts` files with unit tests; components stay thin. Prettier formats (tabs, single quotes).
-- UI (`docs/decisions/0015`, `0021`): runes mode; styles in each component's `<style>` using the variables in `app.css` (colours, `--font`/`--mono`, `--radius-s/m/l`), never raw colours; the page talks to the daemon only through `api.ts`. Every theme must keep working: check light and dark when adding colours.
+- UI (`docs/decisions/0015`, `0021`): runes mode; styles in each component's `<style>` using the variables in `app.css` (colours, `--font`/`--mono`, `--radius-s/m/l`), never raw colours; the page talks to the daemon only through `api.ts`. Every theme must keep working: check light and dark when adding colours. Every page must also work at the desktop app's minimum size (720 × 480, `min_inner_size` in `app/src/main.rs`) and on a phone (360 px wide and up; under 40rem the tabs are a bar along the bottom; there and in windows under 40rem tall, the download list keeps a height of its own with the details panel under it, and the page scrolls). Two traps: a visually hidden `position: absolute` input needs a positioned parent, or it hangs from the window and makes it scroll; and a flex item with `overflow: hidden` shrinks below its content unless it's `flex: none`.
 - Translations (`docs/decisions/0016`): no visible text in components or logic: every string is a message in `messages/en.json` *and* `fr.json` (French typography: no-break space before `: ? !` and inside « »); numbers, sizes and durations go through `format.ts` (`Intl`); daemon text is shown through `explain.ts`. Functions that build text take a `locale` parameter (default `getLocale()`) so tests can check both languages.
 - API docs (`docs/decisions/0030`): every handler has a `#[utoipa::path]` (route, body, answers, the `Reason` codes it can refuse with) and is registered with `routes!`; wire types derive `ToSchema` beside `TS`. Fields inside the tagged enums (`Problem`, `Reason`, `Event`) stay one word (utoipa ignores `rename_all_fields`; a test checks). A change in how to use the API also updates `docs/api/README.md`.
 - API errors (`docs/decisions/0016`): every refusal has a `Reason` code (`crates/api/src/types.rs`) besides the English `error`; a new engine `Error` variant gets a code in `error.rs`.
@@ -352,7 +362,7 @@ Done: ✅ and struck through.
    - ✅ ~~5l starting at sign-in (`docs/decisions/0039`)~~
 6. Scheduler (`docs/decisions/0040`), clipboard monitoring, yt-dlp backend (its own updates, apart from the app's):
    - ✅ ~~6a a download's own start and stop time (the `Scheduled` state)~~
-   - 6b time slots + the Schedule tab
+   - ✅ ~~6b time slots + the Schedule tab~~
    - 6c when everything has finished (desktop app)
    - 6d clipboard monitoring
    - 6e yt-dlp

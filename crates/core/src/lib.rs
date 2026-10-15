@@ -19,6 +19,7 @@ mod problem;
 mod segmented;
 mod sequence;
 mod settings;
+mod slot;
 mod store;
 mod stream;
 mod throttle;
@@ -37,6 +38,7 @@ pub use manager::Manager;
 pub use playback::Playback;
 pub use problem::Problem;
 pub use settings::{Appearance, AppearanceMode, Palette, RetryPolicy, Settings, SettingsChange};
+pub use slot::{Downloads, Repeat, Slot, SlotId, SlotSettings, time_zone_name};
 pub use store::Store;
 pub use stream::{Opened, Reader};
 pub use throttle::Throttle;
@@ -44,3 +46,6 @@ pub use view::{AddedWithin, SortDirection, SortKey, View, ViewId, ViewSettings};
 
 /// The URL type every download uses, so clients don't need `reqwest` themselves.
 pub use reqwest::Url;
+
+/// The calendar types time slots use, so clients don't need `jiff` themselves.
+pub use jiff::civil::{Date, Time, Weekday};

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
 	import type { Job } from '@ottie/api-types/Job';
+	import CalendarClock from '@lucide/svelte/icons/calendar-clock';
 	import Download from '@lucide/svelte/icons/download';
 	import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
 	import Settings from '@lucide/svelte/icons/settings';
@@ -13,9 +14,11 @@
 
 	interface Props {
 		jobs: Job[];
+		/** Icons only, their names in tooltips: the title bar is short of room. */
+		compact?: boolean;
 	}
 
-	let { jobs }: Props = $props();
+	let { jobs, compact = false }: Props = $props();
 	let active = $derived(jobs.filter(isActive).length);
 
 	interface Entry {
@@ -30,12 +33,13 @@
 		{ href: resolve('/'), label: m.nav_dashboard, icon: LayoutDashboard },
 		{ href: resolve('/downloads'), label: m.nav_downloads, icon: Download, badge: () => active },
 		{ href: resolve('/categories'), label: m.nav_categories, icon: Tags },
+		{ href: resolve('/schedule'), label: m.nav_schedule, icon: CalendarClock },
 		{ href: resolve('/settings'), label: m.nav_settings, icon: Settings }
 	];
 </script>
 
 <!-- The sections as tabs in the title bar; a bar along the bottom on phones. -->
-<nav aria-label={m.nav_label()}>
+<nav aria-label={m.nav_label()} class:compact>
 	<ul>
 		{#each ENTRIES as { href, label, icon: Icon, badge } (href)}
 			{@const current = page.url.pathname === href}
@@ -88,9 +92,8 @@
 		font-weight: 600;
 	}
 
-	/* Wide windows: names only. */
 	.icon {
-		display: none;
+		display: grid;
 	}
 
 	.badge {
@@ -105,21 +108,17 @@
 		text-align: center;
 	}
 
-	/* Medium widths: icons only. */
-	@media (max-width: 56rem) and (min-width: 40.01rem) {
-		a {
+	/* Short of room in the title bar: icons only. */
+	@media (min-width: 40.01rem) {
+		.compact a {
 			padding: 0 0.6rem;
 		}
 
-		.icon {
-			display: grid;
-		}
-
-		.name {
+		.compact .name {
 			display: none;
 		}
 
-		.badge {
+		.compact .badge {
 			position: absolute;
 			top: -0.3rem;
 			right: -0.35rem;
@@ -167,8 +166,13 @@
 			color: var(--accent);
 		}
 
-		.icon {
-			display: grid;
+		/* Five names don't fit side by side: only the current tab's. */
+		a:not(.current) .name {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
 		}
 
 		.badge {

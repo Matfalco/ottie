@@ -7,6 +7,7 @@ use std::sync::mpsc as std_mpsc;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use jiff::civil::{Date, Time};
 use reqwest::Url;
 use rusqlite::{Connection, Row, params};
 use tokio::sync::oneshot;
@@ -18,6 +19,7 @@ use crate::id::JobId;
 use crate::job::{JobState, Priority};
 use crate::problem::Problem;
 use crate::settings::{Appearance, AppearanceMode, Palette, RetryPolicy, Settings};
+use crate::slot::{ALL_DAYS, Downloads, Repeat, SlotId, SlotSettings};
 use crate::view::{AddedWithin, SortDirection, SortKey, View, ViewId, ViewSettings};
 
 /// Each entry upgrades the schema by one version (`PRAGMA user_version`).
@@ -257,6 +259,32 @@ const MIGRATIONS: &[&str] = &[
      INSERT INTO view_states_new SELECT view_id, state FROM view_states;
      DROP TABLE view_states;
      ALTER TABLE view_states_new RENAME TO view_states;",
+    // 15: time slots, in the order of the list (`place`). `days` holds a bit
+    // per weekday, Monday first; a slot that happens once has a `date`
+    // (YYYY-MM-DD) instead. Times are minutes from midnight. A slot of a
+    // category goes with it. `stay_paused`: with a stop, those it held are
+    // paused when it ends. And on jobs: started by hand while a slot held
+    // them; the slot holding a scheduled one (no foreign key: a job may
+    // still name a slot just removed, until it's settled).
+    "CREATE TABLE slots (
+        id             INTEGER PRIMARY KEY CHECK (id >= 1),
+        place          INTEGER NOT NULL CHECK (place >= 0),
+        name           TEXT    NOT NULL DEFAULT '',
+        enabled        INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+        category_id    INTEGER REFERENCES categories (id) ON DELETE CASCADE,
+        days           INTEGER CHECK (days BETWEEN 1 AND 127),
+        date           TEXT    CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+        start_minute   INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+        end_minute     INTEGER NOT NULL CHECK (end_minute BETWEEN 0 AND 1439),
+        downloads      TEXT    CHECK (downloads IN ('allow', 'stop', 'stop-let-finish')),
+        speed_limit    INTEGER CHECK (speed_limit >= 0),
+        max_concurrent INTEGER CHECK (max_concurrent >= 1),
+        stay_paused    INTEGER NOT NULL DEFAULT 0 CHECK (stay_paused IN (0, 1)),
+        CHECK ((days IS NULL) <> (date IS NULL))
+     ) STRICT;
+     ALTER TABLE jobs ADD COLUMN ignores_slots INTEGER NOT NULL DEFAULT 0
+        CHECK (ignores_slots IN (0, 1));
+     ALTER TABLE jobs ADD COLUMN held_by INTEGER CHECK (held_by >= 1);",
 ];
 
 /// Everything saved about one job.
@@ -280,6 +308,19 @@ pub(crate) struct JobRecord {
     pub streaming_chosen: bool,
     pub start_at: Option<SystemTime>,
     pub stop_at: Option<SystemTime>,
+    /// Started by hand while a time slot held it: slots leave it alone.
+    pub ignores_slots: bool,
+    /// While `Scheduled`: the slot holding it, so the one that ends can keep
+    /// it paused, even across a restart.
+    pub held_by: Option<SlotId>,
+}
+
+/// A time slot with its place in the list (lower comes first, and wins).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SlotRecord {
+    pub id: SlotId,
+    pub place: u64,
+    pub settings: SlotSettings,
 }
 
 /// Everything the database holds, as read at start.
@@ -294,6 +335,8 @@ pub(crate) struct Loaded {
     pub last_id: Option<JobId>,
     /// By ID.
     pub views: Vec<View>,
+    /// By place.
+    pub slots: Vec<SlotRecord>,
 }
 
 /// Handle to the database thread. The thread stops when this is dropped.
@@ -311,6 +354,8 @@ enum Op {
     SaveView(View),
     RemoveView(ViewId),
     RemoveJob { id: JobId, last_id: JobId },
+    SaveSlot(SlotRecord),
+    RemoveSlot(SlotId),
     Flush(oneshot::Sender<()>),
 }
 
@@ -418,6 +463,20 @@ impl Store {
         }
     }
 
+    /// Queued like `save`.
+    pub(crate) fn save_slot(&self, slot: SlotRecord) {
+        if self.ops.send(Op::SaveSlot(slot)).is_err() {
+            tracing::error!("database thread has stopped; time slot not saved");
+        }
+    }
+
+    /// Queued like `save`.
+    pub(crate) fn remove_slot(&self, id: SlotId) {
+        if self.ops.send(Op::RemoveSlot(id)).is_err() {
+            tracing::error!("database thread has stopped; time slot not removed");
+        }
+    }
+
     /// Waits until every save queued before this call has been written.
     pub(crate) async fn flush(&self) {
         let (reply, done) = oneshot::channel();
@@ -473,6 +532,16 @@ fn serve(mut conn: Connection, requests: std_mpsc::Receiver<Op>) {
             Op::RemoveJob { id, last_id } => {
                 if let Err(err) = remove_job(&mut conn, id, last_id) {
                     tracing::error!(%id, error = %err, "could not remove job");
+                }
+            }
+            Op::SaveSlot(slot) => {
+                if let Err(err) = save_slot(&conn, &slot) {
+                    tracing::error!(id = %slot.id, error = %err, "could not save time slot");
+                }
+            }
+            Op::RemoveSlot(id) => {
+                if let Err(err) = conn.execute("DELETE FROM slots WHERE id = ?1", [id.0]) {
+                    tracing::error!(%id, error = %err, "could not remove time slot");
                 }
             }
             Op::Flush(reply) => {
@@ -553,9 +622,10 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
                            downloaded, validator_kind, validator_value, resumable, error,
                            priority, speed_limit, category_id, category_chosen,
                            problem_kind, problem_number, problem_total, problem_detail,
-                           streaming, streaming_chosen, queue_place, start_at, stop_at)
+                           streaming, streaming_chosen, queue_place, start_at, stop_at,
+                           ignores_slots, held_by)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                 ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
+                 ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)
          ON CONFLICT (id_secs, id_seq) DO UPDATE SET
              url = excluded.url, dest_dir = excluded.dest_dir,
              file_name = excluded.file_name, state = excluded.state,
@@ -569,7 +639,8 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
              problem_total = excluded.problem_total, problem_detail = excluded.problem_detail,
              streaming = excluded.streaming, streaming_chosen = excluded.streaming_chosen,
              queue_place = excluded.queue_place, start_at = excluded.start_at,
-             stop_at = excluded.stop_at",
+             stop_at = excluded.stop_at, ignores_slots = excluded.ignores_slots,
+             held_by = excluded.held_by",
     )?
     .execute(params![
         secs,
@@ -597,6 +668,8 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
         record.place,
         record.start_at.map(unix_millis),
         record.stop_at.map(unix_millis),
+        record.ignores_slots,
+        record.held_by.map(|slot| slot.0),
     ])?;
     tx.prepare_cached("DELETE FROM segments WHERE job_secs = ?1 AND job_seq = ?2")?
         .execute(params![secs, seq])?;
@@ -634,6 +707,7 @@ fn load_all(conn: &Connection) -> Result<Loaded, Error> {
         categories: load_categories(conn)?,
         last_id: load_last_id(conn)?,
         views: load_views(conn)?,
+        slots: load_slots(conn)?,
     })
 }
 
@@ -652,7 +726,8 @@ fn load_jobs(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
                 validator_kind, validator_value, resumable, error, priority, speed_limit,
                 category_id, category_chosen,
                 problem_kind, problem_number, problem_total, problem_detail,
-                streaming, streaming_chosen, queue_place, start_at, stop_at
+                streaming, streaming_chosen, queue_place, start_at, stop_at, ignores_slots,
+                held_by
          FROM jobs ORDER BY id_secs, id_seq",
     )?;
     let mut rows = stmt.query([])?;
@@ -734,6 +809,8 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         place: row.get(22)?,
         start_at: row.get::<_, Option<u64>>(23)?.map(from_unix_millis),
         stop_at: row.get::<_, Option<u64>>(24)?.map(from_unix_millis),
+        ignores_slots: row.get(25)?,
+        held_by: row.get::<_, Option<u32>>(26)?.map(SlotId),
     }))
 }
 
@@ -1043,6 +1120,138 @@ fn save_view(conn: &mut Connection, view: &View) -> Result<(), Error> {
     Ok(())
 }
 
+fn load_slots(conn: &Connection) -> Result<Vec<SlotRecord>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, place, name, enabled, category_id, days, date, start_minute, end_minute,
+                downloads, speed_limit, max_concurrent, stay_paused
+         FROM slots ORDER BY place, id",
+    )?;
+    let mut rows = stmt.query([])?;
+    let mut slots = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id = SlotId(row.get(0)?);
+        // A row we can't understand is skipped (and logged), as with jobs.
+        match slot_from_row(row)? {
+            Some(settings) => slots.push(SlotRecord {
+                id,
+                place: row.get(1)?,
+                settings,
+            }),
+            None => tracing::error!(%id, "skipping unreadable time slot in database"),
+        }
+    }
+    Ok(slots)
+}
+
+fn slot_from_row(row: &Row) -> rusqlite::Result<Option<SlotSettings>> {
+    let days: Option<u8> = row.get(5)?;
+    let date: Option<String> = row.get(6)?;
+    let repeat = match (days, date) {
+        (Some(days), None) => Repeat::Weekly(
+            ALL_DAYS
+                .into_iter()
+                .enumerate()
+                .filter(|(bit, _)| days & (1 << bit) != 0)
+                .map(|(_, day)| day)
+                .collect(),
+        ),
+        (None, Some(date)) => match date.parse::<Date>() {
+            Ok(date) => Repeat::Once(date),
+            Err(_) => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    let downloads: Option<String> = row.get(9)?;
+    let stay_paused: bool = row.get(12)?;
+    let stop = |let_finish| Downloads::Stop {
+        let_finish,
+        stay_paused,
+    };
+    let downloads = match downloads.as_deref() {
+        None => None,
+        Some("allow") => Some(Downloads::Allow),
+        Some("stop") => Some(stop(false)),
+        Some("stop-let-finish") => Some(stop(true)),
+        Some(_) => return Ok(None),
+    };
+    let (Some(from), Some(to)) = (time_of(row.get(7)?), time_of(row.get(8)?)) else {
+        return Ok(None);
+    };
+    Ok(Some(SlotSettings {
+        name: row.get(2)?,
+        enabled: row.get(3)?,
+        category: row.get::<_, Option<u32>>(4)?.map(CategoryId),
+        repeat,
+        from,
+        to,
+        downloads,
+        speed_limit: row.get(10)?,
+        max_concurrent: row.get(11)?,
+    }))
+}
+
+/// A time of day from minutes since midnight.
+fn time_of(minutes: i64) -> Option<Time> {
+    let hour = i8::try_from(minutes / 60).ok()?;
+    let minute = i8::try_from(minutes % 60).ok()?;
+    Time::new(hour, minute, 0, 0).ok()
+}
+
+fn minutes_of(time: Time) -> i64 {
+    i64::from(time.hour()) * 60 + i64::from(time.minute())
+}
+
+fn save_slot(conn: &Connection, slot: &SlotRecord) -> Result<(), Error> {
+    let settings = &slot.settings;
+    let (days, date) = match &settings.repeat {
+        Repeat::Weekly(days) => {
+            let bits = ALL_DAYS
+                .into_iter()
+                .enumerate()
+                .filter(|(_, day)| days.contains(day))
+                .fold(0u8, |bits, (bit, _)| bits | 1 << bit);
+            (Some(bits), None)
+        }
+        Repeat::Once(date) => (None, Some(date.to_string())),
+    };
+    let downloads = settings.downloads.map(|downloads| match downloads {
+        Downloads::Allow => "allow",
+        Downloads::Stop {
+            let_finish: false, ..
+        } => "stop",
+        Downloads::Stop {
+            let_finish: true, ..
+        } => "stop-let-finish",
+    });
+    conn.prepare_cached(
+        "INSERT INTO slots (id, place, name, enabled, category_id, days, date, start_minute,
+                            end_minute, downloads, speed_limit, max_concurrent, stay_paused)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+         ON CONFLICT (id) DO UPDATE SET
+             place = excluded.place, name = excluded.name, enabled = excluded.enabled,
+             category_id = excluded.category_id, days = excluded.days, date = excluded.date,
+             start_minute = excluded.start_minute, end_minute = excluded.end_minute,
+             downloads = excluded.downloads, speed_limit = excluded.speed_limit,
+             max_concurrent = excluded.max_concurrent, stay_paused = excluded.stay_paused",
+    )?
+    .execute(params![
+        slot.id.0,
+        slot.place,
+        settings.name,
+        settings.enabled,
+        settings.category.map(|c| c.0),
+        days,
+        date,
+        minutes_of(settings.from),
+        minutes_of(settings.to),
+        downloads,
+        settings.speed_limit,
+        settings.max_concurrent,
+        settings.keeps_paused(),
+    ])?;
+    Ok(())
+}
+
 fn priority_name(priority: Priority) -> &'static str {
     match priority {
         Priority::Low => "low",
@@ -1119,6 +1328,8 @@ mod tests {
             place: u64::from(seq) * 10,
             start_at: None,
             stop_at: Some(UNIX_EPOCH + Duration::from_millis(1_760_300_000_123)),
+            ignores_slots: true,
+            held_by: Some(SlotId(3)),
         }
     }
 
@@ -1196,6 +1407,56 @@ mod tests {
             )
             .unwrap();
         assert_eq!(left, 0);
+    }
+
+    #[tokio::test]
+    async fn slots_are_saved_replaced_and_removed() {
+        use jiff::civil::{Weekday, date, time};
+        let store = Store::open_in_memory().await.unwrap();
+        store.save_category(videos());
+        let night = SlotRecord {
+            id: SlotId(1),
+            place: 2,
+            settings: SlotSettings {
+                name: "Night".into(),
+                repeat: Repeat::Weekly(vec![Weekday::Monday, Weekday::Sunday]),
+                downloads: Some(Downloads::Stop {
+                    let_finish: true,
+                    stay_paused: true,
+                }),
+                speed_limit: Some(0),
+                ..SlotSettings::daily(time(23, 30, 0, 0), time(7, 0, 0, 0))
+            },
+        };
+        let once = SlotRecord {
+            id: SlotId(2),
+            place: 1,
+            settings: SlotSettings {
+                enabled: false,
+                category: Some(videos().id),
+                repeat: Repeat::Once(date(2026, 10, 14)),
+                downloads: Some(Downloads::Allow),
+                max_concurrent: Some(2),
+                ..SlotSettings::daily(time(0, 0, 0, 0), time(0, 0, 0, 0))
+            },
+        };
+        store.save_slot(night.clone());
+        store.save_slot(once.clone());
+        // In the order of their places.
+        assert_eq!(
+            store.load().await.unwrap().slots,
+            [once.clone(), night.clone()]
+        );
+
+        let mut night = night;
+        night.place = 0;
+        night.settings.downloads = None;
+        store.save_slot(night.clone());
+        store.remove_slot(SlotId(9)); // Not there: nothing happens.
+        assert_eq!(store.load().await.unwrap().slots, [night.clone(), once]);
+        // A category's slots go with it.
+        store.remove_category(videos().id);
+        assert_eq!(store.load().await.unwrap().slots, [night]);
     }
 
     #[tokio::test]

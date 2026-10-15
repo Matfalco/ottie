@@ -4,6 +4,7 @@
 	import { currentSpeed, type Rate } from '#lib/jobs.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { describe, fraction, motion } from '#lib/status.js';
+	import { useApp } from '#lib/context.js';
 
 	interface Props {
 		/** Downloading now. */
@@ -15,6 +16,7 @@
 	}
 
 	let { running, next, rates, now }: Props = $props();
+	const { session } = useApp();
 </script>
 
 <!-- The dashboard's "Downloading now" card: each running download with its
@@ -23,7 +25,7 @@
 	<ul class="running">
 		{#each running as job (job.id)}
 			{@const speed = currentSpeed(rates[job.id], now)}
-			{@const moving = motion(job, speed, now)}
+			{@const moving = motion(job, speed, now, undefined, session.slotNames)}
 			{@const done = fraction(job)}
 			<li>
 				<span class="top">
@@ -33,7 +35,7 @@
 				<span class="bar" class:unknown={done === null}>
 					<span class="fill" style:width={`${(done ?? 0) * 100}%`}></span>
 				</span>
-				<span class="line">{describe(job, speed, now)}</span>
+				<span class="line">{describe(job, speed, now, undefined, session.slotNames)}</span>
 			</li>
 		{/each}
 	</ul>

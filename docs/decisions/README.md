@@ -30,7 +30,7 @@ Each accepted decision has its own short file here (`NNNN-title.md`): what was d
 | [0029](0029-play-while-downloading.md) | Play while downloading through short-lived play links that need no token; the download order follows the player, and a streaming mode (on by itself for videos and music) keeps it in order. |
 | [0032](0032-queue-order.md) | Each download has a place in the queue; buttons and drag and drop move waiting downloads within their priority (`POST /jobs/reorder`); the Waiting group shows the queue. |
 | [0033](0033-connection-failures-and-starved-downloads.md) | One connection's failure no longer stops a multi-connection download; a connection the speed limit starves lets go of its request; a download that gets no bandwidth says so (`waitingForBandwidth`). |
-| [0040](0040-scheduler.md) | Time slots (whole queue or a category, weekly or once; allow or stop, speed limit, max concurrent; higher in the list wins), a download's own start and stop time (a new `Scheduled` state), and an action once everything has finished (quit, sleep, hibernate, shut down; desktop app). |
+| [0040](0040-scheduler.md) | Time slots (whole queue or a category, weekly or once; allow or stop, speed limit, max concurrent; higher in the list wins; a Schedule tab with a week view; `/slots`, one resource each), a download's own start and stop time (a new `Scheduled` state), and an action once everything has finished (quit, sleep, hibernate, shut down; desktop app). Times follow the daemon's clock and time zone, through `jiff`. |
 
 ## API and daemon
 

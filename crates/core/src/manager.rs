@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use jiff::Zoned;
 use reqwest::Url;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -23,7 +24,8 @@ use crate::links::{self, Found, LinkPreview};
 use crate::playback::{self, Head, Playbacks};
 use crate::problem::Problem;
 use crate::settings::{RetryPolicy, Settings, SettingsChange};
-use crate::store::{JobRecord, Store};
+use crate::slot::{Effects, Slot, SlotId, SlotSettings};
+use crate::store::{JobRecord, SlotRecord, Store};
 use crate::throttle::Limiter;
 use crate::view::{View, ViewId, ViewSettings};
 
@@ -92,6 +94,19 @@ impl Manager {
             .into_iter()
             .map(|view| (view.id, view.settings))
             .collect();
+        // Whether each applies is worked out as the actor starts.
+        let slots = loaded
+            .slots
+            .into_iter()
+            .map(|slot| {
+                let entry = SlotEntry {
+                    place: slot.place,
+                    settings: slot.settings,
+                    active: false,
+                };
+                (slot.id, entry)
+            })
+            .collect();
         let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
         let (events, _) = broadcast::channel(EVENT_BUFFER);
         let playbacks = Playbacks::default();
@@ -107,6 +122,9 @@ impl Manager {
             categories,
             other,
             views,
+            slots,
+            effects: Effects::default(),
+            ended: Vec::new(),
             yields: 0,
             wake_at: None,
             events: events.clone(),
@@ -398,6 +416,42 @@ impl Manager {
             .await
     }
 
+    /// Every time slot, in the order of the list (the higher one wins where
+    /// two apply to the same thing). See docs/decisions/0040.
+    pub async fn slots(&self) -> Result<Vec<Slot>, Error> {
+        self.request(|reply| Command::Slots { reply }).await
+    }
+
+    /// Adds a slot at the end of the list. It applies at once if it covers
+    /// now. Its category, if any, must exist.
+    pub async fn add_slot(&self, settings: SlotSettings) -> Result<SlotId, Error> {
+        self.request(|reply| Command::AddSlot { settings, reply })
+            .await
+    }
+
+    /// Replaces the slot's settings; they apply at once.
+    pub async fn update_slot(&self, id: SlotId, settings: SlotSettings) -> Result<(), Error> {
+        self.request(|reply| Command::UpdateSlot {
+            id,
+            settings,
+            reply,
+        })
+        .await
+    }
+
+    pub async fn remove_slot(&self, id: SlotId) -> Result<(), Error> {
+        self.request(|reply| Command::RemoveSlot { id, reply })
+            .await
+    }
+
+    /// Puts the slots in this order: every one, once
+    /// ([`Error::InvalidSlotOrder`] otherwise). Each that moved is saved and
+    /// announced.
+    pub async fn reorder_slots(&self, ids: Vec<SlotId>) -> Result<(), Error> {
+        self.request(|reply| Command::ReorderSlots { ids, reply })
+            .await
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<JobEvent> {
         self.events.subscribe()
     }
@@ -517,6 +571,26 @@ enum Command {
         id: ViewId,
         reply: Reply<()>,
     },
+    Slots {
+        reply: Reply<Vec<Slot>>,
+    },
+    AddSlot {
+        settings: SlotSettings,
+        reply: Reply<SlotId>,
+    },
+    UpdateSlot {
+        id: SlotId,
+        settings: SlotSettings,
+        reply: Reply<()>,
+    },
+    RemoveSlot {
+        id: SlotId,
+        reply: Reply<()>,
+    },
+    ReorderSlots {
+        ids: Vec<SlotId>,
+        reply: Reply<()>,
+    },
     Shutdown {
         reply: Reply<()>,
     },
@@ -559,7 +633,8 @@ enum Stop {
     Move,
     /// Leave the state as it is, so the next start continues the job.
     Shutdown,
-    /// Wait for its start time (`Scheduled`), given while it ran.
+    /// Wait (`Scheduled`) for its start time, given while it ran, or for the
+    /// end of a time slot that stops downloads.
     Hold,
     Pause,
     Cancel,
@@ -611,6 +686,13 @@ struct Job {
     start_at: Option<SystemTime>,
     /// When it pauses if it hasn't finished by then.
     stop_at: Option<SystemTime>,
+    /// Started by hand while a time slot held it: slots leave it alone until
+    /// it pauses, fails or ends.
+    ignores_slots: bool,
+    /// While `Scheduled`: the slot holding it, if one is. Saved, so that
+    /// when the slot ends, even while Ottie isn't running, it's known
+    /// whether to keep the job paused.
+    held_by: Option<SlotId>,
     /// Present while a task is downloading this job.
     task: Option<Task>,
     /// Present while its category is changing and its file moving there.
@@ -638,12 +720,14 @@ impl Job {
             state = JobState::Queued;
         }
         // Stopped by the shutdown while stopping to wait for its start time,
-        // or (a database edited by hand) scheduled for no time.
-        match (state, record.start_at) {
-            (JobState::Queued, Some(_)) => state = JobState::Scheduled,
-            (JobState::Scheduled, None) => state = JobState::Queued,
+        // or (a database edited by hand) scheduled for nothing. Whether a
+        // slot still holds it is worked out again at the first check.
+        match (state, record.start_at, record.held_by) {
+            (JobState::Queued, Some(_), _) => state = JobState::Scheduled,
+            (JobState::Scheduled, None, None) => state = JobState::Queued,
             _ => {}
         }
+        let held_by = record.held_by.filter(|_| state == JobState::Scheduled);
         // What's on disk is the truth for how much we have; the saved byte
         // count can lag behind it. With several connections the file has its
         // full size from the start, so the saved ranges tell instead.
@@ -671,6 +755,8 @@ impl Job {
             waiting_for_bandwidth: false,
             start_at: record.start_at,
             stop_at: record.stop_at,
+            ignores_slots: record.ignores_slots,
+            held_by,
             task: None,
             moving: None,
             last_saved: None,
@@ -709,6 +795,7 @@ impl Job {
             waiting_for_bandwidth: self.waiting_for_bandwidth,
             start_at: self.start_at,
             stop_at: self.stop_at,
+            held_by: self.held_by,
         }
     }
 
@@ -723,6 +810,15 @@ struct Task {
     stop: Option<Stop>,
     /// Pause/cancel/remove requests to answer once the task has really stopped.
     waiters: Vec<(Stop, Reply<()>)>,
+}
+
+/// A time slot as the actor keeps it.
+struct SlotEntry {
+    /// Its place in the list: lower comes first, and wins.
+    place: u64,
+    settings: SlotSettings,
+    /// It applies now (worked out in `update_slots`).
+    active: bool,
 }
 
 /// The task that owns all job state. Only it reads or changes `jobs`.
@@ -742,6 +838,13 @@ struct Actor<B> {
     other: CategoryId,
     /// Saved views. Saved whenever one changes.
     views: BTreeMap<ViewId, ViewSettings>,
+    /// Time slots. Saved whenever one changes.
+    slots: BTreeMap<SlotId, SlotEntry>,
+    /// What the active slots change now (see `apply_effects`).
+    effects: Effects,
+    /// Slots that happened once, have just ended and keep what they held
+    /// paused; only until the end of `check_times`, as they're gone.
+    ended: Vec<SlotId>,
     /// How many times a retrying job has given way (see `Job::gave_way`).
     yields: u64,
     /// The next start or stop time to come, if any (see `check_times`).
@@ -881,6 +984,25 @@ impl<B: Backend> Actor<B> {
             }
             Command::RemoveView { id, reply } => {
                 let _ = reply.send(self.remove_view(id));
+            }
+            Command::Slots { reply } => {
+                let _ = reply.send(Ok(self.slots()));
+            }
+            Command::AddSlot { settings, reply } => {
+                let _ = reply.send(self.add_slot(settings));
+            }
+            Command::UpdateSlot {
+                id,
+                settings,
+                reply,
+            } => {
+                let _ = reply.send(self.update_slot(id, settings));
+            }
+            Command::RemoveSlot { id, reply } => {
+                let _ = reply.send(self.remove_slot(id));
+            }
+            Command::ReorderSlots { ids, reply } => {
+                let _ = reply.send(self.reorder_slots(&ids));
             }
             Command::Shutdown { reply } => self.begin_shutdown(Some(reply)),
         }
@@ -1105,7 +1227,9 @@ impl<B: Backend> Actor<B> {
         {
             return Err(Error::StopBeforeStart);
         }
-        let state = if start_at.is_some() {
+        // A slot that stops its category holds it from the start.
+        let held_by = self.effects.stop(category).map(|(slot, _)| slot);
+        let state = if start_at.is_some() || held_by.is_some() {
             JobState::Scheduled
         } else {
             JobState::Queued
@@ -1136,6 +1260,8 @@ impl<B: Backend> Actor<B> {
                 waiting_for_bandwidth: false,
                 start_at,
                 stop_at: new.stop_at,
+                ignores_slots: false,
+                held_by,
                 task: None,
                 moving: None,
                 last_saved: None,
@@ -1422,8 +1548,8 @@ impl<B: Backend> Actor<B> {
         // General always exists, so there is a last ID.
         let last = self.categories.keys().next_back().map_or(0, |id| id.0);
         let id = CategoryId(last.checked_add(1).ok_or(Error::TooManyCategories)?);
-        self.limiter.set_category_limit(id, settings.speed_limit);
         self.categories.insert(id, settings);
+        self.apply_limits();
         self.save_category(id);
         Ok(id)
     }
@@ -1440,8 +1566,8 @@ impl<B: Backend> Actor<B> {
             settings.extensions.clear();
         }
         let settings = self.check_category(settings, Some(id))?;
-        self.limiter.set_category_limit(id, settings.speed_limit);
         self.categories.insert(id, settings);
+        self.apply_limits();
         self.save_category(id);
         // A higher cap on running jobs may let queued ones start.
         self.schedule();
@@ -1494,11 +1620,22 @@ impl<B: Backend> Actor<B> {
             }
             self.save_view(view_id);
         }
+        // Its time slots go with it, before its row (which they point at).
+        let slots: Vec<SlotId> = self
+            .slots
+            .iter()
+            .filter(|(_, slot)| slot.settings.category == Some(id))
+            .map(|(slot_id, _)| *slot_id)
+            .collect();
+        for slot_id in slots {
+            self.drop_slot(slot_id);
+        }
         self.categories.remove(&id);
         self.limiter.set_category_limit(id, 0);
         self.store.remove_category(id);
         // Fails only when nobody is subscribed.
         let _ = self.events.send(JobEvent::CategoryRemoved(id));
+        self.check_times();
         self.schedule();
         Ok(())
     }
@@ -1790,11 +1927,17 @@ impl<B: Backend> Actor<B> {
         if self.jobs.get(&id).is_some_and(|job| job.moving.is_some()) {
             return Err(Error::JobMoving(id));
         }
+        // Started by hand while a slot stops downloads: it runs anyway.
+        let held = self.hold_of(id).is_some();
         self.transition(id, JobState::Queued, None)?;
         // Resumed by hand: every retry is available again.
         if let Some(job) = self.jobs.get_mut(&id) {
             job.retries = 0;
             job.gave_way = 0;
+            if held {
+                job.ignores_slots = true;
+                self.save(id);
+            }
         }
         self.schedule();
         Ok(())
@@ -1808,7 +1951,7 @@ impl<B: Backend> Actor<B> {
         if self.settings != before {
             self.store.save_settings(self.settings.clone());
             if self.settings.global_limit != before.global_limit {
-                self.limiter.set_global(self.settings.global_limit);
+                self.apply_limits();
             }
             // More slots, or retrying jobs that may now give way.
             self.schedule();
@@ -1841,7 +1984,7 @@ impl<B: Backend> Actor<B> {
             for job in self.jobs.values().filter(|j| j.holds_slot()) {
                 *busy.entry(job.category).or_default() += 1;
             }
-            if busy.values().sum::<usize>() < self.settings.max_concurrent {
+            if busy.values().sum::<usize>() < self.max_concurrent() {
                 let Some(id) = self.next_queued(&busy) else {
                     break;
                 };
@@ -1909,30 +2052,34 @@ impl<B: Backend> Actor<B> {
             .map(|(id, _)| *id)
     }
 
-    /// Queues scheduled jobs whose start time has come and pauses those
-    /// whose stop time has (docs/decisions/0040), then notes the next time
-    /// to look. Jobs whose file is moving wait until it has. The caller
-    /// schedules.
+    /// Follows the clock (docs/decisions/0040): which time slots apply, and
+    /// what they change; pauses jobs whose stop time has come; holds or
+    /// releases each job as the slots and its start time say. Then notes the
+    /// next time to look. Jobs whose file is moving wait until it has. The
+    /// caller schedules.
     fn check_times(&mut self) {
         if self.shutdown.is_some() {
             self.wake_at = None;
             return;
         }
         let now = SystemTime::now();
+        let zoned = Zoned::now();
+        self.update_slots(&zoned);
         let due: Vec<JobId> = self
             .jobs
             .iter()
-            .filter(|(_, job)| {
-                job.moving.is_none()
-                    && (job.stop_at.is_some_and(|at| at <= now)
-                        || (job.state == JobState::Scheduled && !job.held(now)))
-            })
+            .filter(|(_, job)| job.moving.is_none() && job.stop_at.is_some_and(|at| at <= now))
             .map(|(id, _)| *id)
             .collect();
         for id in due {
-            self.on_time(id, now);
+            self.stop_time_came(id);
         }
-        self.wake_at = self
+        let ids: Vec<JobId> = self.jobs.keys().copied().collect();
+        for id in ids {
+            self.settle(id, now);
+        }
+        self.ended.clear();
+        let next_job_time = self
             .jobs
             .values()
             .filter(|job| job.moving.is_none())
@@ -1942,41 +2089,320 @@ impl<B: Backend> Actor<B> {
             })
             .flatten()
             .min();
+        let next_slot_change = self
+            .slots
+            .values()
+            .filter_map(|slot| slot.settings.next_change(&zoned))
+            .min()
+            .map(SystemTime::from);
+        self.wake_at = next_job_time.into_iter().chain(next_slot_change).min();
     }
 
-    /// A job's start or stop time has come. A stop time comes after the
-    /// start time, so when both have, it pauses.
-    fn on_time(&mut self, id: JobId, now: SystemTime) {
+    /// A job's stop time has come: it pauses, wherever it is.
+    fn stop_time_came(&mut self, id: JobId) {
         let Some(job) = self.jobs.get_mut(&id) else {
             return;
         };
-        if job.stop_at.is_some_and(|at| at <= now) {
-            job.stop_at = None;
-            if let Some(task) = &mut job.task {
-                // Saved with the state it stops in (see `on_ended`).
-                task.stop = task.stop.max(Some(Stop::Pause));
-                task.cancel.cancel();
-            } else if matches!(
-                job.state,
-                JobState::Queued | JobState::Scheduled | JobState::Retrying
-            ) {
-                self.transition_or_log(id, JobState::Paused, None);
-            } else {
-                // Already stopped: only the time goes.
+        job.stop_at = None;
+        if let Some(task) = &mut job.task {
+            // Saved with the state it stops in (see `on_ended`).
+            task.stop = task.stop.max(Some(Stop::Pause));
+            task.cancel.cancel();
+        } else if matches!(
+            job.state,
+            JobState::Queued | JobState::Scheduled | JobState::Retrying
+        ) {
+            self.transition_or_log(id, JobState::Paused, None);
+        } else {
+            // Already stopped: only the time goes.
+            self.save(id);
+            self.emit_changed(id);
+        }
+    }
+
+    /// Puts a job where the slots and its start time say: waiting
+    /// (`Scheduled`) or in the queue, or paused if the slot that held it has
+    /// ended and says so. A running one that a slot stops is asked to stop
+    /// (`Stop::Hold`), unless the slot lets it finish.
+    fn settle(&mut self, id: JobId, now: SystemTime) {
+        let hold = self.hold_of(id);
+        let keep_paused = self
+            .jobs
+            .get(&id)
+            .is_some_and(|job| self.keeps_paused(job.held_by));
+        let Some(job) = self.jobs.get_mut(&id) else {
+            return;
+        };
+        if job.moving.is_some() {
+            return;
+        }
+        let slot = hold.map(|(slot, _)| slot);
+        let stops = hold.is_some_and(|(_, let_finish)| !let_finish);
+        match job.state {
+            JobState::Scheduled if slot.is_none() && !job.held(now) => {
+                let next = if keep_paused {
+                    JobState::Paused
+                } else {
+                    JobState::Queued
+                };
+                self.transition_or_log(id, next, None);
+            }
+            JobState::Scheduled if job.held_by != slot => {
+                job.held_by = slot;
                 self.save(id);
                 self.emit_changed(id);
             }
-        } else if job.state == JobState::Scheduled {
-            self.transition_or_log(id, JobState::Queued, None);
+            JobState::Queued if slot.is_some() => {
+                job.held_by = slot;
+                self.transition_or_log(id, JobState::Scheduled, None);
+            }
+            JobState::Retrying if stops => {
+                job.held_by = slot;
+                self.transition_or_log(id, JobState::Scheduled, None);
+            }
+            _ if stops => {
+                if let Some(task) = &mut job.task {
+                    task.stop = task.stop.max(Some(Stop::Hold));
+                    task.cancel.cancel();
+                }
+            }
+            _ => {}
         }
+    }
+
+    /// Whether the slot that held a job has ended and keeps what it held
+    /// paused. Not if it was switched off or removed: that lets them go.
+    fn keeps_paused(&self, held_by: Option<SlotId>) -> bool {
+        held_by.is_some_and(|id| {
+            self.ended.contains(&id)
+                || self.slots.get(&id).is_some_and(|slot| {
+                    slot.settings.enabled && !slot.active && slot.settings.keeps_paused()
+                })
+        })
+    }
+
+    /// The slot stopping this job's downloads, if one does and the job
+    /// doesn't ignore slots, and whether it lets running ones finish.
+    fn hold_of(&self, id: JobId) -> Option<(SlotId, bool)> {
+        let job = self.jobs.get(&id)?;
+        if job.ignores_slots {
+            return None;
+        }
+        self.effects.stop(job.category)
+    }
+
+    /// Works out which slots apply at `now`, announcing each that starts or
+    /// stops applying, removes those that happened once and are over, and
+    /// puts what they change to use.
+    fn update_slots(&mut self, now: &Zoned) {
+        let over: Vec<SlotId> = self
+            .slots
+            .iter()
+            .filter(|(_, slot)| slot.settings.is_over(now))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in over {
+            if self
+                .slots
+                .get(&id)
+                .is_some_and(|slot| slot.settings.enabled && slot.settings.keeps_paused())
+            {
+                self.ended.push(id);
+            }
+            self.drop_slot(id);
+        }
+        let mut changed = Vec::new();
+        for (&id, slot) in &mut self.slots {
+            let active = slot.settings.enabled && slot.settings.covers(now);
+            if slot.active != active {
+                slot.active = active;
+                changed.push(id);
+            }
+        }
+        for id in changed {
+            self.announce_slot(id);
+        }
+        self.apply_effects();
+    }
+
+    /// Recomputes what the active slots change, highest in the list first,
+    /// and applies the limits if that differs.
+    fn apply_effects(&mut self) {
+        let mut active: Vec<(u64, SlotId, &SlotSettings)> = self
+            .slots
+            .iter()
+            .filter(|(_, slot)| slot.active)
+            .map(|(&id, slot)| (slot.place, id, &slot.settings))
+            .collect();
+        active.sort_by_key(|&(place, id, _)| (place, id));
+        let effects = Effects::of(active.into_iter().map(|(_, id, settings)| (id, settings)));
+        if effects != self.effects {
+            self.effects = effects;
+            self.apply_limits();
+        }
+    }
+
+    /// The total and category speed limits: the settings', unless a slot
+    /// sets one now.
+    fn apply_limits(&self) {
+        let global = self.effects.queue.speed_limit;
+        self.limiter
+            .set_global(global.unwrap_or(self.settings.global_limit));
+        for (&id, category) in &self.categories {
+            let limit = self.effects.of_category(id).speed_limit;
+            self.limiter
+                .set_category_limit(id, limit.unwrap_or(category.speed_limit));
+        }
+    }
+
+    /// How many downloads may run at once now: the setting, unless a slot
+    /// says otherwise.
+    fn max_concurrent(&self) -> usize {
+        self.effects
+            .queue
+            .max_concurrent
+            .unwrap_or(self.settings.max_concurrent)
     }
 
     fn has_room(&self, category: CategoryId, busy: &HashMap<CategoryId, usize>) -> bool {
         let cap = self
-            .categories
-            .get(&category)
-            .map_or(0, |c| c.max_concurrent);
+            .effects
+            .of_category(category)
+            .max_concurrent
+            .or_else(|| self.categories.get(&category).map(|c| c.max_concurrent))
+            .unwrap_or(0);
         cap == 0 || busy.get(&category).copied().unwrap_or(0) < cap
+    }
+
+    /// Every slot, in the order of the list.
+    fn slots(&self) -> Vec<Slot> {
+        let mut slots: Vec<(u64, Slot)> = self
+            .slots
+            .iter()
+            .map(|(&id, slot)| (slot.place, self.slot(id, slot)))
+            .collect();
+        slots.sort_by_key(|(place, slot)| (*place, slot.id));
+        slots.into_iter().map(|(_, slot)| slot).collect()
+    }
+
+    fn slot(&self, id: SlotId, entry: &SlotEntry) -> Slot {
+        Slot {
+            id,
+            place: entry.place,
+            settings: entry.settings.clone(),
+            active: entry.active,
+        }
+    }
+
+    /// Normalizes `settings` and checks that its category exists.
+    fn check_slot(&self, settings: SlotSettings) -> Result<SlotSettings, Error> {
+        let settings = settings.normalized()?;
+        if let Some(category) = settings.category {
+            self.category(category)?;
+        }
+        Ok(settings)
+    }
+
+    fn add_slot(&mut self, settings: SlotSettings) -> Result<SlotId, Error> {
+        let settings = self.check_slot(settings)?;
+        let last = self.slots.keys().next_back().map_or(0, |id| id.0);
+        let id = SlotId(last.checked_add(1).ok_or(Error::TooManySlots)?);
+        let place = self
+            .slots
+            .values()
+            .map(|slot| slot.place + 1)
+            .max()
+            .unwrap_or(0);
+        // Known now, so it's announced once.
+        let active = settings.enabled && settings.covers(&Zoned::now());
+        let entry = SlotEntry {
+            place,
+            settings,
+            active,
+        };
+        self.slots.insert(id, entry);
+        self.save_slot(id);
+        self.check_times();
+        self.schedule();
+        Ok(id)
+    }
+
+    fn update_slot(&mut self, id: SlotId, settings: SlotSettings) -> Result<(), Error> {
+        if !self.slots.contains_key(&id) {
+            return Err(Error::SlotNotFound(id));
+        }
+        let settings = self.check_slot(settings)?;
+        let active = settings.enabled && settings.covers(&Zoned::now());
+        if let Some(slot) = self.slots.get_mut(&id) {
+            slot.settings = settings;
+            slot.active = active;
+        }
+        self.save_slot(id);
+        self.check_times();
+        self.schedule();
+        Ok(())
+    }
+
+    fn remove_slot(&mut self, id: SlotId) -> Result<(), Error> {
+        if !self.slots.contains_key(&id) {
+            return Err(Error::SlotNotFound(id));
+        }
+        self.drop_slot(id);
+        self.check_times();
+        self.schedule();
+        Ok(())
+    }
+
+    fn reorder_slots(&mut self, ids: &[SlotId]) -> Result<(), Error> {
+        let unique: HashSet<&SlotId> = ids.iter().collect();
+        if ids.len() != self.slots.len()
+            || unique.len() != ids.len()
+            || ids.iter().any(|id| !self.slots.contains_key(id))
+        {
+            return Err(Error::InvalidSlotOrder);
+        }
+        for (place, &id) in (0u64..).zip(ids) {
+            if let Some(slot) = self.slots.get_mut(&id)
+                && slot.place != place
+            {
+                slot.place = place;
+                self.save_slot(id);
+            }
+        }
+        self.check_times();
+        self.schedule();
+        Ok(())
+    }
+
+    /// Saves the slot and tells the subscribers.
+    fn save_slot(&self, id: SlotId) {
+        if let Some(entry) = self.slots.get(&id) {
+            self.store.save_slot(SlotRecord {
+                id,
+                place: entry.place,
+                settings: entry.settings.clone(),
+            });
+            self.announce_slot(id);
+        }
+    }
+
+    fn announce_slot(&self, id: SlotId) {
+        if let Some(entry) = self.slots.get(&id) {
+            // Fails only when nobody is subscribed.
+            let _ = self
+                .events
+                .send(JobEvent::SlotChanged(self.slot(id, entry)));
+        }
+    }
+
+    /// Takes the slot out of the list and the database. The caller checks
+    /// the times again (what it changed no longer applies).
+    fn drop_slot(&mut self, id: SlotId) {
+        if self.slots.remove(&id).is_some() {
+            self.store.remove_slot(id);
+            // Fails only when nobody is subscribed.
+            let _ = self.events.send(JobEvent::SlotRemoved(id));
+        }
     }
 
     fn start_job(&mut self, id: JobId) -> bool {
@@ -2041,6 +2467,7 @@ impl<B: Backend> Actor<B> {
         download: Box<Download>,
         result: Result<Outcome, Error>,
     ) {
+        let hold = self.hold_of(id);
         let Some(job) = self.jobs.get_mut(&id) else {
             return;
         };
@@ -2053,8 +2480,11 @@ impl<B: Backend> Actor<B> {
         let next = match (result, stop) {
             // Finished before it noticed the stop request: keep the file.
             (Ok(Outcome::Completed { .. }), _) => Some((JobState::Completed, None)),
-            // Its start time was taken away (or came) while it stopped.
-            (_, Some(Stop::Hold)) if !job.held(SystemTime::now()) => Some((JobState::Queued, None)),
+            // Its start time was taken away (or came), or the slot holding
+            // it ended, while it stopped.
+            (_, Some(Stop::Hold)) if !job.held(SystemTime::now()) && hold.is_none() => {
+                Some((JobState::Queued, None))
+            }
             (_, Some(stop)) => stop.target().map(|state| (state, None)),
             // Only the manager cancels the token, so this means paused.
             (Ok(Outcome::Paused), None) => Some((JobState::Paused, None)),
@@ -2072,6 +2502,9 @@ impl<B: Backend> Actor<B> {
                 Some((JobState::Failed, Some(Problem::from(&err))))
             }
         };
+        if let Some((JobState::Scheduled, _)) = next {
+            job.held_by = hold.map(|(slot, _)| slot);
+        }
         match next {
             Some((state, problem)) => {
                 self.transition_or_log(id, state, problem);
@@ -2170,6 +2603,16 @@ impl<B: Backend> Actor<B> {
         if next.is_finished() {
             job.stop_at = None;
         }
+        if next != JobState::Scheduled {
+            job.held_by = None;
+        }
+        // Started by hand during a slot: only until it stops.
+        if matches!(
+            next,
+            JobState::Paused | JobState::Failed | JobState::Completed | JobState::Cancelled
+        ) {
+            job.ignores_slots = false;
+        }
         self.save(id);
         self.emit_changed(id);
         Ok(())
@@ -2210,6 +2653,8 @@ impl<B: Backend> Actor<B> {
             streaming_chosen: job.streaming_chosen,
             start_at: job.start_at,
             stop_at: job.stop_at,
+            ignores_slots: job.ignores_slots,
+            held_by: job.held_by,
         })
     }
 

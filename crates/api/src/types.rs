@@ -76,6 +76,8 @@ pub struct Job {
     /// When it pauses if it hasn't finished by then, the same way.
     #[ts(type = "number | null")]
     pub stop_at: Option<u64>,
+    /// While `scheduled`: the time slot that keeps it from running, if one does.
+    pub held_by: Option<u32>,
 }
 
 /// A part of the file that one connection fetches.
@@ -433,6 +435,257 @@ pub struct AddedView {
     pub id: u32,
 }
 
+/// A time slot (docs/decisions/0040), as `GET /slots` lists it and
+/// `slotChanged` events send it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Slot {
+    pub id: u32,
+    /// Its place in the list: lower comes first, and wins where two apply
+    /// to the same thing. Only the order means something.
+    #[ts(type = "number")]
+    pub place: u64,
+    /// May be empty.
+    pub name: String,
+    /// Off: kept, but it never applies.
+    pub enabled: bool,
+    /// The category it applies to; null: the whole queue.
+    pub category: Option<u32>,
+    /// The days it happens on, every week (Monday first); empty when it
+    /// happens once.
+    pub days: Vec<Day>,
+    /// `YYYY-MM-DD`: it happens once, on that day, and is removed once over.
+    pub date: Option<String>,
+    /// `HH:MM`, in the daemon's time zone.
+    pub from: String,
+    /// `HH:MM`; on the next day if it isn't after `from` (the same: a whole day).
+    pub to: String,
+    /// What it does to downloads; null: nothing.
+    pub downloads: Option<SlotDownloads>,
+    /// With `stop`: running downloads finish; only new ones wait.
+    pub let_finish: bool,
+    /// With `stop`: when it ends, the downloads it held are paused (to be
+    /// resumed by hand) instead of carrying on.
+    pub stay_paused: bool,
+    /// Bytes per second for the queue (or the category) while it lasts;
+    /// 0 = no limit; null: the usual limit.
+    #[ts(type = "number | null")]
+    pub speed_limit: Option<u64>,
+    /// How many downloads may run at once while it lasts; null: the usual.
+    pub max_concurrent: Option<u32>,
+    /// It applies right now.
+    pub active: bool,
+}
+
+/// Body of `POST /slots` and `PUT /slots/{id}`: a slot as set by the user.
+/// Give `days` (every week) or a `date` (once). It must allow or stop
+/// downloads, or set a limit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SlotBody {
+    #[serde(default)]
+    #[ts(optional)]
+    pub name: Option<String>,
+    /// Default: on.
+    #[serde(default)]
+    #[ts(optional)]
+    pub enabled: Option<bool>,
+    /// Default: the whole queue.
+    #[serde(default)]
+    #[ts(optional)]
+    pub category: Option<u32>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub days: Option<Vec<Day>>,
+    /// `YYYY-MM-DD`; given, the slot happens once and `days` is ignored.
+    #[serde(default)]
+    #[ts(optional)]
+    pub date: Option<String>,
+    /// `HH:MM`.
+    pub from: String,
+    /// `HH:MM`.
+    pub to: String,
+    #[serde(default)]
+    #[ts(optional)]
+    pub downloads: Option<SlotDownloads>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub let_finish: Option<bool>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub stay_paused: Option<bool>,
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    pub speed_limit: Option<u64>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub max_concurrent: Option<u32>,
+}
+
+/// Answer to `GET /slots`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SlotList {
+    /// The time zone slots follow (the daemon's computer's), like
+    /// `Europe/Paris`; null if the system doesn't name it.
+    pub time_zone: Option<String>,
+    /// In the order of the list: where two apply to the same thing, the
+    /// higher one wins.
+    pub slots: Vec<Slot>,
+}
+
+/// Answer to `POST /slots`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AddedSlot {
+    pub id: u32,
+}
+
+/// Body of `POST /slots/reorder`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ReorderSlots {
+    /// Every slot, once, in the new order.
+    pub ids: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum Day {
+    Monday,
+    Tuesday,
+    Wednesday,
+    Thursday,
+    Friday,
+    Saturday,
+    Sunday,
+}
+
+/// What a slot does to downloads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum SlotDownloads {
+    /// They may run (over a lower slot that stops them).
+    Allow,
+    /// None start; running ones stop (unless `letFinish`) and carry on
+    /// when it ends (unless `stayPaused`).
+    Stop,
+}
+
+impl From<Day> for ottie_core::Weekday {
+    fn from(day: Day) -> Self {
+        use ottie_core::Weekday as W;
+        match day {
+            Day::Monday => W::Monday,
+            Day::Tuesday => W::Tuesday,
+            Day::Wednesday => W::Wednesday,
+            Day::Thursday => W::Thursday,
+            Day::Friday => W::Friday,
+            Day::Saturday => W::Saturday,
+            Day::Sunday => W::Sunday,
+        }
+    }
+}
+
+impl From<ottie_core::Weekday> for Day {
+    fn from(day: ottie_core::Weekday) -> Self {
+        use ottie_core::Weekday as W;
+        match day {
+            W::Monday => Day::Monday,
+            W::Tuesday => Day::Tuesday,
+            W::Wednesday => Day::Wednesday,
+            W::Thursday => Day::Thursday,
+            W::Friday => Day::Friday,
+            W::Saturday => Day::Saturday,
+            W::Sunday => Day::Sunday,
+        }
+    }
+}
+
+impl From<ottie_core::Slot> for Slot {
+    fn from(slot: ottie_core::Slot) -> Self {
+        use ottie_core::{Downloads, Repeat};
+        let settings = slot.settings;
+        let (days, date) = match settings.repeat {
+            Repeat::Weekly(days) => (days.into_iter().map(Day::from).collect(), None),
+            Repeat::Once(date) => (Vec::new(), Some(date.to_string())),
+        };
+        let (downloads, let_finish, stay_paused) = match settings.downloads {
+            None => (None, false, false),
+            Some(Downloads::Allow) => (Some(SlotDownloads::Allow), false, false),
+            Some(Downloads::Stop {
+                let_finish,
+                stay_paused,
+            }) => (Some(SlotDownloads::Stop), let_finish, stay_paused),
+        };
+        let hhmm = |time: ottie_core::Time| format!("{:02}:{:02}", time.hour(), time.minute());
+        Slot {
+            id: slot.id.0,
+            place: slot.place,
+            name: settings.name,
+            enabled: settings.enabled,
+            category: settings.category.map(|c| c.0),
+            days,
+            date,
+            from: hhmm(settings.from),
+            to: hhmm(settings.to),
+            downloads,
+            let_finish,
+            stay_paused,
+            speed_limit: settings.speed_limit,
+            max_concurrent: settings
+                .max_concurrent
+                .map(|max| u32::try_from(max).unwrap_or(u32::MAX)),
+            active: slot.active,
+        }
+    }
+}
+
+impl SlotBody {
+    /// The engine's settings, or which time or date isn't one.
+    pub(crate) fn settings(self) -> Result<ottie_core::SlotSettings, String> {
+        use ottie_core::{Date, Downloads, Repeat, Time};
+        let time = |text: String| text.trim().parse::<Time>().map_err(|_| text);
+        let repeat = match self.date {
+            Some(date) => Repeat::Once(date.trim().parse::<Date>().map_err(|_| date)?),
+            None => Repeat::Weekly(
+                self.days
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+            ),
+        };
+        let downloads = self.downloads.map(|downloads| match downloads {
+            SlotDownloads::Allow => Downloads::Allow,
+            SlotDownloads::Stop => Downloads::Stop {
+                let_finish: self.let_finish.unwrap_or(false),
+                stay_paused: self.stay_paused.unwrap_or(false),
+            },
+        });
+        Ok(ottie_core::SlotSettings {
+            name: self.name.unwrap_or_default(),
+            enabled: self.enabled.unwrap_or(true),
+            category: self.category.map(ottie_core::CategoryId),
+            repeat,
+            from: time(self.from)?,
+            to: time(self.to)?,
+            downloads,
+            speed_limit: self.speed_limit,
+            max_concurrent: self
+                .max_concurrent
+                .map(|max| usize::try_from(max).unwrap_or(usize::MAX)),
+        })
+    }
+}
+
 /// Body of `PATCH /jobs/{id}`: the job's own settings to change; a field
 /// left out stays as it is.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
@@ -770,6 +1023,19 @@ pub enum Reason {
     },
     /// A download's stop time must come after its start time.
     StopBeforeStart,
+    SlotNotFound {
+        id: u32,
+    },
+    /// A slot without a date needs at least one day.
+    SlotWithoutDays,
+    /// A slot must allow or stop downloads, or set a limit.
+    SlotWithoutEffect,
+    /// Not `HH:MM` (a time) or `YYYY-MM-DD` (a date).
+    InvalidTime {
+        text: String,
+    },
+    /// The new order must list every slot once.
+    InvalidSlotOrder,
     CategoryNotFound {
         id: u32,
     },
@@ -878,6 +1144,11 @@ pub enum Event {
     ViewChanged { view: View },
     /// A saved view was removed.
     ViewRemoved { id: u32 },
+    /// A time slot was added or changed, or started or stopped applying:
+    /// insert-or-replace by `id`.
+    SlotChanged { slot: Slot },
+    /// A time slot was removed (by hand, with its category, or once over).
+    SlotRemoved { id: u32 },
     /// Events were missed (the client was too slow): fetch `GET /jobs` again.
     Resync,
 }
@@ -907,6 +1178,7 @@ impl From<JobSnapshot> for Job {
             waiting_for_bandwidth: job.waiting_for_bandwidth,
             start_at: job.start_at.map(millis),
             stop_at: job.stop_at.map(millis),
+            held_by: job.held_by.map(|slot| slot.0),
         }
     }
 }

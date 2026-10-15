@@ -1,14 +1,17 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! A download's own start and stop time (docs/decisions/0040).
+//! The scheduler (docs/decisions/0040): a download's own start and stop
+//! time, and time slots.
 
 mod support;
 
+use std::collections::HashSet;
 use std::time::{Duration, Instant, SystemTime};
 
 use ottie_core::{
-    Error, HttpBackend, JobChange, JobEvent, JobId, JobSnapshot, JobState, Manager, NewJob,
-    PART_SUFFIX, Reorder, Store,
+    CategoryId, CategorySettings, Downloads, Error, HttpBackend, JobChange, JobEvent, JobId,
+    JobSnapshot, JobState, Manager, NewJob, PART_SUFFIX, Reorder, Repeat, SlotId, SlotSettings,
+    Store, Time, Weekday,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -377,4 +380,375 @@ async fn a_change_of_times_is_announced_once() {
         }
     }
     assert_eq!(changes, [JobState::Scheduled, JobState::Paused]);
+}
+
+// Time slots.
+
+/// A slot that covers every moment (each day, midnight to midnight).
+fn always(downloads: Downloads) -> SlotSettings {
+    let midnight = Time::midnight();
+    SlotSettings {
+        downloads: Some(downloads),
+        ..SlotSettings::daily(midnight, midnight)
+    }
+}
+
+const STOP: Downloads = Downloads::Stop {
+    let_finish: false,
+    stay_paused: false,
+};
+
+/// Stops downloads, and keeps them paused once it ends.
+const STOP_THEN_PAUSE: Downloads = Downloads::Stop {
+    let_finish: false,
+    stay_paused: true,
+};
+
+/// A slot that never covers now: an hour on the day after tomorrow.
+fn elsewhere(downloads: Downloads) -> SlotSettings {
+    let later = jiff::Zoned::now()
+        .date()
+        .tomorrow()
+        .unwrap()
+        .tomorrow()
+        .unwrap();
+    SlotSettings {
+        repeat: Repeat::Weekly(vec![later.weekday()]),
+        downloads: Some(downloads),
+        ..SlotSettings::daily(Time::constant(3, 0, 0, 0), Time::constant(4, 0, 0, 0))
+    }
+}
+
+impl Setup {
+    /// Waits for a `SlotChanged` event of `id` that says whether it applies.
+    async fn wait_for_slot(&mut self, id: SlotId, active: bool) {
+        let events = &mut self.events;
+        tokio::time::timeout(TIMEOUT, async {
+            loop {
+                if let JobEvent::SlotChanged(slot) = events.recv().await.unwrap()
+                    && slot.id == id
+                    && slot.active == active
+                {
+                    return;
+                }
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("slot {id} never became active: {active}"));
+    }
+}
+
+#[tokio::test]
+async fn a_slot_that_stops_downloads_holds_them_until_it_goes() {
+    let mut s = setup(3, 30).await;
+    let running = s.add(s.new_job("a.bin")).await;
+    s.wait_for(running, JobState::Downloading).await;
+
+    let night = s.manager.add_slot(always(STOP)).await.unwrap();
+    s.wait_for_slot(night, true).await;
+    let held = s.wait_for(running, JobState::Scheduled).await;
+    assert_eq!((held.held_by, held.start_at), (Some(night), None));
+    assert_eq!(s.part_len(&held), held.downloaded);
+    // One added meanwhile waits too.
+    let added = s.add(s.new_job("b.bin")).await;
+    let job = s.job(added).await;
+    assert_eq!((job.state, job.held_by), (JobState::Scheduled, Some(night)));
+
+    s.manager.remove_slot(night).await.unwrap();
+    for id in [running, added] {
+        let done = s.wait_for(id, JobState::Completed).await;
+        s.assert_file(&done);
+    }
+}
+
+#[tokio::test]
+async fn a_slot_can_keep_what_it_held_paused_once_it_ends() {
+    let mut s = setup(3, 30).await;
+    let running = s.add(s.new_job("a.bin")).await;
+    s.wait_for(running, JobState::Downloading).await;
+    let night = s.manager.add_slot(always(STOP_THEN_PAUSE)).await.unwrap();
+    s.wait_for(running, JobState::Scheduled).await;
+    let waiting = s.add(s.new_job("b.bin")).await;
+    assert_eq!(s.job(waiting).await.held_by, Some(night));
+
+    // It ends (its hours no longer cover now): both pause.
+    s.manager
+        .update_slot(night, elsewhere(STOP_THEN_PAUSE))
+        .await
+        .unwrap();
+    for id in [running, waiting] {
+        let paused = s.wait_for(id, JobState::Paused).await;
+        assert_eq!(paused.held_by, None);
+    }
+    // Resumed by hand, they finish.
+    s.manager.resume(running).await.unwrap();
+    s.wait_for(running, JobState::Completed).await;
+}
+
+#[tokio::test]
+async fn switching_off_a_slot_that_keeps_paused_lets_them_go() {
+    let mut s = setup(3, 0).await;
+    let night = always(STOP_THEN_PAUSE);
+    let id_slot = s.manager.add_slot(night.clone()).await.unwrap();
+    let id = s.add(s.new_job("a.bin")).await;
+    assert_eq!(s.job(id).await.state, JobState::Scheduled);
+    let off = SlotSettings {
+        enabled: false,
+        ..night
+    };
+    s.manager.update_slot(id_slot, off).await.unwrap();
+    s.wait_for(id, JobState::Completed).await;
+}
+
+#[tokio::test]
+async fn a_slot_that_ended_while_ottie_was_off_keeps_them_paused() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("ottie.db");
+    let s = setup_with(Store::open(&db).await.unwrap(), dir, 3, 0).await;
+    let night = s.manager.add_slot(always(STOP_THEN_PAUSE)).await.unwrap();
+    let id = s.add(s.new_job("a.bin")).await;
+    s.manager.shutdown().await.unwrap();
+
+    // Meanwhile, it ended: now it's an hour on another day.
+    let Setup { dir, .. } = s;
+    let elsewhere = elsewhere(STOP_THEN_PAUSE);
+    let Repeat::Weekly(days) = &elsewhere.repeat else {
+        unreachable!()
+    };
+    // A bit per weekday, Monday first.
+    let day = 1 << days[0].to_monday_zero_offset();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute(
+            "UPDATE slots SET days = ?1, start_minute = 180, end_minute = 240 WHERE id = ?2",
+            (day, night.0),
+        )
+        .unwrap();
+    // Settled before the first command is answered.
+    let again = setup_with(Store::open(&db).await.unwrap(), dir, 3, 0).await;
+    let job = again.job(id).await;
+    assert_eq!((job.state, job.held_by), (JobState::Paused, None));
+}
+
+#[tokio::test]
+async fn a_slot_can_let_running_downloads_finish() {
+    let mut s = setup(3, 20).await;
+    let running = s.add(s.new_job("a.bin")).await;
+    s.wait_for(running, JobState::Downloading).await;
+    let gentle = always(Downloads::Stop {
+        let_finish: true,
+        stay_paused: false,
+    });
+    let night = s.manager.add_slot(gentle).await.unwrap();
+    let waiting = s.add(s.new_job("b.bin")).await;
+    assert_eq!(s.job(waiting).await.held_by, Some(night));
+    s.wait_for(running, JobState::Completed).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(s.job(waiting).await.state, JobState::Scheduled);
+}
+
+#[tokio::test]
+async fn starting_a_held_download_by_hand_runs_it_anyway() {
+    let mut s = setup(3, 20).await;
+    s.manager.add_slot(always(STOP)).await.unwrap();
+    let id = s.add(s.new_job("a.bin")).await;
+    assert_eq!(s.job(id).await.state, JobState::Scheduled);
+    s.manager.resume(id).await.unwrap();
+    s.wait_for(id, JobState::Downloading).await;
+    // Paused, the slot holds it again, until it's started by hand again.
+    s.manager.pause(id).await.unwrap();
+    s.manager.resume(id).await.unwrap();
+    let done = s.wait_for(id, JobState::Completed).await;
+    s.assert_file(&done);
+}
+
+#[tokio::test]
+async fn a_category_slot_holds_only_its_category() {
+    let mut s = setup(3, 0).await;
+    let videos = s
+        .manager
+        .add_category(CategorySettings::named("Videos"))
+        .await
+        .unwrap();
+    let quiet = SlotSettings {
+        category: Some(videos),
+        ..always(STOP)
+    };
+    let slot = s.manager.add_slot(quiet).await.unwrap();
+    let video = s.add(s.new_job("film.mkv").in_category(videos)).await;
+    let other = s.add(s.new_job("a.bin")).await;
+    s.wait_for(other, JobState::Completed).await;
+    assert_eq!(s.job(video).await.held_by, Some(slot));
+
+    // Its slots go with the category, and what they held is let go.
+    s.manager.remove_category(videos).await.unwrap();
+    assert!(s.manager.slots().await.unwrap().is_empty());
+    s.wait_for(video, JobState::Completed).await;
+}
+
+#[tokio::test]
+async fn the_higher_slot_wins() {
+    let mut s = setup(3, 0).await;
+    let stop = s.manager.add_slot(always(STOP)).await.unwrap();
+    let allow = s.manager.add_slot(always(Downloads::Allow)).await.unwrap();
+    let id = s.add(s.new_job("a.bin")).await;
+    assert_eq!(s.job(id).await.held_by, Some(stop));
+    // Allow goes above: it wins.
+    s.manager.reorder_slots(vec![allow, stop]).await.unwrap();
+    let slots = s.manager.slots().await.unwrap();
+    let order: Vec<SlotId> = slots.iter().map(|slot| slot.id).collect();
+    assert_eq!(order, [allow, stop]);
+    s.wait_for(id, JobState::Completed).await;
+
+    let refused = s.manager.reorder_slots(vec![allow]).await;
+    assert!(
+        matches!(refused, Err(Error::InvalidSlotOrder)),
+        "{refused:?}"
+    );
+    let refused = s.manager.reorder_slots(vec![allow, allow]).await;
+    assert!(
+        matches!(refused, Err(Error::InvalidSlotOrder)),
+        "{refused:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_slot_can_lower_how_many_run_at_once() {
+    let mut s = setup(3, 5).await;
+    let one = SlotSettings {
+        max_concurrent: Some(1),
+        ..SlotSettings::daily(Time::midnight(), Time::midnight())
+    };
+    s.manager.add_slot(one).await.unwrap();
+    let mut ids = Vec::new();
+    for name in ["a.bin", "b.bin", "c.bin"] {
+        ids.push(s.add(s.new_job(name)).await);
+    }
+    let events = &mut s.events;
+    let (mut running, mut completed) = (HashSet::new(), 0);
+    tokio::time::timeout(TIMEOUT, async {
+        while completed < ids.len() {
+            if let JobEvent::Changed(job) = events.recv().await.unwrap() {
+                match job.state {
+                    JobState::Connecting => {
+                        running.insert(job.id);
+                    }
+                    JobState::Completed => {
+                        running.remove(&job.id);
+                        completed += 1;
+                    }
+                    _ => {}
+                }
+                assert!(running.len() <= 1, "more than one running");
+            }
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn slots_that_dont_cover_now_change_nothing_until_they_do() {
+    let mut s = setup(3, 0).await;
+    let later = s.manager.add_slot(elsewhere(STOP)).await.unwrap();
+    assert!(!s.manager.slots().await.unwrap()[0].active);
+    let id = s.add(s.new_job("a.bin")).await;
+    s.wait_for(id, JobState::Completed).await;
+
+    // Switched off, a slot that covers now does nothing either.
+    let off = SlotSettings {
+        enabled: false,
+        ..always(STOP)
+    };
+    let switched = s.manager.add_slot(off.clone()).await.unwrap();
+    let id = s.add(s.new_job("b.bin")).await;
+    s.wait_for(id, JobState::Completed).await;
+    // Switched on, it applies.
+    let on = SlotSettings {
+        enabled: true,
+        ..off
+    };
+    s.manager.update_slot(switched, on).await.unwrap();
+    s.wait_for_slot(switched, true).await;
+    let id = s.add(s.new_job("c.bin")).await;
+    assert_eq!(s.job(id).await.held_by, Some(switched));
+    assert!(matches!(
+        s.manager.update_slot(SlotId(99), elsewhere(STOP)).await,
+        Err(Error::SlotNotFound(_))
+    ));
+    s.manager.remove_slot(later).await.unwrap();
+}
+
+#[tokio::test]
+async fn slots_say_what_they_need() {
+    let s = setup(3, 0).await;
+    let no_days = SlotSettings {
+        repeat: Repeat::Weekly(Vec::new()),
+        ..always(STOP)
+    };
+    let refused = s.manager.add_slot(no_days).await;
+    assert!(
+        matches!(refused, Err(Error::SlotWithoutDays)),
+        "{refused:?}"
+    );
+    let idle = SlotSettings::daily(Time::midnight(), Time::midnight());
+    let refused = s.manager.add_slot(idle).await;
+    assert!(
+        matches!(refused, Err(Error::SlotWithoutEffect)),
+        "{refused:?}"
+    );
+    let nowhere = SlotSettings {
+        category: Some(CategoryId(77)),
+        ..always(STOP)
+    };
+    let refused = s.manager.add_slot(nowhere).await;
+    assert!(
+        matches!(refused, Err(Error::CategoryNotFound(_))),
+        "{refused:?}"
+    );
+}
+
+#[tokio::test]
+async fn slots_and_what_they_hold_are_kept_across_a_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("ottie.db");
+    let s = setup_with(Store::open(&db).await.unwrap(), dir, 3, 0).await;
+    let weekend = SlotSettings {
+        name: "Weekend".into(),
+        repeat: Repeat::Weekly(vec![Weekday::Saturday, Weekday::Sunday]),
+        speed_limit: Some(1000),
+        ..elsewhere(STOP)
+    };
+    let night = s.manager.add_slot(always(STOP)).await.unwrap();
+    s.manager.add_slot(weekend).await.unwrap();
+    let id = s.add(s.new_job("a.bin")).await;
+    let before = s.manager.slots().await.unwrap();
+    s.manager.shutdown().await.unwrap();
+
+    let Setup { dir, .. } = s;
+    let again = setup_with(Store::open(&db).await.unwrap(), dir, 3, 0).await;
+    assert_eq!(again.manager.slots().await.unwrap(), before);
+    let job = again.job(id).await;
+    assert_eq!((job.state, job.held_by), (JobState::Scheduled, Some(night)));
+}
+
+#[tokio::test]
+async fn a_slot_limits_the_total_speed_while_it_lasts() {
+    let mut s = setup(3, 0).await;
+    // 512 KiB at 160 KiB/s: over 3 s, where it would take a moment.
+    let slow = SlotSettings {
+        speed_limit: Some(160 * 1024),
+        ..SlotSettings::daily(Time::midnight(), Time::midnight())
+    };
+    s.manager.add_slot(slow).await.unwrap();
+    let started = Instant::now();
+    let id = s.add(s.new_job("a.bin")).await;
+    s.wait_for(id, JobState::Completed).await;
+    assert!(
+        started.elapsed() >= Duration::from_secs(2),
+        "{:?}",
+        started.elapsed()
+    );
+    // The setting itself didn't change.
+    assert_eq!(s.manager.settings().await.unwrap().global_limit, 0);
 }

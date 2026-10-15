@@ -16,6 +16,7 @@ use ottie_api::{
     Reorder, ReorderJobs, Settings, SettingsChange, SortDirection, SortKey, StreamLink,
     TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
 };
+use ottie_api::{AddedSlot, Day, ReorderSlots, Slot, SlotDownloads, SlotList};
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
 use tempfile::TempDir;
@@ -400,6 +401,122 @@ async fn a_download_waits_for_its_start_time() {
     let (status, error) = error_of(response).await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert!(matches!(error.reason, Reason::InvalidTransition { .. }));
+}
+
+#[tokio::test]
+async fn time_slots_hold_downloads_while_they_apply() {
+    let d = start().await;
+    let list = d.get("/slots").send().await.unwrap();
+    let list = list.json::<SlotList>().await.unwrap();
+    assert!(list.slots.is_empty());
+
+    let put = |path: &str, body: serde_json::Value| {
+        let request = d.client.put(d.url(path)).bearer_auth(TOKEN);
+        request.json(&body).send()
+    };
+    // Every day, midnight to midnight: it applies now.
+    let always = serde_json::json!({
+        "name": "Night",
+        "days": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+        "from": "00:00",
+        "to": "00:00",
+        "downloads": "stop",
+    });
+    let response = d.post("/slots").json(&always).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let night = response.json::<AddedSlot>().await.unwrap().id;
+    let list = d.get("/slots").send().await.unwrap();
+    let slots = list.json::<SlotList>().await.unwrap().slots;
+    let expected = Slot {
+        id: night,
+        place: 0,
+        name: "Night".into(),
+        enabled: true,
+        category: None,
+        days: vec![
+            Day::Monday,
+            Day::Tuesday,
+            Day::Wednesday,
+            Day::Thursday,
+            Day::Friday,
+            Day::Saturday,
+            Day::Sunday,
+        ],
+        date: None,
+        from: "00:00".into(),
+        to: "00:00".into(),
+        downloads: Some(SlotDownloads::Stop),
+        let_finish: false,
+        stay_paused: false,
+        speed_limit: None,
+        max_concurrent: None,
+        active: true,
+    };
+    assert_eq!(slots, [expected]);
+
+    let id = d.add("file.bin").await;
+    let job = d.job(&id).await;
+    assert_eq!((job.state, job.held_by), (JobState::Scheduled, Some(night)));
+
+    // What's wrong is said.
+    let refusals = [
+        (
+            serde_json::json!({ "from": "25:00", "to": "01:00", "downloads": "stop", "days": ["monday"] }),
+            Reason::InvalidTime {
+                text: "25:00".into(),
+            },
+        ),
+        (
+            serde_json::json!({ "from": "01:00", "to": "02:00", "downloads": "stop" }),
+            Reason::SlotWithoutDays,
+        ),
+        (
+            serde_json::json!({ "from": "01:00", "to": "02:00", "date": "2026-10-14" }),
+            Reason::SlotWithoutEffect,
+        ),
+        (
+            serde_json::json!({ "from": "01:00", "to": "02:00", "date": "2026-10-14", "maxConcurrent": 0 }),
+            Reason::OutOfRange {
+                setting: "maxConcurrent".into(),
+                min: 1,
+                max: 50,
+            },
+        ),
+        (
+            serde_json::json!({ "from": "01:00", "to": "02:00", "date": "2026-10-14", "speedLimit": 0, "category": 99 }),
+            Reason::CategoryNotFound { id: 99 },
+        ),
+    ];
+    for (body, reason) in refusals {
+        let response = d.post("/slots").json(&body).send().await.unwrap();
+        assert_eq!(error_of(response).await.1.reason, reason, "{body}");
+    }
+    let response = d
+        .post("/slots/reorder")
+        .json(&ReorderSlots { ids: vec![] })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(error_of(response).await.1.reason, Reason::InvalidSlotOrder);
+
+    // Switched off, it lets the download go.
+    let off = serde_json::json!({ "enabled": false, "from": "00:00", "to": "00:00", "downloads": "stop", "days": ["monday"] });
+    let response = put(&format!("/slots/{night}"), off).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    d.wait_until(&id, JobState::Completed).await;
+    let response = d
+        .client
+        .delete(d.url(&format!("/slots/{night}")))
+        .bearer_auth(TOKEN)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let response = put(&format!("/slots/{night}"), always).await.unwrap();
+    assert_eq!(
+        error_of(response).await.1.reason,
+        Reason::SlotNotFound { id: night }
+    );
 }
 
 #[tokio::test]

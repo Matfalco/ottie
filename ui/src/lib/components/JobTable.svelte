@@ -203,6 +203,16 @@
 		overflow: auto;
 	}
 
+	/* Short windows and phones: a height of its own, the details under it
+	   (see Downloads). */
+	@media (max-height: 40rem), (max-width: 40rem) {
+		.scroller {
+			flex: none;
+			height: 60dvh;
+			min-height: 12rem;
+		}
+	}
+
 	.scroller.dragging,
 	.scroller.dragging :global(*) {
 		cursor: grabbing;
@@ -343,22 +353,46 @@
 		width: 4.6rem;
 	}
 
-	/* Less room beside the menu: fewer columns. */
-	@container page (max-width: 66rem) {
+	/* Less room: fewer columns, narrower ones, so names keep about 15rem. A
+	   column left out stays at no width rather than going: the group rows
+	   span every column, and a column they span but no header holds would
+	   take a share of the room. */
+	@container page (max-width: 72rem) {
 		.category {
-			display: none;
+			width: 0;
+			padding: 0;
+			overflow: hidden;
+			visibility: hidden;
+			white-space: nowrap;
 		}
 	}
 
-	@container page (max-width: 58rem) {
+	@container page (max-width: 63rem) {
 		.added {
-			display: none;
+			width: 0;
+			padding: 0;
+			overflow: hidden;
+			visibility: hidden;
+			white-space: nowrap;
 		}
 	}
 
-	@container page (max-width: 42rem) {
+	@container page (max-width: 53rem) {
 		.size {
-			display: none;
+			width: 0;
+			padding: 0;
+			overflow: hidden;
+			visibility: hidden;
+			white-space: nowrap;
+		}
+
+		.progress {
+			width: 7rem;
+		}
+
+		.speed,
+		.left {
+			width: 5rem;
 		}
 	}
 

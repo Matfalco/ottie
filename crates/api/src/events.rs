@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::AppState;
 use crate::auth::EVENTS_PROTOCOL;
-use crate::types::{ApiError, ByteRange, Category, Event, Job, Settings, View};
+use crate::types::{ApiError, ByteRange, Category, Event, Job, Settings, Slot, View};
 
 /// Live changes, as a WebSocket of JSON `Event` messages. Offer the
 /// protocols `ottie.v1` and `ottie.token.<token>` (browsers can't set headers
@@ -78,6 +78,10 @@ async fn forward(
                 view: View::from(view),
             },
             Ok(JobEvent::ViewRemoved(id)) => Event::ViewRemoved { id: id.0 },
+            Ok(JobEvent::SlotChanged(slot)) => Event::SlotChanged {
+                slot: Slot::from(slot),
+            },
+            Ok(JobEvent::SlotRemoved(id)) => Event::SlotRemoved { id: id.0 },
             // Not part of the API yet (restarts).
             Ok(_) => continue,
             Err(RecvError::Lagged(_)) => Event::Resync,

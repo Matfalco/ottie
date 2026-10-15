@@ -1462,6 +1462,332 @@
         }
       }
     },
+    "/api/v1/slots": {
+      "get": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Every time slot, in the order of the list, and the time zone they follow.",
+        "operationId": "listSlots",
+        "responses": {
+          "200": {
+            "description": "Every slot, and the time zone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlotList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Adds a slot at the end of the list (the lowest: others win over it). It\napplies at once if it covers now.",
+        "operationId": "addSlot",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlotBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddedSlot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`slotWithoutDays`, `slotWithoutEffect`, `invalidTime` or `outOfRange` (`maxConcurrent`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`categoryNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/slots/reorder": {
+      "post": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Puts the slots in a new order (the higher one wins where two apply to\nthe same thing). Every client hears of each one that moved through a\n`slotChanged` event.",
+        "operationId": "reorderSlots",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderSlots"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Reordered"
+          },
+          "400": {
+            "description": "`invalidSlotOrder`: not every slot once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/slots/{id}": {
+      "put": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Replaces a slot; it applies at once.",
+        "operationId": "updateSlot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SlotBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Replaced"
+          },
+          "400": {
+            "description": "`slotWithoutDays`, `slotWithoutEffect`, `invalidTime` or `outOfRange` (`maxConcurrent`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`slotNotFound` or `categoryNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Removes a slot; what it held or limited goes back to normal.",
+        "operationId": "removeSlot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Slot ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`slotNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/stream/{ticket}": {
       "get": {
         "tags": [
@@ -2004,6 +2330,20 @@
           }
         }
       },
+      "AddedSlot": {
+        "type": "object",
+        "description": "Answer to `POST /slots`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
       "AddedView": {
         "type": "object",
         "description": "Answer to `POST /views`.",
@@ -2226,6 +2566,18 @@
           }
         }
       },
+      "Day": {
+        "type": "string",
+        "enum": [
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+          "sunday"
+        ]
+      },
       "Event": {
         "oneOf": [
           {
@@ -2408,6 +2760,46 @@
           },
           {
             "type": "object",
+            "description": "A time slot was added or changed, or started or stopped applying:\ninsert-or-replace by `id`.",
+            "required": [
+              "slot",
+              "type"
+            ],
+            "properties": {
+              "slot": {
+                "$ref": "#/components/schemas/Slot"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "slotChanged"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A time slot was removed (by hand, with its category, or once over).",
+            "required": [
+              "id",
+              "type"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "slotRemoved"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Events were missed (the client was too slow): fetch `GET /jobs` again.",
             "required": [
               "type"
@@ -2534,6 +2926,15 @@
               "null"
             ],
             "description": "Known once the server has answered."
+          },
+          "heldBy": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "While `scheduled`: the time slot that keeps it from running, if one does.",
+            "minimum": 0
           },
           "id": {
             "type": "string",
@@ -3188,6 +3589,90 @@
               "code": {
                 "type": "string",
                 "enum": [
+                  "slotNotFound"
+                ]
+              },
+              "id": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A slot without a date needs at least one day.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "slotWithoutDays"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A slot must allow or stop downloads, or set a limit.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "slotWithoutEffect"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Not `HH:MM` (a time) or `YYYY-MM-DD` (a date).",
+            "required": [
+              "text",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidTime"
+                ]
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The new order must list every slot once.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidSlotOrder"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
                   "categoryNotFound"
                 ]
               },
@@ -3658,6 +4143,24 @@
           }
         }
       },
+      "ReorderSlots": {
+        "type": "object",
+        "description": "Body of `POST /slots/reorder`.",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "description": "Every slot, once, in the new order."
+          }
+        }
+      },
       "Settings": {
         "type": "object",
         "description": "What applies to the whole daemon, as `GET /settings` answers it and\n`settingsChanged` events send it.",
@@ -3818,6 +4321,240 @@
           }
         }
       },
+      "Slot": {
+        "type": "object",
+        "description": "A time slot (docs/decisions/0040), as `GET /slots` lists it and\n`slotChanged` events send it.",
+        "required": [
+          "id",
+          "place",
+          "name",
+          "enabled",
+          "days",
+          "from",
+          "to",
+          "letFinish",
+          "stayPaused",
+          "active"
+        ],
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "It applies right now."
+          },
+          "category": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The category it applies to; null: the whole queue.",
+            "minimum": 0
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`YYYY-MM-DD`: it happens once, on that day, and is removed once over."
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Day"
+            },
+            "description": "The days it happens on, every week (Monday first); empty when it\nhappens once."
+          },
+          "downloads": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SlotDownloads",
+                "description": "What it does to downloads; null: nothing."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Off: kept, but it never applies."
+          },
+          "from": {
+            "type": "string",
+            "description": "`HH:MM`, in the daemon's time zone."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "letFinish": {
+            "type": "boolean",
+            "description": "With `stop`: running downloads finish; only new ones wait."
+          },
+          "maxConcurrent": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "How many downloads may run at once while it lasts; null: the usual.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "description": "May be empty."
+          },
+          "place": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Its place in the list: lower comes first, and wins where two apply\nto the same thing. Only the order means something.",
+            "minimum": 0
+          },
+          "speedLimit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Bytes per second for the queue (or the category) while it lasts;\n0 = no limit; null: the usual limit.",
+            "minimum": 0
+          },
+          "stayPaused": {
+            "type": "boolean",
+            "description": "With `stop`: when it ends, the downloads it held are paused (to be\nresumed by hand) instead of carrying on."
+          },
+          "to": {
+            "type": "string",
+            "description": "`HH:MM`; on the next day if it isn't after `from` (the same: a whole day)."
+          }
+        }
+      },
+      "SlotBody": {
+        "type": "object",
+        "description": "Body of `POST /slots` and `PUT /slots/{id}`: a slot as set by the user.\nGive `days` (every week) or a `date` (once). It must allow or stop\ndownloads, or set a limit.",
+        "required": [
+          "from",
+          "to"
+        ],
+        "properties": {
+          "category": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Default: the whole queue.",
+            "minimum": 0
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`YYYY-MM-DD`; given, the slot happens once and `days` is ignored."
+          },
+          "days": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Day"
+            }
+          },
+          "downloads": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SlotDownloads"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Default: on."
+          },
+          "from": {
+            "type": "string",
+            "description": "`HH:MM`."
+          },
+          "letFinish": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "maxConcurrent": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "speedLimit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "stayPaused": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "to": {
+            "type": "string",
+            "description": "`HH:MM`."
+          }
+        }
+      },
+      "SlotDownloads": {
+        "type": "string",
+        "description": "What a slot does to downloads.",
+        "enum": [
+          "allow",
+          "stop"
+        ]
+      },
+      "SlotList": {
+        "type": "object",
+        "description": "Answer to `GET /slots`.",
+        "required": [
+          "slots"
+        ],
+        "properties": {
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Slot"
+            },
+            "description": "In the order of the list: where two apply to the same thing, the\nhigher one wins."
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The time zone slots follow (the daemon's computer's), like\n`Europe/Paris`; null if the system doesn't name it."
+          }
+        }
+      },
       "SortDirection": {
         "type": "string",
         "enum": [
@@ -3962,6 +4699,10 @@
     {
       "name": "views",
       "description": "Saved views of the downloads list"
+    },
+    {
+      "name": "schedule",
+      "description": "Time slots: when downloads run, stop or are limited"
     },
     {
       "name": "settings",

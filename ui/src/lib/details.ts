@@ -75,7 +75,8 @@ export function facts(
 	speed: number,
 	now: number,
 	maxRetries: number | null,
-	locale: Locale = getLocale()
+	locale: Locale = getLocale(),
+	slots: Record<number, string> = {}
 ): Fact[] {
 	const options = { locale };
 	const unknown = m.det_unknown({}, options);
@@ -127,10 +128,12 @@ export function facts(
 			];
 		case 'scheduled':
 			return [
-				fact(
-					m.det_starts({}, options),
-					job.startAt === null ? '—' : formatWhenShort(job.startAt, now, locale)
-				),
+				job.heldBy !== null && (job.startAt === null || job.startAt <= now)
+					? fact(m.det_held_by({}, options), slots[job.heldBy] ?? '—')
+					: fact(
+							m.det_starts({}, options),
+							job.startAt === null ? '—' : formatWhenShort(job.startAt, now, locale)
+						),
 				sizeFact,
 				fact(m.det_priority({}, options), priorityName(job.priority, locale)),
 				addedFact

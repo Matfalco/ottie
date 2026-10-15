@@ -8,6 +8,7 @@ use crate::download::{RestartReason, Segment};
 use crate::id::JobId;
 use crate::problem::Problem;
 use crate::settings::Settings;
+use crate::slot::{Slot, SlotId};
 use crate::view::{View, ViewId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -294,6 +295,8 @@ pub struct JobSnapshot {
     pub start_at: Option<SystemTime>,
     /// When it pauses if it hasn't finished by then.
     pub stop_at: Option<SystemTime>,
+    /// While `Scheduled`: the time slot that keeps it from running, if one does.
+    pub held_by: Option<SlotId>,
 }
 
 /// Broadcast to every subscriber of the manager.
@@ -325,6 +328,11 @@ pub enum JobEvent {
     ViewChanged(View),
     /// A saved view was removed.
     ViewRemoved(ViewId),
+    /// A time slot was added or changed, or started or stopped applying.
+    /// Clients can insert-or-replace by `id`.
+    SlotChanged(Slot),
+    /// A time slot was removed (by hand, with its category, or once over).
+    SlotRemoved(SlotId),
 }
 
 #[cfg(test)]

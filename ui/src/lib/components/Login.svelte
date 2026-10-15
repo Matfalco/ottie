@@ -79,6 +79,11 @@
 
 	input {
 		flex: 1;
+		min-width: 0;
+	}
+
+	form button {
+		white-space: nowrap;
 	}
 
 	.problem {

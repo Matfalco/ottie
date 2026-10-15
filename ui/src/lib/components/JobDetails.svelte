@@ -29,6 +29,7 @@
 	import { canChoosePlayer } from '#lib/window.js';
 	import LimitControl from './LimitControl.svelte';
 	import Switch from './Switch.svelte';
+	import { useApp } from '#lib/context.js';
 
 	interface Props {
 		job: Job;
@@ -63,6 +64,7 @@
 		onChange,
 		getLink
 	}: Props = $props();
+	const { session } = useApp();
 
 	let name = $derived(displayName(job));
 	let status = $derived(statusOf(job));
@@ -183,21 +185,22 @@
 			{/if}
 			<button disabled title={m.coming_later()}>{m.det_show_folder()}</button>
 			<button class="danger" onclick={() => onRun('remove')}>{m.remove()}</button>
-			<button
-				class="toggle"
-				aria-expanded={open}
-				aria-label={open ? m.det_hide() : m.det_show()}
-				title={open ? m.det_hide() : m.det_show()}
-				onclick={onToggle}
-			>
-				{#if open}
-					<ChevronDown size={16} aria-hidden="true" />
-				{:else}
-					<ChevronUp size={16} aria-hidden="true" />
-				{/if}
-			</button>
 		</div>
 	</div>
+	<!-- In the top right corner, wherever the buttons wrap to. -->
+	<button
+		class="toggle"
+		aria-expanded={open}
+		aria-label={open ? m.det_hide() : m.det_show()}
+		title={open ? m.det_hide() : m.det_show()}
+		onclick={onToggle}
+	>
+		{#if open}
+			<ChevronDown size={16} aria-hidden="true" />
+		{:else}
+			<ChevronUp size={16} aria-hidden="true" />
+		{/if}
+	</button>
 
 	{#if showLink && link}
 		<input class="link" readonly value={link} aria-label={m.det_link_label()} />
@@ -256,7 +259,7 @@
 					<p class="problem">{problem}</p>
 				{/if}
 				<dl>
-					{#each facts(job, speed, now, maxRetries) as fact (fact.label)}
+					{#each facts(job, speed, now, maxRetries, undefined, session.slotNames) as fact (fact.label)}
 						<div>
 							<dt>{fact.label}</dt>
 							<dd>{fact.value}</dd>
@@ -355,6 +358,7 @@
 <style>
 	/* Under the list, on the same card; scrolls by itself on small screens. */
 	.details {
+		position: relative;
 		flex: none;
 		max-height: 60%;
 		overflow: auto;
@@ -362,12 +366,13 @@
 		background: var(--well);
 	}
 
+	/* Room on the right for the arrow. */
 	.top {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem 0.75rem;
-		padding: 0.6rem 0.9rem;
+		padding: 0.6rem 3.4rem 0.6rem 0.9rem;
 	}
 
 	.title {
@@ -461,8 +466,13 @@
 	}
 
 	.toggle {
+		position: absolute;
+		top: 0.6rem;
+		right: 0.9rem;
+		display: grid;
+		place-items: center;
 		width: 2rem;
-		justify-content: center;
+		height: 2rem;
 		padding: 0;
 		border-color: transparent;
 		background: none;
@@ -740,7 +750,10 @@
 		background: var(--surface);
 	}
 
+	/* Holds its hidden radio button: without it, the button would hang from
+	   the window and stretch it. */
 	.segments label {
+		position: relative;
 		display: grid;
 		flex: 1;
 		place-items: center;
@@ -778,6 +791,15 @@
 	@media (max-width: 40rem) {
 		dl {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	/* Short windows and phones: under the list, as tall as it is; the page
+	   scrolls (see Downloads). */
+	@media (max-height: 40rem), (max-width: 40rem) {
+		.details {
+			max-height: none;
+			overflow: visible;
 		}
 	}
 </style>

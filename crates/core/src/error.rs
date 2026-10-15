@@ -6,6 +6,7 @@ use reqwest::StatusCode;
 use crate::category::CategoryId;
 use crate::id::JobId;
 use crate::job::JobState;
+use crate::slot::SlotId;
 use crate::view::ViewId;
 
 #[derive(Debug, thiserror::Error)]
@@ -54,6 +55,21 @@ pub enum Error {
 
     #[error("a download's stop time must be after its start time")]
     StopBeforeStart,
+
+    #[error("no time slot with ID {0}")]
+    SlotNotFound(SlotId),
+
+    #[error("a weekly time slot needs at least one day")]
+    SlotWithoutDays,
+
+    #[error("a time slot must allow or stop downloads, or set a limit")]
+    SlotWithoutEffect,
+
+    #[error("the new order must list every time slot once")]
+    InvalidSlotOrder,
+
+    #[error("no more time slot IDs are available")]
+    TooManySlots,
 
     #[error("`{0}` is not a job ID (expected yyyy.mm.dd-hh.mm.ss-N)")]
     InvalidJobId(String),

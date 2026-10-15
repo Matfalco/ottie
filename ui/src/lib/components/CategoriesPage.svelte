@@ -190,7 +190,10 @@
 		color: var(--muted);
 	}
 
+	/* As tall as its list: the page scrolls, not the pane (with overflow
+	   hidden, a flex item would shrink to the window and cut it off). */
 	.pane {
+		flex: none;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-l);
 		background: var(--surface);
@@ -322,11 +325,13 @@
 		white-space: nowrap;
 	}
 
+	/* On the right, even on a line of their own. */
 	.actions {
 		display: flex;
 		flex: 0 0 4.2rem;
 		justify-content: flex-end;
 		gap: 0.15rem;
+		margin-left: auto;
 	}
 
 	.actions button {

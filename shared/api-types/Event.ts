@@ -3,6 +3,7 @@ import type { ByteRange } from "./ByteRange";
 import type { Category } from "./Category";
 import type { Job } from "./Job";
 import type { Settings } from "./Settings";
+import type { Slot } from "./Slot";
 import type { View } from "./View";
 
 /**
@@ -15,4 +16,4 @@ export type Event = { "type": "changed", job: Job, } | { "type": "progress", id:
  * Several connections: each one's range, with what has arrived so
  * far. Empty for one connection.
  */
-ranges: Array<ByteRange>, } | { "type": "removed", id: string, } | { "type": "categoryChanged", category: Category, } | { "type": "categoryRemoved", id: number, } | { "type": "settingsChanged", settings: Settings, } | { "type": "viewChanged", view: View, } | { "type": "viewRemoved", id: number, } | { "type": "resync" };
+ranges: Array<ByteRange>, } | { "type": "removed", id: string, } | { "type": "categoryChanged", category: Category, } | { "type": "categoryRemoved", id: number, } | { "type": "settingsChanged", settings: Settings, } | { "type": "viewChanged", view: View, } | { "type": "viewRemoved", id: number, } | { "type": "slotChanged", slot: Slot, } | { "type": "slotRemoved", id: number, } | { "type": "resync" };

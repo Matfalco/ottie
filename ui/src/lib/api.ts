@@ -21,7 +21,11 @@ import type { ReorderJobs } from '@ottie/api-types/ReorderJobs';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 import type { StreamLink } from '@ottie/api-types/StreamLink';
+import type { AddedSlot } from '@ottie/api-types/AddedSlot';
 import type { AddedView } from '@ottie/api-types/AddedView';
+import type { ReorderSlots } from '@ottie/api-types/ReorderSlots';
+import type { SlotBody } from '@ottie/api-types/SlotBody';
+import type { SlotList } from '@ottie/api-types/SlotList';
 import type { View } from '@ottie/api-types/View';
 import type { ViewBody } from '@ottie/api-types/ViewBody';
 
@@ -159,6 +163,29 @@ export class Api {
 
 	removeView(id: number): Promise<void> {
 		return this.request('DELETE', `/views/${id}`);
+	}
+
+	/** The time slots in their order, and the daemon's time zone. */
+	listSlots(): Promise<SlotList> {
+		return this.request('GET', '/slots');
+	}
+
+	addSlot(slot: SlotBody): Promise<AddedSlot> {
+		return this.request('POST', '/slots', slot);
+	}
+
+	updateSlot(id: number, slot: SlotBody): Promise<void> {
+		return this.request('PUT', `/slots/${id}`, slot);
+	}
+
+	removeSlot(id: number): Promise<void> {
+		return this.request('DELETE', `/slots/${id}`);
+	}
+
+	/** Every slot's ID, once, in the new order. */
+	reorderSlots(ids: number[]): Promise<void> {
+		const body: ReorderSlots = { ids };
+		return this.request('POST', '/slots/reorder', body);
 	}
 
 	/** Opens the live events stream. */

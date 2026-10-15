@@ -40,6 +40,8 @@ export function applyEvent(jobs: Jobs, event: ApiEvent): boolean {
 		case 'settingsChanged':
 		case 'viewChanged':
 		case 'viewRemoved':
+		case 'slotChanged':
+		case 'slotRemoved':
 			return false;
 		case 'resync':
 			return true;

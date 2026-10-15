@@ -461,6 +461,12 @@
 		gap: 0.75rem;
 	}
 
+	/* No wider than its column, however long its options. */
+	.choose select {
+		width: 100%;
+		min-width: 0;
+	}
+
 	.row {
 		display: flex;
 		gap: 0.4rem;

@@ -15,12 +15,14 @@ export function amount(job: Job, locale: Locale = getLocale()): string {
 		: m.status_amount({ done, total: formatBytes(job.total, locale) }, { locale });
 }
 
-/** One line under the file name. `now` is `Date.now()`. */
+/** One line under the file name. `now` is `Date.now()`; `slots` names the
+ * time slots by ID, for one held by a slot. */
 export function describe(
 	job: Job,
 	bytesPerSec: number,
 	now: number,
-	locale: Locale = getLocale()
+	locale: Locale = getLocale(),
+	slots: Record<number, string> = {}
 ): string {
 	const options = { locale };
 	const why = () => explainProblem(job.problem, job.error, locale);
@@ -37,13 +39,20 @@ export function describe(
 			return job.retries > 0
 				? join([m.status_waiting_retry({}, options), why(), stops])
 				: join([m.status_waiting({}, options), stops]);
-		case 'scheduled':
+		case 'scheduled': {
+			// Its start time, once that comes the slot may still hold it.
+			const held =
+				job.heldBy === null
+					? null
+					: m.status_held({ name: slots[job.heldBy] ?? m.status_a_slot({}, options) }, options);
 			return join([
 				job.startAt === null
-					? m.status_waiting({}, options)
+					? (held ?? m.status_waiting({}, options))
 					: m.status_starts({ when: formatWhen(job.startAt, now, locale) }, options),
+				job.startAt === null ? '' : (held ?? ''),
 				stops
 			]);
+		}
 		case 'connecting':
 			return join([m.status_connecting({}, options), stops]);
 		case 'downloading': {
@@ -89,7 +98,8 @@ export function motion(
 	job: Job,
 	bytesPerSec: number,
 	now: number,
-	locale: Locale = getLocale()
+	locale: Locale = getLocale(),
+	slots: Record<number, string> = {}
 ): Motion {
 	const options = { locale };
 	if (job.moving) {
@@ -115,7 +125,7 @@ export function motion(
 			return { status: m.status_done({}, options) };
 		default:
 			// The same words as the full description.
-			return { status: describe(job, bytesPerSec, now, locale) };
+			return { status: describe(job, bytesPerSec, now, locale, slots) };
 	}
 }
 

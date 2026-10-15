@@ -13,6 +13,7 @@ publish = true
 workspace = true
 
 [dependencies]
+jiff = "0.2.38"
 percent-encoding = "2.3.2"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2", "system-proxy"] }
 rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
@@ -24,5 +25,6 @@ tracing = "0.1.44"
 [dev-dependencies]
 axum = "0.8.9"
 futures-util = "0.3.34"
+rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
 tempfile = "3.27.0"
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "signal", "io-std"] }

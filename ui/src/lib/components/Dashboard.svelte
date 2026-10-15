@@ -135,10 +135,17 @@
 		background: var(--surface);
 	}
 
+	/* Four in a row, or two by two: never three and one. */
 	.tiles {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 0.75rem;
+	}
+
+	@container page (max-width: 48rem) {
+		.tiles {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
 	}
 
 	.tile {

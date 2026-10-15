@@ -20,6 +20,7 @@ mod events;
 mod jobs;
 mod openapi;
 mod settings;
+mod slots;
 mod stream;
 mod types;
 mod ui;
@@ -44,6 +45,7 @@ pub use types::{
     Problem, Reason, RefusedJob, Reorder, ReorderJobs, Settings, SettingsChange, SortDirection,
     SortKey, StreamLink, View, ViewBody, ViewFilters,
 };
+pub use types::{AddedSlot, Day, ReorderSlots, Slot, SlotBody, SlotDownloads, SlotList};
 pub use ui::UiSource;
 
 /// Shared by every request handler.
@@ -85,6 +87,9 @@ fn private_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(settings::get, settings::change))
         .routes(routes!(views::list, views::add))
         .routes(routes!(views::update, views::remove))
+        .routes(routes!(slots::list, slots::add))
+        .routes(routes!(slots::update, slots::remove))
+        .routes(routes!(slots::reorder))
         .routes(routes!(events::subscribe))
         .routes(routes!(openapi::spec))
 }

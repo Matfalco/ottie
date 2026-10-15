@@ -31,6 +31,7 @@
 	import AddCard from './AddCard.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import FilterPanel from './FilterPanel.svelte';
+	import DetailsEmpty from './DetailsEmpty.svelte';
 	import JobDetails from './JobDetails.svelte';
 	import JobTable from './JobTable.svelte';
 	import QuickFilters from './QuickFilters.svelte';
@@ -144,102 +145,110 @@
 
 <svelte:window onkeydown={keydown} />
 
-<div class="add"><AddCard /></div>
+<div class="page">
+	<div class="add"><AddCard /></div>
 
-<section class="pane" aria-label={m.nav_downloads()}>
-	<div class="head">
-		<Toolbar
-			{selected}
-			{finished}
-			onRun={run}
-			categories={session.categoryList}
-			onMove={(category) =>
-				session.move(
-					selected.map((job) => job.id),
-					category
-				)}
-			onReorder={reorder}
-			{canUp}
-			{canDown}
-			shown={shown.length}
-			total={session.list.length}
-			active={activeCount(filters)}
-			{open}
-			onToggle={() => (open = !open)}
-		/>
-		{#if open}
-			{#key resets}
-				<FilterPanel
+	<section class="pane" aria-label={m.nav_downloads()}>
+		<div class="head">
+			<Toolbar
+				{selected}
+				{finished}
+				onRun={run}
+				categories={session.categoryList}
+				onMove={(category) =>
+					session.move(
+						selected.map((job) => job.id),
+						category
+					)}
+				onReorder={reorder}
+				{canUp}
+				{canDown}
+				shown={shown.length}
+				total={session.list.length}
+				active={activeCount(filters)}
+				{open}
+				onToggle={() => (open = !open)}
+			/>
+			{#if open}
+				{#key resets}
+					<FilterPanel
+						{filters}
+						{arrangement}
+						jobs={session.list}
+						categories={session.categoryList}
+						onFilters={setFilters}
+						onArrange={setArrangement}
+						onSaveView={() => (naming = { view: null })}
+						onClose={() => (open = false)}
+					/>
+				{/key}
+			{:else}
+				<QuickFilters
 					{filters}
 					{arrangement}
 					jobs={session.list}
-					categories={session.categoryList}
-					onFilters={setFilters}
+					categories={used}
+					views={session.viewList}
+					now={today}
 					onArrange={setArrangement}
-					onSaveView={() => (naming = { view: null })}
-					onClose={() => (open = false)}
+					onRename={(view) => (naming = { view })}
+					onDelete={(view) => (deleting = view)}
 				/>
-			{/key}
+			{/if}
+		</div>
+
+		{#if session.list.length === 0 && session.connection === 'live'}
+			<p class="empty">{m.empty()}</p>
+		{:else if shown.length === 0 && session.connection === 'live'}
+			<div class="empty">
+				<p>{m.empty_filter()}</p>
+				<button
+					onclick={() => {
+						setFilters(NO_FILTERS);
+						resets += 1;
+					}}>{m.fl_reset_filters()}</button
+				>
+			</div>
 		{:else}
-			<QuickFilters
-				{filters}
+			<JobTable
+				{sections}
 				{arrangement}
-				jobs={session.list}
-				categories={used}
-				views={session.viewList}
-				now={today}
-				onArrange={setArrangement}
-				onRename={(view) => (naming = { view })}
-				onDelete={(view) => (deleting = view)}
+				selection={current}
+				categories={session.categories}
+				rates={session.rates}
+				now={session.now}
+				note={(group) => groupNote(group, facts)}
+				onSelect={(chosen) => (selection = chosen)}
+				onRun={run}
+				onSort={(sort) => setArrangement(sortBy(arrangement, sort))}
+				onReorder={(ids, to) => void session.reorder(ids, to)}
 			/>
 		{/if}
-	</div>
 
-	{#if session.list.length === 0 && session.connection === 'live'}
-		<p class="empty">{m.empty()}</p>
-	{:else if shown.length === 0 && session.connection === 'live'}
-		<div class="empty">
-			<p>{m.empty_filter()}</p>
-			<button
-				onclick={() => {
-					setFilters(NO_FILTERS);
-					resets += 1;
-				}}>{m.fl_reset_filters()}</button
-			>
-		</div>
-	{:else}
-		<JobTable
-			{sections}
-			{arrangement}
-			selection={current}
-			categories={session.categories}
-			rates={session.rates}
-			now={session.now}
-			note={(group) => groupNote(group, facts)}
-			onSelect={(chosen) => (selection = chosen)}
-			onRun={run}
-			onSort={(sort) => setArrangement(sortBy(arrangement, sort))}
-			onReorder={(ids, to) => void session.reorder(ids, to)}
-		/>
-	{/if}
-
-	{#if picked}
-		{@const job = picked}
-		<JobDetails
-			{job}
-			categories={session.categoryList}
-			speed={currentSpeed(session.rates[job.id], session.now)}
-			now={session.now}
-			maxRetries={session.settings?.maxRetries ?? null}
-			open={detailsOpen}
-			onToggle={() => (detailsOpen = !detailsOpen)}
-			onRun={(action) => run(action, [job])}
-			onMove={(category) => session.move([job.id], category)}
-			onChange={(change) => changeJob(job.id, change)}
-			getLink={() => session.streamLink(job.id)}
-		/>
-	{/if}
-</section>
+		{#if picked}
+			{@const job = picked}
+			<JobDetails
+				{job}
+				categories={session.categoryList}
+				speed={currentSpeed(session.rates[job.id], session.now)}
+				now={session.now}
+				maxRetries={session.settings?.maxRetries ?? null}
+				open={detailsOpen}
+				onToggle={() => (detailsOpen = !detailsOpen)}
+				onRun={(action) => run(action, [job])}
+				onMove={(category) => session.move([job.id], category)}
+				onChange={(change) => changeJob(job.id, change)}
+				getLink={() => session.streamLink(job.id)}
+			/>
+		{:else}
+			<DetailsEmpty
+				count={selected.length}
+				open={detailsOpen}
+				onToggle={() => (detailsOpen = !detailsOpen)}
+			/>
+		{/if}
+	</section>
+</div>
 
 {#if naming}
 	{@const view = naming.view}
@@ -267,6 +276,14 @@
 {/if}
 
 <style>
+	/* The list fills what's left of the page and scrolls inside it. */
+	.page {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+	}
+
 	.add {
 		padding: 0.25rem 1rem 0.75rem;
 	}
@@ -307,6 +324,18 @@
 
 	div.empty p {
 		margin: 0;
+	}
+
+	/* Short windows and phones: the list keeps a height of its own (see
+	   JobTable) and the details come under it; the page scrolls. */
+	@media (max-height: 40rem), (max-width: 40rem) {
+		.page {
+			overflow: auto;
+		}
+
+		.pane {
+			flex: none;
+		}
 	}
 
 	@media (max-width: 40rem) {

@@ -290,7 +290,10 @@
 		border-radius: var(--radius-s);
 	}
 
+	/* Holds its hidden radio button: without it, the button would hang from
+	   the window and stretch it. */
 	.segments label {
+		position: relative;
 		display: grid;
 		flex: 1;
 		place-items: center;

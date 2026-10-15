@@ -28,6 +28,7 @@ export function job(overrides: Partial<Job> = {}): Job {
 		waitingForBandwidth: false,
 		startAt: null,
 		stopAt: null,
+		heldBy: null,
 		...overrides
 	};
 }

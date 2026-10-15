@@ -18,6 +18,7 @@
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import NavMenu from './NavMenu.svelte';
 	import Setup from './Setup.svelte';
+	import { queueNow } from '#lib/slots.js';
 	import SpeedChip from './SpeedChip.svelte';
 	import TitleBar from './TitleBar.svelte';
 
@@ -141,17 +142,21 @@
 
 <div class="app">
 	<TitleBar>
-		{#if !settingUp}
-			<NavMenu jobs={session.list} />
-		{/if}
-		<span class="end">
-			<SpeedChip
-				speed={session.history.at(-1) ?? 0}
-				limit={session.settings?.globalLimit ?? null}
-				connection={session.connection}
-				onLimit={setLimit}
-			/>
-		</span>
+		{#snippet children(level)}
+			{#if !settingUp}
+				<NavMenu jobs={session.list} compact={level >= 1} />
+			{/if}
+			<span class="end">
+				<SpeedChip
+					brief={level >= 2}
+					speed={session.history.at(-1) ?? 0}
+					limit={session.settings?.globalLimit ?? null}
+					schedule={queueNow(session.slotList)}
+					connection={session.connection}
+					onLimit={setLimit}
+				/>
+			</span>
+		{/snippet}
 	</TitleBar>
 
 	{#if settingUp}

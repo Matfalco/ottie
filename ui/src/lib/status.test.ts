@@ -103,6 +103,17 @@ group('progress and buttons', () => {
 		expect(canPause(later)).toBe(true);
 	});
 
+	it('names the time slot holding a download', () => {
+		const held = job({ state: 'scheduled', heldBy: 3 });
+		expect(describe(held, 0, 0, 'en', { 3: 'Night' })).toBe('Held by Night');
+		expect(describe(held, 0, 0, 'fr')).toBe('Retenu par une plage horaire');
+		const tonight = new Date(2026, 9, 14, 23, 0).getTime();
+		const both = job({ state: 'scheduled', heldBy: 3, startAt: tonight });
+		expect(describe(both, 0, new Date(2026, 9, 14, 9).getTime(), 'en', { 3: 'Night' })).toBe(
+			'Starts today at 11:00 PM · Held by Night'
+		);
+	});
+
 	it('offers nothing while the file moves, and says so', () => {
 		const moving = job({ state: 'downloading', moving: true });
 		expect([canPause(moving), canResume(moving), canCancel(moving)]).toEqual([false, false, false]);

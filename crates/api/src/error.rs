@@ -74,6 +74,10 @@ impl From<Error> for Failure {
                 },
             ),
             Error::StopBeforeStart => (S::BAD_REQUEST, Reason::StopBeforeStart),
+            Error::SlotNotFound(id) => (S::NOT_FOUND, Reason::SlotNotFound { id: id.0 }),
+            Error::SlotWithoutDays => (S::BAD_REQUEST, Reason::SlotWithoutDays),
+            Error::SlotWithoutEffect => (S::BAD_REQUEST, Reason::SlotWithoutEffect),
+            Error::InvalidSlotOrder => (S::BAD_REQUEST, Reason::InvalidSlotOrder),
             Error::CategoryNameTaken(name) => (
                 S::CONFLICT,
                 Reason::CategoryNameTaken { name: name.clone() },

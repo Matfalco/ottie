@@ -7,6 +7,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { canResume, describe } from '#lib/status.js';
 	import FileIcon from './FileIcon.svelte';
+	import { useApp } from '#lib/context.js';
 
 	interface Props {
 		job: Job;
@@ -16,6 +17,7 @@
 	}
 
 	let { job, now, onRun }: Props = $props();
+	const { session } = useApp();
 	let name = $derived(displayName(job));
 </script>
 
@@ -24,7 +26,7 @@
 	<span class="kind"><FileIcon {name} /></span>
 	<span class="text">
 		<span class="name" title={job.url}>{name}</span>
-		<span class="line">{describe(job, 0, now)}</span>
+		<span class="line">{describe(job, 0, now, undefined, session.slotNames)}</span>
 	</span>
 	{#if onRun}
 		<span class="actions">

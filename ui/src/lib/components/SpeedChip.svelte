@@ -1,8 +1,11 @@
 <script lang="ts">
+	import CalendarClock from '@lucide/svelte/icons/calendar-clock';
 	import Gauge from '@lucide/svelte/icons/gauge';
+	import { resolve } from '$app/paths';
 	import { formatSpeed } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { Connection } from '#lib/session.svelte.js';
+	import { shortLabel, type queueNow } from '#lib/slots.js';
 	import LimitControl from './LimitControl.svelte';
 	import RatePresets from './RatePresets.svelte';
 
@@ -11,19 +14,39 @@
 		speed: number;
 		/** The total limit in bytes per second (0 = none); null until known. */
 		limit: number | null;
+		/** What the time slots do to all downloads right now. */
+		schedule: ReturnType<typeof queueNow>;
 		connection: Connection;
 		/** Saves a new total limit; resolves to false if it couldn't. */
 		onLimit: (bytesPerSec: number) => Promise<boolean>;
+		/** The time slot's chip as its icon alone: the title bar is short of room. */
+		brief?: boolean;
 	}
 
-	let { speed, limit, connection, onLimit }: Props = $props();
+	let { speed, limit, schedule, connection, onLimit, brief = false }: Props = $props();
 	let open = $state(false);
 	let chip: HTMLButtonElement | undefined = $state();
 
+	/** The slot at work on all downloads, if one is: stopping them, or limiting. */
+	let note = $derived(
+		schedule.stoppedBy
+			? m.chip_stopped({ name: shortLabel(schedule.stoppedBy) })
+			: schedule.limit
+				? shortLabel(schedule.limit.slot)
+				: null
+	);
+	/** A slot's limit replaces the setting's while it lasts. */
+	let shown = $derived(schedule.limit?.bytesPerSec ?? limit);
 	const label = $derived(
-		limit
-			? m.chip_speed_limited({ speed: formatSpeed(speed), limit: formatSpeed(limit) })
-			: m.chip_speed({ speed: formatSpeed(speed) })
+		[
+			shown
+				? m.chip_speed_limited({ speed: formatSpeed(speed), limit: formatSpeed(shown) })
+				: m.chip_speed({ speed: formatSpeed(speed) }),
+			schedule.limit ? m.chip_slot_limit({ name: shortLabel(schedule.limit.slot) }) : null,
+			schedule.stoppedBy ? m.chip_stopped({ name: shortLabel(schedule.stoppedBy) }) : null
+		]
+			.filter((part) => part !== null)
+			.join(' · ')
 	);
 
 	/** Closes the popup once focus leaves the chip and the popup. */
@@ -58,10 +81,17 @@
 		>
 			<Gauge size={14} aria-hidden="true" />
 			<span class="speed">{formatSpeed(speed)}</span>
-			{#if limit > 0}
-				<span class="limit">/ {formatSpeed(limit)}</span>
+			{#if shown}
+				<span class="limit">/ {formatSpeed(shown)}</span>
 			{/if}
 		</button>
+		{#if note}
+			<!-- A time slot is at work: says which, and leads to the schedule. -->
+			<a class="slot" class:brief href={resolve('/schedule')} title={label} aria-label={label}>
+				<CalendarClock size={13} aria-hidden="true" />
+				<span class="note">{note}</span>
+			</a>
+		{/if}
 		{#if open}
 			<!-- Focusable, so a click inside doesn't count as leaving it. -->
 			<div class="popup" role="dialog" aria-label={m.limit_total()} tabindex="-1">
@@ -87,6 +117,27 @@
 <style>
 	.holder {
 		position: relative;
+		display: flex;
+		align-items: center;
+	}
+
+	/* Short of room: the icon alone, the rest in its tooltip. */
+	.slot.brief .note {
+		display: none;
+	}
+
+	.slot {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		height: 1.5rem;
+		padding: 0 0.5rem;
+		border-radius: 999px;
+		background: var(--warn-bg);
+		color: var(--warn);
+		font-size: 0.75rem;
+		text-decoration: none;
+		white-space: nowrap;
 	}
 
 	.chip {
@@ -168,5 +219,18 @@
 
 	.offline .dot {
 		background: var(--danger);
+	}
+
+	/* Phones: across the screen, under the title bar (fixed, so the title
+	   bar's middle, which cuts off what's too wide, doesn't cut it). */
+	@media (max-width: 40rem) {
+		.popup {
+			position: fixed;
+			top: 3.25rem;
+			right: 0.5rem;
+			left: 0.5rem;
+			width: auto;
+			max-width: none;
+		}
 	}
 </style>

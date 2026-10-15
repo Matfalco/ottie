@@ -18,6 +18,7 @@
 	import type { Keys } from '#lib/selection.js';
 	import { canPause, canResume, describe, fraction, motion } from '#lib/status.js';
 	import FileIcon from './FileIcon.svelte';
+	import { useApp } from '#lib/context.js';
 
 	interface Props {
 		job: Job;
@@ -57,6 +58,7 @@
 		onGrab,
 		onStep
 	}: Props = $props();
+	const { session } = useApp();
 
 	/** Normal has none. */
 	const PRIORITY_ICONS: Record<Exclude<Priority, 'normal'>, Component> = {
@@ -69,7 +71,7 @@
 	let done = $derived(fraction(job));
 	// Several connections: one piece of the bar each.
 	let parts = $derived(barParts(job));
-	let moving = $derived(motion(job, speed, now));
+	let moving = $derived(motion(job, speed, now, undefined, session.slotNames));
 	let added = $derived(addedAt(job.id));
 	let size = $derived(
 		job.total !== null
@@ -141,7 +143,7 @@
 			<span class="kind"><FileIcon {name} /></span>
 			<span class="text">
 				<span class="title">{name}</span>
-				<span class="line">{describe(job, speed, now)}</span>
+				<span class="line">{describe(job, speed, now, undefined, session.slotNames)}</span>
 			</span>
 			{#if job.priority !== 'normal'}
 				{@const Icon = PRIORITY_ICONS[job.priority]}
@@ -459,22 +461,34 @@
 		}
 	}
 
-	/* Less room beside the menu: fewer columns. */
-	@container page (max-width: 66rem) {
+	/* Less room: fewer columns (as JobTable's header says), kept at no width. */
+	@container page (max-width: 72rem) {
 		.category {
-			display: none;
+			width: 0;
+			padding: 0;
+			overflow: hidden;
+			visibility: hidden;
+			white-space: nowrap;
 		}
 	}
 
-	@container page (max-width: 58rem) {
+	@container page (max-width: 63rem) {
 		.added {
-			display: none;
+			width: 0;
+			padding: 0;
+			overflow: hidden;
+			visibility: hidden;
+			white-space: nowrap;
 		}
 	}
 
-	@container page (max-width: 42rem) {
+	@container page (max-width: 53rem) {
 		.size {
-			display: none;
+			width: 0;
+			padding: 0;
+			overflow: hidden;
+			visibility: hidden;
+			white-space: nowrap;
 		}
 	}
 
@@ -526,7 +540,9 @@
 
 		.grip,
 		.percent,
+		.size,
 		.category,
+		.added,
 		.status,
 		.speed,
 		.left {
