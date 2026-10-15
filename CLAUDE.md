@@ -22,7 +22,7 @@
 - A **browser extension** (Chromium-based browsers and Firefox, desktop) that takes over downloads from the browser: intercepts them, hides the browser's own download UI where possible, and shows our download list in its popup.
 - Must-haves: pause/resume (including after a restart or crash), multi-connection downloads, and speed limits at three levels (per download, per category, global), adjustable while downloads run.
 - **Play while downloading** (uGet can): a short-lived play link (`POST /jobs/{id}/stream` → `GET /stream/{ticket}/{name}`, no token, range support) serves a partial file, so the browser, VLC/mpv or an Android player can play a video before it finishes, locally or from a remote daemon (`docs/decisions/0029`). The download order follows the player and, in a per-download streaming mode, stays in order and fetches the last chunk early (many MP4s keep their index at the end).
-- **Translated UI:** in the system's language by default (a device or every device can choose another), English as the fallback. English and French, then languages in batches (EU, Latin America, Asia, Africa; `docs/decisions/0041`): de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR so far. Each is one JSON file in `ui/messages/` and, for the tray, one in `app/messages/`; daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
+- **Translated UI:** in the system's language by default (a device or every device can choose another), English as the fallback. English and French, then languages in batches (EU, Latin America, Asia, Africa; `docs/decisions/0041`): de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR, then the rest of the EU in Latin script (sv, ro, cs, hu, da, fi, sk, hr, sl, lt, lv, et, ga, mt) so far. Each is one JSON file in `ui/messages/` and, for the tray, one in `app/messages/`; daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
 - uGet features to bring over time: categories (folder + file-type rules), queue with max concurrent downloads, opt-in clipboard monitoring, batch/URL-list import, scheduler.
 
 ## Stack
@@ -374,7 +374,7 @@ Done: ✅ and struck through.
 
 Languages, a batch per slice, between the steps above (`docs/decisions/0041`; no Russian for now):
 - ✅ ~~L1 "System" by default (also as the shared language), matching the system's tag, unreviewed note; de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR~~
-- L2 the rest of the EU in Latin script: sv, ro, cs, hu, da, fi, sk, hr, sl, lt, lv, et, ga, mt
+- ✅ ~~L2 the rest of the EU in Latin script: sv, ro, cs, hu, da, fi, sk, hr, sl, lt, lv, et, ga, mt~~
 - L3 Greek and Cyrillic: el, bg, uk (Outfit lacks them: the system's font through `:lang()`, or a second bundled font)
 - L4 Asia: zh-Hans, zh-Hant, ja, ko, id, hi, vi, tr (fonts as in L3)
 - L5 Africa: sw, am, ha, yo, zu

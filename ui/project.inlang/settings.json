@@ -1,7 +1,32 @@
 {
 	"$schema": "https://inlang.com/schema/project-settings",
 	"baseLocale": "en",
-	"locales": ["en", "fr", "de", "es-ES", "es-419", "it", "nl", "pl", "pt-PT", "pt-BR"],
+	"locales": [
+		"en",
+		"fr",
+		"de",
+		"es-ES",
+		"es-419",
+		"it",
+		"nl",
+		"pl",
+		"pt-PT",
+		"pt-BR",
+		"sv",
+		"ro",
+		"cs",
+		"hu",
+		"da",
+		"fi",
+		"sk",
+		"hr",
+		"sl",
+		"lt",
+		"lv",
+		"et",
+		"ga",
+		"mt"
+	],
 	"modules": ["./node_modules/@inlang/plugin-message-format/dist/index.js"],
 	"plugin.inlang.messageFormat": {
 		"pathPattern": "./messages/{locale}.json"

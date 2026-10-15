@@ -8,7 +8,7 @@ use crate::status::{Progress, Summary};
 
 /// Each language's texts, by its tag, as the page names them
 /// (`ui/project.inlang/settings.json`). The first is the fallback.
-const LANGUAGES: [(&str, &str); 10] = [
+const LANGUAGES: [(&str, &str); 24] = [
     ("en", include_str!("../messages/en.json")),
     ("fr", include_str!("../messages/fr.json")),
     ("de", include_str!("../messages/de.json")),
@@ -19,6 +19,20 @@ const LANGUAGES: [(&str, &str); 10] = [
     ("pl", include_str!("../messages/pl.json")),
     ("pt-PT", include_str!("../messages/pt-PT.json")),
     ("pt-BR", include_str!("../messages/pt-BR.json")),
+    ("sv", include_str!("../messages/sv.json")),
+    ("ro", include_str!("../messages/ro.json")),
+    ("cs", include_str!("../messages/cs.json")),
+    ("hu", include_str!("../messages/hu.json")),
+    ("da", include_str!("../messages/da.json")),
+    ("fi", include_str!("../messages/fi.json")),
+    ("sk", include_str!("../messages/sk.json")),
+    ("hr", include_str!("../messages/hr.json")),
+    ("sl", include_str!("../messages/sl.json")),
+    ("lt", include_str!("../messages/lt.json")),
+    ("lv", include_str!("../messages/lv.json")),
+    ("et", include_str!("../messages/et.json")),
+    ("ga", include_str!("../messages/ga.json")),
+    ("mt", include_str!("../messages/mt.json")),
 ];
 
 /// Units count in 1024s, as on the page (`ui/src/lib/format.ts`).

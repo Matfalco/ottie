@@ -15,7 +15,21 @@ export const NAMES: Record<Locale, string> = {
 	nl: 'Nederlands',
 	pl: 'Polski',
 	'pt-PT': 'Português (Portugal)',
-	'pt-BR': 'Português (Brasil)'
+	'pt-BR': 'Português (Brasil)',
+	sv: 'Svenska',
+	ro: 'Română',
+	cs: 'Čeština',
+	hu: 'Magyar',
+	da: 'Dansk',
+	fi: 'Suomi',
+	sk: 'Slovenčina',
+	hr: 'Hrvatski',
+	sl: 'Slovenščina',
+	lt: 'Lietuvių',
+	lv: 'Latviešu',
+	et: 'Eesti',
+	ga: 'Gaeilge',
+	mt: 'Malti'
 };
 
 /** Checked by a native speaker; the others say so under the picker. */
