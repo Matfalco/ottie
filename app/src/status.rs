@@ -1,6 +1,7 @@
 //! What the tray shows (docs/decisions/0034): the daemon's downloads,
 //! followed through its events stream and summed up once a second. Their
-//! changes are also what notifications tell (docs/decisions/0035).
+//! changes are also what notifications tell (docs/decisions/0035), and say
+//! when everything has finished (0040).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::client::{Daemon, Event, Job};
+use crate::finish::{self, Left};
 use crate::notify::{self, News, Notifier};
 use crate::prefs;
 use crate::texts::Texts;
@@ -130,17 +132,19 @@ async fn load(app: &AppHandle, daemon: &Daemon, model: &mut Model) -> Result<()>
     Ok(())
 }
 
-/// Notifies what the last changes call for.
+/// Notifies what the last changes call for, then whether everything has
+/// finished.
 fn tell(app: &AppHandle, model: &mut Model, notifier: &mut Notifier) {
     let news = std::mem::take(&mut model.news);
+    let ended = !news.is_empty();
     let busy = model.busy();
-    // Nothing new, and nothing waiting for the downloads still running.
-    if news.is_empty() && (busy || !notifier.waiting()) {
-        return;
+    // Something new, or finished downloads waiting for the last ones.
+    if ended || (!busy && notifier.waiting()) {
+        let prefs = app.state::<prefs::Saved>().get();
+        let texts = Texts::for_language(prefs.language.as_deref());
+        notify::show(app, notifier.notes(news, busy, &prefs, &texts), &prefs);
     }
-    let prefs = app.state::<prefs::Saved>().get();
-    let texts = Texts::for_language(prefs.language.as_deref());
-    notify::show(app, notifier.notes(news, busy, &prefs, &texts), &prefs);
+    finish::follow(app, model.left(), ended);
 }
 
 /// The tray's "Limit speed" switches the last limit back on.
@@ -235,6 +239,19 @@ impl Model {
         self.jobs
             .values()
             .any(|tracked| RUNNING.contains(&tracked.state.as_str()) || tracked.state == "queued")
+    }
+
+    /// What's left to run, for "when everything has finished".
+    fn left(&self) -> Left {
+        let mut left = Left::default();
+        for tracked in self.jobs.values() {
+            match tracked.state.as_str() {
+                state if RUNNING.contains(&state) || state == "queued" => left.running += 1,
+                "scheduled" => left.scheduled += 1,
+                _ => {}
+            }
+        }
+        left
     }
 
     fn summary(&self, now: Instant) -> Summary {
@@ -359,6 +376,7 @@ mod tests {
             }]
         );
         assert!(!model.busy());
+        assert_eq!(model.left(), Left::default());
         // Missed while the daemon was away, seen in the next list.
         model.news.clear();
         model.reset(vec![job("c", "queued", 0)], now);
@@ -377,8 +395,16 @@ mod tests {
                 job("c", "queued", 0),
                 job("d", "paused", 0),
                 job("e", "completed", 0),
+                job("f", "scheduled", 0),
             ],
             now,
+        );
+        assert_eq!(
+            model.left(),
+            Left {
+                running: 3,
+                scheduled: 1
+            }
         );
         model.apply(
             Event::SettingsChanged {

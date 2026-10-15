@@ -1,11 +1,23 @@
 <script lang="ts">
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import { onMount } from 'svelte';
+	import { canDo, FINISH_CHOICES, finishName, nextFinish, soonText } from '#lib/finish.js';
+	import { LiveFinishing } from '#lib/finish.svelte.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { Session } from '#lib/session.svelte.js';
 	import { loadToken } from '#lib/token.js';
 	import { pauseSteps, resumeTargets, trayRunning, trayStatus } from '#lib/tray.js';
-	import { hideMenu, menuReady, quitApp, showMain } from '#lib/window.js';
+	import {
+		cancelFinish,
+		hideMenu,
+		menuReady,
+		quitApp,
+		setFinishOnce,
+		showMain,
+		type Finish
+	} from '#lib/window.js';
 	import LimitControl from './LimitControl.svelte';
 	import RatePresets from './RatePresets.svelte';
 	import RunningList from './RunningList.svelte';
@@ -27,11 +39,23 @@
 	const steps = $derived(pauseSteps(jobs));
 	const resumable = $derived(resumeTargets(jobs));
 
+	// What happens when everything has finished, this time only, or Cancel
+	// during a countdown (docs/decisions/0040).
+	const live = new LiveFinishing();
+	const finishing = $derived(live.current);
+	const countdown = $derived(finishing?.running ?? null);
+	/** The choices are listed under their item. */
+	let choosing = $state(false);
+
 	let menu: HTMLElement;
 
 	onMount(() => {
 		session?.start();
-		return () => session?.stop();
+		live.start();
+		return () => {
+			session?.stop();
+			live.stop();
+		};
 	});
 
 	// The app sizes the window to the menu, now and whenever it changes.
@@ -62,6 +86,11 @@
 
 	async function setLimit(bytesPerSec: number): Promise<boolean> {
 		return (await session?.changeSettings({ globalLimit: bytesPerSec })) === null;
+	}
+
+	function chooseFinish(choice: Finish) {
+		choosing = false;
+		return live.change(() => setFinishOnce(choice));
 	}
 
 	function keyDown(event: KeyboardEvent) {
@@ -99,6 +128,42 @@
 			disabled={connection !== 'live' || resumable.length === 0}
 			onclick={pick(resumeAll)}>{m.tray_resume_all()}</button
 		>
+		{#if finishing}
+			{#if countdown}
+				<button class="item cancel" role="menuitem" onclick={pick(cancelFinish)}>
+					{m.finish_cancel()}
+					<span class="soon">{soonText(countdown.action, live.left ?? 0)}</span>
+				</button>
+			{/if}
+			<button
+				class="item choose"
+				role="menuitem"
+				aria-haspopup="menu"
+				aria-expanded={choosing}
+				onclick={() => (choosing = !choosing)}
+			>
+				<span>{m.tray_finish({ choice: finishName(nextFinish(finishing)) })}</span>
+				{#if choosing}
+					<ChevronUp size={14} aria-hidden="true" />
+				{:else}
+					<ChevronDown size={14} aria-hidden="true" />
+				{/if}
+			</button>
+			{#if choosing}
+				<div class="choices" role="menu" aria-label={m.finish_title()}>
+					{#each FINISH_CHOICES as choice (choice)}
+						<button
+							class="item"
+							role="menuitemradio"
+							aria-checked={choice === nextFinish(finishing)}
+							class:chosen={choice === nextFinish(finishing)}
+							disabled={!canDo(finishing, choice)}
+							onclick={pick(() => chooseFinish(choice))}>{finishName(choice)}</button
+						>
+					{/each}
+				</div>
+			{/if}
+		{/if}
 		{#if connection === 'live' && limit !== null}
 			<hr />
 			<div class="limit">
@@ -187,5 +252,44 @@
 		margin: 0;
 		color: var(--muted);
 		font-size: 0.8rem;
+	}
+
+	.choose {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.choose span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.choices {
+		display: grid;
+		padding-inline-start: 0.75rem;
+	}
+
+	.chosen {
+		color: var(--accent);
+		font-weight: 500;
+	}
+
+	.cancel {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		color: var(--danger);
+		font-weight: 500;
+	}
+
+	.soon {
+		color: var(--muted);
+		font-weight: 400;
+		font-size: 0.8rem;
+		font-variant-numeric: tabular-nums;
 	}
 </style>

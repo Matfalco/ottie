@@ -48,7 +48,6 @@ export const NAMES: Record<Locale, string> = {
 	zu: 'isiZulu',
 	ar: 'العربية',
 	fa: 'فارسی',
-	he: 'עברית',
 	ur: 'اردو'
 };
 
@@ -74,7 +73,7 @@ export function intlLocale(locale: Locale): string {
 
 /** The languages written right to left: their pages are mirrored
  * (docs/decisions/0042). */
-const RIGHT_TO_LEFT: readonly Locale[] = ['ar', 'fa', 'he', 'ur'];
+const RIGHT_TO_LEFT: readonly Locale[] = ['ar', 'fa', 'ur'];
 
 /** Which way `locale` is written, for the page's `dir`. */
 export function direction(locale: Locale): 'ltr' | 'rtl' {

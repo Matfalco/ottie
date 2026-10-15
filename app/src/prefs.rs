@@ -1,9 +1,10 @@
 //! What this app remembers on this computer besides the player
 //! (docs/decisions/0034): whether closing the window keeps Ottie in the tray,
 //! when to notify (docs/decisions/0035) and with which sounds (0038), what
-//! starting at sign-in starts (0039), the language the page shows (for the
-//! tray's texts and notifications), and the last total speed limit (for the
-//! tray's "Limit speed").
+//! starting at sign-in starts (0039), what happens when everything has
+//! finished (0040), the language the page shows (for the tray's texts and
+//! notifications), and the last total speed limit (for the tray's "Limit
+//! speed").
 
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -12,6 +13,7 @@ use tauri::{AppHandle, State};
 
 use crate::autostart::{self, Mode, Startup};
 use crate::config;
+use crate::finish::{self, CountdownIn, Finish};
 use crate::notify::Kind;
 use crate::sound::{self, Sound, Sounds};
 
@@ -37,6 +39,16 @@ pub struct Prefs {
     pub sound_failed: Sound,
     /// What the system's entry starts at sign-in, when there is one.
     pub startup: Mode,
+    /// When everything has finished, every time…
+    pub finish: Finish,
+    /// …or this time only, instead (cleared once its time has come).
+    pub finish_once: Option<Finish>,
+    /// Seconds to cancel before the computer sleeps, hibernates or shuts down.
+    pub countdown: u32,
+    pub countdown_in: CountdownIn,
+    /// Downloads waiting for their start time or held by a slot count as
+    /// not finished.
+    pub finish_waits_for_scheduled: bool,
     /// The page's language, as it said last.
     pub language: Option<String>,
     /// The total limit last set (bytes per second), by anyone.
@@ -53,6 +65,11 @@ impl Default for Prefs {
             sound_finished: Sound::System,
             sound_failed: Sound::System,
             startup: Mode::Tray,
+            finish: Finish::Nothing,
+            finish_once: None,
+            countdown: finish::DEFAULT_COUNTDOWN,
+            countdown_in: CountdownIn::Window,
+            finish_waits_for_scheduled: true,
             language: None,
             last_limit: None,
         }
@@ -295,6 +312,9 @@ mod tests {
         assert!(prefs.notify_failed);
         assert_eq!(prefs.sounds, Sounds::System);
         assert_eq!(prefs.startup, Mode::Tray);
+        assert_eq!((prefs.finish, prefs.finish_once), (Finish::Nothing, None));
+        assert_eq!(prefs.countdown, 60);
+        assert!(prefs.finish_waits_for_scheduled);
         assert_eq!(prefs.language.as_deref(), Some("fr"));
         assert_eq!(prefs.last_limit, None);
     }

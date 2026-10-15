@@ -193,6 +193,21 @@ pub fn show(app: &AppHandle, notes: Vec<Note>, prefs: &Prefs) {
     }
 }
 
+/// A notification of the app's own, whatever notifications are set to: the
+/// countdown before the computer goes, or why it couldn't (0040). The
+/// system's sound, as for a warning.
+pub fn warn(app: &AppHandle, title: String, body: Option<String>) {
+    let builder = app.notification().builder().title(title);
+    let builder = match body {
+        Some(body) => builder.body(body),
+        None => builder,
+    };
+    #[cfg(windows)]
+    let builder = builder.sound("Default");
+    // Best effort: the tray menu and the page say the same.
+    let _ = builder.show();
+}
+
 /// A click on a notification opens the window.
 pub fn listen(app: &AppHandle) {
     let handle = app.clone();

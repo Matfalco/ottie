@@ -33,3 +33,12 @@ auto-launch = "0.6"
 [target.'cfg(windows)'.dependencies]
 # The taskbar's theme, for the tray icon's colour.
 windows-registry = "0.6.1"
+# Sleep, hibernate and shut down when everything has finished
+# (docs/decisions/0040): the system's calls, already built for Tauri.
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Power",
+    "Win32_System_Shutdown",
+    "Win32_System_Threading",
+] }

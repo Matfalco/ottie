@@ -14,6 +14,8 @@
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { Reorder } from '#lib/queue.js';
+	import { canFinish } from '#lib/window.js';
+	import FinishMenu from './FinishMenu.svelte';
 	import MoveMenu from './MoveMenu.svelte';
 
 	interface Props {
@@ -98,6 +100,9 @@
 		<span class="count">{m.selected_count({ count: formatCount(selected.length) })}</span>
 	{/if}
 	<span class="spacer"></span>
+	{#if canFinish()}
+		<FinishMenu />
+	{/if}
 	{#if finished.length > 0}
 		<button class="clear" onclick={() => onRun('remove', finished)}>
 			<Eraser size={15} aria-hidden="true" />

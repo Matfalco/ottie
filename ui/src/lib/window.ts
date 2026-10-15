@@ -5,6 +5,7 @@
 // from the tray.
 
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { Sound, SoundKind, Sounds } from './sounds.js';
@@ -185,4 +186,87 @@ export function quitApp(): Promise<void> {
 /** Closes the menu, as a click elsewhere does. */
 export function hideMenu(): Promise<void> {
 	return getCurrentWindow().hide();
+}
+
+/** What happens when everything has finished (docs/decisions/0040). */
+export type Finish = 'nothing' | 'quit' | 'sleep' | 'hibernate' | 'shutDown';
+/** Those that need the computer, after a countdown. */
+export type Power = Exclude<Finish, 'nothing' | 'quit'>;
+export type CountdownIn = 'window' | 'notification';
+
+/** The desktop app's "when everything has finished": what's chosen, what
+ * this computer can do, and the countdown while one runs. */
+export interface Finishing {
+	/** Every time (Settings). */
+	always: Finish;
+	/** This time only, instead (the tray menu, the Downloads page). */
+	once: Finish | null;
+	/** What this computer lets Ottie do now. */
+	able: Record<Power, boolean>;
+	/** The countdown's length, in seconds. */
+	countdown: number;
+	countdownIn: CountdownIn;
+	/** Downloads waiting for their time or held by a slot count as not finished. */
+	waitsForScheduled: boolean;
+	/** While a countdown runs: what, and when (milliseconds since 1970). */
+	running: { action: Power; endsAt: number } | null;
+}
+
+/** Whether something can happen when everything has finished (only the desktop app). */
+export function canFinish(): boolean {
+	return isTauri();
+}
+
+export function finishing(): Promise<Finishing> {
+	return invoke<Finishing>('finish');
+}
+
+/** Calls `onChange` whenever any of it changes, in any window. Returns a
+ * function that stops listening. */
+export function followFinishing(onChange: (finishing: Finishing) => void): () => void {
+	let stopped = false;
+	let unlisten: (() => void) | null = null;
+	listen<Finishing>('finish', (event) => onChange(event.payload)).then(
+		(stop) => (stopped ? stop() : (unlisten = stop)),
+		() => {}
+	);
+	return () => {
+		stopped = true;
+		unlisten?.();
+	};
+}
+
+export function setFinish(finish: Finish): Promise<Finishing> {
+	return invoke<Finishing>('set_finish', { finish });
+}
+
+export function setFinishOnce(finish: Finish): Promise<Finishing> {
+	return invoke<Finishing>('set_finish_once', { finish });
+}
+
+export function setCountdown(seconds: number): Promise<Finishing> {
+	return invoke<Finishing>('set_countdown', { seconds });
+}
+
+export function setCountdownIn(countdownIn: CountdownIn): Promise<Finishing> {
+	return invoke<Finishing>('set_countdown_in', { countdownIn });
+}
+
+export function setFinishWaits(on: boolean): Promise<Finishing> {
+	return invoke<Finishing>('set_finish_waits', { on });
+}
+
+/** Cancels the countdown: the computer stays as it is. */
+export function cancelFinish(): Promise<void> {
+	return invoke('cancel_finish');
+}
+
+/** Ends the countdown now: the computer goes. */
+export function finishNow(): Promise<void> {
+	return invoke('finish_now');
+}
+
+/** The countdown's window: says how tall it is, so the app can size it. */
+export function countdownReady(height: number): void {
+	invoke('countdown_ready', { height }).catch(() => {});
 }

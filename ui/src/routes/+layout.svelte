@@ -20,8 +20,9 @@
 	let { children }: LayoutProps = $props();
 	let token: string | null = $state(null);
 	let ready = $state(false);
-	/** The desktop app's tray menu: no shell around it (docs/decisions/0034). */
-	const inTray = page.route.id === '/tray';
+	/** The desktop app's tray menu and countdown window: no shell around
+	 * them (docs/decisions/0034, 0040). */
+	const bare = page.route.id === '/tray' || page.route.id === '/finish';
 
 	// For screen readers, spell checking and hyphenation, and which way the
 	// page runs: mirrored for a language written right to left. (Changing
@@ -77,7 +78,7 @@
 </svelte:head>
 
 {#if ready}
-	{#if inTray}
+	{#if bare}
 		{@render children()}
 	{:else if token}
 		<!-- Keyed: a new token means a new session. -->

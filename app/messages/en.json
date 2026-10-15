@@ -21,6 +21,23 @@
 	"allFinished": "All downloads finished",
 	"files": "{count} files downloaded",
 	"failed": "Download failed",
+	"whenFinished": "When everything has finished",
+	"finishNothing": "Do nothing",
+	"finishSleep": "Sleep",
+	"finishHibernate": "Hibernate",
+	"finishShutDown": "Shut down",
+	"soon": [
+		"The computer will sleep in {time}",
+		"The computer will hibernate in {time}",
+		"The computer will shut down in {time}"
+	],
+	"cancelSoon": ["Cancel sleep ({time})", "Cancel hibernation ({time})", "Cancel shutdown ({time})"],
+	"cancelHow": "You can cancel it from Ottie’s tray menu.",
+	"cant": [
+		"Ottie couldn’t put the computer to sleep",
+		"Ottie couldn’t hibernate the computer",
+		"Ottie couldn’t shut down the computer"
+	],
 	"problems": {
 		"network": "Network error ({detail})",
 		"redirect": "Bad redirect ({detail})",

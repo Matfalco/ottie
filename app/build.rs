@@ -19,6 +19,15 @@ fn main() {
         "menu_ready",
         "show_main",
         "quit_app",
+        "finish",
+        "set_finish",
+        "set_finish_once",
+        "set_countdown",
+        "set_countdown_in",
+        "set_finish_waits",
+        "cancel_finish",
+        "finish_now",
+        "countdown_ready",
     ]);
     if let Err(err) = tauri_build::try_build(Attributes::new().app_manifest(manifest)) {
         panic!("{err:#}");

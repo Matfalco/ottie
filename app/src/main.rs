@@ -8,9 +8,11 @@ mod autostart;
 mod client;
 mod config;
 mod daemon;
+mod finish;
 mod notify;
 mod player;
 mod popup;
+mod power;
 mod prefs;
 mod sound;
 mod status;
@@ -39,9 +41,11 @@ const PROJECT: &str = "https://github.com/Matfalco/ottie/";
 /// only hands back the path the user chose, choose how to play
 /// (docs/decisions/0031), set what closing does, when to notify
 /// (docs/decisions/0035), what happens at sign-in (0039) and the tray's
-/// language, and, in Ottie's tray menu, open the window, quit, and hide the
-/// menu (docs/decisions/0034). Only these, and only for the daemon's pages.
-const PAGE_PERMISSIONS: [&str; 25] = [
+/// language, in Ottie's tray menu, open the window, quit, and hide the
+/// menu (docs/decisions/0034), and choose what happens when everything has
+/// finished, or cancel it (0040). Only these, and only for the daemon's
+/// pages.
+const PAGE_PERMISSIONS: [&str; 34] = [
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
@@ -74,6 +78,17 @@ const PAGE_PERMISSIONS: [&str; 25] = [
     "allow-menu-ready",
     "allow-show-main",
     "allow-quit-app",
+    // When everything has finished (`finish.rs`): Settings, the Downloads
+    // page, the tray menu and the countdown's window.
+    "allow-finish",
+    "allow-set-finish",
+    "allow-set-finish-once",
+    "allow-set-countdown",
+    "allow-set-countdown-in",
+    "allow-set-finish-waits",
+    "allow-cancel-finish",
+    "allow-finish-now",
+    "allow-countdown-ready",
 ];
 
 /// The daemon this app started, if it did: stopped when the app quits.
@@ -103,7 +118,16 @@ fn main() -> tauri::Result<()> {
             prefs::set_language,
             popup::menu_ready,
             popup::show_main,
-            popup::quit_app
+            popup::quit_app,
+            finish::finish,
+            finish::set_finish,
+            finish::set_finish_once,
+            finish::set_countdown,
+            finish::set_countdown_in,
+            finish::set_finish_waits,
+            finish::cancel_finish,
+            finish::finish_now,
+            finish::countdown_ready
         ])
         .setup(|app| {
             app.manage(player::Chosen::load(app.handle()));
@@ -148,6 +172,7 @@ async fn start(app: &AppHandle, shown: bool) -> anyhow::Result<()> {
     *owned(app) = connection.started;
     let daemon = Arc::new(Daemon::new(&connection.link)?);
     app.manage(popup::Popup::new(&connection.link));
+    app.manage(finish::Finisher::new(&connection.link));
     open_window(app, connection.link, shown)?;
     tray::start(app, daemon)?;
     Ok(())
@@ -178,7 +203,7 @@ fn open_window(app: &AppHandle, link: Url, shown: bool) -> tauri::Result<()> {
             // The daemon's address is only known now, hence a runtime capability.
             .remote(daemon.ascii_serialization())
             .local(false)
-            .windows([WINDOW, popup::LABEL]),
+            .windows([WINDOW, popup::LABEL, finish::LABEL]),
         CapabilityBuilder::permission,
     );
     app.add_capability(page)?;

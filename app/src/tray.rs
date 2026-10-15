@@ -1,7 +1,8 @@
 //! The tray icon (docs/decisions/0034). A right click opens Ottie's own menu
 //! (`popup.rs`), which has the limit's field. The system's menu below (open
 //! the window, see what runs and how far it has come, pause or resume everything, switch the total
-//! limit or pick one, quit) is there while the daemon can't be reached, since
+//! limit or pick one, choose what happens when everything has finished or cancel it
+//! (docs/decisions/0040), quit) is there while the daemon can't be reached, since
 //! Ottie's menu is its page, and always on Linux, whose trays report no
 //! clicks. What it shows comes from the daemon's events (`status.rs`); what
 //! it does goes through the daemon's API, like any other front end.
@@ -18,6 +19,7 @@ use tauri::{AppHandle, Manager, Wry};
 use tokio::sync::watch;
 
 use crate::client::Daemon;
+use crate::finish::{self, Finish, Finisher};
 use crate::status::{self, Summary};
 use crate::texts::Texts;
 use crate::{popup, prefs};
@@ -32,6 +34,10 @@ const LIMITS: &str = "limits";
 /// A preset limit's item: `limit-<bytes per second>`.
 const PRESET: &str = "limit-";
 const OTHER_LIMIT: &str = "limit-other";
+const FINISH: &str = "finish";
+/// A choice's item: `finish-<its place in Finish::ALL>`.
+const FINISH_CHOICE: &str = "finish-";
+const CANCEL_FINISH: &str = "finish-cancel";
 const QUIT: &str = "quit";
 
 /// The limits offered in the system's menu, in bytes per second, as on the
@@ -53,6 +59,9 @@ const ALWAYS_MENU: bool = cfg!(target_os = "linux");
 /// Where the progress goes in the system's menu while there's one: under
 /// the status (after "Open Ottie" and a separator).
 const PROGRESS_AT: usize = 3;
+/// Where Cancel goes during a countdown: after the "When everything has
+/// finished" submenu (one further down with the progress).
+const CANCEL_AT: usize = 8;
 /// How often the tray's texts, menu and icon are brought up to date.
 const REFRESH: Duration = Duration::from_secs(1);
 /// Switching the total limit on for the first time, as on the page
@@ -126,6 +135,10 @@ struct Items {
     limits: Submenu<Wry>,
     presets: Vec<(u64, CheckMenuItem<Wry>)>,
     other_limit: MenuItem<Wry>,
+    finish: Submenu<Wry>,
+    finish_choices: Vec<(Finish, CheckMenuItem<Wry>)>,
+    /// In the menu only during a countdown.
+    cancel_finish: MenuItem<Wry>,
     quit: MenuItem<Wry>,
 }
 
@@ -164,6 +177,18 @@ pub fn start(app: &AppHandle, daemon: Arc<Daemon>) -> tauri::Result<()> {
             })
             .collect::<tauri::Result<_>>()?,
         other_limit: MenuItem::with_id(app, OTHER_LIMIT, &texts.other_limit, true, None::<&str>)?,
+        finish: Submenu::with_id(app, FINISH, &texts.when_finished, false)?,
+        finish_choices: Finish::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(place, finish)| {
+                let id = format!("{FINISH_CHOICE}{place}");
+                let text = texts.choice(finish);
+                let item = CheckMenuItem::with_id(app, id, text, true, false, None::<&str>);
+                item.map(|item| (finish, item))
+            })
+            .collect::<tauri::Result<_>>()?,
+        cancel_finish: MenuItem::with_id(app, CANCEL_FINISH, "", true, None::<&str>)?,
         quit: MenuItem::with_id(app, QUIT, &texts.quit, true, None::<&str>)?,
     };
     let presets: Vec<&dyn IsMenuItem<Wry>> = items
@@ -174,6 +199,9 @@ pub fn start(app: &AppHandle, daemon: Arc<Daemon>) -> tauri::Result<()> {
     items.limits.append_items(&presets)?;
     items.limits.append(&PredefinedMenuItem::separator(app)?)?;
     items.limits.append(&items.other_limit)?;
+    for (_, item) in &items.finish_choices {
+        items.finish.append(item)?;
+    }
     let menu = Menu::with_items(
         app,
         &[
@@ -184,6 +212,7 @@ pub fn start(app: &AppHandle, daemon: Arc<Daemon>) -> tauri::Result<()> {
             &items.resume_all,
             &items.limit,
             &items.limits,
+            &items.finish,
             &PredefinedMenuItem::separator(app)?,
             &items.quit,
         ],
@@ -243,6 +272,7 @@ fn chosen(app: &AppHandle, event: MenuEvent) {
             }
         }
         QUIT => app.exit(0),
+        CANCEL_FINISH => finish::cancel(app),
         PAUSE_ALL => {
             tauri::async_runtime::spawn(async move { pause_all(&daemon).await });
         }
@@ -261,6 +291,15 @@ fn chosen(app: &AppHandle, event: MenuEvent) {
             });
         }
         _ => {
+            let choice = id
+                .strip_prefix(FINISH_CHOICE)
+                .and_then(|place| place.parse::<usize>().ok())
+                .and_then(|place| Finish::ALL.get(place));
+            if let Some(&finish) = choice {
+                // Failed: the next refresh shows what's saved.
+                let _ = finish::choose_once(app, finish);
+                return;
+            }
             let preset = id.strip_prefix(PRESET).and_then(|limit| limit.parse().ok());
             if let Some(limit) = preset {
                 tauri::async_runtime::spawn(async move {
@@ -323,8 +362,9 @@ async fn refresh(
     let mut language = None;
     let mut texts = Texts::default();
     let mut shown = Shown::default();
-    // Whether the progress item is in the menu.
+    // Whether the progress item is in the menu, and Cancel.
     let mut progress_listed = false;
+    let mut cancel_listed = false;
     let mut tick = tokio::time::interval(REFRESH);
     loop {
         tick.tick().await;
@@ -343,6 +383,10 @@ async fn refresh(
             for (limit, item) in &items.presets {
                 let _ = item.set_text(texts.rate(*limit));
             }
+            let _ = items.finish.set_text(&texts.when_finished);
+            for (finish, item) in &items.finish_choices {
+                let _ = item.set_text(texts.choice(*finish));
+            }
         }
         let summary = *summaries.borrow();
         let limit = if summary.global_limit > 0 {
@@ -350,7 +394,10 @@ async fn refresh(
         } else {
             last_limit(&app)
         };
+        let finisher = app.state::<Finisher>();
+        let counting = finisher.counting();
         let now = Shown {
+            cancel: counting.map(|(power, seconds)| texts.cancel_soon(power, seconds)),
             status: Some(texts.status(&summary)),
             progress: summary.progress.map(|progress| texts.progress(&progress)),
             can_pause: summary.running + summary.waiting > 0,
@@ -379,6 +426,22 @@ async fn refresh(
                 }
             }
         }
+        match &now.cancel {
+            Some(cancel) => {
+                if now.cancel != shown.cancel {
+                    let _ = items.cancel_finish.set_text(cancel);
+                }
+                if !cancel_listed {
+                    let at = CANCEL_AT + usize::from(progress_listed);
+                    cancel_listed = menu.insert(&items.cancel_finish, at).is_ok();
+                }
+            }
+            None => {
+                if cancel_listed && menu.remove(&items.cancel_finish).is_ok() {
+                    cancel_listed = false;
+                }
+            }
+        }
         if (&now.status, &now.progress) != (&shown.status, &shown.progress) {
             // "Ottie", what runs, how far it has come: far below the 127
             // characters Windows shows.
@@ -402,6 +465,7 @@ async fn refresh(
         if now.connected != shown.connected {
             let _ = items.limit.set_enabled(now.connected);
             let _ = items.limits.set_enabled(now.connected);
+            let _ = items.finish.set_enabled(now.connected);
             let attached = (ALWAYS_MENU || !now.connected).then(|| menu.clone());
             let _ = tray.set_menu(attached);
         }
@@ -410,6 +474,17 @@ async fn refresh(
         tick_if(&items.limit, summary.global_limit > 0);
         for (limit, item) in &items.presets {
             tick_if(item, summary.global_limit == *limit);
+        }
+        // What happens next time: for once, else every time. One the
+        // computer can't do stays listed, greyed out.
+        let next = prefs.finish_once.unwrap_or(prefs.finish);
+        let able = finisher.able();
+        for (finish, item) in &items.finish_choices {
+            tick_if(item, *finish == next);
+            let can = finish.power().is_none_or(|power| able.to(power));
+            if item.is_enabled().is_ok_and(|enabled| enabled != can) {
+                let _ = item.set_enabled(can);
+            }
         }
         shown = now;
         let next = Look::now(&app);
@@ -429,6 +504,8 @@ fn tick_if(item: &CheckMenuItem<Wry>, on: bool) {
 /// What the menu shows now, to change only what differs.
 #[derive(Default)]
 struct Shown {
+    /// Cancel, during a countdown.
+    cancel: Option<String>,
     status: Option<String>,
     progress: Option<String>,
     can_pause: bool,

@@ -7,9 +7,13 @@
 	import Paintbrush from '@lucide/svelte/icons/palette';
 	import Play from '@lucide/svelte/icons/play';
 	import Plug from '@lucide/svelte/icons/plug';
+	import Power from '@lucide/svelte/icons/power';
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
+	import { onMount } from 'svelte';
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
 	import { useApp } from '#lib/context.js';
+	import { canDo, COUNTDOWN, FINISH_CHOICES, finishHint, finishName } from '#lib/finish.js';
+	import { LiveFinishing } from '#lib/finish.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { HELP_TRANSLATE, REVIEWED, switchLanguage } from '#lib/languages.js';
 	import { getLocale, type Locale } from '#lib/paraglide/runtime.js';
@@ -41,13 +45,20 @@
 		player as playerSetting,
 		playSound,
 		setCloseToTray,
+		setCountdown,
+		setCountdownIn,
+		setFinish,
+		setFinishWaits,
 		setNotify,
 		setNotifyFailed,
 		setPlayWith,
 		setSound,
 		setSounds,
 		setStartup,
+		type CountdownIn,
 		type Desktop,
+		type Finish,
+		type Finishing,
 		type Notify,
 		type PlayWith,
 		type Player,
@@ -95,6 +106,13 @@
 	};
 	const SOUND_KINDS = Object.keys(SOUND_NAMES) as SoundKind[];
 
+	/** Where the countdown before sleep, hibernate or shut down shows (docs/decisions/0040). */
+	const COUNTDOWN_NAMES: Record<CountdownIn, { name: () => string; hint: () => string }> = {
+		window: { name: m.set_countdown_window, hint: m.set_countdown_window_hint },
+		notification: { name: m.set_countdown_notification, hint: m.set_countdown_notification_hint }
+	};
+	const COUNTDOWN_CHOICES = Object.keys(COUNTDOWN_NAMES) as CountdownIn[];
+
 	/** Only the desktop app can start a player (docs/decisions/0031), stay
 	 * in the tray (0034), notify (0035) or start at sign-in (0039). */
 	const inApp = canChoosePlayer();
@@ -106,6 +124,7 @@
 		...(inApp
 			? [
 					{ id: 'set-app', label: m.set_app },
+					{ id: 'set-finish', label: m.finish_title },
 					{ id: 'set-notifications', label: m.set_notifications },
 					{ id: 'set-playing', label: m.set_playing }
 				]
@@ -135,9 +154,30 @@
 	/** The sign-in choice shown, put back the same way. */
 	let startup: Startup = $state('off');
 
+	/** When everything has finished, as the desktop app has it. */
+	const live = new LiveFinishing();
+	const finishing = $derived(live.current);
+	/** The choices shown, put back if a change doesn't happen. */
+	let finishAlways: Finish = $derived(finishing?.always ?? 'nothing');
+	let countdownIn: CountdownIn = $derived(finishing?.countdownIn ?? 'window');
+
 	if (inApp) {
 		playerSetting().then(showPlayer, () => (problem = m.set_play_failed()));
 		desktopSetting().then(showDesktop, () => (problem = m.set_app_failed()));
+		onMount(() => {
+			live.start();
+			return () => live.stop();
+		});
+	}
+
+	async function changeFinish(change: () => Promise<Finishing>): Promise<boolean> {
+		const done = await live.change(change);
+		if (!done) {
+			problem = m.finish_failed();
+			finishAlways = finishing?.always ?? 'nothing';
+			countdownIn = finishing?.countdownIn ?? 'window';
+		}
+		return done;
 	}
 
 	function showDesktop(answer: Desktop) {
@@ -514,6 +554,90 @@
 							onChange={(on) => changeDesktop(() => setCloseToTray(on))}
 						/>
 					</div>
+				{:else}
+					<p class="waiting">{m.connection_connecting()}</p>
+				{/if}
+			</section>
+
+			<section id="set-finish" class="card" aria-labelledby="finish-title">
+				<header>
+					<span class="icon" aria-hidden="true"><Power size={16} /></span>
+					<h2 id="finish-title">{m.finish_title()}</h2>
+					<p class="hint">{m.set_finish_hint()}</p>
+				</header>
+				{#if finishing}
+					<fieldset>
+						<legend>{m.set_finish_always()}</legend>
+						<div class="options finishes">
+							{#each FINISH_CHOICES as choice (choice)}
+								{@const can = canDo(finishing, choice)}
+								<label
+									class="option row"
+									class:chosen={finishAlways === choice}
+									class:unable={!can}
+								>
+									<input
+										type="radio"
+										name="finish"
+										value={choice}
+										disabled={!can}
+										bind:group={finishAlways}
+										onchange={() => changeFinish(() => setFinish(choice))}
+									/>
+									<span class="names">
+										<span>{finishName(choice)}</span>
+										<span class="hint">{finishHint(finishing, choice)}</span>
+									</span>
+								</label>
+							{/each}
+						</div>
+					</fieldset>
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_countdown()}</span>
+							<span class="hint">{m.set_countdown_hint()}</span>
+						</span>
+						<NumberField
+							value={finishing.countdown}
+							label={m.set_countdown()}
+							unit={m.unit_seconds()}
+							parse={(text) => parseWhole(text, COUNTDOWN)}
+							onChange={(seconds) => changeFinish(() => setCountdown(seconds))}
+						/>
+					</div>
+					<fieldset>
+						<legend>{m.set_countdown_in()}</legend>
+						<div class="options countdowns">
+							{#each COUNTDOWN_CHOICES as choice (choice)}
+								<label class="option row" class:chosen={countdownIn === choice}>
+									<input
+										type="radio"
+										name="countdown-in"
+										value={choice}
+										bind:group={countdownIn}
+										onchange={() => changeFinish(() => setCountdownIn(choice))}
+									/>
+									<span class="names">
+										<span>{COUNTDOWN_NAMES[choice].name()}</span>
+										<span class="hint">{COUNTDOWN_NAMES[choice].hint()}</span>
+									</span>
+								</label>
+							{/each}
+						</div>
+					</fieldset>
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_finish_waits()}</span>
+							<span class="hint">{m.set_finish_waits_hint()}</span>
+						</span>
+						<Switch
+							on={finishing.waitsForScheduled}
+							label={m.set_finish_waits()}
+							onChange={(on) => changeFinish(() => setFinishWaits(on))}
+						/>
+					</div>
+				{:else if live.failed}
+					<p class="waiting">{m.finish_failed()}</p>
 				{:else}
 					<p class="waiting">{m.connection_connecting()}</p>
 				{/if}
@@ -1117,8 +1241,16 @@
 
 	.plays,
 	.notifies,
-	.startups {
+	.startups,
+	.finishes,
+	.countdowns {
 		grid-template-columns: minmax(0, 1fr);
+	}
+
+	/* A choice this computer can't make: listed, greyed out, with why. */
+	.option.unable {
+		opacity: 0.55;
+		cursor: default;
 	}
 
 	fieldset.last {

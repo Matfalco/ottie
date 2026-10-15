@@ -203,7 +203,6 @@
 :root:lang(yo),
 :root:lang(ar),
 :root:lang(fa),
-:root:lang(he),
 :root:lang(ur) {
 	--font: system-ui, sans-serif;
 	--mono: ui-monospace, monospace;
@@ -216,12 +215,11 @@
 	text-align: match-parent;
 }
 
-/* Arabic and Hebrew script in a monospace font come apart (Arabic letters
+/* Arabic script in a monospace font comes apart (Arabic letters
    can't join): numbers in columns use the proportional font there, its
    digits still of equal width (`tabular-nums`). */
 :root:lang(ar),
 :root:lang(fa),
-:root:lang(he),
 :root:lang(ur) {
 	--mono: system-ui, sans-serif;
 }

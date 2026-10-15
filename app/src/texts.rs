@@ -4,11 +4,13 @@
 use serde::Deserialize;
 
 use crate::client::Problem;
+use crate::finish::Finish;
+use crate::power::Power;
 use crate::status::{Progress, Summary};
 
 /// Each language's texts, by its tag, as the page names them
 /// (`ui/project.inlang/settings.json`). The first is the fallback.
-const LANGUAGES: [(&str, &str); 44] = [
+const LANGUAGES: [(&str, &str); 43] = [
     ("en", include_str!("../messages/en.json")),
     ("fr", include_str!("../messages/fr.json")),
     ("de", include_str!("../messages/de.json")),
@@ -51,13 +53,12 @@ const LANGUAGES: [(&str, &str); 44] = [
     ("zu", include_str!("../messages/zu.json")),
     ("ar", include_str!("../messages/ar.json")),
     ("fa", include_str!("../messages/fa.json")),
-    ("he", include_str!("../messages/he.json")),
     ("ur", include_str!("../messages/ur.json")),
 ];
 
 /// The languages written right to left (`direction` in
 /// `ui/src/lib/languages.ts`).
-const RIGHT_TO_LEFT: [&str; 4] = ["ar", "fa", "he", "ur"];
+const RIGHT_TO_LEFT: [&str; 3] = ["ar", "fa", "ur"];
 
 /// Units count in 1024s, as on the page (`ui/src/lib/format.ts`).
 const STEP: f64 = 1024.0;
@@ -106,6 +107,21 @@ pub struct Texts {
     /// `{count}` downloads finished, at least 2.
     files: String,
     pub failed: String,
+    /// The submenu of what happens when everything has finished
+    /// (docs/decisions/0040), and its choices (with `quit`).
+    pub when_finished: String,
+    finish_nothing: String,
+    finish_sleep: String,
+    finish_hibernate: String,
+    finish_shut_down: String,
+    /// The computer will sleep, hibernate, shut down in `{time}`.
+    soon: [String; 3],
+    /// Cancelling that, `{time}` before it happens: a menu item.
+    cancel_soon: [String; 3],
+    /// Under `soon` in its notification.
+    pub cancel_how: String,
+    /// It couldn't sleep, hibernate, shut down.
+    cant: [String; 3],
     problems: Problems,
     /// Written right to left: every text comes embedded as such.
     #[serde(skip)]
@@ -165,6 +181,12 @@ impl Texts {
                 &mut texts.finished,
                 &mut texts.all_finished,
                 &mut texts.failed,
+                &mut texts.when_finished,
+                &mut texts.finish_nothing,
+                &mut texts.finish_sleep,
+                &mut texts.finish_hibernate,
+                &mut texts.finish_shut_down,
+                &mut texts.cancel_how,
             ] {
                 *text = embedded(true, std::mem::take(text));
             }
@@ -289,6 +311,34 @@ impl Texts {
             .replace("{unit}", &self.units[unit])
     }
 
+    /// A choice in the "When everything has finished" submenu.
+    pub fn choice(&self, finish: Finish) -> &str {
+        match finish {
+            Finish::Nothing => &self.finish_nothing,
+            Finish::Quit => &self.quit,
+            Finish::Sleep => &self.finish_sleep,
+            Finish::Hibernate => &self.finish_hibernate,
+            Finish::ShutDown => &self.finish_shut_down,
+        }
+    }
+
+    /// "The computer will shut down in 1 min".
+    pub fn soon(&self, power: Power, seconds: u64) -> String {
+        let text = &self.soon[power_index(power)];
+        self.shown(text.replace("{time}", &self.duration(seconds)))
+    }
+
+    /// "Cancel shutdown (45 sec)".
+    pub fn cancel_soon(&self, power: Power, seconds: u64) -> String {
+        let text = &self.cancel_soon[power_index(power)];
+        self.shown(text.replace("{time}", &self.duration(seconds)))
+    }
+
+    /// "Ottie couldn't shut down the computer".
+    pub fn cant(&self, power: Power) -> String {
+        self.shown(self.cant[power_index(power)].clone())
+    }
+
     /// "3 files downloaded".
     pub fn files(&self, count: usize) -> String {
         self.shown(self.files.replace("{count}", &self.count(count)))
@@ -360,6 +410,15 @@ impl Texts {
 }
 
 /// `text` embedded right to left if `right_to_left`; nothing stays nothing.
+/// Where each of `soon`, `cancel_soon` and `cant` speaks of it.
+fn power_index(power: Power) -> usize {
+    match power {
+        Power::Sleep => 0,
+        Power::Hibernate => 1,
+        Power::ShutDown => 2,
+    }
+}
+
 fn embedded(right_to_left: bool, text: String) -> String {
     if right_to_left && !text.is_empty() {
         format!("\u{202b}{text}\u{202c}")
@@ -447,6 +506,23 @@ mod tests {
         assert_eq!(ar.reason(None, None), "");
         let en = Texts::for_language(Some("en"));
         assert_eq!(en.quit, "Quit Ottie");
+    }
+
+    #[test]
+    fn the_countdown_says_what_and_when() {
+        let en = Texts::for_language(Some("en"));
+        assert_eq!(
+            en.soon(Power::ShutDown, 60),
+            "The computer will shut down in 1 min"
+        );
+        assert_eq!(en.cancel_soon(Power::Sleep, 45), "Cancel sleep (45 sec)");
+        assert_eq!(
+            en.cant(Power::Hibernate),
+            "Ottie couldn’t hibernate the computer"
+        );
+        assert_eq!(en.choice(Finish::Quit), "Quit Ottie");
+        let ar = Texts::for_language(Some("ar"));
+        assert!(ar.soon(Power::Sleep, 5).starts_with('\u{202b}'));
     }
 
     #[test]
