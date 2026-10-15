@@ -135,7 +135,7 @@
 		border-radius: var(--radius-s);
 		background: none;
 		color: var(--text);
-		text-align: left;
+		text-align: start;
 	}
 
 	.item:hover:not(:disabled),

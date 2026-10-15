@@ -88,7 +88,7 @@
 		<label class="downloads">
 			<span class="heading">{m.setup_folder()}</span>
 			<span class="row">
-				<input bind:value={downloads} />
+				<input bind:value={downloads} dir="auto" />
 				{#if canPickFolder()}
 					<button type="button" onclick={browse}>
 						<FolderOpen size={15} aria-hidden="true" />

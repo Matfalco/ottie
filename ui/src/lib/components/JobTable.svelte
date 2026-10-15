@@ -21,7 +21,7 @@
 		categories: Categories;
 		rates: Record<string, Rate>;
 		now: number;
-		/** What a group's header says on its right. */
+		/** What a group's header says at its end. */
 		note: (group: Group) => string;
 		onSelect: (selection: Selection) => void;
 		onRun: (action: Action, jobs: Job[]) => void;
@@ -236,7 +236,7 @@
 		color: var(--faint);
 		font-size: 0.8rem;
 		font-weight: 600;
-		text-align: left;
+		text-align: start;
 		white-space: nowrap;
 	}
 
@@ -306,7 +306,7 @@
 	}
 
 	.note {
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	.grip {
@@ -316,7 +316,7 @@
 
 	.check {
 		width: 2.4rem;
-		padding-right: 0;
+		padding-inline-end: 0;
 		text-align: center;
 	}
 
@@ -327,7 +327,7 @@
 
 	.size {
 		width: 6rem;
-		text-align: right;
+		text-align: end;
 	}
 
 	.progress {
@@ -337,7 +337,7 @@
 	.speed,
 	.left {
 		width: 6.5rem;
-		text-align: right;
+		text-align: end;
 	}
 
 	.category {
@@ -346,7 +346,12 @@
 
 	.added {
 		width: 10.5rem;
-		text-align: right;
+		text-align: end;
+	}
+
+	/* "15/10/2026، 10:36:53 ص" is a little longer. */
+	:global(:root:lang(ar)) .added {
+		width: 11rem;
 	}
 
 	.actions {

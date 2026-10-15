@@ -68,3 +68,13 @@ export function paths(
 	const area = `${line}L${last.x.toFixed(1)},${height}L${first.x.toFixed(1)},${height}Z`;
 	return { line, area };
 }
+
+/** The sample under a pointer at `x` on a chart spanning `left` to `left +
+ * width`, as seconds before now. The newest sample is at the end of the line:
+ * the right, or the left on a right-to-left page (`rtl`). */
+export function secondsAt(x: number, left: number, width: number, rtl: boolean): number {
+	const fromLeft = Math.min(1, Math.max(0, (x - left) / width));
+	const towardNow = rtl ? 1 - fromLeft : fromLeft;
+	// The crosshair snaps to the nearest second.
+	return Math.round((1 - towardNow) * (HISTORY_SECONDS - 1));
+}

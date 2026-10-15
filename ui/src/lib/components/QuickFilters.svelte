@@ -119,7 +119,7 @@
 		data-sveltekit-keepfocus
 	>
 		{#if view}<Bookmark size={13} aria-hidden="true" />{/if}
-		<span>{name}</span>
+		<span dir="auto">{name}</span>
 		<span class="count">{formatCount(count(jobs, target, now))}</span>
 	</a>
 {/snippet}
@@ -173,12 +173,12 @@
 	}
 
 	.view a :global(svg) {
-		margin-left: -0.2rem;
+		margin-inline-start: -0.2rem;
 		opacity: 0.8;
 	}
 
 	.view.current a {
-		padding-right: 0.55rem;
+		padding-inline-end: 0.55rem;
 		border-top-right-radius: 0;
 		border-bottom-right-radius: 0;
 	}
@@ -189,7 +189,7 @@
 		height: 1.85rem;
 		padding: 0 0.5rem 0 0.4rem;
 		border: none;
-		border-left: 1px solid var(--on-accent);
+		border-inline-start: 1px solid var(--on-accent);
 		border-radius: 0 999px 999px 0;
 		background: var(--accent);
 		color: var(--on-accent);
@@ -203,7 +203,7 @@
 	ul {
 		position: absolute;
 		top: calc(100% + 0.3rem);
-		right: 0;
+		inset-inline-end: 0;
 		z-index: 10;
 		min-width: 10rem;
 		margin: 0;
@@ -222,7 +222,7 @@
 		border-color: transparent;
 		border-radius: var(--radius-s);
 		background: none;
-		text-align: left;
+		text-align: start;
 	}
 
 	ul button:hover {

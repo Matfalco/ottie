@@ -45,7 +45,11 @@ export const NAMES: Record<Locale, string> = {
 	am: 'አማርኛ',
 	ha: 'Hausa',
 	yo: 'Èdè Yorùbá',
-	zu: 'isiZulu'
+	zu: 'isiZulu',
+	ar: 'العربية',
+	fa: 'فارسی',
+	he: 'עברית',
+	ur: 'اردو'
 };
 
 /** Checked by a native speaker; the others say so under the picker. */
@@ -54,12 +58,27 @@ export const REVIEWED: readonly Locale[] = ['en', 'fr'];
 /** Stand-ins for the languages Chrome, Edge and the desktop app have no
  * `Intl` data for: there, numbers, units and dates would come out in the
  * system's language. Their country's English instead, in every browser, as
- * the tray writes them too (app/messages/). */
-const INTL: Partial<Record<Locale, string>> = { ha: 'en-NG', yo: 'en-NG', zu: 'en-ZA' };
+ * the tray writes them too (app/messages/). Arabic keeps its own, with the
+ * digits most Arabic software uses today (123, not ١٢٣) in every browser. */
+const INTL: Partial<Record<Locale, string>> = {
+	ha: 'en-NG',
+	yo: 'en-NG',
+	zu: 'en-ZA',
+	ar: 'ar-u-nu-latn'
+};
 
 /** The locale `Intl` writes numbers, units and dates in for `locale`. */
 export function intlLocale(locale: Locale): string {
 	return INTL[locale] ?? locale;
+}
+
+/** The languages written right to left: their pages are mirrored
+ * (docs/decisions/0042). */
+const RIGHT_TO_LEFT: readonly Locale[] = ['ar', 'fa', 'he', 'ur'];
+
+/** Which way `locale` is written, for the page's `dir`. */
+export function direction(locale: Locale): 'ltr' | 'rtl' {
+	return RIGHT_TO_LEFT.includes(locale) ? 'rtl' : 'ltr';
 }
 
 /** Where people can help with a translation. */

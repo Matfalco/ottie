@@ -236,7 +236,7 @@
 	}
 
 	.numbers {
-		margin-left: auto;
+		margin-inline-start: auto;
 		color: var(--muted);
 		font-size: 0.85rem;
 	}
@@ -247,7 +247,7 @@
 	}
 
 	header a {
-		margin-left: auto;
+		margin-inline-start: auto;
 		color: var(--accent);
 		font-size: 0.85rem;
 		font-weight: 500;

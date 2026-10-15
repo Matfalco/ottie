@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { formatDuration, formatSpeed } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { HISTORY_SECONDS, niceTop, paths, points } from '#lib/speed.js';
+	import { HISTORY_SECONDS, niceTop, paths, points, secondsAt } from '#lib/speed.js';
 
 	interface Props {
 		/** One total-speed sample per second, oldest first. */
@@ -30,9 +30,8 @@
 
 	function move(event: PointerEvent & { currentTarget: HTMLElement }) {
 		const box = event.currentTarget.getBoundingClientRect();
-		const fraction = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
-		// The crosshair snaps to the nearest second.
-		hovered = Math.round((1 - fraction) * (HISTORY_SECONDS - 1));
+		const rtl = getComputedStyle(event.currentTarget).direction === 'rtl';
+		hovered = secondsAt(event.clientX, box.left, box.width, rtl);
 	}
 
 	function ago(seconds: number): string {
@@ -61,11 +60,11 @@
 		<span class="tick" style:top="1px">{formatSpeed(top)}</span>
 		<span class="tick" style:top="50%">{formatSpeed(top / 2)}</span>
 		{#if hoveredPoint && hovered !== null}
-			<!-- Flips to the left of the crosshair in the right half, so it stays inside. -->
+			<!-- Flips before the crosshair in the half toward now, so it stays inside. -->
 			<div
 				class="tooltip"
-				class:left={hoveredPoint.x > WIDTH / 2}
-				style:left={`${(hoveredPoint.x / WIDTH) * 100}%`}
+				class:before={hoveredPoint.x > WIDTH / 2}
+				style:inset-inline-start={`${(hoveredPoint.x / WIDTH) * 100}%`}
 			>
 				<strong>{formatSpeed(history[hoveredIndex])}</strong>
 				<span>{ago(hovered)}</span>
@@ -87,6 +86,12 @@
 		position: relative;
 		height: 11rem;
 		touch-action: pan-y;
+	}
+
+	/* Time runs with the text: now at the end of the line, so on the left
+	   right to left (docs/decisions/0042). */
+	svg:dir(rtl) {
+		transform: scaleX(-1);
 	}
 
 	svg {
@@ -132,7 +137,7 @@
 	/* Just above its gridline, so it never covers the line. */
 	.tick {
 		position: absolute;
-		right: 0;
+		inset-inline-end: 0;
 		color: var(--muted);
 		font-size: 0.75rem;
 		font-variant-numeric: tabular-nums;
@@ -144,7 +149,7 @@
 		position: absolute;
 		top: 0.25rem;
 		display: grid;
-		margin-left: 0.5rem;
+		margin-inline-start: 0.5rem;
 		padding: 0.35rem 0.55rem;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-s);
@@ -155,9 +160,13 @@
 		pointer-events: none;
 	}
 
-	.tooltip.left {
-		margin-left: 0;
+	.tooltip.before {
+		margin-inline-start: 0;
 		transform: translateX(calc(-100% - 0.5rem));
+	}
+
+	.tooltip.before:dir(rtl) {
+		transform: translateX(calc(100% + 0.5rem));
 	}
 
 	.tooltip span {

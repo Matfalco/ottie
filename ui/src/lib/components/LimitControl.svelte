@@ -99,13 +99,13 @@
 	}
 
 	.limit > :global(button) {
-		margin-right: 0.25rem;
+		margin-inline-end: 0.25rem;
 	}
 
 	input {
 		width: 4.5rem;
 		height: 2.1rem;
-		text-align: right;
+		text-align: end;
 	}
 
 	select {

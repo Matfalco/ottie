@@ -197,9 +197,9 @@
 		height: 100dvh;
 	}
 
-	/* Pushes the speed to the right of the title bar. */
+	/* Pushes the speed to the end of the title bar. */
 	.end {
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	/* Still short of room once folded all the way: the speed shortens. */

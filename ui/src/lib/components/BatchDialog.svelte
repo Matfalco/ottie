@@ -164,6 +164,7 @@
 			<!-- svelte-ignore a11y_autofocus -->
 			<textarea
 				bind:value={text}
+				dir="auto"
 				oninput={typed}
 				placeholder={m.batch_text_placeholder()}
 				rows="4"
@@ -210,8 +211,8 @@
 							<input type="checkbox" bind:checked={row.chosen} aria-label={found.name} />
 							<FileIcon name={found.name} />
 							<span class="names">
-								<span class="name">{found.name}</span>
-								<span class="url" title={found.url}>{found.url}</span>
+								<span class="name" dir="auto">{found.name}</span>
+								<span class="url" title={found.url} dir="auto">{found.url}</span>
 								{#if note}
 									<span class="note" class:bad={row.refused !== null}>{note}</span>
 								{/if}
@@ -230,7 +231,7 @@
 							<input type="checkbox" disabled aria-label={row.found.text} />
 							<FileIcon name="" />
 							<span class="names">
-								<span class="url" title={row.found.text}>{row.found.text}</span>
+								<span class="url" title={row.found.text} dir="auto">{row.found.text}</span>
 								<span class="note bad">{note}</span>
 							</span>
 						{/if}
@@ -263,7 +264,12 @@
 			<label class="folder">
 				<span class="legend">{m.add_folder_label()}</span>
 				<span class="row">
-					<input bind:value={folder} oninput={typed} placeholder={m.batch_folder_default()} />
+					<input
+						bind:value={folder}
+						dir="auto"
+						oninput={typed}
+						placeholder={m.batch_folder_default()}
+					/>
 					{#if canPickFolder()}
 						<button type="button" onclick={browse}>
 							<FolderOpen size={15} aria-hidden="true" />
@@ -380,7 +386,7 @@
 	}
 
 	.looking {
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	ul {

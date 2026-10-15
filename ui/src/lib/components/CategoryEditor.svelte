@@ -92,14 +92,14 @@
 		<label>
 			<span>{m.cat_name()}</span>
 			<!-- svelte-ignore a11y_autofocus -->
-			<input value={name} oninput={rename} required autofocus />
+			<input value={name} dir="auto" oninput={rename} required autofocus />
 		</label>
 
 		{#if !other}
 			<label>
 				<span>{m.cat_folder()}</span>
 				<span class="row">
-					<input bind:value={folder} oninput={() => (folderTouched = true)} />
+					<input bind:value={folder} dir="auto" oninput={() => (folderTouched = true)} />
 					{#if canPickFolder()}
 						<button type="button" onclick={browse}>
 							<FolderOpen size={15} aria-hidden="true" />
@@ -111,7 +111,7 @@
 
 			<label class="wide">
 				<span>{m.cat_extensions()}</span>
-				<input bind:value={extensions} spellcheck="false" autocapitalize="off" />
+				<input bind:value={extensions} dir="auto" spellcheck="false" autocapitalize="off" />
 				<small>{m.cat_extensions_hint()}</small>
 			</label>
 		{/if}

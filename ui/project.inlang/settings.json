@@ -41,7 +41,11 @@
 		"am",
 		"ha",
 		"yo",
-		"zu"
+		"zu",
+		"ar",
+		"fa",
+		"he",
+		"ur"
 	],
 	"modules": ["./node_modules/@inlang/plugin-message-format/dist/index.js"],
 	"plugin.inlang.messageFormat": {

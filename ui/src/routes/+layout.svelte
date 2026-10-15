@@ -10,7 +10,7 @@
 	import icon from '#lib/assets/ottie.svg';
 	import Login from '#lib/components/Login.svelte';
 	import Shell from '#lib/components/Shell.svelte';
-	import { followLanguage } from '#lib/languages.js';
+	import { direction, followLanguage } from '#lib/languages.js';
 	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { themeFor } from '#lib/theme.js';
 	import { forgetToken, loadToken, saveToken, tokenFromFragment } from '#lib/token.js';
@@ -23,10 +23,12 @@
 	/** The desktop app's tray menu: no shell around it (docs/decisions/0034). */
 	const inTray = page.route.id === '/tray';
 
-	// For screen readers, spell checking and hyphenation. (Changing the
-	// language reloads the page, so this runs again.)
+	// For screen readers, spell checking and hyphenation, and which way the
+	// page runs: mirrored for a language written right to left. (Changing
+	// the language reloads the page, so this runs again.)
 	const shown = getLocale();
 	document.documentElement.lang = shown;
+	document.documentElement.dir = direction(shown);
 	// The desktop app's tray speaks it too.
 	tellLanguage(shown);
 	// A language chosen in another window (or the shared one, taken on

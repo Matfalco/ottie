@@ -200,9 +200,30 @@
 :root:lang(ko),
 :root:lang(am),
 :root:lang(ha),
-:root:lang(yo) {
+:root:lang(yo),
+:root:lang(ar),
+:root:lang(fa),
+:root:lang(he),
+:root:lang(ur) {
 	--font: system-ui, sans-serif;
 	--mono: ui-monospace, monospace;
+}
+
+/* A name, link or folder takes its own direction (`dir="auto"`), but lines
+   up with the text around it: on the right of a page written right to left,
+   even when it's in English (docs/decisions/0042). */
+:not(input, textarea)[dir='auto'] {
+	text-align: match-parent;
+}
+
+/* Arabic and Hebrew script in a monospace font come apart (Arabic letters
+   can't join): numbers in columns use the proportional font there, its
+   digits still of equal width (`tabular-nums`). */
+:root:lang(ar),
+:root:lang(fa),
+:root:lang(he),
+:root:lang(ur) {
+	--mono: system-ui, sans-serif;
 }
 
 /* Korean breaks lines between words, not inside them. */

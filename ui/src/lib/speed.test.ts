@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addSample, niceTop, paths, points, totalSpeed } from './speed';
+import { addSample, niceTop, paths, points, secondsAt, totalSpeed } from './speed';
 
 const KB = 1024;
 const MB = 1024 * 1024;
@@ -49,5 +49,16 @@ describe('graph shapes', () => {
 		expect(line).toBe('M0.0,4.0L10.0,2.0');
 		expect(area).toBe('M0.0,4.0L10.0,2.0L10.0,8L0.0,8Z');
 		expect(paths([], 8)).toEqual({ line: '', area: '' });
+	});
+
+	it('finds the second under the pointer, now at the end of the line', () => {
+		// Left to right: now on the right.
+		expect(secondsAt(500, 100, 400, false)).toBe(0);
+		expect(secondsAt(100, 100, 400, false)).toBe(299);
+		expect(secondsAt(50, 100, 400, false)).toBe(299);
+		// Right to left: now on the left.
+		expect(secondsAt(100, 100, 400, true)).toBe(0);
+		expect(secondsAt(500, 100, 400, true)).toBe(299);
+		expect(secondsAt(300, 100, 400, true)).toBe(150);
 	});
 });

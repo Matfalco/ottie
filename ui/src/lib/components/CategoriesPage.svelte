@@ -90,7 +90,7 @@
 						</span>
 						<div class="who">
 							<span class="name">
-								<span>{name}</span>
+								<span dir="auto">{name}</span>
 								{#if category.builtIn === 'general'}
 									<span class="badge">{m.cat_default()}</span>
 								{:else if category.builtIn === 'other'}
@@ -112,7 +112,7 @@
 								<span class="note">{m.cat_no_extensions()}</span>
 							{:else}
 								{#each extensions as extension (extension)}
-									<span class="chip">{extension}</span>
+									<span class="chip" dir="auto">{extension}</span>
 								{/each}
 								{#if more > 0}
 									<span class="note">{m.cat_more({ count: formatCount(more) })}</span>
@@ -219,7 +219,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	ul {
@@ -321,17 +321,17 @@
 	.count {
 		flex: none;
 		color: var(--muted);
-		text-align: right;
+		text-align: end;
 		white-space: nowrap;
 	}
 
-	/* On the right, even on a line of their own. */
+	/* At the end, even on a line of their own. */
 	.actions {
 		display: flex;
 		flex: 0 0 4.2rem;
 		justify-content: flex-end;
 		gap: 0.15rem;
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	.actions button {
@@ -357,7 +357,7 @@
 
 		.count {
 			flex-basis: auto;
-			text-align: left;
+			text-align: start;
 		}
 	}
 </style>

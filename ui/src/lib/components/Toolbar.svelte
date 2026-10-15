@@ -158,7 +158,7 @@
 	}
 
 	.count {
-		margin-left: 0.5rem;
+		margin-inline-start: 0.5rem;
 		color: var(--muted);
 		font-size: 0.9em;
 		white-space: nowrap;
@@ -171,7 +171,7 @@
 		background: var(--border);
 	}
 
-	/* Pushes "Clear finished" and the filters to the right. */
+	/* Pushes "Clear finished" and the filters to the end. */
 	.spacer {
 		flex: 1;
 	}
@@ -181,7 +181,7 @@
 	}
 
 	.shown {
-		margin-right: 0.4rem;
+		margin-inline-end: 0.4rem;
 		color: var(--faint);
 		font-size: 0.85em;
 		white-space: nowrap;

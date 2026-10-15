@@ -29,7 +29,7 @@
 			{@const done = fraction(job)}
 			<li>
 				<span class="top">
-					<span class="name" title={job.url}>{displayName(job)}</span>
+					<span class="name" title={job.url} dir="auto">{displayName(job)}</span>
 					<span class="speed">{'speed' in moving ? moving.speed : ''}</span>
 				</span>
 				<span class="bar" class:unknown={done === null}>
@@ -49,7 +49,7 @@
 		<ul>
 			{#each next as job (job.id)}
 				<li>
-					<span class="name" title={job.url}>{displayName(job)}</span>
+					<span class="name" title={job.url} dir="auto">{displayName(job)}</span>
 				</li>
 			{/each}
 		</ul>
@@ -113,11 +113,11 @@
 
 	@keyframes slide {
 		from {
-			margin-left: 0;
+			margin-inline-start: 0;
 		}
 
 		to {
-			margin-left: 70%;
+			margin-inline-start: 70%;
 		}
 	}
 

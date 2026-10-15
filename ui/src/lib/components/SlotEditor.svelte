@@ -75,7 +75,7 @@
 		<label>
 			<span>{m.sched_name()}</span>
 			<!-- svelte-ignore a11y_autofocus -->
-			<input bind:value={draft.name} autofocus />
+			<input bind:value={draft.name} dir="auto" autofocus />
 			<small>{m.sched_name_hint()}</small>
 		</label>
 
@@ -391,7 +391,7 @@
 	}
 
 	.segments label + label {
-		border-left: 1px solid var(--border);
+		border-inline-start: 1px solid var(--border);
 	}
 
 	.segments label:hover {
@@ -448,6 +448,6 @@
 	}
 
 	.buttons .switch-row {
-		margin-right: auto;
+		margin-inline-end: auto;
 	}
 </style>

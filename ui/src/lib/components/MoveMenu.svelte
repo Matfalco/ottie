@@ -84,7 +84,7 @@
 	ul {
 		position: absolute;
 		top: calc(100% + 0.3rem);
-		left: 0;
+		inset-inline-start: 0;
 		z-index: 10;
 		min-width: 12rem;
 		max-height: 18rem;
@@ -102,7 +102,7 @@
 		width: 100%;
 		height: 2.1rem;
 		border-radius: var(--radius-s);
-		text-align: left;
+		text-align: start;
 	}
 
 	@container page (max-width: 56rem) {

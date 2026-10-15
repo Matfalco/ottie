@@ -88,7 +88,7 @@
 		align-items: center;
 		gap: 1.1rem;
 		height: 3rem;
-		padding-left: 0.9rem;
+		padding-inline-start: 0.9rem;
 		background: var(--bg);
 		user-select: none;
 	}
@@ -120,12 +120,12 @@
 		gap: 1rem;
 		min-width: 0;
 		height: 100%;
-		padding-right: 0.75rem;
+		padding-inline-end: 0.75rem;
 		overflow-x: clip;
 	}
 
 	/* The desktop window's buttons sit right at the edge. */
 	.desktop .middle {
-		padding-right: 0.25rem;
+		padding-inline-end: 0.25rem;
 	}
 </style>

@@ -43,6 +43,7 @@
 		id="try-link"
 		type="url"
 		bind:value={url}
+		dir="auto"
 		oninput={typed}
 		placeholder={m.cat_try_placeholder()}
 		spellcheck="false"
@@ -52,10 +53,10 @@
 			<span class="dot" style:--hue={categoryHue(category)} aria-hidden="true"></span>
 			<strong>{categoryName(category)}</strong>
 			{#if matched?.extension}
-				<span class="faint">(.{matched.extension})</span>
+				<span class="faint">(<bdi>.{matched.extension}</bdi>)</span>
 			{/if}
-			<span class="faint" aria-hidden="true">→</span>
-			<span class="folder">{category.folder ?? m.cat_no_folder()}</span>
+			<span class="faint arrow" aria-hidden="true">→</span>
+			<span class="folder" dir="auto">{category.folder ?? m.cat_no_folder()}</span>
 		</p>
 	{/if}
 </div>
@@ -109,5 +110,11 @@
 		font-size: 0.8rem;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	/* Points the way the line reads. */
+	.arrow:dir(rtl) {
+		display: inline-block;
+		transform: scaleX(-1);
 	}
 </style>

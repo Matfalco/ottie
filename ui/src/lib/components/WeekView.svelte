@@ -173,7 +173,7 @@
 						class:overridden={conflicts[slot.id] !== undefined}
 						style:top={percent(block.start)}
 						style:height={percent(block.end - block.start)}
-						style:left={`${(block.lane / block.lanes) * 100}%`}
+						style:inset-inline-start={`${(block.lane / block.lanes) * 100}%`}
 						style:width={`${100 / block.lanes}%`}
 						title={[slotLabel(slot), describeHours(slot), ...describeEffects(slot)].join(' · ')}
 						aria-label={m.sched_block_label({ name: slotLabel(slot), hours: describeHours(slot) })}
@@ -182,7 +182,7 @@
 					>
 						{#if block.end - block.start >= LABELLED}
 							<!-- While dragged, its new hours. -->
-							<span class="label">{moving ? describeHours(slot) : slotLabel(slot)}</span>
+							<span class="label" dir="auto">{moving ? describeHours(slot) : slotLabel(slot)}</span>
 						{/if}
 						{#if block.first}
 							<span
@@ -236,7 +236,7 @@
 
 	.hours span {
 		position: absolute;
-		right: 0.3rem;
+		inset-inline-end: 0.3rem;
 		color: var(--faint);
 		font-size: 0.7rem;
 		transform: translateY(-50%);
@@ -273,14 +273,14 @@
 		overflow: hidden;
 		padding: 0.05rem 0.25rem;
 		border: 1px solid transparent;
-		border-left: 3px solid var(--hue);
+		border-inline-start: 3px solid var(--hue);
 		border-radius: 3px;
 		--hue: var(--accent);
 		--fill: color-mix(in srgb, var(--accent) 20%, var(--surface));
 		background: var(--fill);
 		color: var(--text);
 		font: inherit;
-		text-align: left;
+		text-align: start;
 		cursor: grab;
 		touch-action: none;
 	}
@@ -308,7 +308,7 @@
 	.block.overridden {
 		border-style: dashed;
 		border-color: var(--warn);
-		border-left-style: solid;
+		border-inline-start-style: solid;
 	}
 
 	.block.moving {
@@ -324,8 +324,8 @@
 	/* The top and bottom edges, to drag the start or the end. */
 	.edge {
 		position: absolute;
-		right: 0;
-		left: 0;
+		inset-inline-end: 0;
+		inset-inline-start: 0;
 		height: 6px;
 		cursor: ns-resize;
 	}
@@ -356,8 +356,8 @@
 
 	.now {
 		position: absolute;
-		right: 0;
-		left: 0;
+		inset-inline-end: 0;
+		inset-inline-start: 0;
 		height: 2px;
 		background: var(--accent);
 	}

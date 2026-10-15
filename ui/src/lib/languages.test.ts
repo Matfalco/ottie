@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { closestLanguage } from './languages';
+import { closestLanguage, direction } from './languages';
+import { locales } from './paraglide/runtime.js';
 
 const KNOWN = ['en', 'fr', 'de', 'es-ES', 'es-419', 'pt-PT', 'pt-BR', 'zh-Hans', 'zh-Hant'];
 const closest = (...wanted: string[]) => closestLanguage(wanted, KNOWN);
@@ -38,5 +39,16 @@ describe('closestLanguage', () => {
 		expect(closest('zh-Hant-SG')).toBe('zh-Hant');
 		expect(closest('zh-CN')).toBe('zh-Hans');
 		expect(closest('zh')).toBe('zh-Hans');
+	});
+});
+
+describe('direction', () => {
+	it('mirrors the pages of every language written right to left', () => {
+		// (`getTextInfo` is in Node and Chromium, not yet in TypeScript's lib.)
+		type WithText = Intl.Locale & { getTextInfo(): { direction: 'ltr' | 'rtl' } };
+		for (const locale of locales) {
+			const written = (new Intl.Locale(locale) as WithText).getTextInfo().direction;
+			expect(direction(locale), locale).toBe(written);
+		}
 	});
 });

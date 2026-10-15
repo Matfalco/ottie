@@ -99,7 +99,7 @@
 	 * in the tray (0034), notify (0035) or start at sign-in (0039). */
 	const inApp = canChoosePlayer();
 
-	/** The sections, top to bottom, for the list on the left. */
+	/** The sections, top to bottom, for the list at the start. */
 	const SECTIONS: { id: string; label: () => string }[] = [
 		{ id: 'set-appearance', label: m.set_appearance },
 		{ id: 'set-downloads', label: m.set_downloads },
@@ -734,6 +734,7 @@
 					<input
 						readonly
 						value={link}
+						dir="auto"
 						aria-label={m.set_link_label()}
 						onfocus={(event) => event.currentTarget.select()}
 					/>
@@ -745,7 +746,7 @@
 </div>
 
 <style>
-	/* The section list on the left, the sections taking the rest. */
+	/* The section list at the start, the sections taking the rest. */
 	.settings {
 		display: flex;
 		flex: 1;
@@ -843,13 +844,13 @@
 		color: var(--accent);
 	}
 
-	/* The card's title and hint, and a switch for all of it on the right. */
+	/* The card's title and hint, and a switch for all of it at the end. */
 	header.with-switch {
 		column-gap: 1rem;
 	}
 
 	header.with-switch .icon {
-		margin-right: -0.25rem;
+		margin-inline-end: -0.25rem;
 	}
 
 	.sync {

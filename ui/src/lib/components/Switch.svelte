@@ -41,16 +41,16 @@
 	.knob {
 		position: absolute;
 		top: 0.1875rem;
-		left: 0.1875rem;
+		inset-inline-start: 0.1875rem;
 		width: 0.875rem;
 		height: 0.875rem;
 		border-radius: 50%;
 		background: var(--muted);
-		transition: left 0.15s;
+		transition: inset-inline-start 0.15s;
 	}
 
 	.on .knob {
-		left: 1.1875rem;
+		inset-inline-start: 1.1875rem;
 		background: var(--on-accent);
 	}
 </style>

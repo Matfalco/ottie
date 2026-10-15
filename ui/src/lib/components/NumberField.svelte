@@ -55,7 +55,7 @@
 	input {
 		width: 4.5rem;
 		height: 2.1rem;
-		text-align: right;
+		text-align: end;
 	}
 
 	.unit {

@@ -25,7 +25,7 @@
 <li class={job.state}>
 	<span class="kind"><FileIcon {name} /></span>
 	<span class="text">
-		<span class="name" title={job.url}>{name}</span>
+		<span class="name" title={job.url} dir="auto">{name}</span>
 		<span class="line">{describe(job, 0, now, undefined, session.slotNames)}</span>
 	</span>
 	{#if onRun}

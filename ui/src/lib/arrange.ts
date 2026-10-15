@@ -102,7 +102,7 @@ export function arrange(
 	}).filter((section) => section.jobs.length > 0);
 }
 
-/** What a group's header says on its right: the total speed of the running
+/** What a group's header says at its end: the total speed of the running
  * ones, how many of the download slots are taken above the waiting ones. */
 export function groupNote(
 	group: Group,

@@ -203,7 +203,7 @@
 	.popup {
 		position: absolute;
 		top: calc(100% + 0.4rem);
-		right: 0;
+		inset-inline-end: 0;
 		z-index: 20;
 		display: grid;
 		gap: 0.6rem;
@@ -254,8 +254,8 @@
 		.popup {
 			position: fixed;
 			top: 3.25rem;
-			right: 0.5rem;
-			left: 0.5rem;
+			inset-inline-end: 0.5rem;
+			inset-inline-start: 0.5rem;
 			width: auto;
 			max-width: none;
 		}

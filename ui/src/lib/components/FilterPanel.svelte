@@ -99,6 +99,7 @@
 				<input
 					type="search"
 					bind:value={query}
+					dir="auto"
 					oninput={() => onFilters({ ...filters, query })}
 					placeholder={m.fl_name_example()}
 				/>
@@ -306,7 +307,7 @@
 	}
 
 	.segments label + label {
-		border-left: 1px solid var(--border);
+		border-inline-start: 1px solid var(--border);
 	}
 
 	.segments label:hover {
@@ -345,7 +346,7 @@
 	}
 
 	.hint {
-		margin-left: auto;
+		margin-inline-start: auto;
 		color: var(--faint);
 		font-size: 0.85em;
 	}

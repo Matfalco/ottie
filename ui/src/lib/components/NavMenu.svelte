@@ -121,7 +121,7 @@
 		.compact .badge {
 			position: absolute;
 			top: -0.3rem;
-			right: -0.35rem;
+			inset-inline-end: -0.35rem;
 			min-width: 1.05rem;
 			padding: 0 0.25rem;
 			font-size: 0.65rem;
@@ -133,9 +133,9 @@
 	@media (max-width: 40rem) {
 		nav {
 			position: fixed;
-			right: 0;
+			inset-inline-end: 0;
 			bottom: 0;
-			left: 0;
+			inset-inline-start: 0;
 			z-index: 5;
 			padding: 0.3rem 0.5rem;
 			border-top: 1px solid var(--border);
@@ -178,7 +178,7 @@
 		.badge {
 			position: absolute;
 			top: 0.15rem;
-			left: calc(50% + 0.4rem);
+			inset-inline-start: calc(50% + 0.4rem);
 			min-width: 1.1rem;
 			font-size: 0.65rem;
 			line-height: 1.1rem;

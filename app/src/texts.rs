@@ -8,7 +8,7 @@ use crate::status::{Progress, Summary};
 
 /// Each language's texts, by its tag, as the page names them
 /// (`ui/project.inlang/settings.json`). The first is the fallback.
-const LANGUAGES: [(&str, &str); 40] = [
+const LANGUAGES: [(&str, &str); 44] = [
     ("en", include_str!("../messages/en.json")),
     ("fr", include_str!("../messages/fr.json")),
     ("de", include_str!("../messages/de.json")),
@@ -49,7 +49,15 @@ const LANGUAGES: [(&str, &str); 40] = [
     ("ha", include_str!("../messages/ha.json")),
     ("yo", include_str!("../messages/yo.json")),
     ("zu", include_str!("../messages/zu.json")),
+    ("ar", include_str!("../messages/ar.json")),
+    ("fa", include_str!("../messages/fa.json")),
+    ("he", include_str!("../messages/he.json")),
+    ("ur", include_str!("../messages/ur.json")),
 ];
+
+/// The languages written right to left (`direction` in
+/// `ui/src/lib/languages.ts`).
+const RIGHT_TO_LEFT: [&str; 4] = ["ar", "fa", "he", "ur"];
 
 /// Units count in 1024s, as on the page (`ui/src/lib/format.ts`).
 const STEP: f64 = 1024.0;
@@ -81,6 +89,10 @@ pub struct Texts {
     decimal: String,
     /// Between groups of three digits.
     group: String,
+    /// The language's own digits, 0 to 9, where the page's `Intl` writes
+    /// them (Persian: "۰۱۲۳۴۵۶۷۸۹"); else 0 to 9.
+    #[serde(default)]
+    digits: Option<String>,
     /// `{number}` and `{unit}`.
     speed: String,
     /// Bytes, kB… per second.
@@ -95,6 +107,9 @@ pub struct Texts {
     files: String,
     pub failed: String,
     problems: Problems,
+    /// Written right to left: every text comes embedded as such.
+    #[serde(skip)]
+    right_to_left: bool,
 }
 
 /// Why a download failed, as the page says it (`problem_…` in
@@ -125,24 +140,50 @@ impl Texts {
     pub fn for_language(tag: Option<&str>) -> Texts {
         let tag = tag.unwrap_or_default();
         let primary = tag.split(['-', '_']).next().unwrap_or_default();
-        let [(_, english), ..] = LANGUAGES;
-        let file = [tag, primary]
+        let [english, ..] = LANGUAGES;
+        let (language, file) = [tag, primary]
             .iter()
             .find_map(|wanted| {
                 LANGUAGES
                     .iter()
                     .find(|(language, _)| language.eq_ignore_ascii_case(wanted))
             })
-            .map_or(english, |(_, file)| file);
-        serde_json::from_str(file)
-            .or_else(|_| serde_json::from_str(english))
-            .unwrap_or_default()
+            .copied()
+            .unwrap_or(english);
+        let Ok(mut texts) = serde_json::from_str::<Texts>(file) else {
+            return serde_json::from_str(english.1).unwrap_or_default();
+        };
+        if RIGHT_TO_LEFT.contains(&language) {
+            texts.right_to_left = true;
+            for text in [
+                &mut texts.open,
+                &mut texts.pause_all,
+                &mut texts.resume_all,
+                &mut texts.change_limit,
+                &mut texts.other_limit,
+                &mut texts.quit,
+                &mut texts.finished,
+                &mut texts.all_finished,
+                &mut texts.failed,
+            ] {
+                *text = embedded(true, std::mem::take(text));
+            }
+        }
+        texts
+    }
+
+    /// A text as shown on its own: embedded right to left for those
+    /// languages (U+202B … U+202C). Windows draws the tray's tooltip and
+    /// menus left to right, which would put "Ottie" or a speed first
+    /// (docs/decisions/0042).
+    fn shown(&self, text: String) -> String {
+        embedded(self.right_to_left, text)
     }
 
     /// "2 downloading, 5 waiting · 1.5 MB/s", "Nothing downloading".
     pub fn status(&self, summary: &Summary) -> String {
         if !summary.connected {
-            return self.connecting.clone();
+            return self.shown(self.connecting.clone());
         }
         let mut parts = Vec::new();
         if summary.running > 0 {
@@ -158,14 +199,14 @@ impl Texts {
             );
         }
         if parts.is_empty() {
-            return self.idle.clone();
+            return self.shown(self.idle.clone());
         }
         let mut status = parts.join(", ");
         if summary.running > 0 {
             status.push_str(" · ");
             status.push_str(&self.speed(summary.speed));
         }
-        status
+        self.shown(status)
     }
 
     /// "45% · 8 min left": how far the running downloads of known size have
@@ -174,7 +215,7 @@ impl Texts {
         let done = progress.downloaded.min(progress.total) as f64 / progress.total.max(1) as f64;
         // Whole percents, rounded down so 99.9% isn't "100%", as on the page.
         let percent = (done * 100.0).floor() as u64;
-        let mut line = self.percent.replace("{number}", &percent.to_string());
+        let mut line = self.percent.replace("{number}", &self.grouped(percent));
         if progress.speed > 0 {
             let left = progress.total.saturating_sub(progress.downloaded);
             // Whole seconds, never above u64 (bytes / bytes per second).
@@ -182,7 +223,7 @@ impl Texts {
             line.push_str(" · ");
             line.push_str(&self.left.replace("{time}", &self.duration(seconds)));
         }
-        line
+        self.shown(line)
     }
 
     /// "45 sec", "3 min 20 sec", "2 hr 5 min": the two largest units, as on
@@ -210,18 +251,22 @@ impl Texts {
 
     /// "Limit speed to 10 MB/s".
     pub fn limit(&self, bytes_per_second: u64) -> String {
-        self.limit.replace("{speed}", &self.rate(bytes_per_second))
+        let limit = self
+            .limit
+            .replace("{speed}", &self.format(bytes_per_second, true));
+        self.shown(limit)
     }
 
-    /// "2.5 MB/s", "234 kB/s": one decimal below 10, as on the page.
-    pub fn speed(&self, bytes_per_second: u64) -> String {
+    /// "2.5 MB/s", "234 kB/s": one decimal below 10, as on the page (inside
+    /// the status line).
+    fn speed(&self, bytes_per_second: u64) -> String {
         self.format(bytes_per_second, false)
     }
 
     /// A limit as people pick it: "1 MB/s", not "1.0 MB/s" (`formatLimit`
     /// on the page).
     pub fn rate(&self, bytes_per_second: u64) -> String {
-        self.format(bytes_per_second, true)
+        self.shown(self.format(bytes_per_second, true))
     }
 
     fn format(&self, bytes_per_second: u64, trim: bool) -> String {
@@ -233,7 +278,8 @@ impl Texts {
         }
         let whole = (value * 10.0).round() % 10.0 == 0.0;
         let number = if unit > 0 && value < 10.0 && !(trim && whole) {
-            format!("{value:.1}").replace('.', &self.decimal)
+            self.digits(&format!("{value:.1}"))
+                .replace('.', &self.decimal)
         } else {
             // Whole: rounded, never above u64 (bytes per second, then /1024s).
             self.grouped(value.round() as u64)
@@ -245,12 +291,17 @@ impl Texts {
 
     /// "3 files downloaded".
     pub fn files(&self, count: usize) -> String {
-        self.files.replace("{count}", &self.count(count))
+        self.shown(self.files.replace("{count}", &self.count(count)))
     }
 
     /// Why a download failed; the daemon's English for codes this app
     /// doesn't know.
     pub fn reason(&self, problem: Option<&Problem>, english: Option<&str>) -> String {
+        let reason = self.reason_text(problem, english);
+        self.shown(reason)
+    }
+
+    fn reason_text(&self, problem: Option<&Problem>, english: Option<&str>) -> String {
         let texts = &self.problems;
         let detail = |text: &str, detail: &str| text.replace("{detail}", detail);
         let status = |text: &str, status: u16| text.replace("{status}", &status.to_string());
@@ -278,7 +329,7 @@ impl Texts {
         self.grouped(count as u64)
     }
 
-    /// "12,345" (French: "12 345").
+    /// "12,345" (French: "12 345", Persian: "۱۲٬۳۴۵").
     fn grouped(&self, number: u64) -> String {
         let digits = number.to_string();
         let mut grouped = String::new();
@@ -288,7 +339,32 @@ impl Texts {
             }
             grouped.push(digit);
         }
-        grouped
+        self.digits(&grouped)
+    }
+
+    /// `text` with its digits 0 to 9 in the language's own.
+    fn digits(&self, text: &str) -> String {
+        let Some(own) = &self.digits else {
+            return text.to_owned();
+        };
+        let own: Vec<char> = own.chars().collect();
+        text.chars()
+            .map(|c| {
+                c.to_digit(10)
+                    .and_then(|digit| own.get(digit as usize))
+                    .copied()
+                    .unwrap_or(c)
+            })
+            .collect()
+    }
+}
+
+/// `text` embedded right to left if `right_to_left`; nothing stays nothing.
+fn embedded(right_to_left: bool, text: String) -> String {
+    if right_to_left && !text.is_empty() {
+        format!("\u{202b}{text}\u{202c}")
+    } else {
+        text
     }
 }
 
@@ -314,14 +390,18 @@ mod tests {
         }
     }
 
-    /// The same keys, lists of the same length, and texts with the same
-    /// `{placeholders}`, all the way down.
+    /// The same keys (but `digits`, which only some have), lists of the same
+    /// length, and texts with the same `{placeholders}`, all the way down.
     fn same_shape(english: &serde_json::Value, other: &serde_json::Value, path: &str) {
         use serde_json::Value;
         match (english, other) {
             (Value::Object(english), Value::Object(other)) => {
                 let keys = |object: &serde_json::Map<_, _>| {
-                    object.keys().cloned().collect::<Vec<String>>()
+                    object
+                        .keys()
+                        .filter(|key| *key != "digits")
+                        .cloned()
+                        .collect::<Vec<String>>()
                 };
                 assert_eq!(keys(english), keys(other), "{path}");
                 for (key, value) in english {
@@ -349,6 +429,35 @@ mod tests {
             .collect();
         found.sort_unstable();
         found
+    }
+
+    #[test]
+    fn right_to_left_texts_come_embedded_as_such() {
+        let ar = Texts::for_language(Some("ar"));
+        assert!(ar.quit.starts_with('\u{202b}') && ar.quit.ends_with('\u{202c}'));
+        let busy = Summary {
+            connected: true,
+            running: 2,
+            speed: 3 * 1024 * 1024,
+            ..Summary::default()
+        };
+        let status = ar.status(&busy);
+        assert_eq!(status.matches('\u{202b}').count(), 1, "{status}");
+        assert!(status.starts_with('\u{202b}') && status.ends_with('\u{202c}'));
+        assert_eq!(ar.reason(None, None), "");
+        let en = Texts::for_language(Some("en"));
+        assert_eq!(en.quit, "Quit Ottie");
+    }
+
+    #[test]
+    fn persian_counts_in_its_own_digits() {
+        let fa = Texts::for_language(Some("fa"));
+        let inner = |text: String| text.trim_matches(['\u{202b}', '\u{202c}']).to_owned();
+        assert_eq!(
+            inner(fa.files(1234)),
+            inner(fa.files.replace("{count}", "۱٬۲۳۴"))
+        );
+        assert!(inner(fa.speed(1536 * 1024)).starts_with("۱٫۵"));
     }
 
     #[test]

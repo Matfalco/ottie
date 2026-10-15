@@ -48,6 +48,7 @@
 			<!-- svelte-ignore a11y_autofocus -->
 			<input
 				bind:value={typed}
+				dir="auto"
 				placeholder={m.view_name_example()}
 				aria-invalid={problem !== null}
 				autofocus

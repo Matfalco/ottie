@@ -181,6 +181,7 @@
 		<input
 			bind:this={link}
 			bind:value={url}
+			dir="auto"
 			oninput={() => (step = null)}
 			onpaste={pasted}
 			type="url"
@@ -233,6 +234,7 @@
 				<span class="row">
 					<input
 						bind:value={folder}
+						dir="auto"
 						oninput={folderTyped}
 						placeholder={fallback
 							? m.add_folder_default({ folder: fallback })
@@ -331,8 +333,8 @@
 	.step {
 		position: absolute;
 		top: calc(100% + 0.4rem);
-		right: 0;
-		left: 0;
+		inset-inline-end: 0;
+		inset-inline-start: 0;
 		z-index: 10;
 		display: grid;
 		gap: 0.9rem;

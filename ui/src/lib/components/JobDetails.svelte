@@ -150,7 +150,7 @@
 <section class="details {job.state}" aria-label={m.det_label()}>
 	<div class="top">
 		<div class="title">
-			<h2 title={name}>{name}</h2>
+			<h2 title={name} dir="auto">{name}</h2>
 			<span class="pill {status}">{statusName(status)}</span>
 		</div>
 		<div class="buttons">
@@ -187,7 +187,7 @@
 			<button class="danger" onclick={() => onRun('remove')}>{m.remove()}</button>
 		</div>
 	</div>
-	<!-- In the top right corner, wherever the buttons wrap to. -->
+	<!-- In the top corner at the end of the line, wherever the buttons wrap to. -->
 	<button
 		class="toggle"
 		aria-expanded={open}
@@ -203,13 +203,13 @@
 	</button>
 
 	{#if showLink && link}
-		<input class="link" readonly value={link} aria-label={m.det_link_label()} />
+		<input class="link" readonly value={link} dir="auto" aria-label={m.det_link_label()} />
 	{/if}
 
 	{#if open}
 		<div class="body">
 			<div class="column">
-				<div class="url" title={job.url}>{job.url}</div>
+				<div class="url" title={job.url} dir="auto">{job.url}</div>
 				<div class="amount">
 					<span>{amount(job)}</span>
 					<span class="muted">{done === null ? '' : formatPercent(done)}</span>
@@ -224,7 +224,7 @@
 							<span
 								class="range"
 								class:writing={part.writing}
-								style:left={percent(part.start)}
+								style:inset-inline-start={percent(part.start)}
 								style:width={percent(part.end - part.start)}
 							>
 								<span
@@ -279,7 +279,7 @@
 				</label>
 				<div class="field">
 					<span class="label">{m.det_folder()}</span>
-					<span class="folder" title={job.destDir}>{job.destDir}</span>
+					<span class="folder" title={job.destDir} dir="auto">{job.destDir}</span>
 				</div>
 				<div class="field wide">
 					<span class="label">{m.det_speed_limit()}</span>
@@ -366,7 +366,7 @@
 		background: var(--well);
 	}
 
-	/* Room on the right for the arrow. */
+	/* Room at the end for the arrow. */
 	.top {
 		display: flex;
 		flex-wrap: wrap;
@@ -468,7 +468,7 @@
 	.toggle {
 		position: absolute;
 		top: 0.6rem;
-		right: 0.9rem;
+		inset-inline-end: 0.9rem;
 		display: grid;
 		place-items: center;
 		width: 2rem;
@@ -532,7 +532,7 @@
 	}
 
 	.range + .range {
-		border-left: 1px solid var(--well);
+		border-inline-start: 1px solid var(--well);
 	}
 
 	.fill {
@@ -547,7 +547,7 @@
 	.writing .fill::after {
 		position: absolute;
 		top: 0;
-		right: 0;
+		inset-inline-end: 0;
 		bottom: 0;
 		width: 2px;
 		background: var(--arriving);
@@ -764,7 +764,7 @@
 	}
 
 	.segments label + label {
-		border-left: 1px solid var(--border);
+		border-inline-start: 1px solid var(--border);
 	}
 
 	.segments label:hover {

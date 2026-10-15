@@ -157,7 +157,7 @@
 						<div class="who">
 							<span class="name">
 								<!-- Without a name, when it is stands in for one. -->
-								<span>{slot.name.trim() ? name : describeHours(slot)}</span>
+								<span dir="auto">{slot.name.trim() ? name : describeHours(slot)}</span>
 								{#if slot.active}
 									<span class="badge now">{m.sched_now()}</span>
 								{:else if !slot.enabled}
@@ -288,7 +288,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	ul {
@@ -432,12 +432,12 @@
 		line-height: 1.4rem;
 	}
 
-	/* The switch and the buttons, on the right even on a line of their own. */
+	/* The switch and the buttons, at the end even on a line of their own. */
 	.end {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	.actions {

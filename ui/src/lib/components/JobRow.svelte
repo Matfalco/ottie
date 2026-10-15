@@ -142,7 +142,7 @@
 		<div class="cell">
 			<span class="kind"><FileIcon {name} /></span>
 			<span class="text">
-				<span class="title">{name}</span>
+				<span class="title" dir="auto">{name}</span>
 				<span class="line">{describe(job, speed, now, undefined, session.slotNames)}</span>
 			</span>
 			{#if job.priority !== 'normal'}
@@ -278,7 +278,7 @@
 	}
 
 	.check {
-		padding-right: 0;
+		padding-inline-end: 0;
 		text-align: center;
 	}
 
@@ -337,7 +337,7 @@
 	.left,
 	.added {
 		color: var(--muted);
-		text-align: right;
+		text-align: end;
 	}
 
 	.status,
@@ -411,10 +411,10 @@
 
 	@keyframes slide {
 		from {
-			margin-left: 0;
+			margin-inline-start: 0;
 		}
 		to {
-			margin-left: 70%;
+			margin-inline-start: 70%;
 		}
 	}
 
@@ -422,12 +422,12 @@
 		width: 2.6rem;
 		color: var(--muted);
 		font-size: 0.85em;
-		text-align: right;
+		text-align: end;
 	}
 
 	.actions {
 		padding: 0 0.25rem;
-		text-align: right;
+		text-align: end;
 	}
 
 	.actions button {
