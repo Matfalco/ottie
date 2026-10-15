@@ -169,16 +169,12 @@
 
 /* The same in every theme. */
 :root {
-	/* Manrope and JetBrains Mono draw what Outfit and DM Mono can't (Greek,
-	   Cyrillic, Vietnamese), e.g. «Български» in the language picker; the Noto
-	   fonts cut to our translations (src/fonts/) the languages' names in Hindi,
-	   Chinese, Japanese and Korean. A browser fetches one only for a character
-	   it holds. */
-	--noto:
-		'Ottie Noto Sans Devanagari', 'Ottie Noto Sans SC', 'Ottie Noto Sans TC', 'Ottie Noto Sans JP',
-		'Ottie Noto Sans KR';
-	--font: 'Outfit Variable', 'Manrope Variable', var(--noto), system-ui, sans-serif;
-	--mono: 'DM Mono', 'JetBrains Mono Variable', var(--noto), ui-monospace, monospace;
+	/* Outfit, and DM Mono for numbers in columns, are the fonts Ottie brings
+	   (docs/decisions/0041): they draw every language in Latin script but
+	   Vietnamese. What they can't draw (a Greek file name, «Български» in the
+	   language picker) comes from the system's fonts. */
+	--font: 'Outfit Variable', system-ui, sans-serif;
+	--mono: 'DM Mono', ui-monospace, monospace;
 	/* Buttons and fields; panels and menus; cards. */
 	--radius-s: 8px;
 	--radius-m: 12px;
@@ -188,45 +184,31 @@
 	--on-close: #ffffff;
 }
 
-/* Pages in Greek, Cyrillic or Vietnamese use them throughout, so file names
-   and numbers don't mix two fonts in one line (docs/decisions/0041). */
+/* Pages in a language Outfit can't fully draw use the system's fonts
+   throughout, the monospace one too ("kB/δευτ."), so a word or a line never
+   mixes two fonts; the browser picks them for the page's language. A test
+   checks this list against the letters Outfit draws; CLAUDE.md's table says
+   the same. */
 :root:lang(el),
 :root:lang(bg),
 :root:lang(uk),
-:root:lang(vi) {
-	--font: 'Manrope Variable', system-ui, sans-serif;
-	--mono: 'JetBrains Mono Variable', ui-monospace, monospace;
-}
-
-/* Pages in Hindi, Chinese, Japanese or Korean start with their own Noto, which
-   also holds Latin letters and digits, for the same reason; the mono font
-   takes its characters from it too ("kB/秒"). It holds only what the page
-   writes, so a rarer character (in a file name) comes from the next fonts,
-   the system's last, which the browser picks for the page's language. */
-:root:lang(hi) {
-	--noto: 'Ottie Noto Sans Devanagari';
-}
-:root:lang(zh-Hans) {
-	--noto: 'Ottie Noto Sans SC';
-}
-:root:lang(zh-Hant) {
-	--noto: 'Ottie Noto Sans TC';
-}
-:root:lang(ja) {
-	--noto: 'Ottie Noto Sans JP';
-}
-:root:lang(ko) {
-	--noto: 'Ottie Noto Sans KR';
-	/* Korean breaks lines between words, not inside them. */
-	word-break: keep-all;
-	overflow-wrap: break-word;
-}
+:root:lang(vi),
 :root:lang(hi),
 :root:lang(zh-Hans),
 :root:lang(zh-Hant),
 :root:lang(ja),
+:root:lang(ko),
+:root:lang(am),
+:root:lang(ha),
+:root:lang(yo) {
+	--font: system-ui, sans-serif;
+	--mono: ui-monospace, monospace;
+}
+
+/* Korean breaks lines between words, not inside them. */
 :root:lang(ko) {
-	--font: var(--noto), 'Outfit Variable', 'Manrope Variable', system-ui, sans-serif;
+	word-break: keep-all;
+	overflow-wrap: break-word;
 }
 
 /* Before the script has picked a theme: no white flash for dark systems. */

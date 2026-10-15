@@ -28,6 +28,13 @@ describe('formatBytes', () => {
 		expect(formatSpeed(2.5 * MB, 'en')).toBe('2.5 MB/s');
 		expect(plain(formatSpeed(2.5 * MB, 'fr'))).toBe('2,5 Mo/s');
 	});
+
+	it('writes Hausa, Yoruba and Zulu as their country’s English', () => {
+		expect(formatSpeed(2.5 * MB, 'ha')).toBe('2.5 MB/s');
+		expect(formatDuration(200, 'yo')).toBe('3 mins 20 secs');
+		expect(plain(formatBytes(1023, 'zu'))).toBe('1 023 bytes');
+		expect(plain(formatSpeed(2.5 * MB, 'zu'))).toBe('2,5 MB/s');
+	});
 });
 
 describe('formatCount', () => {

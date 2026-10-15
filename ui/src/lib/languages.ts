@@ -40,11 +40,27 @@ export const NAMES: Record<Locale, string> = {
 	id: 'Bahasa Indonesia',
 	hi: 'हिन्दी',
 	vi: 'Tiếng Việt',
-	tr: 'Türkçe'
+	tr: 'Türkçe',
+	sw: 'Kiswahili',
+	am: 'አማርኛ',
+	ha: 'Hausa',
+	yo: 'Èdè Yorùbá',
+	zu: 'isiZulu'
 };
 
 /** Checked by a native speaker; the others say so under the picker. */
 export const REVIEWED: readonly Locale[] = ['en', 'fr'];
+
+/** Stand-ins for the languages Chrome, Edge and the desktop app have no
+ * `Intl` data for: there, numbers, units and dates would come out in the
+ * system's language. Their country's English instead, in every browser, as
+ * the tray writes them too (app/messages/). */
+const INTL: Partial<Record<Locale, string>> = { ha: 'en-NG', yo: 'en-NG', zu: 'en-ZA' };
+
+/** The locale `Intl` writes numbers, units and dates in for `locale`. */
+export function intlLocale(locale: Locale): string {
+	return INTL[locale] ?? locale;
+}
 
 /** Where people can help with a translation. */
 export const HELP_TRANSLATE = 'https://github.com/Matfalco/ottie/issues';

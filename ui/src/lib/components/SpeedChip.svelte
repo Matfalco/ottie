@@ -21,9 +21,21 @@
 		onLimit: (bytesPerSec: number) => Promise<boolean>;
 		/** The time slot's chip as its icon alone: the title bar is short of room. */
 		brief?: boolean;
+		/** The title bar is still short of room: the chip shortens to fit,
+		 * cut with "…" (the whole in its tooltip), so it and its popup stay
+		 * inside the window. */
+		squeezed?: boolean;
 	}
 
-	let { speed, limit, schedule, connection, onLimit, brief = false }: Props = $props();
+	let {
+		speed,
+		limit,
+		schedule,
+		connection,
+		onLimit,
+		brief = false,
+		squeezed = false
+	}: Props = $props();
 	let open = $state(false);
 	let chip: HTMLButtonElement | undefined = $state();
 
@@ -69,7 +81,7 @@
      clicking it opens the limit. While the daemon can't be reached, why
      instead. -->
 {#if connection === 'live' && limit !== null}
-	<div class="holder" onfocusout={focusOut} onkeydown={keyDown} role="presentation">
+	<div class="holder" class:squeezed onfocusout={focusOut} onkeydown={keyDown} role="presentation">
 		<button
 			bind:this={chip}
 			class="chip"
@@ -119,6 +131,21 @@
 		position: relative;
 		display: flex;
 		align-items: center;
+	}
+
+	.holder.squeezed,
+	.squeezed .chip,
+	.squeezed .chip span {
+		min-width: 0;
+	}
+
+	.squeezed .chip span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.squeezed .chip :global(svg) {
+		flex: none;
 	}
 
 	/* Short of room: the icon alone, the rest in its tooltip. */

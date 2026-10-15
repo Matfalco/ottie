@@ -36,7 +36,12 @@
 		"id",
 		"hi",
 		"vi",
-		"tr"
+		"tr",
+		"sw",
+		"am",
+		"ha",
+		"yo",
+		"zu"
 	],
 	"modules": ["./node_modules/@inlang/plugin-message-format/dist/index.js"],
 	"plugin.inlang.messageFormat": {

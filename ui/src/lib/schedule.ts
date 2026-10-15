@@ -4,6 +4,7 @@
 import type { Job } from '@ottie/api-types/Job';
 import type { JobChange } from '@ottie/api-types/JobChange';
 import { m } from './paraglide/messages.js';
+import { intlLocale } from './languages';
 import { getLocale, type Locale } from './paraglide/runtime.js';
 
 /** What a `datetime-local` field holds for `ms`, in the page's time zone
@@ -45,7 +46,7 @@ export function canSchedule(job: Job): boolean {
 export function formatWhen(ms: number, now: number, locale: Locale = getLocale()): string {
 	const options = { locale };
 	const at = new Date(ms);
-	const time = new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(at);
+	const time = new Intl.DateTimeFormat(intlLocale(locale), { timeStyle: 'short' }).format(at);
 	const today = new Date(now);
 	const days = dayNumber(at) - dayNumber(today);
 	if (days === 0) {
@@ -54,7 +55,7 @@ export function formatWhen(ms: number, now: number, locale: Locale = getLocale()
 	if (days === 1) {
 		return m.when_tomorrow({ time }, options);
 	}
-	const date = new Intl.DateTimeFormat(locale, {
+	const date = new Intl.DateTimeFormat(intlLocale(locale), {
 		weekday: 'short',
 		day: 'numeric',
 		month: 'short',
@@ -71,7 +72,7 @@ export function formatWhenShort(ms: number, now: number, locale: Locale = getLoc
 	const style = today
 		? ({ timeStyle: 'short' } as const)
 		: ({ dateStyle: 'short', timeStyle: 'short' } as const);
-	return new Intl.DateTimeFormat(locale, style).format(at);
+	return new Intl.DateTimeFormat(intlLocale(locale), style).format(at);
 }
 
 /** Days since 1970 by the page's calendar, so "tomorrow" ignores the hour

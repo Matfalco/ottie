@@ -22,7 +22,7 @@
 - A **browser extension** (Chromium-based browsers and Firefox, desktop) that takes over downloads from the browser: intercepts them, hides the browser's own download UI where possible, and shows our download list in its popup.
 - Must-haves: pause/resume (including after a restart or crash), multi-connection downloads, and speed limits at three levels (per download, per category, global), adjustable while downloads run.
 - **Play while downloading** (uGet can): a short-lived play link (`POST /jobs/{id}/stream` → `GET /stream/{ticket}/{name}`, no token, range support) serves a partial file, so the browser, VLC/mpv or an Android player can play a video before it finishes, locally or from a remote daemon (`docs/decisions/0029`). The download order follows the player and, in a per-download streaming mode, stays in order and fetches the last chunk early (many MP4s keep their index at the end).
-- **Translated UI:** in the system's language by default (a device or every device can choose another), English as the fallback. English and French, then languages in batches (EU, Latin America, Asia, Africa; `docs/decisions/0041`): de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR, then the rest of the EU in Latin script (sv, ro, cs, hu, da, fi, sk, hr, sl, lt, lv, et, ga, mt), Greek and Cyrillic (el, bg, uk), Asia (zh-Hans, zh-Hant, ja, ko, id, hi, vi, tr) so far. Each is one JSON file in `ui/messages/` and, for the tray, one in `app/messages/`; daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
+- **Translated UI:** in the system's language by default (a device or every device can choose another), English as the fallback. English and French, then languages in batches (EU, Latin America, Asia, Africa; `docs/decisions/0041`): de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR, then the rest of the EU in Latin script (sv, ro, cs, hu, da, fi, sk, hr, sl, lt, lv, et, ga, mt), Greek and Cyrillic (el, bg, uk), Asia (zh-Hans, zh-Hant, ja, ko, id, hi, vi, tr), Africa (sw, am, ha, yo, zu) so far. Each is one JSON file in `ui/messages/` and, for the tray, one in `app/messages/`; daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
 - uGet features to bring over time: categories (folder + file-type rules), queue with max concurrent downloads, opt-in clipboard monitoring, batch/URL-list import, scheduler.
 
 ## Stack
@@ -208,10 +208,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        BatchDialog: several links, from a paste, the list button or a file),
                        FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu)
   messages/<tag>.json  every UI text, per language (Paraglide); project.inlang/ its settings (the locales)
-  src/app.css        the four themes as variables under [data-theme] (docs/decisions/0021), fonts (Manrope +
-                     JetBrains Mono for Greek, Cyrillic and Vietnamese; Noto for Hindi and CJK, 0041), radii
-  src/fonts/         Noto Sans Devanagari/SC/TC/JP/KR cut to the characters our translations use, and
-                     faces.css: made by scripts/fonts.mjs (`pnpm --filter ui fonts`), never edited by hand
+  src/app.css        the four themes as variables under [data-theme] (docs/decisions/0021), fonts (Outfit +
+                     DM Mono, else the system's; see "Languages and fonts" below, 0041), radii
   vite.config.ts     SvelteKit + adapter-static → ../crates/api/ui-dist; Paraglide; dev proxy /api → daemon
 extension/         WebExtension (Chrome + Firefox)
 shared/api-types/  TypeScript types generated from Rust (ts-rs, by `cargo test -p ottie-api`;
@@ -245,7 +243,6 @@ pnpm --filter ui check               # svelte-check + tsc (fails on warnings)
 pnpm --filter ui test                # Vitest unit tests
 pnpm --filter ui lint                # Prettier check (`format` fixes)
 pnpm --filter ui i18n                # recompile messages/*.json (check, dev, build and test do it too)
-pnpm --filter ui fonts               # cut the Hindi and CJK fonts to the messages again (after changing those languages)
 pnpm --filter app dev                # desktop app (builds the UI and ottie first; starts it unless one answers)
 pnpm --filter app build              # installer: UI → release ottie → app (target/release/bundle/)
 pnpm --filter app icon               # rebuild app/icons/icon.ico after changing res/icons
@@ -311,13 +308,60 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - License header: published crates' entry files carry the MPL "Exhibit A" notice, because the root `LICENSE` file isn't packaged.
 - TypeScript: `strict`, no `any`. API types come only from `shared/api-types/` (`import type { Job } from '@ottie/api-types/Job'`). In the UI, `#lib/…` imports of TS files end in `.js` (`#lib/format.js`). Logic lives in plain `.ts` files with unit tests; components stay thin. Prettier formats (tabs, single quotes).
 - UI (`docs/decisions/0015`, `0021`): runes mode; styles in each component's `<style>` using the variables in `app.css` (colours, `--font`/`--mono`, `--radius-s/m/l`), never raw colours; the page talks to the daemon only through `api.ts`. Every theme must keep working: check light and dark when adding colours. Every page must also work at the desktop app's minimum size (720 × 480, `min_inner_size` in `app/src/main.rs`) and on a phone (360 px wide and up; under 40rem the tabs are a bar along the bottom; there and in windows under 40rem tall, the download list keeps a height of its own with the details panel under it, and the page scrolls). Two traps: a visually hidden `position: absolute` input needs a positioned parent, or it hangs from the window and makes it scroll; and a flex item with `overflow: hidden` shrinks below its content unless it's `flex: none`.
-- Translations (`docs/decisions/0016`): no visible text in components or logic: every string is a message in `messages/en.json` *and* `fr.json` (French typography: no-break space before `: ? !` and inside « »); numbers, sizes and durations go through `format.ts` (`Intl`); daemon text is shown through `explain.ts`. Functions that build text take a `locale` parameter (default `getLocale()`) so tests can check both languages. Other languages (`docs/decisions/0041`): write a count as a label ("Pobierane: {count}"), not with plural forms; a new language is a file in `ui/messages/` and `app/messages/`, its tag in `project.inlang/settings.json`, its name in `NAMES` (`languages.ts`) and its file in `LANGUAGES` (`app/src/texts.rs`); once a native speaker has checked it, add it to `REVIEWED`. A script none of our fonts draws gets a Noto cut to its messages (`FONTS` in `ui/scripts/fonts.mjs`, a `:lang()` rule in `app.css`); after changing the messages of a language with a cut font (hi, zh-Hans, zh-Hant, ja, ko), run `pnpm --filter ui fonts` (a test fails until you do).
+- Translations (`docs/decisions/0016`): no visible text in components or logic: every string is a message in `messages/en.json` *and* `fr.json` (French typography: no-break space before `: ? !` and inside « »); numbers, sizes and durations go through `format.ts` (`Intl`); daemon text is shown through `explain.ts`. Functions that build text take a `locale` parameter (default `getLocale()`) so tests can check both languages. Other languages (`docs/decisions/0041`): write a count as a label ("Pobierane: {count}"), not with plural forms; a new language is a file in `ui/messages/` and `app/messages/`, its tag in `project.inlang/settings.json`, its name in `NAMES` (`languages.ts`) and its file in `LANGUAGES` (`app/src/texts.rs`); once a native speaker has checked it, add it to `REVIEWED`. A language Outfit can't fully draw goes in the `:lang()` list in `app.css` (the system's font throughout; a test fails until it does) and in the table under "Languages and fonts". A language the browsers lack `Intl` data for (check in Edge: `Intl.NumberFormat.supportedLocalesOf`) gets a stand-in in `INTL` (`languages.ts`), and its tray texts follow the stand-in.
 - API docs (`docs/decisions/0030`): every handler has a `#[utoipa::path]` (route, body, answers, the `Reason` codes it can refuse with) and is registered with `routes!`; wire types derive `ToSchema` beside `TS`. Fields inside the tagged enums (`Problem`, `Reason`, `Event`) stay one word (utoipa ignores `rename_all_fields`; a test checks). A change in how to use the API also updates `docs/api/README.md`.
 - API errors (`docs/decisions/0016`): every refusal has a `Reason` code (`crates/api/src/types.rs`) besides the English `error`; a new engine `Error` variant gets a code in `error.rs`.
 - Tests: engine behaviour is tested against the in-process server in `crates/core/tests/support/` (dropped connections, no range support, slow chunks, changed ETag, `unplug()`: open connections go silent as after a network change). Speed-limit tests (`tests/throttle.rs`) assert shares and minimum durations with wide margins, never exact speeds; progress snapshots lag up to ~0.5 s, so don't measure rates over short windows. Multi-connection tests (`tests/segmented.rs`) use `HttpConfig { connections: 4, min_split: 64 KiB }`; the other test files pin one connection or use files too small to split. Tests never hit the real internet. A resumed download must be byte-identical to a clean one. Don't assert exact byte counts after an injected connection drop; assert `.part.ottie` length == `downloaded` instead. Manager tests subscribe before adding jobs, and wait for several concurrent jobs with `wait_for_all` (any order), never one after another.
 - Line endings: LF everywhere (`.gitattributes`).
 - Commits: Conventional Commits (`feat(core): …`, `fix(extension): …`), one per slice: the code, its tests and its docs (decision record + its line in `docs/decisions/README.md`, CLAUDE.md) together. Unrelated changes (e.g. a test fix found along the way) get their own.
 - New dependency: say what it's for and why it beats the alternatives before adding it.
+
+## Languages and fonts
+
+Ottie embeds two fonts, Outfit and DM Mono for numbers in columns (`docs/decisions/0041`). A page in a language Outfit draws in full uses them; a page in any other language uses the system's fonts throughout, monospace included, picked by the browser for the page's `lang` (`app.css`; a test checks the list against Outfit's characters). "Numbers and dates" says what `Intl` writes them in when the browser has no data for the language (Chrome, Edge, the desktop app).
+
+| Language | Tag | Drawn in | Numbers and dates |
+|---|---|---|---|
+| English | `en` | Outfit | own |
+| French | `fr` | Outfit | own |
+| German | `de` | Outfit | own |
+| Spanish (Spain) | `es-ES` | Outfit | own |
+| Spanish (Latin America) | `es-419` | Outfit | own |
+| Italian | `it` | Outfit | own |
+| Dutch | `nl` | Outfit | own |
+| Polish | `pl` | Outfit | own |
+| Portuguese (Portugal) | `pt-PT` | Outfit | own |
+| Portuguese (Brazil) | `pt-BR` | Outfit | own |
+| Swedish | `sv` | Outfit | own |
+| Romanian | `ro` | Outfit | own |
+| Czech | `cs` | Outfit | own |
+| Hungarian | `hu` | Outfit | own |
+| Danish | `da` | Outfit | own |
+| Finnish | `fi` | Outfit | own |
+| Slovak | `sk` | Outfit | own |
+| Croatian | `hr` | Outfit | own |
+| Slovene | `sl` | Outfit | own |
+| Lithuanian | `lt` | Outfit | own |
+| Latvian | `lv` | Outfit | own |
+| Estonian | `et` | Outfit | own |
+| Irish | `ga` | Outfit | own |
+| Maltese | `mt` | Outfit | own |
+| Indonesian | `id` | Outfit | own |
+| Turkish | `tr` | Outfit | own |
+| Swahili | `sw` | Outfit | own |
+| Zulu | `zu` | Outfit | South African English (`en-ZA`) |
+| Greek | `el` | system font (Greek script) | own |
+| Bulgarian | `bg` | system font (Cyrillic) | own |
+| Ukrainian | `uk` | system font (Cyrillic) | own |
+| Vietnamese | `vi` | system font (ạ, ư, ổ…) | own |
+| Hindi | `hi` | system font (Devanagari) | own |
+| Chinese (simplified) | `zh-Hans` | system font (Han) | own |
+| Chinese (traditional) | `zh-Hant` | system font (Han) | own |
+| Japanese | `ja` | system font (kana, Han) | own |
+| Korean | `ko` | system font (Hangul) | own |
+| Amharic | `am` | system font (Ethiopic) | own |
+| Hausa | `ha` | system font (ɓ, ɗ, ƙ) | Nigerian English (`en-NG`) |
+| Yoruba | `yo` | system font (ẹ, ọ, ṣ, tone marks) | Nigerian English (`en-NG`) |
 
 ## How we work
 
@@ -381,7 +425,7 @@ Languages, a batch per slice, between the steps above (`docs/decisions/0041`; no
 - ✅ ~~L2 the rest of the EU in Latin script: sv, ro, cs, hu, da, fi, sk, hr, sl, lt, lv, et, ga, mt~~
 - ✅ ~~L3 Greek and Cyrillic: el, bg, uk (Manrope + JetBrains Mono, bundled)~~
 - ✅ ~~L4 Asia: zh-Hans, zh-Hant, ja, ko, id, hi, vi, tr (Manrope for vi; Noto cut to our messages for hi and CJK)~~
-- L5 Africa: sw, am, ha, yo, zu
+- ✅ ~~L5 Africa: sw, am, ha, yo, zu (only Outfit + DM Mono embedded from then on, the system's fonts for the rest; ha, yo, zu numbers and dates in their country's English)~~
 - L6 Arabic, with the whole layout mirrored (right to left)
 
 Each translation is drafted, then checked by a native speaker when one helps (a platform like Weblate); checked ones go in `REVIEWED`.

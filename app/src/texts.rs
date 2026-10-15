@@ -8,7 +8,7 @@ use crate::status::{Progress, Summary};
 
 /// Each language's texts, by its tag, as the page names them
 /// (`ui/project.inlang/settings.json`). The first is the fallback.
-const LANGUAGES: [(&str, &str); 35] = [
+const LANGUAGES: [(&str, &str); 40] = [
     ("en", include_str!("../messages/en.json")),
     ("fr", include_str!("../messages/fr.json")),
     ("de", include_str!("../messages/de.json")),
@@ -44,6 +44,11 @@ const LANGUAGES: [(&str, &str); 35] = [
     ("hi", include_str!("../messages/hi.json")),
     ("vi", include_str!("../messages/vi.json")),
     ("tr", include_str!("../messages/tr.json")),
+    ("sw", include_str!("../messages/sw.json")),
+    ("am", include_str!("../messages/am.json")),
+    ("ha", include_str!("../messages/ha.json")),
+    ("yo", include_str!("../messages/yo.json")),
+    ("zu", include_str!("../messages/zu.json")),
 ];
 
 /// Units count in 1024s, as on the page (`ui/src/lib/format.ts`).
@@ -377,6 +382,14 @@ mod tests {
             fr.limit(10 * 1024 * 1024),
             "Limiter la vitesse à 10\u{a0}Mo/s"
         );
+        // The unit first, as the page's `Intl` writes Swahili; Zulu as South
+        // African English (`intlLocale` in ui/src/lib/languages.ts).
+        let sw = Texts::for_language(Some("sw"));
+        assert_eq!(sw.speed(1536 * 1024), "MB 1.5 kwa kila sekunde");
+        assert_eq!(sw.duration(200), "dakika 3 sekunde 20");
+        let zu = Texts::for_language(Some("zu"));
+        assert_eq!(zu.speed(1536 * 1024), "1,5 MB/s");
+        assert_eq!(zu.speed(1023 * 1024 + 900), "1\u{a0}024 kB/s");
     }
 
     #[test]

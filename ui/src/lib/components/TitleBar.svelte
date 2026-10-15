@@ -15,10 +15,11 @@
 
 	/** How far the bar is folded to fit: 0 not at all, 1 the tabs show
 	 * only their icons, 2 the time slot's chip too, 3 the logo loses its
-	 * name. What's inside folds through classes only, never by adding or
-	 * removing elements (that would set off `fit` again). */
+	 * name, 4 the speed's chip shortens to fit (long units: "kilobaiti 300
+	 * kwa kila sekunde"). What's inside folds through classes only, never
+	 * by adding or removing elements (that would set off `fit` again). */
 	let level = $state(0);
-	const MOST = 3;
+	const MOST = 4;
 	let middle: HTMLElement | undefined = $state();
 	let fitting = false;
 

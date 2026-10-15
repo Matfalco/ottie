@@ -1,8 +1,9 @@
 // Numbers and names as people read them, in the page's language: the
 // browser's `Intl` knows each language's units and separators ("1.5 MB",
-// "1,5 Mo").
+// "1,5 Mo"), or a stand-in's for those it lacks (`intlLocale`).
 
 import type { Job } from '@ottie/api-types/Job';
+import { intlLocale } from './languages';
 import { getLocale, type Locale } from './paraglide/runtime.js';
 
 const UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const;
@@ -29,7 +30,7 @@ function number(
 	// One decimal for small numbers ("1.5 MB"), none for big ones ("234 MB");
 	// trimmed, none when it's 0 ("1 MB").
 	const digits = unit > 0 && value < 10 ? 1 : 0;
-	return new Intl.NumberFormat(locale, {
+	return new Intl.NumberFormat(intlLocale(locale), {
 		style: 'unit',
 		unit: intlUnit,
 		unitDisplay: long ? 'long' : 'short',
@@ -60,25 +61,30 @@ export function formatLimit(bytesPerSec: number, locale: Locale = getLocale()): 
 
 /** "1,234" (French: "1 234"). */
 export function formatCount(count: number, locale: Locale = getLocale()): string {
-	return new Intl.NumberFormat(locale).format(count);
+	return new Intl.NumberFormat(intlLocale(locale)).format(count);
 }
 
 /** "80%" (French: "80 %"); whole percents, rounded down so 99.9% isn't "100%". */
 export function formatPercent(fraction: number, locale: Locale = getLocale()): string {
 	const whole = Math.floor(fraction * 100) / 100;
-	return new Intl.NumberFormat(locale, { style: 'percent' }).format(whole);
+	return new Intl.NumberFormat(intlLocale(locale), { style: 'percent' }).format(whole);
 }
 
 /** When a job was added: the date and the time to the second, in the
  * page's time zone. */
 export function formatAdded(added: Date, locale: Locale = getLocale()): string {
-	return new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' }).format(added);
+	return new Intl.DateTimeFormat(intlLocale(locale), {
+		dateStyle: 'short',
+		timeStyle: 'medium'
+	}).format(added);
 }
 
 /** The two largest units: "45 sec", "3 min 20 sec", "2 hr 5 min" (French: "2 h 5 min"). */
 export function formatDuration(seconds: number, locale: Locale = getLocale()): string {
 	const part = (value: number, unit: string) =>
-		new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'short' }).format(value);
+		new Intl.NumberFormat(intlLocale(locale), { style: 'unit', unit, unitDisplay: 'short' }).format(
+			value
+		);
 	const s = Math.max(0, Math.round(seconds));
 	if (s < 60) {
 		return part(s, 'second');

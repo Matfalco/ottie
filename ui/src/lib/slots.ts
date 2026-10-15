@@ -9,6 +9,7 @@ import type { Slot } from '@ottie/api-types/Slot';
 import type { SlotBody } from '@ottie/api-types/SlotBody';
 import { categoryName, type Categories } from './categories';
 import { formatCount, formatLimit } from './format';
+import { intlLocale } from './languages';
 import { m } from './paraglide/messages.js';
 import { getLocale, type Locale } from './paraglide/runtime.js';
 import { fieldToLimit, limitToField, parseWhole, type SpeedUnit } from './settings';
@@ -45,19 +46,21 @@ export function sortedSlots(slots: Slots): Slot[] {
 export function dayName(day: Day, style: 'long' | 'short', locale: Locale = getLocale()): string {
 	// 2024-01-01 was a Monday.
 	const date = new Date(2024, 0, 1 + DAYS.indexOf(day));
-	return new Intl.DateTimeFormat(locale, { weekday: style }).format(date);
+	return new Intl.DateTimeFormat(intlLocale(locale), { weekday: style }).format(date);
 }
 
 /** "HH:MM" as the page shows times: "23:00", or "11:00 PM". */
 export function formatClock(hhmm: string, locale: Locale = getLocale()): string {
 	const minutes = minutesOf(hhmm);
 	const at = new Date(2024, 0, 1, Math.floor(minutes / 60), minutes % 60);
-	return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(at);
+	return new Intl.DateTimeFormat(intlLocale(locale), { timeStyle: 'short' }).format(at);
 }
 
 /** An hour on the week view's side: "6 AM", "18 h". */
 export function formatHour(hour: number, locale: Locale = getLocale()): string {
-	return new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2024, 0, 1, hour));
+	return new Intl.DateTimeFormat(intlLocale(locale), { hour: 'numeric' }).format(
+		new Date(2024, 0, 1, hour)
+	);
 }
 
 /** Minutes from midnight of "HH:MM". */
@@ -77,7 +80,7 @@ function dateOf(text: string): Date {
 export function describeDays(slot: Slot, locale: Locale = getLocale()): string {
 	const options = { locale };
 	if (slot.date !== null) {
-		return new Intl.DateTimeFormat(locale, {
+		return new Intl.DateTimeFormat(intlLocale(locale), {
 			weekday: 'short',
 			day: 'numeric',
 			month: 'short'

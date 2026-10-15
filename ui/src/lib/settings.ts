@@ -3,6 +3,7 @@
 
 import { RANGES } from '@ottie/api-types/Ranges';
 import { m } from './paraglide/messages.js';
+import { intlLocale } from './languages';
 import { getLocale, type Locale } from './paraglide/runtime.js';
 
 export type SpeedUnit = 'kB' | 'MB' | 'GB';
@@ -41,9 +42,10 @@ const LAST_LIMIT_KEYS: Record<LimitMemory, string> = {
 
 /** A number for a field: "40", "0.5" (French: "0,5"), two decimals at most. */
 export function toField(value: number, locale: Locale = getLocale()): string {
-	return new Intl.NumberFormat(locale, { maximumFractionDigits: 2, useGrouping: false }).format(
-		value
-	);
+	return new Intl.NumberFormat(intlLocale(locale), {
+		maximumFractionDigits: 2,
+		useGrouping: false
+	}).format(value);
 }
 
 /** What was typed, with a point or a comma; null if it isn't a number. */

@@ -149,9 +149,10 @@
 			{#if !settingUp}
 				<NavMenu jobs={session.list} compact={level >= 1} />
 			{/if}
-			<span class="end">
+			<span class="end" class:squeezed={level >= 4}>
 				<SpeedChip
 					brief={level >= 2}
+					squeezed={level >= 4}
 					speed={session.history.at(-1) ?? 0}
 					limit={session.settings?.globalLimit ?? null}
 					schedule={queueNow(session.slotList)}
@@ -199,6 +200,12 @@
 	/* Pushes the speed to the right of the title bar. */
 	.end {
 		margin-left: auto;
+	}
+
+	/* Still short of room once folded all the way: the speed shortens. */
+	.end.squeezed {
+		display: flex;
+		min-width: 0;
 	}
 
 	main {
