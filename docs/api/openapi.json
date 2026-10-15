@@ -4203,7 +4203,7 @@
               "string",
               "null"
             ],
-            "description": "The language those devices show, as a tag like `en` or `pt-BR`; null\nuntil one shares its own. A device without it keeps its own."
+            "description": "The language those devices show, as a tag like `en` or `pt-BR`; null:\neach shows its own system's. A device without it keeps its own."
           },
           "maxBatch": {
             "type": "integer",
@@ -4273,7 +4273,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "`null`: each device shows its own system's language."
           },
           "maxBatch": {
             "type": [

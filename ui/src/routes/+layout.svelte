@@ -10,6 +10,7 @@
 	import icon from '#lib/assets/ottie.svg';
 	import Login from '#lib/components/Login.svelte';
 	import Shell from '#lib/components/Shell.svelte';
+	import { followLanguage } from '#lib/languages.js';
 	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { themeFor } from '#lib/theme.js';
 	import { forgetToken, loadToken, saveToken, tokenFromFragment } from '#lib/token.js';
@@ -24,9 +25,13 @@
 
 	// For screen readers, spell checking and hyphenation. (Changing the
 	// language reloads the page, so this runs again.)
-	document.documentElement.lang = getLocale();
+	const shown = getLocale();
+	document.documentElement.lang = shown;
 	// The desktop app's tray speaks it too.
-	tellLanguage(getLocale());
+	tellLanguage(shown);
+	// A language chosen in another window (or the shared one, taken on
+	// there) reloads this one too: the tray's menu stays loaded while hidden.
+	onMount(() => followLanguage(shown));
 
 	// The theme, set before anything is drawn, then kept up to date with the
 	// user's choice and the system's dark mode.

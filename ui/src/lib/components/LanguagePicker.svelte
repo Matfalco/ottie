@@ -1,30 +1,46 @@
 <script lang="ts">
+	import {
+		chosenLanguage,
+		NAMES,
+		sortedLocales,
+		switchLanguage,
+		systemLanguage
+	} from '#lib/languages.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { getLocale, isLocale, locales, setLocale, type Locale } from '#lib/paraglide/runtime.js';
+	import { isLocale, type Locale } from '#lib/paraglide/runtime.js';
 
 	interface Props {
 		/** For a `<label for>` outside. */
 		id?: string;
-		/** Switches to the language chosen; by default, on this device only. */
-		onChoose?: (locale: Locale) => void;
+		/** Switches to the language chosen (null: the system's); by default,
+		 * on this device only. */
+		onChoose?: (locale: Locale | null) => void;
 	}
 
-	let { id, onChoose = (locale) => setLocale(locale) }: Props = $props();
+	let { id, onChoose = switchLanguage }: Props = $props();
 
-	/** Each language in its own words. */
-	const NAMES: Record<Locale, string> = { en: 'English', fr: 'Français' };
+	const SYSTEM = 'system';
+	const system = systemLanguage();
 
 	function change(event: Event & { currentTarget: HTMLSelectElement }) {
 		const chosen = event.currentTarget.value;
-		if (isLocale(chosen)) {
+		if (chosen === SYSTEM) {
+			onChoose(null);
+		} else if (isLocale(chosen)) {
 			// Remembered by this browser; the page reloads in that language.
 			onChoose(chosen);
 		}
 	}
 </script>
 
-<select {id} value={getLocale()} onchange={change} aria-label={id ? undefined : m.language()}>
-	{#each locales as locale (locale)}
+<select
+	{id}
+	value={chosenLanguage() ?? SYSTEM}
+	onchange={change}
+	aria-label={id ? undefined : m.language()}
+>
+	<option value={SYSTEM}>{m.language_system({ language: NAMES[system] })}</option>
+	{#each sortedLocales() as locale (locale)}
 		<option value={locale} lang={locale}>{NAMES[locale]}</option>
 	{/each}
 </select>
@@ -32,6 +48,7 @@
 <style>
 	select {
 		min-width: 10rem;
+		max-width: 100%;
 		padding: 0.35rem 0.6rem;
 	}
 </style>

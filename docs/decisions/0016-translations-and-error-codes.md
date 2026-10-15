@@ -9,7 +9,7 @@ Accepted 2026-10-12.
 - A unit test checks that every language has every English message with the same `{placeholders}`.
 - The add-on's defaults are for server-rendered sites with the language in the URL. For our single-page app they're replaced:
   - no server hooks and no localized URLs;
-  - language strategy `localStorage` (the page's own selector) → `preferredLanguage` (the browser's) → English;
+  - language strategy `localStorage` (the page's own selector) → `preferredLanguage` (the browser's) → English (replaced in 0041 by Ottie's own choice, then the system's closest language, then English);
   - a language change reloads the page;
   - `<html lang>` is set from the client.
 - The compiler's message-format plugin is loaded from the pinned npm package (`./node_modules/@inlang/plugin-message-format`), not from a CDN, so builds work offline and never run code fetched at build time.

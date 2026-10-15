@@ -23,7 +23,7 @@ pub struct Settings {
     /// shares its own. The engine only keeps it (docs/decisions/0022).
     pub appearance: Option<Appearance>,
     /// The language those devices show, as a tag like `en` or `pt-BR`;
-    /// `None` until one shares its own.
+    /// `None`: each shows its own system's (docs/decisions/0041).
     pub language: Option<String>,
 }
 
@@ -87,7 +87,7 @@ impl Settings {
             self.appearance = Some(appearance);
         }
         if let Some(language) = language {
-            self.language = Some(language);
+            self.language = language;
         }
     }
 }
@@ -104,7 +104,8 @@ pub struct SettingsChange {
     pub stream_media: Option<bool>,
     pub setup_done: Option<bool>,
     pub appearance: Option<Appearance>,
-    pub language: Option<String>,
+    /// `Some(None)`: back to each device's system language.
+    pub language: Option<Option<String>>,
 }
 
 /// What happens when a download fails with an error that may go away (a

@@ -50,7 +50,7 @@ streamMedia: boolean,
  */
 appearance: Appearance | null, 
 /**
- * The language those devices show, as a tag like `en` or `pt-BR`; null
- * until one shares its own. A device without it keeps its own.
+ * The language those devices show, as a tag like `en` or `pt-BR`; null:
+ * each shows its own system's. A device without it keeps its own.
  */
 language: string | null, };

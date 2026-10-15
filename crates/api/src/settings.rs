@@ -95,7 +95,7 @@ fn check(change: &SettingsChange) -> Result<(), Failure> {
             ));
         }
     }
-    if let Some(language) = &change.language
+    if let Some(Some(language)) = &change.language
         && !is_language_tag(language)
     {
         return Err(Failure::new(

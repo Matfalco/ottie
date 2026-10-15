@@ -30,6 +30,9 @@ use crate::daemon::Started;
 const WINDOW: &str = "main";
 /// The daemon's play links (docs/decisions/0029).
 const PLAY_PATH: &str = "/api/v1/stream/";
+/// Ottie's own pages on the web (e.g. to help translate it), which the page
+/// may open in the system's browser.
+const PROJECT: &str = "https://github.com/Matfalco/ottie/";
 
 /// What the page may do in the app: control its window, since it draws its
 /// own title bar (docs/decisions/0019), open the system folder picker, which
@@ -192,10 +195,14 @@ fn open_window(app: &AppHandle, link: Url, shown: bool) -> tauri::Result<()> {
         // window into a browser.
         .on_navigation(move |url| url.origin() == daemon)
         // "Play" opens the daemon's play link in a new tab: here, in the
-        // player chosen in Settings. No other page opens a window.
+        // player chosen in Settings. Ottie's own pages on the web open in
+        // the system's browser. No other page opens a window.
         .on_new_window(move |url, _| {
             if url.origin() == links && url.path().starts_with(PLAY_PATH) {
                 player::play(&handle, &url);
+            } else if url.as_str().starts_with(PROJECT) {
+                // Best effort: without a browser, the link does nothing.
+                let _ = open::that_detached(url.as_str());
             }
             NewWindowResponse::Deny
         })

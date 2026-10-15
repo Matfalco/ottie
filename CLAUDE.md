@@ -22,7 +22,7 @@
 - A **browser extension** (Chromium-based browsers and Firefox, desktop) that takes over downloads from the browser: intercepts them, hides the browser's own download UI where possible, and shows our download list in its popup.
 - Must-haves: pause/resume (including after a restart or crash), multi-connection downloads, and speed limits at three levels (per download, per category, global), adjustable while downloads run.
 - **Play while downloading** (uGet can): a short-lived play link (`POST /jobs/{id}/stream` → `GET /stream/{ticket}/{name}`, no token, range support) serves a partial file, so the browser, VLC/mpv or an Android player can play a video before it finishes, locally or from a remote daemon (`docs/decisions/0029`). The download order follows the player and, in a per-download streaming mode, stays in order and fetches the last chunk early (many MP4s keep their index at the end).
-- **Translated UI:** English and French to start (more languages = one JSON file each, in `ui/messages/` and, for the tray, `app/messages/`); daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
+- **Translated UI:** in the system's language by default (a device or every device can choose another), English as the fallback. English and French, then languages in batches (EU, Latin America, Asia, Africa; `docs/decisions/0041`): de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR so far. Each is one JSON file in `ui/messages/` and, for the tray, one in `app/messages/`; daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
 - uGet features to bring over time: categories (folder + file-type rules), queue with max concurrent downloads, opt-in clipboard monitoring, batch/URL-list import, scheduler.
 
 ## Stack
@@ -136,8 +136,8 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
                      (tray or daemon only), `--autostart`
   src/popup.rs       Ottie's own tray menu: the /tray page in a borderless window beside the click, hidden
                      on blur; commands menu_ready / show_main / quit_app
-  src/texts.rs       the tray's and notifications' texts from messages/{en,fr}.json, speeds, counts and
-                     failure reasons per language
+  src/texts.rs       the tray's and notifications' texts from messages/<tag>.json (the page's tag, else
+                     the bare language), speeds, counts and failure reasons per language
   src/prefs.rs       app.json: close to tray, notifications and their sounds, what sign-in starts, the page's
                      language, last total limit; commands desktop / set_startup / set_close_to_tray / set_notify / set_notify_failed / set_sounds /
                      set_sound / play_sound / set_language
@@ -154,6 +154,7 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
   scripts/          sidecar.mjs (UI + release ottie → binaries/), ico.mjs (icons/icon.ico from res/icons)
   package.json       pnpm package `app`: the Tauri CLI
 ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [exists]
+  src/hooks.client.ts  which language the page shows: Paraglide strategies that save nothing (0041)
   src/routes/        +layout.svelte (fonts, app.css, theme, favicon, token → Login | Shell; /tray without),
                      +layout.ts (ssr = false), +page.svelte (Dashboard), downloads/+page.svelte
                      (Downloads, ?status= filter), categories/+page.svelte, schedule/+page.svelte,
@@ -166,7 +167,9 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      arrange.ts (sort + group by status, saved per device),
                      details.ts (the selected download's panel: main action, facts, priorities),
                      filemap.ts (ranges → a row's split bar, and the detail bar that maps the file, 0027),
-                     views.ts (saved views ↔ filters + arrangement, which pill is lit), format.ts, token.ts, adding.ts (the add step), setup.ts (starter categories),
+                     views.ts (saved views ↔ filters + arrangement, which pill is lit),
+                     languages.ts (each language's name, which are reviewed, the system's closest, the
+                     device's choice, 0041), format.ts, token.ts, adding.ts (the add step), setup.ts (starter categories),
                      theme.ts (light/dark/system + palette → theme, saved per device),
                      settings.ts (settings fields: kB/MB/GB per second, seconds, ranges; last limit
                      per device), sync.ts (following the shared look + language),
@@ -204,7 +207,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        TitleBar (+ WindowControls; folds to fit: tab icons, slot chip, logo name), AddCard (AddBar: link, then category + folder step;
                        BatchDialog: several links, from a paste, the list button or a file),
                        FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu)
-  messages/{en,fr}.json  every UI text, per language (Paraglide); project.inlang/ its settings
+  messages/<tag>.json  every UI text, per language (Paraglide); project.inlang/ its settings (the locales)
   src/app.css        the four themes as variables under [data-theme] (docs/decisions/0021), fonts, radii
   vite.config.ts     SvelteKit + adapter-static → ../crates/api/ui-dist; Paraglide; dev proxy /api → daemon
 extension/         WebExtension (Chrome + Firefox)
@@ -304,7 +307,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - License header: published crates' entry files carry the MPL "Exhibit A" notice, because the root `LICENSE` file isn't packaged.
 - TypeScript: `strict`, no `any`. API types come only from `shared/api-types/` (`import type { Job } from '@ottie/api-types/Job'`). In the UI, `#lib/…` imports of TS files end in `.js` (`#lib/format.js`). Logic lives in plain `.ts` files with unit tests; components stay thin. Prettier formats (tabs, single quotes).
 - UI (`docs/decisions/0015`, `0021`): runes mode; styles in each component's `<style>` using the variables in `app.css` (colours, `--font`/`--mono`, `--radius-s/m/l`), never raw colours; the page talks to the daemon only through `api.ts`. Every theme must keep working: check light and dark when adding colours. Every page must also work at the desktop app's minimum size (720 × 480, `min_inner_size` in `app/src/main.rs`) and on a phone (360 px wide and up; under 40rem the tabs are a bar along the bottom; there and in windows under 40rem tall, the download list keeps a height of its own with the details panel under it, and the page scrolls). Two traps: a visually hidden `position: absolute` input needs a positioned parent, or it hangs from the window and makes it scroll; and a flex item with `overflow: hidden` shrinks below its content unless it's `flex: none`.
-- Translations (`docs/decisions/0016`): no visible text in components or logic: every string is a message in `messages/en.json` *and* `fr.json` (French typography: no-break space before `: ? !` and inside « »); numbers, sizes and durations go through `format.ts` (`Intl`); daemon text is shown through `explain.ts`. Functions that build text take a `locale` parameter (default `getLocale()`) so tests can check both languages.
+- Translations (`docs/decisions/0016`): no visible text in components or logic: every string is a message in `messages/en.json` *and* `fr.json` (French typography: no-break space before `: ? !` and inside « »); numbers, sizes and durations go through `format.ts` (`Intl`); daemon text is shown through `explain.ts`. Functions that build text take a `locale` parameter (default `getLocale()`) so tests can check both languages. Other languages (`docs/decisions/0041`): write a count as a label ("Pobierane: {count}"), not with plural forms; a new language is a file in `ui/messages/` and `app/messages/`, its tag in `project.inlang/settings.json`, its name in `NAMES` (`languages.ts`) and its file in `LANGUAGES` (`app/src/texts.rs`); once a native speaker has checked it, add it to `REVIEWED`.
 - API docs (`docs/decisions/0030`): every handler has a `#[utoipa::path]` (route, body, answers, the `Reason` codes it can refuse with) and is registered with `routes!`; wire types derive `ToSchema` beside `TS`. Fields inside the tagged enums (`Problem`, `Reason`, `Event`) stay one word (utoipa ignores `rename_all_fields`; a test checks). A change in how to use the API also updates `docs/api/README.md`.
 - API errors (`docs/decisions/0016`): every refusal has a `Reason` code (`crates/api/src/types.rs`) besides the English `error`; a new engine `Error` variant gets a code in `error.rs`.
 - Tests: engine behaviour is tested against the in-process server in `crates/core/tests/support/` (dropped connections, no range support, slow chunks, changed ETag, `unplug()`: open connections go silent as after a network change). Speed-limit tests (`tests/throttle.rs`) assert shares and minimum durations with wide margins, never exact speeds; progress snapshots lag up to ~0.5 s, so don't measure rates over short windows. Multi-connection tests (`tests/segmented.rs`) use `HttpConfig { connections: 4, min_split: 64 KiB }`; the other test files pin one connection or use files too small to split. Tests never hit the real internet. A resumed download must be byte-identical to a clean one. Don't assert exact byte counts after an injected connection drop; assert `.part.ottie` length == `downloaded` instead. Manager tests subscribe before adding jobs, and wait for several concurrent jobs with `wait_for_all` (any order), never one after another.
@@ -369,6 +372,16 @@ Done: ✅ and struck through.
 7. Browser extension.
 8. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.
 
+Languages, a batch per slice, between the steps above (`docs/decisions/0041`; no Russian for now):
+- ✅ ~~L1 "System" by default (also as the shared language), matching the system's tag, unreviewed note; de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR~~
+- L2 the rest of the EU in Latin script: sv, ro, cs, hu, da, fi, sk, hr, sl, lt, lv, et, ga, mt
+- L3 Greek and Cyrillic: el, bg, uk (Outfit lacks them: the system's font through `:lang()`, or a second bundled font)
+- L4 Asia: zh-Hans, zh-Hant, ja, ko, id, hi, vi, tr (fonts as in L3)
+- L5 Africa: sw, am, ha, yo, zu
+- L6 Arabic, with the whole layout mirrored (right to left)
+
+Each translation is drafted, then checked by a native speaker when one helps (a platform like Weblate); checked ones go in `REVIEWED`.
+
 ## Open decisions
 
 - Extension pairing: both, a native messaging host when installed (zero-config, can start the daemon) and the token as the fallback (remote daemon, portable setup). Details in step 7.
@@ -379,3 +392,7 @@ Settled: no uGet import; no aria2 (its HTTP strengths are in our engine already)
 ## Later (TODO)
 
 - FTP/SFTP as a native backend, maybe Metalink (one file from several mirrors, checked by checksum).
+- Ottie as a service only (no app): `ottie service install|uninstall|status`. Per user by default (systemd user unit, LaunchAgent, Task Scheduler at sign-in: the user's own folders), system-wide for headless machines (system unit, Windows service, Docker image: another account, so other folders and file owners). People connect as today: the daemon's page in a browser (`ottie open`/`ottie link`), the desktop app (uses a daemon that answers), the extension.
+- Remote access, documented: `tailscale serve` (stays on 127.0.0.1, HTTPS within the tailnet), a VPN, or a reverse proxy with HTTPS; never the port open to the internet. Hardening: folders a client may write to limited to a list in config.toml (the token can name any folder today, so it can write anywhere the daemon's user can, e.g. a Startup folder); a token per device, revocable, and rotation (maybe read-only ones); a system service under its own locked-down user.
+- Several daemons from one place: in the desktop app, a list (name, URL, token in the OS keychain) and a switcher, with fewer app commands for a remote daemon's page (no open folder, no play with); in the web UI, a switcher first (needs CORS on the daemon, safe since the token isn't a cookie), maybe later one list across daemons (IDs clash, one event stream each).
+- Onboarding in several steps, each skippable (and the whole of it): e.g. language + look, starter categories, downloads folder, sign-in and closing (desktop app), notifications, later the extension and other devices.

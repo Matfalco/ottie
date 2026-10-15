@@ -251,7 +251,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         stream_media: Some(false),
         setup_done: Some(true),
         appearance: Some(appearance),
-        language: Some("fr".into()),
+        language: Some(Some("fr".into())),
         ..SettingsChange::default()
     };
     manager.change_settings(change).await.unwrap();

@@ -1053,6 +1053,21 @@ async fn settings_are_read_and_changed() {
     };
     assert_eq!(refused(odd).await, invalid);
     assert_eq!(settings().await, changed);
+
+    // Null puts every device back on its own system's language.
+    let system = serde_json::json!({ "language": null });
+    assert_eq!(
+        patch(system).await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    let language = None;
+    assert_eq!(
+        settings().await,
+        Settings {
+            language,
+            ..changed
+        }
+    );
 }
 
 #[tokio::test]

@@ -6,10 +6,19 @@ use serde::Deserialize;
 use crate::client::Problem;
 use crate::status::{Progress, Summary};
 
-/// Each language's texts, by its tag. The first is the fallback.
-const LANGUAGES: [(&str, &str); 2] = [
+/// Each language's texts, by its tag, as the page names them
+/// (`ui/project.inlang/settings.json`). The first is the fallback.
+const LANGUAGES: [(&str, &str); 10] = [
     ("en", include_str!("../messages/en.json")),
     ("fr", include_str!("../messages/fr.json")),
+    ("de", include_str!("../messages/de.json")),
+    ("es-ES", include_str!("../messages/es-ES.json")),
+    ("es-419", include_str!("../messages/es-419.json")),
+    ("it", include_str!("../messages/it.json")),
+    ("nl", include_str!("../messages/nl.json")),
+    ("pl", include_str!("../messages/pl.json")),
+    ("pt-PT", include_str!("../messages/pt-PT.json")),
+    ("pt-BR", include_str!("../messages/pt-BR.json")),
 ];
 
 /// Units count in 1024s, as on the page (`ui/src/lib/format.ts`).
@@ -80,17 +89,20 @@ struct Problems {
 }
 
 impl Texts {
-    /// The texts for a language tag (`fr`, `fr-CA`), else English. The files
-    /// are checked by a test, so the empty fallback never shows.
+    /// The texts for a language tag: the page's own (`fr`, `pt-BR`), else
+    /// its bare language (`fr-CA`), else English. The files are checked by a
+    /// test, so the empty fallback never shows.
     pub fn for_language(tag: Option<&str>) -> Texts {
-        let primary = tag
-            .and_then(|tag| tag.split(['-', '_']).next())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
+        let tag = tag.unwrap_or_default();
+        let primary = tag.split(['-', '_']).next().unwrap_or_default();
         let [(_, english), ..] = LANGUAGES;
-        let file = LANGUAGES
+        let file = [tag, primary]
             .iter()
-            .find(|(language, _)| *language == primary)
+            .find_map(|wanted| {
+                LANGUAGES
+                    .iter()
+                    .find(|(language, _)| language.eq_ignore_ascii_case(wanted))
+            })
             .map_or(english, |(_, file)| file);
         serde_json::from_str(file)
             .or_else(|_| serde_json::from_str(english))
@@ -263,10 +275,63 @@ mod tests {
     }
 
     #[test]
+    fn every_language_has_the_same_texts_and_placeholders() {
+        let [(_, english), ..] = LANGUAGES;
+        let english: serde_json::Value = serde_json::from_str(english).unwrap();
+        for (language, file) in LANGUAGES {
+            let texts: serde_json::Value = serde_json::from_str(file).unwrap();
+            same_shape(&english, &texts, language);
+        }
+    }
+
+    /// The same keys, lists of the same length, and texts with the same
+    /// `{placeholders}`, all the way down.
+    fn same_shape(english: &serde_json::Value, other: &serde_json::Value, path: &str) {
+        use serde_json::Value;
+        match (english, other) {
+            (Value::Object(english), Value::Object(other)) => {
+                let keys = |object: &serde_json::Map<_, _>| {
+                    object.keys().cloned().collect::<Vec<String>>()
+                };
+                assert_eq!(keys(english), keys(other), "{path}");
+                for (key, value) in english {
+                    same_shape(value, &other[key], &format!("{path}.{key}"));
+                }
+            }
+            (Value::Array(english), Value::Array(other)) => {
+                assert_eq!(english.len(), other.len(), "{path}");
+                for (i, (english, other)) in english.iter().zip(other).enumerate() {
+                    same_shape(english, other, &format!("{path}[{i}]"));
+                }
+            }
+            (Value::String(english), Value::String(other)) => {
+                assert_eq!(placeholders(english), placeholders(other), "{path}");
+            }
+            _ => panic!("{path}: not the same kind of value"),
+        }
+    }
+
+    fn placeholders(text: &str) -> Vec<&str> {
+        let mut found: Vec<&str> = text
+            .split('{')
+            .skip(1)
+            .filter_map(|after| after.split_once('}').map(|(name, _)| name))
+            .collect();
+        found.sort_unstable();
+        found
+    }
+
+    #[test]
     fn a_language_falls_back_to_english() {
         assert_eq!(Texts::for_language(Some("fr-CA")).quit, "Quitter Ottie");
-        assert_eq!(Texts::for_language(Some("de")).quit, "Quit Ottie");
+        assert_eq!(Texts::for_language(Some("ja")).quit, "Quit Ottie");
         assert_eq!(Texts::for_language(None).quit, "Quit Ottie");
+    }
+
+    #[test]
+    fn a_language_with_countries_is_found_by_its_full_tag() {
+        assert_eq!(Texts::for_language(Some("pt-BR")).quit, "Sair do Ottie");
+        assert_eq!(Texts::for_language(Some("es-419")).quit, "Salir de Ottie");
     }
 
     #[test]

@@ -1,6 +1,9 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"language": "Language",
+	"language_system": "System ({language})",
+	"language_unreviewed": "No native speaker has checked this translation yet.",
+	"language_help": "Help improve it",
 	"login_intro": "Paste the token that “ottie token” prints.",
 	"login_token": "Token",
 	"login_sign_in": "Sign in",

@@ -854,8 +854,8 @@ pub struct Settings {
     /// The look shared by the devices that choose to follow it; null until
     /// one shares its own.
     pub appearance: Option<Appearance>,
-    /// The language those devices show, as a tag like `en` or `pt-BR`; null
-    /// until one shares its own. A device without it keeps its own.
+    /// The language those devices show, as a tag like `en` or `pt-BR`; null:
+    /// each shows its own system's. A device without it keeps its own.
     pub language: Option<String>,
 }
 
@@ -893,9 +893,11 @@ pub struct SettingsChange {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub appearance: Option<Appearance>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub language: Option<String>,
+    /// `null`: each device shows its own system's language.
+    #[serde(default, with = "present", skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "string | null")]
+    #[schema(value_type = Option<String>)]
+    pub language: Option<Option<String>>,
 }
 
 /// How the front ends look: light, dark or as the system says, and which

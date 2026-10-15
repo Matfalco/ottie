@@ -12,7 +12,8 @@
 	import { provideApp } from '#lib/context.js';
 	import { parseFilters, showsNewJobs, type Status } from '#lib/filters.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { getLocale, isLocale, locales, setLocale } from '#lib/paraglide/runtime.js';
+	import { chosenLanguage, switchLanguage } from '#lib/languages.js';
+	import { isLocale, locales } from '#lib/paraglide/runtime.js';
 	import { Session, type Answer } from '#lib/session.svelte.js';
 	import { syncSteps } from '#lib/sync.js';
 	import ConfirmDialog from './ConfirmDialog.svelte';
@@ -49,7 +50,7 @@
 	provideApp({ session, token, run, ask, add, addMany });
 
 	// A device that follows the shared look and language takes them on
-	// whenever they change, and shares its own while none are shared. (Only
+	// whenever they change, and shares its look while none is shared. (Only
 	// the settings and the choice to follow are watched: a change made here is
 	// on its way to the daemon and comes back as the shared one.)
 	$effect(() => {
@@ -60,15 +61,17 @@
 	});
 
 	async function follow(settings: Settings) {
-		const steps = syncSteps(appearance, getLocale(), settings, locales);
+		const steps = syncSteps(appearance, chosenLanguage(), settings, locales);
 		if (steps.look) {
 			setAppearance(steps.look);
 		}
 		if (steps.share) {
 			await session.changeSettings(steps.share);
 		}
-		if (steps.language && isLocale(steps.language)) {
-			setLocale(steps.language); // Reloads the page in that language.
+		if (steps.systemLanguage) {
+			switchLanguage(null);
+		} else if (steps.language && isLocale(steps.language)) {
+			switchLanguage(steps.language);
 		}
 	}
 

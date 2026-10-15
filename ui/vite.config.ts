@@ -25,13 +25,13 @@ export default defineConfig({
 		}),
 
 		// Translations: messages/{locale}.json compiled into typed functions.
-		// The language: the one chosen in the page (remembered by the
-		// browser), else the browser's, else English. Never in the URL.
+		// The language: the one chosen on this device, else the closest to the
+		// system's, else English (src/hooks.client.ts). Never in the URL.
 		paraglideVitePlugin({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
 			emitTsDeclarations: true,
-			strategy: ['localStorage', 'preferredLanguage', 'baseLocale']
+			strategy: ['custom-chosen', 'custom-system', 'baseLocale']
 		})
 	],
 	server: {

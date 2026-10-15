@@ -11,7 +11,8 @@
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
 	import { useApp } from '#lib/context.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { setLocale, type Locale } from '#lib/paraglide/runtime.js';
+	import { HELP_TRANSLATE, REVIEWED, switchLanguage } from '#lib/languages.js';
+	import { getLocale, type Locale } from '#lib/paraglide/runtime.js';
 	import { RANGES, parseSeconds, parseWhole, toField } from '#lib/settings.js';
 	import {
 		MODES,
@@ -236,12 +237,13 @@
 		}
 	}
 
-	/** A language for this page, and for every device that follows. */
-	async function chooseLanguage(locale: Locale) {
+	/** A language for this page, and for every device that follows (null:
+	 * each its own system's). */
+	async function chooseLanguage(locale: Locale | null) {
 		if (appearance.synced && !(await save({ language: locale }))) {
 			return;
 		}
-		setLocale(locale); // Reloads the page in that language.
+		switchLanguage(locale);
 	}
 
 	function step(by: number) {
@@ -396,6 +398,12 @@
 					<span class="hint">{m.set_language_hint()}</span>
 				</label>
 				<LanguagePicker id="language" onChoose={(locale) => void chooseLanguage(locale)} />
+				{#if !REVIEWED.includes(getLocale())}
+					<p class="hint unreviewed">
+						{m.language_unreviewed()}
+						<a href={HELP_TRANSLATE} target="_blank" rel="noopener">{m.language_help()}</a>
+					</p>
+				{/if}
 			</div>
 		</section>
 
@@ -1004,6 +1012,21 @@
 	header + .setting,
 	fieldset + .setting {
 		border-top: none;
+	}
+
+	/* Under the language, across the row. */
+	.unreviewed {
+		flex-basis: 100%;
+	}
+
+	.unreviewed a {
+		color: var(--accent);
+		font-weight: 500;
+		text-decoration: none;
+	}
+
+	.unreviewed a:hover {
+		text-decoration: underline;
 	}
 
 	.sound {

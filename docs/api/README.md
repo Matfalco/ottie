@@ -76,6 +76,9 @@ curl -H "$AUTH" -X DELETE $API/jobs/2026.10.13-14.28.59-1
 # A total limit for all downloads, and at most 3 at once
 curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH \
      -d '{"globalLimit": 5242880, "maxConcurrent": 3}' $API/settings
+
+# The language every following device shows; null: each its own system's
+curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH      -d '{"language": "de"}' $API/settings
 ```
 
 A download's `state` is one of `queued`, `connecting`, `downloading`, `paused`, `completed`, `failed`, `cancelled`, `retrying` and `scheduled`. Downloads wait in `queued` until a slot is free: the highest `priority` first, then the lowest `place` (new downloads go last; `POST /jobs/reorder` moves them among the queued, scheduled and paused ones of their priority). `failed` and `paused` downloads can be resumed. `completed` and `cancelled` are final. A `downloading` job with `waitingForBandwidth: true` is running but gets no bandwidth for now: the speed limits give it all to others (urgent ones first).
