@@ -8,7 +8,7 @@ use crate::status::{Progress, Summary};
 
 /// Each language's texts, by its tag, as the page names them
 /// (`ui/project.inlang/settings.json`). The first is the fallback.
-const LANGUAGES: [(&str, &str); 24] = [
+const LANGUAGES: [(&str, &str); 27] = [
     ("en", include_str!("../messages/en.json")),
     ("fr", include_str!("../messages/fr.json")),
     ("de", include_str!("../messages/de.json")),
@@ -33,6 +33,9 @@ const LANGUAGES: [(&str, &str); 24] = [
     ("et", include_str!("../messages/et.json")),
     ("ga", include_str!("../messages/ga.json")),
     ("mt", include_str!("../messages/mt.json")),
+    ("el", include_str!("../messages/el.json")),
+    ("bg", include_str!("../messages/bg.json")),
+    ("uk", include_str!("../messages/uk.json")),
 ];
 
 /// Units count in 1024s, as on the page (`ui/src/lib/format.ts`).

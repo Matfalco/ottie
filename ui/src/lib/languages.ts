@@ -29,7 +29,10 @@ export const NAMES: Record<Locale, string> = {
 	lv: 'Latviešu',
 	et: 'Eesti',
 	ga: 'Gaeilge',
-	mt: 'Malti'
+	mt: 'Malti',
+	el: 'Ελληνικά',
+	bg: 'Български',
+	uk: 'Українська'
 };
 
 /** Checked by a native speaker; the others say so under the picker. */

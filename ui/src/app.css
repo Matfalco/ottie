@@ -169,8 +169,10 @@
 
 /* The same in every theme. */
 :root {
-	--font: 'Outfit Variable', system-ui, sans-serif;
-	--mono: 'DM Mono', ui-monospace, monospace;
+	/* Manrope and JetBrains Mono draw what Outfit and DM Mono can't (Greek,
+	   Cyrillic), e.g. «Български» in the language picker. */
+	--font: 'Outfit Variable', 'Manrope Variable', system-ui, sans-serif;
+	--mono: 'DM Mono', 'JetBrains Mono Variable', ui-monospace, monospace;
 	/* Buttons and fields; panels and menus; cards. */
 	--radius-s: 8px;
 	--radius-m: 12px;
@@ -178,6 +180,15 @@
 	/* The window's close button, as Windows draws it. */
 	--close-hover: #c42b1c;
 	--on-close: #ffffff;
+}
+
+/* Pages in Greek or Cyrillic use them throughout, so file names and numbers
+   don't mix two fonts in one line (docs/decisions/0041). */
+:root:lang(el),
+:root:lang(bg),
+:root:lang(uk) {
+	--font: 'Manrope Variable', system-ui, sans-serif;
+	--mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 }
 
 /* Before the script has picked a theme: no white flash for dark systems. */

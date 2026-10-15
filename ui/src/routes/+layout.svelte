@@ -2,6 +2,8 @@
 	import '@fontsource-variable/outfit';
 	import '@fontsource/dm-mono/400.css';
 	import '@fontsource/dm-mono/500.css';
+	import '@fontsource-variable/manrope';
+	import '@fontsource-variable/jetbrains-mono';
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { replaceState } from '$app/navigation';

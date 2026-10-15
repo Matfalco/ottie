@@ -25,7 +25,10 @@
 		"lv",
 		"et",
 		"ga",
-		"mt"
+		"mt",
+		"el",
+		"bg",
+		"uk"
 	],
 	"modules": ["./node_modules/@inlang/plugin-message-format/dist/index.js"],
 	"plugin.inlang.messageFormat": {
