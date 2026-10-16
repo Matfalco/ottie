@@ -323,11 +323,11 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Shutdown keeps running jobs running** in the database (it doesn't mark them Paused), so the next start continues them; user-paused jobs stay paused.
 - **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Names come from `Content-Disposition` (`filename*`, then `filename`), else the final URL; chosen once at the first response. Sanitize them; never write outside the target folder; resolve collisions with ` (1)`, ` (2)`. Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files).
 - **Cancellation:** `tokio_util::sync::CancellationToken`, raced against network reads with `tokio::select! { biased; … }`. Pausing must stop all segments promptly and leave state consistent.
-- **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; yt-dlp (step 7) and later native FTP/SFTP plug in beside it, so keep HTTP assumptions inside the HTTP backend.
+- **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; native FTP/SFTP (7j) and yt-dlp (step 9) plug in beside it, so keep HTTP assumptions inside the HTTP backend.
 
 ## Platform gotchas
 
-- **TLS:** rustls everywhere. No OpenSSL/native-tls; it breaks Android and Windows builds. On Android, `rustls-platform-verifier` must be initialised with the app's JNI context and ships a small Kotlin component. Check its docs in the Android step (9).
+- **TLS:** rustls everywhere. No OpenSSL/native-tls; it breaks Android and Windows builds. On Android, `rustls-platform-verifier` must be initialised with the app's JNI context and ships a small Kotlin component. Check its docs in the Android step (10).
 - **Android background work:** downloads must keep going when the app is in the background. Android 15 limits `dataSync` foreground services to 6 hours per 24 h; prefer user-initiated data transfer jobs. This needs a small Kotlin Tauri plugin. Check current Android docs before implementing.
 - **Android storage:** the engine needs a seekable file. Write `.part.ottie` files to app storage and publish finished files to Downloads through MediaStore.
 - **Android browser integration:** no reliable extension route (Chrome for Android has no extensions; Firefox for Android only partly supports the downloads API). Take URLs from the share sheet and "Open with" intent filters instead.
@@ -462,10 +462,37 @@ Done: ✅ and struck through.
 7. More features:
    - ✅ ~~7a clipboard monitoring (desktop app, `docs/decisions/0043`)~~
    - ✅ ~~the rounded style, the look from before as legacy palettes, the new Dashboard and an hour of speed (`docs/decisions/0044`)~~
-   - 7b yt-dlp backend (its own updates, apart from the app's)
-   - then a look at "Later (TODO)" below together, to pick which come here
+   - 7b open the file and its folder (desktop app: app commands that take a job ID, never a path; a
+     confirmation before running a program; double-click and Enter open too), Pause all / Resume all
+     in the main window
+   - 7c keyboard shortcuts (tabs, add/paste a link, Space, arrows, Enter, Delete; a "?" list of them;
+     never while typing)
+   - 7d animations (dialogs, menus, rows coming and going, the queue's reorder), none under
+     `prefers-reduced-motion`
+   - 7e a file already on disk: the add step says so (preview and at the first response) and offers
+     rename, overwrite or skip; a setting decides when nobody is asked (extension, clipboard), rename
+     by default as today
+   - 7f onboarding in several steps, each skippable (and the whole of it): e.g. language + look,
+     starter categories, downloads folder, sign-in and closing (desktop app), notifications, later the
+     extension and other devices
+   - 7g Ottie as a service only (no app): `ottie service install|uninstall|status`. Per user by default
+     (systemd user unit, LaunchAgent, Task Scheduler at sign-in: the user's own folders), system-wide
+     for headless machines (system unit, Windows service, Docker image: another account, so other
+     folders and file owners). People connect as today: the daemon's page in a browser (`ottie
+     open`/`ottie link`), the desktop app (uses a daemon that answers), the extension
+   - 7h remote access, documented: `tailscale serve` (stays on 127.0.0.1, HTTPS within the tailnet), a
+     VPN, or a reverse proxy with HTTPS; never the port open to the internet. Hardening: folders a
+     client may write to limited to a list in config.toml (the token can name any folder today, so it
+     can write anywhere the daemon's user can, e.g. a Startup folder); a token per device, revocable,
+     and rotation (maybe read-only ones); a system service under its own locked-down user
+   - 7i several daemons from one place: in the desktop app, a list (name, URL, token in the OS
+     keychain) and a switcher, with fewer app commands for a remote daemon's page (no open folder, no
+     play with); in the web UI, a switcher first (needs CORS on the daemon, safe since the token isn't
+     a cookie), maybe later one list across daemons (IDs clash, one event stream each)
+   - 7j FTP/SFTP as a native backend
 8. Browser extension.
-9. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.
+9. yt-dlp backend (its own updates, apart from the app's).
+10. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.
 
 Languages, a batch per slice, between the steps above (`docs/decisions/0041`; no Russian or Hebrew for now):
 - ✅ ~~L1 "System" by default (also as the shared language), matching the system's tag, unreviewed note; de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR~~
@@ -486,8 +513,4 @@ Settled: no uGet import; no aria2 (its HTTP strengths are in our engine already)
 
 ## Later (TODO)
 
-- FTP/SFTP as a native backend, maybe Metalink (one file from several mirrors, checked by checksum).
-- Ottie as a service only (no app): `ottie service install|uninstall|status`. Per user by default (systemd user unit, LaunchAgent, Task Scheduler at sign-in: the user's own folders), system-wide for headless machines (system unit, Windows service, Docker image: another account, so other folders and file owners). People connect as today: the daemon's page in a browser (`ottie open`/`ottie link`), the desktop app (uses a daemon that answers), the extension.
-- Remote access, documented: `tailscale serve` (stays on 127.0.0.1, HTTPS within the tailnet), a VPN, or a reverse proxy with HTTPS; never the port open to the internet. Hardening: folders a client may write to limited to a list in config.toml (the token can name any folder today, so it can write anywhere the daemon's user can, e.g. a Startup folder); a token per device, revocable, and rotation (maybe read-only ones); a system service under its own locked-down user.
-- Several daemons from one place: in the desktop app, a list (name, URL, token in the OS keychain) and a switcher, with fewer app commands for a remote daemon's page (no open folder, no play with); in the web UI, a switcher first (needs CORS on the daemon, safe since the token isn't a cookie), maybe later one list across daemons (IDs clash, one event stream each).
-- Onboarding in several steps, each skippable (and the whole of it): e.g. language + look, starter categories, downloads folder, sign-in and closing (desktop app), notifications, later the extension and other devices.
+- Metalink? (one file from several mirrors, checked by checksum).
