@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { m } from '#lib/paraglide/messages.js';
+	import { pop } from '#lib/moving.svelte.js';
 
 	interface Props {
 		message: string;
@@ -19,6 +20,8 @@
 
 <dialog
 	bind:this={dialog}
+	in:pop
+	out:pop
 	oncancel={(event) => {
 		// Escape: answer "no" ourselves, so the page decides when it closes.
 		event.preventDefault();

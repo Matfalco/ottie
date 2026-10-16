@@ -4,6 +4,7 @@
 	import Trash from '@lucide/svelte/icons/trash';
 	import type { Action } from '#lib/bulk.js';
 	import { displayName } from '#lib/format.js';
+	import { leave } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { canResume, describe } from '#lib/status.js';
 	import FileIcon from './FileIcon.svelte';
@@ -11,18 +12,20 @@
 
 	interface Props {
 		job: Job;
+		/** Its key in the dashboard's slides (`shuffle`): the card and its ID. */
+		flip: string;
 		now: number;
 		/** Shows Resume and Remove buttons when given. */
 		onRun?: (action: Action) => void;
 	}
 
-	let { job, now, onRun }: Props = $props();
+	let { job, flip, now, onRun }: Props = $props();
 	const { session } = useApp();
 	let name = $derived(displayName(job));
 </script>
 
 <!-- One download in a dashboard list: icon, name, what's going on. -->
-<li class={job.state}>
+<li class={job.state} data-flip={flip} out:leave>
 	<span class="kind"><FileIcon {name} /></span>
 	<span class="text">
 		<span class="name" title={job.url} dir="auto">{name}</span>

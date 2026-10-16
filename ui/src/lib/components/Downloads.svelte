@@ -27,6 +27,7 @@
 	} from '#lib/filters.js';
 	import { currentSpeed } from '#lib/jobs.js';
 	import { openProblem, toOpen } from '#lib/opening.js';
+	import { resizes } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { canReorder, type Reorder } from '#lib/queue.js';
 	import { NOTHING, keepShown, selectAll, step, type Selection } from '#lib/selection.js';
@@ -52,6 +53,12 @@
 	let filters = $derived(parseFilters(page.url.searchParams));
 	let arrangement: Arrangement = $state(loadArrangement());
 	let open = $state(false);
+	let head: HTMLDivElement | undefined = $state();
+	// The pills and the panel take each other's place smoothly (docs/decisions/0048).
+	resizes(
+		() => head,
+		() => open
+	);
 	/** Bumped by "Reset filters" under an empty list, so an open panel starts
 	 * over (it keeps what's typed in its name field otherwise). */
 	let resets = $state(0);
@@ -250,7 +257,7 @@
 	<div class="add"><AddCard /></div>
 
 	<section class="pane" aria-label={m.nav_downloads()}>
-		<div class="head">
+		<div class="head" bind:this={head}>
 			<Toolbar
 				{selected}
 				{finished}

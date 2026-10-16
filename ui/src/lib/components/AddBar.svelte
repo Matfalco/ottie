@@ -15,6 +15,7 @@
 	} from '#lib/adding.js';
 	import { holdsSeveral } from '#lib/batch.js';
 	import { categoryName, type Categories } from '#lib/categories.js';
+	import { drop } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { fromField, inOrder } from '#lib/schedule.js';
 	import { canPickFolder, pickFolder } from '#lib/window.js';
@@ -221,7 +222,7 @@
 
 	{#if step}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="step" onkeydown={keydown}>
+		<div class="step" onkeydown={keydown} in:drop out:drop>
 			<fieldset>
 				<legend>{m.add_category()}</legend>
 				<div class="choices">

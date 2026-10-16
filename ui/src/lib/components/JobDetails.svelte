@@ -24,6 +24,7 @@
 	import { connections, strip } from '#lib/filemap.js';
 	import { statusName, statusOf } from '#lib/filters.js';
 	import { displayName, formatBytes, formatPercent, formatSpeed } from '#lib/format.js';
+	import { resizes, shuffle } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { savePlaylist } from '#lib/playlist.js';
 	import { canSchedule, fromField, timeChange, toField, type TimeKey } from '#lib/schedule.js';
@@ -76,6 +77,18 @@
 		onShowFolder
 	}: Props = $props();
 	const { session } = useApp();
+	let panel: HTMLElement | undefined = $state();
+	let priorities: HTMLDivElement | undefined = $state();
+	// Folding slides rather than jumps, the chosen priority's highlight to
+	// the next (docs/decisions/0048).
+	resizes(
+		() => panel,
+		() => open
+	);
+	shuffle(
+		() => priorities,
+		() => job.priority
+	);
 
 	let name = $derived(displayName(job));
 	let status = $derived(statusOf(job));
@@ -165,7 +178,7 @@
 <!-- The selected download (docs/decisions/0044): a header bar, then two
      halves (its facts and own settings | the bar that maps the file), then a
      strip for where it goes and when. Explanations sit behind an (i). -->
-<section class="details {job.state}" aria-label={m.det_label()}>
+<section class="details {job.state}" aria-label={m.det_label()} bind:this={panel}>
 	<div class="top">
 		<span class="kind"><FileIcon {name} size={18} /></span>
 		<div class="title">
@@ -269,9 +282,12 @@
 						<div class="inline" role="radiogroup" aria-label={m.det_priority()}>
 							<span class="label" aria-hidden="true">{m.det_priority()}</span>
 							<Hint text={m.det_priority_hint()} />
-							<div class="segments">
+							<div class="segments" bind:this={priorities}>
 								{#each PRIORITIES as priority (priority)}
 									<label class:chosen={job.priority === priority}>
+										{#if job.priority === priority}
+											<span class="highlight" data-flip="highlight" data-flip-size></span>
+										{/if}
 										<input
 											type="radio"
 											name="priority"
@@ -862,6 +878,7 @@
 	   the window and stretch it. */
 	.segments label {
 		position: relative;
+		isolation: isolate;
 		display: grid;
 		flex: 1;
 		place-items: center;
@@ -879,8 +896,6 @@
 	.segments label.chosen {
 		color: var(--text);
 		font-weight: 500;
-		background: var(--raised);
-		box-shadow: var(--raised-shadow);
 	}
 
 	.problem {

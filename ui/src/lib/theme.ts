@@ -6,15 +6,18 @@
 import type { Appearance } from '@ottie/api-types/Appearance';
 import type { AppearanceMode } from '@ottie/api-types/AppearanceMode';
 import type { Palette } from '@ottie/api-types/Palette';
+import { MOTIONS, type Motion } from './motion';
 
 export type { Appearance, Palette };
 export type Mode = AppearanceMode;
 export type Theme = 'seafoam' | 'lagoon' | 'pearl' | 'slate';
 
 /** The look on this device, and whether it follows the shared look and
- * language (yes unless switched off). */
+ * language (yes unless switched off); whether it moves, which is this
+ * device's alone (docs/decisions/0048). */
 export interface DeviceAppearance extends Appearance {
 	synced: boolean;
+	motion: Motion;
 }
 
 export const MODES: Mode[] = ['system', 'light', 'dark'];
@@ -22,7 +25,8 @@ export const PALETTES: Palette[] = ['sea', 'neutral'];
 export const DEFAULT_APPEARANCE: DeviceAppearance = {
 	mode: 'system',
 	palette: 'sea',
-	synced: true
+	synced: true,
+	motion: 'system'
 };
 
 /** Each palette's light and dark theme. */
@@ -71,13 +75,15 @@ export function parseAppearance(text: string | null): DeviceAppearance {
 	const mode = 'mode' in fields ? fields.mode : undefined;
 	const palette = 'palette' in fields ? fields.palette : undefined;
 	const synced = 'synced' in fields ? fields.synced : undefined;
+	const motion = 'motion' in fields ? fields.motion : undefined;
 	return {
 		mode: MODES.find((known) => known === mode) ?? DEFAULT_APPEARANCE.mode,
 		palette:
 			PALETTES.find((known) => known === palette) ??
 			(typeof palette === 'string' ? LEGACY[palette] : undefined) ??
 			DEFAULT_APPEARANCE.palette,
-		synced: synced !== false
+		synced: synced !== false,
+		motion: MOTIONS.find((known) => known === motion) ?? DEFAULT_APPEARANCE.motion
 	};
 }
 

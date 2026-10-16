@@ -3,6 +3,7 @@
 	import FolderInput from '@lucide/svelte/icons/folder-input';
 	import { categoryName } from '#lib/categories.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { drop } from '#lib/moving.svelte.js';
 
 	interface Props {
 		categories: Category[];
@@ -40,7 +41,7 @@
 		<span>{m.move_to()}</span>
 	</button>
 	{#if open && !disabled}
-		<ul role="menu">
+		<ul role="menu" in:drop out:drop>
 			{#each categories as category (category.id)}
 				<li role="none">
 					<button

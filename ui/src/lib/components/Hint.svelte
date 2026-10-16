@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Info from '@lucide/svelte/icons/info';
 	import { bubbleAt, type Box } from '#lib/hint.js';
+	import { appear } from '#lib/moving.svelte.js';
 
 	interface Props {
 		/** What the setting does: the button's name, and the bubble. */
@@ -83,6 +84,7 @@
 	<span
 		class="bubble"
 		aria-hidden="true"
+		in:appear
 		bind:this={bubble}
 		style:left={at ? `${at.left}px` : '0'}
 		style:top={at ? `${at.top}px` : '0'}

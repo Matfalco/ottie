@@ -10,6 +10,7 @@
 	import { page } from '$app/state';
 	import { isActive } from '#lib/filters.js';
 	import { formatCount } from '#lib/format.js';
+	import { shuffle } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 
 	interface Props {
@@ -20,6 +21,12 @@
 
 	let { jobs, compact = false }: Props = $props();
 	let active = $derived(jobs.filter(isActive).length);
+	let tabs: HTMLUListElement | undefined = $state();
+	// The current tab's highlight slides to the next one (docs/decisions/0048).
+	shuffle(
+		() => tabs,
+		() => page.url.pathname
+	);
 
 	interface Entry {
 		href: string;
@@ -40,12 +47,15 @@
 
 <!-- The sections as tabs in the title bar; a bar along the bottom on phones. -->
 <nav aria-label={m.nav_label()} class:compact>
-	<ul>
+	<ul bind:this={tabs}>
 		{#each ENTRIES as { href, label, icon: Icon, badge } (href)}
 			{@const current = page.url.pathname === href}
 			{@const count = badge?.() ?? 0}
 			<li>
 				<a {href} class:current aria-current={current ? 'page' : undefined} title={label()}>
+					{#if current}
+						<span class="highlight" data-flip="highlight" data-flip-size></span>
+					{/if}
 					<span class="icon"><Icon size={18} aria-hidden="true" /></span>
 					<span class="name">{label()}</span>
 					{#if count > 0}
@@ -58,22 +68,42 @@
 </nav>
 
 <style>
+	/* The tabs sit in a sunken track, the current one raised (its highlight,
+	   which slides from tab to tab: docs/decisions/0048). */
+	ul {
+		display: flex;
+		gap: 0.15rem;
+		margin: 0;
+		padding: 0.25rem;
+		border-radius: 999px;
+		background: var(--sunken);
+		box-shadow: var(--sunken-shadow);
+		list-style: none;
+	}
+
 	a {
 		position: relative;
+		/* The highlight goes under the tab's content but over its hover. */
+		isolation: isolate;
 		display: flex;
 		align-items: center;
 		gap: 0.45rem;
-		color: var(--muted);
-		text-decoration: none;
-		white-space: nowrap;
 		height: 2.1rem;
 		padding: 0 0.95rem;
 		border-radius: 999px;
+		color: var(--muted);
+		text-decoration: none;
+		white-space: nowrap;
 	}
 
 	a:hover {
 		background: var(--hover);
 		color: var(--text);
+	}
+
+	a.current {
+		color: var(--text);
+		font-weight: 600;
 	}
 
 	.icon {
@@ -90,26 +120,6 @@
 		font-weight: 600;
 		line-height: 1.15rem;
 		text-align: center;
-	}
-
-	/* The tabs sit in a sunken track, the
-	   current one raised. */
-	ul {
-		display: flex;
-		margin: 0;
-		list-style: none;
-		gap: 0.15rem;
-		padding: 0.25rem;
-		border-radius: 999px;
-		background: var(--sunken);
-		box-shadow: var(--sunken-shadow);
-	}
-
-	a.current {
-		color: var(--text);
-		font-weight: 600;
-		background: var(--raised);
-		box-shadow: var(--raised-shadow);
 	}
 
 	/* Short of room in the title bar: icons only. */
@@ -167,8 +177,6 @@
 
 		a.current {
 			color: var(--accent);
-			background: var(--raised);
-			box-shadow: var(--raised-shadow);
 		}
 
 		/* Five names don't fit side by side: only the current tab's. */

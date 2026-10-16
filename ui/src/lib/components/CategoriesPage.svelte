@@ -12,6 +12,7 @@
 	} from '#lib/categories.js';
 	import { useApp } from '#lib/context.js';
 	import { formatCount } from '#lib/format.js';
+	import { leave, shuffle } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import CategoryEditor from './CategoryEditor.svelte';
 	import LinkTester from './LinkTester.svelte';
@@ -22,6 +23,13 @@
 
 	/** The category in the editor: `null` for a new one, `undefined` when closed. */
 	let editing: Category | null | undefined = $state(undefined);
+	let list: HTMLUListElement | undefined = $state();
+	// Rows slide aside for the editor and for a new category, and close up
+	// after one goes (docs/decisions/0048).
+	shuffle(
+		() => list,
+		() => [editing === null, editing?.id, ...session.categoryList.map((category) => category.id)]
+	);
 
 	let counts = $derived(
 		session.list.reduce<Record<number, number>>((counts, job) => {
@@ -39,14 +47,12 @@
 </script>
 
 {#snippet editor(category: Category | null)}
-	<li class="editing">
-		<CategoryEditor
-			{category}
-			{generalFolder}
-			onSave={(body) => session.saveCategory(category?.id ?? null, body)}
-			onClose={() => (editing = undefined)}
-		/>
-	</li>
+	<CategoryEditor
+		{category}
+		{generalFolder}
+		onSave={(body) => session.saveCategory(category?.id ?? null, body)}
+		onClose={() => (editing = undefined)}
+	/>
 {/snippet}
 
 <div class="page">
@@ -74,17 +80,18 @@
 			</button>
 		</div>
 
-		<ul>
+		<ul bind:this={list}>
 			{#if editing === null}
-				{@render editor(null)}
+				<li class="editing" data-flip="new" out:leave>{@render editor(null)}</li>
 			{/if}
 			{#each session.categoryList as category (category.id)}
-				{#if editing?.id === category.id}
-					{@render editor(category)}
-				{:else}
-					{@const name = categoryName(category)}
-					{@const [extensions, more] = someExtensions(category.extensions, SHOWN_EXTENSIONS)}
-					<li class="row">
+				{@const open = editing?.id === category.id}
+				<li class={open ? 'editing' : 'row'} data-flip={category.id} out:leave>
+					{#if open}
+						{@render editor(category)}
+					{:else}
+						{@const name = categoryName(category)}
+						{@const [extensions, more] = someExtensions(category.extensions, SHOWN_EXTENSIONS)}
 						<span class="tile" style:--hue={categoryHue(category)} aria-hidden="true">
 							{name.charAt(0).toUpperCase()}
 						</span>
@@ -141,8 +148,8 @@
 								</button>
 							{/if}
 						</span>
-					</li>
-				{/if}
+					{/if}
+				</li>
 			{/each}
 		</ul>
 	</section>
@@ -222,7 +229,9 @@
 		margin-inline-start: auto;
 	}
 
+	/* Positioned: a row going away stays drawn where it was (shuffle). */
 	ul {
+		position: relative;
 		margin: 0;
 		padding: 0;
 		list-style: none;

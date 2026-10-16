@@ -24,6 +24,7 @@
 		type Filters
 	} from '#lib/filters.js';
 	import { formatCount } from '#lib/format.js';
+	import { shuffle } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 
 	interface Props {
@@ -41,6 +42,17 @@
 
 	let { filters, arrangement, jobs, categories, onFilters, onArrange, onSaveView, onClose }: Props =
 		$props();
+	let sorts: HTMLDivElement | undefined = $state();
+	let directions: HTMLDivElement | undefined = $state();
+	// The chosen segment's highlight slides to the next (docs/decisions/0048).
+	shuffle(
+		() => sorts,
+		() => arrangement.sort
+	);
+	shuffle(
+		() => directions,
+		() => arrangement.direction
+	);
 
 	// Typed here and sent on each key, but not read back from the address
 	// while typing: a slow round trip would otherwise undo the last letters.
@@ -138,9 +150,12 @@
 			</fieldset>
 			<fieldset>
 				<legend>{m.fl_sort()}</legend>
-				<div class="segments">
+				<div class="segments" bind:this={sorts}>
 					{#each SORT_KEYS as sort (sort)}
 						<label class:chosen={arrangement.sort === sort}>
+							{#if arrangement.sort === sort}
+								<span class="highlight" data-flip="highlight" data-flip-size></span>
+							{/if}
 							<input
 								type="radio"
 								name="sort"
@@ -155,9 +170,12 @@
 			</fieldset>
 			<fieldset>
 				<legend class="hidden">{m.fl_order()}</legend>
-				<div class="segments">
+				<div class="segments" bind:this={directions}>
 					{#each DIRECTIONS as direction (direction)}
 						<label class:chosen={arrangement.direction === direction}>
+							{#if arrangement.direction === direction}
+								<span class="highlight" data-flip="highlight" data-flip-size></span>
+							{/if}
 							<input
 								type="radio"
 								name="direction"
@@ -349,6 +367,7 @@
 	   the window and stretch it. */
 	.segments label {
 		position: relative;
+		isolation: isolate;
 		display: grid;
 		flex: 1;
 		place-items: center;
@@ -367,7 +386,5 @@
 
 	.segments label.chosen {
 		color: var(--text);
-		background: var(--raised);
-		box-shadow: var(--raised-shadow);
 	}
 </style>

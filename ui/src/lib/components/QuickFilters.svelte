@@ -9,6 +9,7 @@
 	import { count, filtersQuery, quickFilters, sameFilters, type Filters } from '#lib/filters.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { drop } from '#lib/moving.svelte.js';
 	import { showsView, viewFilters } from '#lib/views.js';
 
 	interface Props {
@@ -76,7 +77,7 @@
 					<Ellipsis size={15} aria-hidden="true" />
 				</button>
 				{#if menu === view.id}
-					<ul role="menu">
+					<ul role="menu" in:drop out:drop>
 						<li role="none">
 							<button role="menuitem" onclick={() => choose(onRename, view)}>
 								{m.view_rename()}

@@ -13,6 +13,7 @@
 	import { priorityName } from '#lib/details.js';
 	import { displayName, formatAdded, formatBytes, formatPercent } from '#lib/format.js';
 	import { addedAt } from '#lib/jobs.js';
+	import { leave } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { Keys } from '#lib/selection.js';
 	import { canPause, canResume, describe, fraction, motion } from '#lib/status.js';
@@ -117,6 +118,8 @@
 	class:drop-before={drop === 'before'}
 	class:drop-after={drop === 'after'}
 	data-id={job.id}
+	data-flip={job.id}
+	out:leave
 	onclick={click}
 	ondblclick={onOpen ? doubleClick : undefined}
 >

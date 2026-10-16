@@ -9,6 +9,7 @@
 	import { formatCount } from '#lib/format.js';
 	import { currentSpeed, type Rate } from '#lib/jobs.js';
 	import { canOpen } from '#lib/opening.js';
+	import { shuffle } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { canDrop, carried, type Reorder } from '#lib/queue.js';
 	import { NOTHING, click, selectAll, type Selection } from '#lib/selection.js';
@@ -59,6 +60,14 @@
 	 * drop (next to a waiting download of the same priority). */
 	let drag: { jobs: Job[]; over: { id: string; after: boolean } | null } | null = $state.raw(null);
 	let scroller: HTMLDivElement | undefined = $state();
+	let table: HTMLTableElement | undefined = $state();
+	// Rows slide to their new places: moved in the queue, sorted, from one
+	// group to another (docs/decisions/0048).
+	shuffle(
+		() => table,
+		() =>
+			sections.map((section) => `${section.group}:${section.jobs.map((job) => job.id)}`).join(' ')
+	);
 	/** Near the list's top or bottom edge, a drag scrolls it. */
 	const EDGE = 40;
 
@@ -136,7 +145,7 @@
 <svelte:window onpointermove={move} onpointerup={drop} onpointercancel={() => (drag = null)} />
 
 <div class="scroller" class:dragging={drag !== null} bind:this={scroller}>
-	<table>
+	<table bind:this={table}>
 		<thead>
 			<tr>
 				{#if arrangement.grouped}
@@ -168,7 +177,7 @@
 		{#each sections as section (section.group)}
 			<tbody>
 				{#if section.group !== null}
-					<tr class="group {section.group}">
+					<tr class="group {section.group}" data-flip="group {section.group}">
 						<th colspan="10" scope="rowgroup">
 							<span class="heading">
 								<span class="dot" aria-hidden="true"></span>
@@ -225,7 +234,9 @@
 		cursor: grabbing;
 	}
 
+	/* Positioned: a row going away stays drawn where it was (shuffle). */
 	table {
+		position: relative;
 		width: 100%;
 		/* Column widths come from the header, so they don't jump as numbers change. */
 		table-layout: fixed;

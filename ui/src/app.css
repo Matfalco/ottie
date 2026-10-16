@@ -282,6 +282,46 @@
 	box-sizing: border-box;
 }
 
+/* Animations (docs/decisions/0048). A dialog's backdrop fades in with it,
+   and out once it goes (the `pop` transition marks it `leaving`). */
+dialog::backdrop {
+	animation: backdrop-in 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+dialog.leaving::backdrop {
+	opacity: 0;
+	transition: opacity 120ms ease-in;
+}
+
+/* The chosen tab or segment's highlight: an element of its own, so it can
+   slide from one to the next (`shuffle`). It sits under its parent's text,
+   which is positioned and isolated. */
+.highlight {
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	background: var(--raised);
+	box-shadow: var(--raised-shadow);
+}
+
+@keyframes backdrop-in {
+	from {
+		opacity: 0;
+	}
+}
+
+/* None at all when the system asks for less motion or Settings says off:
+   the components' own transitions and animations too. (Svelte's transitions
+   ask `moving()` themselves.) */
+[data-motion='off'] *,
+[data-motion='off'] *::before,
+[data-motion='off'] *::after,
+[data-motion='off'] ::backdrop {
+	transition: none !important;
+	animation: none !important;
+}
+
 /* Scroll bars in the theme's colours rather than the system's grey (inherited,
    so this covers every scrolling element). */
 html {

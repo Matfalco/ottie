@@ -12,10 +12,12 @@
 	import Power from '@lucide/svelte/icons/power';
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 	import { onMount } from 'svelte';
+	import { prefersReducedMotion } from 'svelte/motion';
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
 	import { useApp } from '#lib/context.js';
 	import { canDo, COUNTDOWN, FINISH_CHOICES, finishHint, finishName } from '#lib/finish.js';
 	import { LiveFinishing } from '#lib/finish.svelte.js';
+	import { MOTIONS, type Motion } from '#lib/motion.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { HELP_TRANSLATE, REVIEWED, switchLanguage } from '#lib/languages.js';
 	import { getLocale, type Locale } from '#lib/paraglide/runtime.js';
@@ -85,6 +87,12 @@
 		system: m.set_mode_system,
 		light: m.set_mode_light,
 		dark: m.set_mode_dark
+	};
+
+	const MOTION_NAMES: Record<Motion, () => string> = {
+		system: m.set_motion_system,
+		on: m.set_motion_on,
+		off: m.set_motion_off
 	};
 
 	const PALETTE_NAMES: Record<Palette, { name: () => string; hint: () => string }> = {
@@ -470,6 +478,33 @@
 						<a href={HELP_TRANSLATE} target="_blank" rel="noopener">{m.language_help()}</a>
 					</p>
 				{/if}
+			</div>
+
+			<!-- This device's alone, not part of the shared look (docs/decisions/0048). -->
+			<div class="setting">
+				<label for="motion" class="names">
+					<span>{m.set_motion()}</span>
+					<span class="hint">
+						{appearance.motion === 'system' && prefersReducedMotion.current
+							? m.set_motion_system_less()
+							: m.set_motion_hint()}
+					</span>
+				</label>
+				<select
+					id="motion"
+					class="motion"
+					value={appearance.motion}
+					onchange={(event) => {
+						const chosen = MOTIONS.find((motion) => motion === event.currentTarget.value);
+						if (chosen) {
+							setAppearance({ motion: chosen });
+						}
+					}}
+				>
+					{#each MOTIONS as motion (motion)}
+						<option value={motion}>{MOTION_NAMES[motion]()}</option>
+					{/each}
+				</select>
 			</div>
 		</section>
 
@@ -1219,6 +1254,11 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
+	}
+
+	.motion {
+		min-width: 10rem;
+		padding: 0.35rem 0.6rem;
 	}
 
 	.sound select {

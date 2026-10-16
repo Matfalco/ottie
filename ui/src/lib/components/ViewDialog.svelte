@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
 	import { m } from '#lib/paraglide/messages.js';
+	import { pop } from '#lib/moving.svelte.js';
 
 	interface Props {
 		title: string;
@@ -34,6 +35,8 @@
 
 <dialog
 	bind:this={dialog}
+	in:pop
+	out:pop
 	aria-labelledby="view-dialog-title"
 	oncancel={(event) => {
 		// Escape: the page decides when it closes.

@@ -18,6 +18,7 @@
 	} from '#lib/finish.js';
 	import { LiveFinishing } from '#lib/finish.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { drop } from '#lib/moving.svelte.js';
 	import { cancelFinish, setFinishOnce, type Finish } from '#lib/window.js';
 
 	// The Downloads page's "When finished" (docs/decisions/0040), in the
@@ -86,7 +87,7 @@
 			<span>{label}</span>
 		</button>
 		{#if open}
-			<div class="list" role="menu" tabindex="-1" onkeydown={keyDown}>
+			<div class="list" role="menu" tabindex="-1" onkeydown={keyDown} in:drop out:drop>
 				{#if running}
 					<button class="item cancel" role="menuitem" onclick={cancel}>
 						<span class="mark" aria-hidden="true"></span>

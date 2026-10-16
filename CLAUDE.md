@@ -224,6 +224,9 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      Downloads, whether the focused control needs that key, what a paste holds, the
                      list of them with key names per language, 0046)
                      plain logic, unit-tested (*.test.ts, Vitest)
+  src/lib/motion.ts  animations (0048): on or off (device's choice, else the system's), timings, what a
+                     list's rows do after a change (plan); moving.svelte.ts: the transitions (pop, drop,
+                     leave), shuffle (rows slide, data-flip), resizes (panels)
   src/lib/appearance.svelte.ts  the appearance chosen on this device (state shared by layout, shell
                      (follows the shared one, docs/decisions/0022) and Settings)
   src/lib/window.ts  the desktop app: its window (minimize/maximize/close), the folder picker,
@@ -481,7 +484,7 @@ Done: ✅ and struck through.
    - ✅ ~~7b open the file and its folder, Pause all / Resume all in the main window (`docs/decisions/0045`)~~
    - ✅ ~~7c keyboard shortcuts (`docs/decisions/0046`)~~
    - 7d animations (dialogs, menus, rows coming and going, the queue's reorder), none under
-     `prefers-reduced-motion`
+     `prefers-reduced-motion`: in progress (`docs/decisions/0048`), some still missing, needs review
    - 7e a file already on disk: the add step says so (preview and at the first response) and offers
      rename, overwrite or skip; a setting decides when nobody is asked (extension, clipboard), rename
      by default as today

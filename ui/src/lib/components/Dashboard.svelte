@@ -20,6 +20,7 @@
 		formatSpeed
 	} from '#lib/format.js';
 	import { currentSpeed } from '#lib/jobs.js';
+	import { leave, shuffle } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { canReorder, waitingInOrder } from '#lib/queue.js';
 	import { SPANS, loadSpan, saveSpan, type Span } from '#lib/speed.js';
@@ -42,12 +43,27 @@
 	};
 
 	let span: Span = $state(loadSpan());
+	let spans: HTMLDivElement | undefined = $state();
+	shuffle(
+		() => spans,
+		() => span
+	);
 	let running = $derived(session.list.filter((job) => job.state === 'downloading'));
 	let waiting = $derived(waitingInOrder(session.list));
 	let attention = $derived(
 		session.list.filter((job) => job.state === 'failed' || job.state === 'retrying')
 	);
 	let latest = $derived(session.list.filter((job) => job.state === 'completed'));
+	let board: HTMLDivElement | undefined = $state();
+	// Rows slide into place as downloads come, go and move in the queue
+	// (docs/decisions/0048); one going to another card fades there.
+	shuffle(
+		() => board,
+		() =>
+			[running, waiting, attention, latest]
+				.map((jobs) => jobs.slice(0, LISTED).map((job) => job.id))
+				.join(' ')
+	);
 	let speed = $derived(session.history.at(-1) ?? 0);
 	let peak = $derived(Math.max(0, ...session.history.slice(-span)));
 
@@ -61,16 +77,19 @@
 	}
 </script>
 
-<div class="dashboard">
+<div class="dashboard" bind:this={board}>
 	<AddCard />
 
 	<!-- The speed across the whole width, how far back it looks chosen here. -->
 	<section class="card speed" aria-labelledby="dash-speed">
 		<header>
 			<h2 id="dash-speed">{m.dash_speed()}</h2>
-			<div class="spans" role="radiogroup" aria-label={m.dash_span_label()}>
+			<div class="spans" role="radiogroup" aria-label={m.dash_span_label()} bind:this={spans}>
 				{#each SPANS as option (option)}
 					<label class:chosen={span === option}>
+						{#if span === option}
+							<span class="highlight" data-flip="highlight" data-flip-size></span>
+						{/if}
 						<input
 							type="radio"
 							name="span"
@@ -122,7 +141,12 @@
 			{#if attention.length > 0}
 				<ul>
 					{#each attention.slice(0, LISTED) as job (job.id)}
-						<JobSummary {job} now={session.now} onRun={(action) => run(action, [job])} />
+						<JobSummary
+							{job}
+							flip="attention {job.id}"
+							now={session.now}
+							onRun={(action) => run(action, [job])}
+						/>
 					{/each}
 				</ul>
 			{:else}
@@ -135,7 +159,7 @@
 			{#if latest.length > 0}
 				<ul>
 					{#each latest.slice(0, LISTED) as job (job.id)}
-						<JobSummary {job} now={session.now} />
+						<JobSummary {job} flip="finished {job.id}" now={session.now} />
 					{/each}
 				</ul>
 			{:else}
@@ -170,7 +194,7 @@
 	{@const name = displayName(job)}
 	{@const bytesPerSec = currentSpeed(session.rates[job.id], session.now)}
 	{@const done = fraction(job)}
-	<li class="row running">
+	<li class="row running" data-flip="running {job.id}" out:leave>
 		<span class="fill" class:unknown={done === null} style:width={`${(done ?? 0) * 100}%`}></span>
 		<span class="lead percent">{done === null ? '' : formatPercent(done)}</span>
 		<span class="text">
@@ -196,7 +220,7 @@
      or move it. -->
 {#snippet waitingRow(job: Job, place: number)}
 	{@const name = displayName(job)}
-	<li class="row">
+	<li class="row" data-flip="waiting {job.id}" out:leave>
 		<span class="lead place">{formatCount(place)}</span>
 		<span class="text">
 			<span class="name" title={job.url} dir="auto">{name}</span>
@@ -238,6 +262,8 @@
 <style>
 	/* Uses the whole width of the window; cards wrap as it narrows. */
 	.dashboard {
+		/* Positioned: a row going away stays drawn where it was (shuffle). */
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
@@ -295,6 +321,7 @@
 
 	.spans label {
 		position: relative;
+		isolation: isolate;
 		border-radius: var(--radius-pill);
 		color: var(--muted);
 		font-size: 0.85rem;
@@ -488,8 +515,6 @@
 	.spans label.chosen {
 		color: var(--text);
 		font-weight: 600;
-		background: var(--raised);
-		box-shadow: var(--raised-shadow);
 	}
 
 	header a {

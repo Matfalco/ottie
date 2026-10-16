@@ -13,6 +13,7 @@
 	import { direction, followLanguage } from '#lib/languages.js';
 	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { themeFor } from '#lib/theme.js';
+	import { moving } from '#lib/moving.svelte.js';
 	import { forgetToken, loadToken, saveToken, tokenFromFragment } from '#lib/token.js';
 	import { tellLanguage } from '#lib/window.js';
 	import type { LayoutProps } from './$types';
@@ -44,6 +45,12 @@
 	document.documentElement.dataset.theme = themeFor(appearance, darkSystem.matches);
 	$effect(() => {
 		document.documentElement.dataset.theme = themeFor(appearance, systemDark);
+	});
+	// Whether it moves: what the system asks for, unless this device says
+	// otherwise (docs/decisions/0048). The styles' own transitions stop
+	// under `[data-motion='off']`.
+	$effect(() => {
+		document.documentElement.dataset.motion = moving() ? 'on' : 'off';
 	});
 
 	onMount(() => {

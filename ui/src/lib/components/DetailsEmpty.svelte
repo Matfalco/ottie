@@ -2,6 +2,7 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import { formatCount } from '#lib/format.js';
+	import { resizes } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 
 	interface Props {
@@ -13,11 +14,17 @@
 	}
 
 	let { count, open, onToggle }: Props = $props();
+	let panel: HTMLElement | undefined = $state();
+	// Folding slides rather than jumps (docs/decisions/0048).
+	resizes(
+		() => panel,
+		() => open
+	);
 </script>
 
 <!-- The details panel while it has no one download to show: it keeps its
      place under the list, as JobDetails draws it. -->
-<section class="details" aria-label={m.det_label()}>
+<section class="details" aria-label={m.det_label()} bind:this={panel}>
 	<div class="top">
 		<!-- One line: what's selected, then what to do. -->
 		<div class="text">

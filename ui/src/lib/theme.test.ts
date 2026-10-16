@@ -32,10 +32,13 @@ describe('previewFor', () => {
 
 describe('parseAppearance', () => {
 	it('reads what was saved', () => {
-		expect(parseAppearance('{"mode":"dark","palette":"neutral","synced":false}')).toEqual({
+		expect(
+			parseAppearance('{"mode":"dark","palette":"neutral","synced":false,"motion":"off"}')
+		).toEqual({
 			mode: 'dark',
 			palette: 'neutral',
-			synced: false
+			synced: false,
+			motion: 'off'
 		});
 		expect(parseAppearance('{"mode":"light","palette":"neutral"}').palette).toBe('neutral');
 	});
@@ -50,17 +53,18 @@ describe('parseAppearance', () => {
 		expect(parseAppearance('not json')).toEqual(DEFAULT_APPEARANCE);
 		expect(parseAppearance('"dark"')).toEqual(DEFAULT_APPEARANCE);
 		// Saved before the switch existed: it follows, like every new device.
-		expect(parseAppearance('{"mode":"dim","palette":"neutral"}')).toEqual({
+		expect(parseAppearance('{"mode":"dim","palette":"neutral","motion":"fast"}')).toEqual({
 			mode: 'system',
 			palette: 'neutral',
-			synced: true
+			synced: true,
+			motion: 'system'
 		});
 	});
 });
 
 describe('lookOf', () => {
 	it('leaves out what belongs to this device only', () => {
-		const device: DeviceAppearance = { mode: 'dark', palette: 'sea', synced: true };
+		const device: DeviceAppearance = { mode: 'dark', palette: 'sea', synced: true, motion: 'on' };
 		expect(lookOf(device)).toEqual({
 			mode: 'dark',
 			palette: 'sea'

@@ -20,6 +20,7 @@
 	import { useApp } from '#lib/context.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { pop } from '#lib/moving.svelte.js';
 	import { canPickFolder, pickFolder } from '#lib/window.js';
 	import FileIcon from './FileIcon.svelte';
 
@@ -149,6 +150,8 @@
 
 <dialog
 	bind:this={dialog}
+	in:pop
+	out:pop
 	aria-labelledby="batch-title"
 	oncancel={(event) => {
 		// Escape: the page decides when it closes.

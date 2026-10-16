@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import X from '@lucide/svelte/icons/x';
 	import { m } from '#lib/paraglide/messages.js';
+	import { pop } from '#lib/moving.svelte.js';
 	import ShortcutList from './ShortcutList.svelte';
 
 	interface Props {
@@ -17,6 +18,8 @@
 <!-- "?" anywhere in the main window (docs/decisions/0046). -->
 <dialog
 	bind:this={dialog}
+	in:pop
+	out:pop
 	aria-labelledby="shortcuts-title"
 	oncancel={(event) => {
 		event.preventDefault();

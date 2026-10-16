@@ -8,6 +8,7 @@
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { useApp } from '#lib/context.js';
 	import { formatCount } from '#lib/format.js';
+	import { leave, shuffle } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
 		bodyFromSlot,
@@ -33,6 +34,13 @@
 	let list = $derived(session.slotList);
 	let clashes = $derived(conflicts(list));
 	let crossings = $derived(overlaps(list));
+	let rows: HTMLUListElement | undefined = $state();
+	// Rows slide aside for the editor, move up and down the list and close up
+	// after one goes (docs/decisions/0048).
+	shuffle(
+		() => rows,
+		() => [editing === null, editing?.id, ...list.map((slot) => slot.id)]
+	);
 
 	async function remove(slot: Slot) {
 		if (await ask(m.sched_remove_confirm({ name: slotLabel(slot) }), m.sched_remove())) {
@@ -77,16 +85,16 @@
 </script>
 
 {#snippet editor(slot: Slot | null)}
-	<li class="editing">
-		<SlotEditor
-			{slot}
-			slots={list}
-			categories={session.categoryList}
-			now={session.now}
-			onSave={(body) => session.saveSlot(slot?.id ?? null, body)}
-			onClose={() => (editing = undefined)}
-		/>
-	</li>
+	<!-- Spread: a plain `slot` attribute here would be read as Svelte's old
+	     way of placing content. -->
+	<SlotEditor
+		{...{ slot }}
+		slots={list}
+		categories={session.categoryList}
+		now={session.now}
+		onSave={(body) => session.saveSlot(slot?.id ?? null, body)}
+		onClose={() => (editing = undefined)}
+	/>
 {/snippet}
 
 <div class="page">
@@ -123,18 +131,24 @@
 			</button>
 		</div>
 
-		<ul>
+		<ul bind:this={rows}>
 			{#if editing === null}
-				{@render editor(null)}
+				<li class="editing" data-flip="new" out:leave>{@render editor(null)}</li>
 			{/if}
 			{#each list as slot, i (slot.id)}
-				{#if editing?.id === slot.id}
-					{@render editor(slot)}
-				{:else}
-					{@const name = slotLabel(slot)}
-					{@const over = clashes[slot.id]}
-					{@const crossed = crossings[slot.id]}
-					<li class="row" class:off={!slot.enabled}>
+				{@const open = editing?.id === slot.id}
+				<li
+					class={open ? 'editing' : 'row'}
+					class:off={!open && !slot.enabled}
+					data-flip={slot.id}
+					out:leave
+				>
+					{#if open}
+						{@render editor(slot)}
+					{:else}
+						{@const name = slotLabel(slot)}
+						{@const over = clashes[slot.id]}
+						{@const crossed = crossings[slot.id]}
 						<span class="order">
 							<button
 								onclick={() => move(slot, true)}
@@ -214,8 +228,8 @@
 								</button>
 							</span>
 						</span>
-					</li>
-				{/if}
+					{/if}
+				</li>
 			{:else}
 				{#if editing !== null && session.connection === 'live'}
 					<li class="empty">{m.sched_empty()}</li>
@@ -291,7 +305,9 @@
 		margin-inline-start: auto;
 	}
 
+	/* Positioned: a row going away stays drawn where it was (shuffle). */
 	ul {
+		position: relative;
 		margin: 0;
 		padding: 0;
 		list-style: none;

@@ -3,7 +3,7 @@
 	import type { AddJob } from '@ottie/api-types/AddJob';
 	import type { AddedJobs } from '@ottie/api-types/AddedJobs';
 	import type { Job } from '@ottie/api-types/Job';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Settings } from '@ottie/api-types/Settings';
@@ -12,6 +12,7 @@
 	import { confirmation, targets, type Action } from '#lib/bulk.js';
 	import { provideApp } from '#lib/context.js';
 	import { parseFilters, showsNewJobs, type Status } from '#lib/filters.js';
+	import { fadeIn } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { chosenLanguage, switchLanguage } from '#lib/languages.js';
 	import { isLocale, locales } from '#lib/paraglide/runtime.js';
@@ -63,6 +64,18 @@
 		resolve('/schedule'),
 		resolve('/settings')
 	];
+	let main: HTMLElement | undefined = $state();
+	// Another tab's page fades in (docs/decisions/0048); a filter changing
+	// the address doesn't count. (The page's own address, not the
+	// navigation's: its `from` can lack one, and a callback that throws
+	// turns the move into a full reload.)
+	let shownPath = page.url.pathname;
+	afterNavigate(() => {
+		if (main && page.url.pathname !== shownPath) {
+			fadeIn(main);
+		}
+		shownPath = page.url.pathname;
+	});
 	/** The first start: the setup page replaces the app until it's done. */
 	let settingUp = $derived(session.settings?.setupDone === false);
 
@@ -238,7 +251,7 @@
 	{#if settingUp}
 		<Setup />
 	{:else}
-		<main>
+		<main bind:this={main}>
 			{#if session.error}
 				<div class="error" role="alert">
 					<span>{session.error}</span>

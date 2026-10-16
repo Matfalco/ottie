@@ -3,7 +3,12 @@ import { syncSteps } from './sync';
 import type { DeviceAppearance } from './theme';
 
 const KNOWN = ['en', 'fr'];
-const device: DeviceAppearance = { mode: 'dark', palette: 'sea', synced: true };
+const device: DeviceAppearance = {
+	mode: 'dark',
+	palette: 'sea',
+	synced: true,
+	motion: 'system'
+};
 const look = { mode: 'dark', palette: 'sea' } as const;
 
 describe('syncSteps', () => {

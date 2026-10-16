@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { formatSpeed } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { drop } from '#lib/moving.svelte.js';
 	import type { Connection } from '#lib/session.svelte.js';
 	import { shortLabel, type queueNow } from '#lib/slots.js';
 	import LimitControl from './LimitControl.svelte';
@@ -116,7 +117,7 @@
 		{/if}
 		{#if open}
 			<!-- Focusable, so a click inside doesn't count as leaving it. -->
-			<div class="popup" role="dialog" aria-label={m.limit_total()} tabindex="-1">
+			<div class="popup" role="dialog" aria-label={m.limit_total()} tabindex="-1" in:drop out:drop>
 				<p class="title">{m.limit_total()}</p>
 				<LimitControl {limit} onChange={onLimit} />
 				<RatePresets {limit} onChange={onLimit} />
