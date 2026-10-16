@@ -20,7 +20,7 @@ import { explainRefusal } from './explain';
 import { m } from './paraglide/messages.js';
 import { applyEvent, newestFirst, nextRate, type Jobs, type Rate } from './jobs';
 import { applySlotEvent, slotNames, sortedSlots, type Slots } from './slots';
-import { addSample, totalSpeed } from './speed';
+import { addSample, nextSample, totalSpeed } from './speed';
 import { applyViewEvent, sortedViews, type Views } from './views';
 
 export type Connection = 'connecting' | 'live' | 'offline';
@@ -40,8 +40,8 @@ export class Session {
 	error: string | null = $state(null);
 	/** Updated every second, so "speed" and "retrying in" stay current. */
 	now = $state(Date.now());
-	/** Total speed, one sample per second since the page opened (the last
-	 * few minutes), for the dashboard's graph. */
+	/** Total speed, one sample per second, oldest first: the daemon's last
+	 * hour, then the page's own (docs/decisions/0044). */
 	history: number[] = $state.raw([]);
 	list = $derived(newestFirst(this.jobs));
 	categories: Categories = $state({});
@@ -67,6 +67,9 @@ export class Session {
 	private retryMs = FIRST_RETRY_MS;
 	private timers: ReturnType<typeof setTimeout>[] = [];
 	private stopped = false;
+	/** When the daemon's speed history last came: the page's own rates take
+	 * a moment to measure after that (see `nextSample`). */
+	private historyAt = 0;
 
 	constructor(
 		token: string,
@@ -79,7 +82,11 @@ export class Session {
 		this.connect();
 		const clock = setInterval(() => {
 			this.now = Date.now();
-			this.history = addSample(this.history, totalSpeed(this.rates, this.now));
+			const own = totalSpeed(this.rates, this.now);
+			this.history = addSample(
+				this.history,
+				nextSample(this.history, own, this.now - this.historyAt)
+			);
 		}, 1000);
 		this.timers.push(clock);
 	}
@@ -356,13 +363,16 @@ export class Session {
 		}
 		this.pending = [];
 		try {
-			const [jobs, categories, settings, views, slots] = await Promise.all([
+			const [jobs, categories, settings, views, slots, speed] = await Promise.all([
 				this.api.listJobs(),
 				this.api.listCategories(),
 				this.api.getSettings(),
 				this.api.listViews(),
-				this.api.listSlots()
+				this.api.listSlots(),
+				this.api.speedHistory()
 			]);
+			this.history = speed.samples;
+			this.historyAt = Date.now();
 			this.jobs = Object.fromEntries(jobs.map((job) => [job.id, job]));
 			this.categories = Object.fromEntries(categories.map((category) => [category.id, category]));
 			this.settings = settings;

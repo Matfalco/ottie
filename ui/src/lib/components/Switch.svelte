@@ -53,4 +53,41 @@
 		inset-inline-start: 1.1875rem;
 		background: var(--on-accent);
 	}
+
+	/* Rounded (docs/decisions/0044): a sunken track that lights up, and a
+	   raised knob with a grip. */
+	:global([data-style='rounded']) button {
+		width: 2.6rem;
+		height: 1.5rem;
+		background: var(--sunken);
+		box-shadow: var(--sunken-shadow);
+	}
+
+	:global([data-style='rounded']) button.on {
+		background: linear-gradient(
+			180deg,
+			color-mix(in srgb, var(--accent) 80%, black),
+			var(--accent)
+		);
+		box-shadow:
+			inset 0 1px 3px rgb(0 0 0 / 30%),
+			0 0 10px color-mix(in srgb, var(--accent) 30%, transparent);
+	}
+
+	:global([data-style='rounded']) .knob {
+		top: 0.1875rem;
+		width: 1.125rem;
+		height: 1.125rem;
+		background:
+			repeating-conic-gradient(var(--surface) 0 25%, var(--well) 0 50%) 0 0 / 4px 4px,
+			var(--surface);
+		box-shadow:
+			0 2px 4px rgb(0 0 0 / 35%),
+			inset 0 0 0 1px var(--border),
+			inset 0 1px 0 rgb(255 255 255 / 12%);
+	}
+
+	:global([data-style='rounded']) .on .knob {
+		inset-inline-start: 1.2875rem;
+	}
 </style>

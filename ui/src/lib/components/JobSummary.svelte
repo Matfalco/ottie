@@ -51,22 +51,42 @@
 </li>
 
 <style>
+	/* A row like the dashboard's others: the file's kind where they show
+	   the percent or the place. */
 	li {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
-		min-height: 2.75rem;
-		padding: 0.35rem 0;
-		border-bottom: 1px solid var(--border-soft);
-	}
-
-	li:last-child {
-		border-bottom: none;
+		gap: 0.65rem;
+		min-height: 3.1rem;
+		padding: 0.35rem 0.4rem 0.35rem 0.5rem;
+		border-radius: var(--radius-m);
+		background: var(--well);
 	}
 
 	.kind {
 		display: grid;
+		flex: none;
+		place-items: center;
+		width: 2.6rem;
+		height: 2.3rem;
+		border-radius: var(--radius-s);
+		background: var(--hover);
 		color: var(--muted);
+	}
+
+	.failed .kind {
+		background: var(--danger-bg);
+		color: var(--danger);
+	}
+
+	.retrying .kind {
+		background: var(--warn-bg);
+		color: var(--warn);
+	}
+
+	.completed .kind {
+		background: var(--ok-bg);
+		color: var(--ok);
 	}
 
 	.text {
@@ -103,10 +123,11 @@
 	button {
 		display: grid;
 		place-items: center;
-		width: 1.9rem;
-		height: 1.9rem;
+		width: 2rem;
+		height: 2rem;
 		padding: 0;
 		border-color: transparent;
+		border-radius: 50%;
 		background: none;
 		color: var(--muted);
 	}

@@ -194,7 +194,7 @@
 	   hidden, a flex item would shrink to the window and cut it off). */
 	.pane {
 		flex: none;
-		border: 1px solid var(--border);
+		border: 1px solid var(--edge);
 		border-radius: var(--radius-l);
 		background: var(--surface);
 		overflow: hidden;

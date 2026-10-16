@@ -450,4 +450,27 @@
 	.buttons .switch-row {
 		margin-inline-end: auto;
 	}
+
+	/* Rounded (docs/decisions/0044): a sunken track, the chosen one raised. */
+	:global([data-style='rounded']) .segments {
+		gap: 0.15rem;
+		padding: 0.2rem;
+		border: none;
+		border-radius: 999px;
+		background: var(--sunken);
+		box-shadow: var(--sunken-shadow);
+	}
+
+	:global([data-style='rounded']) .segments label {
+		border-radius: 999px;
+	}
+
+	:global([data-style='rounded']) .segments label + label {
+		border-inline-start: none;
+	}
+
+	:global([data-style='rounded']) .segments label.chosen {
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
+	}
 </style>

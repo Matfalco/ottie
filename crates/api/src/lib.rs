@@ -21,6 +21,7 @@ mod jobs;
 mod openapi;
 mod settings;
 mod slots;
+mod speed;
 mod stream;
 mod types;
 mod ui;
@@ -43,7 +44,7 @@ pub use types::{
     AppearanceMode, Arrangement, BuiltIn, ByteRange, Category, CategoryBody, Event, FoundLink, Job,
     JobChange, JobState, MatchLink, Matched, MoveJob, Palette, Preview, PreviewLinks, Priority,
     Problem, Reason, RefusedJob, Reorder, ReorderJobs, Settings, SettingsChange, SortDirection,
-    SortKey, StreamLink, View, ViewBody, ViewFilters,
+    SortKey, SpeedHistory, StreamLink, View, ViewBody, ViewFilters,
 };
 pub use types::{AddedSlot, Day, ReorderSlots, Slot, SlotBody, SlotDownloads, SlotList};
 pub use ui::UiSource;
@@ -85,6 +86,7 @@ fn private_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(categories::matching))
         .routes(routes!(categories::update, categories::remove))
         .routes(routes!(settings::get, settings::change))
+        .routes(routes!(speed::history))
         .routes(routes!(views::list, views::add))
         .routes(routes!(views::update, views::remove))
         .routes(routes!(slots::list, slots::add))

@@ -297,7 +297,7 @@
 		min-height: 0;
 		margin: 0 1rem 1rem;
 		overflow: hidden;
-		border: 1px solid var(--border);
+		border: 1px solid var(--edge);
 		border-radius: var(--radius-l);
 		background: var(--surface);
 	}
@@ -346,5 +346,11 @@
 		.pane {
 			margin: 0 0.5rem 0.5rem;
 		}
+	}
+
+	/* Rounded (docs/decisions/0044): no line under the filters, the rows
+	   carry their own shapes. */
+	:global([data-style='rounded']) .head {
+		border-bottom: none;
 	}
 </style>

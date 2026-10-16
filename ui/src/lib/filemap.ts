@@ -1,5 +1,5 @@
-// Where in the file the bytes have arrived: a row's progress bar split by
-// connection, and the detail panel's bar, which maps the file.
+// Where in the file the bytes have arrived: the bar that maps the file, in
+// the details panel and, smaller, in each row (docs/decisions/0027, 0044).
 
 import type { ByteRange } from '@ottie/api-types/ByteRange';
 import type { Job } from '@ottie/api-types/Job';
@@ -44,21 +44,7 @@ function merged(ranges: ByteRange[]): ByteRange[] {
 	return parts;
 }
 
-/** A row's bar, one piece per connection: its share of the file, and how
- * full it is (0 to 1). Null for one connection: the bar stays whole. */
-export function barParts(job: Job): { share: number; fill: number }[] | null {
-	const parts = received(job);
-	const total = parts.reduce((sum, part) => sum + (part.end - part.start), 0);
-	if (parts.length < 2 || total === 0) {
-		return null;
-	}
-	return parts.map((part) => {
-		const length = part.end - part.start;
-		return { share: length / total, fill: length === 0 ? 1 : part.done / length };
-	});
-}
-
-/** A range on the detail panel's bar, as fractions of the file (0 to 1):
+/** A range on the bar, as fractions of the file (0 to 1):
  * where it starts and ends, and how far it has arrived. */
 export interface StripPart {
 	start: number;
@@ -68,7 +54,7 @@ export interface StripPart {
 	writing: boolean;
 }
 
-/** The detail panel's bar: each range at its exact place in the file (one
+/** The bar: each range at its exact place in the file (one
  * from the start for one connection). Unfinished ranges are being written
  * only while `running`. Null while the size is unknown. */
 export function strip(job: Job, running: boolean): StripPart[] | null {

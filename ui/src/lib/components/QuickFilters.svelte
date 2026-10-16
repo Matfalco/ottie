@@ -247,4 +247,49 @@
 		border-color: var(--muted);
 		background: var(--hover);
 	}
+
+	/* Rounded (docs/decisions/0044): the pills sit in a sunken track, the
+	   current one raised; saved views and "…" stay apart, after it. */
+	:global([data-style='rounded']) .pills {
+		width: fit-content;
+		max-width: 100%;
+		gap: 0.15rem;
+		padding: 0.25rem;
+		border-radius: 1.2rem;
+		background: var(--sunken);
+		box-shadow: var(--sunken-shadow);
+	}
+
+	:global([data-style='rounded']) a,
+	:global([data-style='rounded']) .more {
+		height: 2rem;
+		border-color: transparent;
+		color: var(--muted);
+	}
+
+	:global([data-style='rounded']) a:hover {
+		color: var(--text);
+	}
+
+	:global([data-style='rounded']) a.current {
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
+		color: var(--text);
+	}
+
+	:global([data-style='rounded']) .options {
+		height: 2rem;
+		border-inline-start-color: var(--border);
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
+		color: var(--text);
+	}
+
+	:global([data-style='rounded']) .more {
+		border-color: var(--border);
+	}
+
+	:global([data-style='rounded']) ul {
+		border-color: var(--edge);
+	}
 </style>

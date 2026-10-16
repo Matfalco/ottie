@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { barParts, connections, received, strip } from './filemap';
+import { connections, received, strip } from './filemap';
 import { job } from './testing';
 
 const split = job({
@@ -64,15 +64,6 @@ describe('file map', () => {
 			{ start: 450, end: 500, done: 10 }
 		]);
 		expect(connections(streamed, 'en')).toBe('5 ranges');
-	});
-
-	it('splits the bar by connection, sized by share', () => {
-		expect(barParts(split)).toEqual([
-			{ share: 0.5, fill: 0.5 },
-			{ share: 0.25, fill: 0.5 },
-			{ share: 0.25, fill: 0 }
-		]);
-		expect(barParts(job({ state: 'downloading', total: 100, downloaded: 10 }))).toBeNull();
 	});
 
 	it('places each range on the bar', () => {

@@ -20,6 +20,7 @@ mod segmented;
 mod sequence;
 mod settings;
 mod slot;
+mod speed;
 mod store;
 mod stream;
 mod throttle;

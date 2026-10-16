@@ -108,6 +108,27 @@
 		text-align: center;
 	}
 
+	/* Rounded (docs/decisions/0044): the tabs sit in a sunken track, the
+	   current one raised. */
+	:global([data-style='rounded']) ul {
+		gap: 0.15rem;
+		padding: 0.25rem;
+		border-radius: 999px;
+		background: var(--sunken);
+		box-shadow: var(--sunken-shadow);
+	}
+
+	:global([data-style='rounded']) a {
+		height: 2.1rem;
+		padding: 0 0.95rem;
+		border-radius: 999px;
+	}
+
+	:global([data-style='rounded']) a.current {
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
+	}
+
 	/* Short of room in the title bar: icons only. */
 	@media (min-width: 40.01rem) {
 		.compact a {
@@ -164,6 +185,26 @@
 		a.current {
 			background: none;
 			color: var(--accent);
+		}
+
+		:global([data-style='rounded']) nav {
+			border-top: none;
+			background: var(--frame);
+		}
+
+		:global([data-style='rounded']) ul {
+			padding: 0;
+			background: none;
+			box-shadow: none;
+		}
+
+		:global([data-style='rounded']) a {
+			border-radius: var(--radius-m);
+		}
+
+		:global([data-style='rounded']) a.current {
+			background: var(--raised);
+			box-shadow: var(--raised-shadow);
 		}
 
 		/* Five names don't fit side by side: only the current tab's. */

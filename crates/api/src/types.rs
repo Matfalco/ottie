@@ -919,7 +919,8 @@ pub enum AppearanceMode {
     Dark,
 }
 
-/// A light theme and a dark one that go together.
+/// A light theme and a dark one that go together. The legacy ones keep the
+/// look from before the rounder shapes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -928,6 +929,21 @@ pub enum Palette {
     Sea,
     /// Pearl and Slate.
     Neutral,
+    /// Seafoam and Lagoon as they were.
+    SeaLegacy,
+    /// Pearl and Slate as they were.
+    NeutralLegacy,
+}
+
+/// The total download speed over the last hour.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SpeedHistory {
+    /// All downloads' speed together in bytes per second, one sample per
+    /// second, oldest first; the last is the latest. At most 3600.
+    #[ts(type = "number[]")]
+    pub samples: Vec<u64>,
 }
 
 /// Why a job failed or is retrying. Clients translate it by `code` and
@@ -1268,6 +1284,8 @@ impl From<ottie_core::Appearance> for Appearance {
             palette: match appearance.palette {
                 P::Sea => Palette::Sea,
                 P::Neutral => Palette::Neutral,
+                P::SeaLegacy => Palette::SeaLegacy,
+                P::NeutralLegacy => Palette::NeutralLegacy,
             },
         }
     }
@@ -1285,6 +1303,8 @@ impl From<Appearance> for ottie_core::Appearance {
             palette: match appearance.palette {
                 Palette::Sea => P::Sea,
                 Palette::Neutral => P::Neutral,
+                Palette::SeaLegacy => P::SeaLegacy,
+                Palette::NeutralLegacy => P::NeutralLegacy,
             },
         }
     }

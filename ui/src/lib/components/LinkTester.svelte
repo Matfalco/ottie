@@ -66,7 +66,7 @@
 		display: grid;
 		gap: 0.4rem;
 		padding: 0.75rem 0.9rem;
-		border: 1px solid var(--border);
+		border: 1px solid var(--edge);
 		border-radius: var(--radius-l);
 		background: var(--surface);
 	}

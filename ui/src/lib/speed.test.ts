@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { addSample, niceTop, paths, points, secondsAt, totalSpeed } from './speed';
+import {
+	DEFAULT_SPAN,
+	addSample,
+	nextSample,
+	niceTop,
+	overSpan,
+	parseSpan,
+	paths,
+	points,
+	pointsAgo,
+	totalSpeed
+} from './speed';
 
 const KB = 1024;
 const MB = 1024 * 1024;
@@ -14,9 +25,30 @@ describe('speed history', () => {
 		expect(totalSpeed(rates, 2000)).toBe(500);
 	});
 
+	it("carries the daemon's last sample on while the page measures its own", () => {
+		expect(nextSample([10, 20], 0, 500)).toBe(20);
+		expect(nextSample([10, 20], 5, 3000)).toBe(5);
+		expect(nextSample([], 7, 500)).toBe(7);
+	});
+
 	it('keeps the last samples', () => {
 		expect(addSample([1, 2, 3], 4, 3)).toEqual([2, 3, 4]);
 		expect(addSample([], 7)).toEqual([7]);
+	});
+
+	it('shows the chosen span, averaging seconds when it is long', () => {
+		expect(overSpan([1, 2, 3, 4, 5], 3)).toEqual({ samples: [3, 4, 5], step: 1 });
+		// Six seconds in two points of three: counted back from now.
+		expect(overSpan([9, 1, 2, 3, 4, 5, 6], 6, 2)).toEqual({ samples: [2, 5], step: 3 });
+		// Fewer seconds than a whole step: the oldest point averages what there is.
+		expect(overSpan([2, 4, 6], 3600, 300)).toEqual({ samples: [4], step: 12 });
+		expect(overSpan([], 300)).toEqual({ samples: [], step: 1 });
+	});
+
+	it('remembers only the spans it offers', () => {
+		expect(parseSpan('1800')).toBe(1800);
+		expect(parseSpan('42')).toBe(DEFAULT_SPAN);
+		expect(parseSpan(null)).toBe(DEFAULT_SPAN);
 	});
 
 	it('rounds the scale up to 1, 2 or 5 of the unit the labels show', () => {
@@ -51,14 +83,14 @@ describe('graph shapes', () => {
 		expect(paths([], 8)).toEqual({ line: '', area: '' });
 	});
 
-	it('finds the second under the pointer, now at the end of the line', () => {
+	it('finds the point under the pointer, now at the end of the line', () => {
 		// Left to right: now on the right.
-		expect(secondsAt(500, 100, 400, false)).toBe(0);
-		expect(secondsAt(100, 100, 400, false)).toBe(299);
-		expect(secondsAt(50, 100, 400, false)).toBe(299);
+		expect(pointsAgo(500, 100, 400, false)).toBe(0);
+		expect(pointsAgo(100, 100, 400, false)).toBe(299);
+		expect(pointsAgo(50, 100, 400, false)).toBe(299);
 		// Right to left: now on the left.
-		expect(secondsAt(100, 100, 400, true)).toBe(0);
-		expect(secondsAt(500, 100, 400, true)).toBe(299);
-		expect(secondsAt(300, 100, 400, true)).toBe(150);
+		expect(pointsAgo(100, 100, 400, true)).toBe(0);
+		expect(pointsAgo(500, 100, 400, true)).toBe(299);
+		expect(pointsAgo(300, 100, 400, true)).toBe(150);
 	});
 });

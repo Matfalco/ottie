@@ -13,8 +13,8 @@ use ottie_api::{
     AddJob, AddJobs, Added, AddedCategory, AddedJobs, AddedView, AddedWithin, ApiError, Appearance,
     AppearanceMode, Arrangement, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL, Event,
     FoundLink, Job, JobState, Matched, Palette, Preview, PreviewLinks, Priority, Problem, Reason,
-    Reorder, ReorderJobs, Settings, SettingsChange, SortDirection, SortKey, StreamLink,
-    TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
+    Reorder, ReorderJobs, Settings, SettingsChange, SortDirection, SortKey, SpeedHistory,
+    StreamLink, TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
 };
 use ottie_api::{AddedSlot, Day, ReorderSlots, Slot, SlotDownloads, SlotList};
 use ottie_core::{HttpBackend, Manager, Store};
@@ -264,6 +264,24 @@ async fn a_download_from_start_to_finish() {
     );
     let file = Path::new(&job.dest_dir).join("file.bin");
     assert_eq!(std::fs::read(file).unwrap(), vec![7u8; SIZE]);
+}
+
+#[tokio::test]
+async fn the_speed_history_gives_a_sample_per_second() {
+    let d = start().await;
+    let history = || async {
+        let response = d.get("/speed").send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        response.json::<SpeedHistory>().await.unwrap()
+    };
+    let before = history().await.samples.len();
+    tokio::time::sleep(Duration::from_millis(2100)).await;
+    let after = history().await.samples;
+    assert!(after.len() >= before + 2, "{before} then {}", after.len());
+    assert!(
+        after.iter().all(|&bytes| bytes == 0),
+        "nothing was downloading"
+    );
 }
 
 #[tokio::test]
@@ -985,7 +1003,7 @@ async fn settings_are_read_and_changed() {
         "firstRetryWaitMs": 500,
         "maxBatch": 500,
         "streamMedia": false,
-        "appearance": { "mode": "dark", "palette": "neutral" },
+        "appearance": { "mode": "dark", "palette": "neutralLegacy" },
         "language": "fr",
     });
     let response = patch(change).await.unwrap();
@@ -999,7 +1017,7 @@ async fn settings_are_read_and_changed() {
         stream_media: false,
         appearance: Some(Appearance {
             mode: AppearanceMode::Dark,
-            palette: Palette::Neutral,
+            palette: Palette::NeutralLegacy,
         }),
         language: Some("fr".into()),
         ..defaults

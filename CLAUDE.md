@@ -74,6 +74,7 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/links.rs       the links in pasted text (find), LinkPreview: for adding several at once
   src/sequence.rs    sequences in one link, curl-style ([001-120], [a-z], {a,b}): count, then expand
   src/throttle.rs    speed limits: per-job token buckets, refill task, priority-weighted sharing, category caps
+  src/speed.rs       the last hour of total speed, one sample per second, from each job's smoothed rate (0044)
   src/http.rs        HTTP transfer: first request, single-connection stream, resume, restart rules, stall timeout
   src/segmented.rs   multi-connection transfer: coordinator, connection tasks, dynamic splitting
   src/download.rs    Download state (what gets persisted), Placement, Event, Outcome
@@ -103,6 +104,7 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
                      write them to shared/api-types/Ranges.ts)
   src/views.rs       GET/POST /views, PUT/DELETE /views/{id} (saved views)
   src/slots.rs       GET/POST /slots (with the time zone), PUT/DELETE /slots/{id}, POST /slots/reorder
+  src/speed.rs       GET /speed: the last hour of total speed, for the graph (0044)
   src/stream.rs      play links: POST /jobs/{id}/stream → GET /stream/{ticket}/{name} (no token, Range)
   src/events.rs      GET /events WebSocket: changed / progress / removed / categoryChanged /
                      categoryRemoved / settingsChanged / viewChanged / viewRemoved / resync
@@ -181,20 +183,22 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
   src/lib/api.ts     fetch + WebSocket client for /api/v1 (Unauthorized, ApiFailure)
   src/lib/session.svelte.ts  live job list: events WebSocket, reconnect, buffered resync
   src/lib/context.ts what every page shares (session, run): Svelte createContext
-  src/lib/jobs.ts, categories.ts, status.ts, selection.ts, bulk.ts, filetypes.ts, speed.ts,
+  src/lib/jobs.ts, categories.ts, status.ts, selection.ts, bulk.ts, filetypes.ts,
+                     speed.ts (the speed history: the graph's spans, 5 min to 1 h, saved per device, 0044),
                      filters.ts (Downloads filters ↔ address, quick filters, the four status groups),
                      arrange.ts (sort + group by status, saved per device),
                      details.ts (the selected download's panel: main action, facts, priorities),
-                     filemap.ts (ranges → a row's split bar, and the detail bar that maps the file, 0027),
+                     filemap.ts (ranges → the bar that maps the file, in the details and each row, 0027),
                      views.ts (saved views ↔ filters + arrangement, which pill is lit),
                      languages.ts (each language's name, which are reviewed, the system's closest, the
                      device's choice, 0041; which way it's written, 0042), format.ts, token.ts, adding.ts (the add step), setup.ts (starter categories),
-                     theme.ts (light/dark/system + palette → theme, saved per device),
+                     theme.ts (light/dark/system + palette → theme and style (rounded or legacy, 0044),
+                     saved per device),
                      settings.ts (settings fields: kB/MB/GB per second, seconds, ranges; last limit
                      per device), sync.ts (following the shared look + language),
                      playlist.ts (a play link as a .m3u, saved through the browser, 0031),
                      tray.ts (the tray menu's status line, what Pause all / Resume all act on),
-                     queue.ts (queue order, up next, whether up/down would move anything, what a drag
+                     queue.ts (queue order, the waiting ones in it, whether up/down would move anything, what a drag
                      carries and where it may drop, 0032),
                      startup.ts (the sign-in choices, for Settings and Setup, 0039),
                      schedule.ts (a download's start and stop time: date-and-time fields ↔
@@ -219,11 +223,13 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
   src/lib/components/  Shell (TitleBar with NavMenu tabs + SpeedChip (limit popup: LimitControl + RatePresets), page,
                        dialog, BatchDialog for links sent by More… in the clipboard's window; Setup on first
                        start, with the sign-in and clipboard choices in the desktop app),
-                       Dashboard (AddCard, tiles, SpeedChart, RunningList, JobSummary),
+                       Dashboard (AddCard, SpeedChart across the top with its span, then the four groups two
+                       by two: running rows filling up, waiting ones in queue order, JobSummary rows),
                        Downloads (AddCard, then one pane: Toolbar + MoveMenu + FinishMenu (desktop app), QuickFilters (with the
                        saved views' pills + their menu) or FilterPanel, ViewDialog (name a view),
                        JobTable (group rows, sortable headers, drag in the Waiting group) + JobRow,
-                       JobDetails under it for the one selected download (its bar maps the file), or
+                       JobDetails under it for the one selected download (FileBar maps the file, as in each
+                       row), or
                        DetailsEmpty in its place for none or several),
                        CategoriesPage (LinkTester, rows, CategoryEditor inline in place of a row),
                        SchedulePage (WeekView: drag a slot or its edges, click to edit; then the
@@ -232,12 +238,13 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        desktop app (sign-in, closing), clipboard, notifications + playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
                        TitleBar (+ WindowControls; folds to fit: tab icons, slot chip, logo name), AddCard (AddBar: link, then category + folder step;
                        BatchDialog: several links, from a paste, the list button or a file),
-                       FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu), Countdown (its
+                       FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu, its RunningList), Countdown (its
                        countdown window before sleep, hibernate or shut down), Caught (its window for links
                        copied elsewhere)
   messages/<tag>.json  every UI text, per language (Paraglide); project.inlang/ its settings (the locales)
   src/app.css        the four themes as variables under [data-theme] (docs/decisions/0021), fonts (Outfit +
-                     DM Mono, else the system's; see "Languages and fonts" below, 0041), radii
+                     DM Mono, else the system's; see "Languages and fonts" below, 0041), radii; the
+                     rounded style's surfaces and shapes under [data-style='rounded'] (0044)
   vite.config.ts     SvelteKit + adapter-static → ../crates/api/ui-dist; Paraglide; dev proxy /api → daemon
 extension/         WebExtension (Chrome + Firefox)
 shared/api-types/  TypeScript types generated from Rust (ts-rs, by `cargo test -p ottie-api`;
@@ -303,6 +310,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Time slots** (`docs/decisions/0040`, `slot.rs`): kept by the actor like views (`Manager::add_slot` …, `SlotChanged`/`SlotRemoved`, also when one starts or stops applying), in list order (`place`). `check_times` works out the active ones (`update_slots`; a slot that happens once is removed once over) and what they change (`Effects`: per effect, the highest slot that sets it, for the queue and each category), then applies it: limits through the limiter (`apply_limits`: a slot's, else the setting's), caps in `schedule`/`has_room`, and holds in `settle` (a queued job a slot stops becomes `Scheduled` with `held_by`; a running one gets `Stop::Hold` unless the slot lets it finish; released when no slot holds it and its start time has passed: to the queue, or `Paused` if the slot that held it (`held_by`, saved) ended at its time and keeps them paused (`stay_paused`; `keeps_paused`, `Actor::ended` for one that happened once). Settings are never changed by a slot. A job resumed by hand while held gets `ignores_slots` (saved) until it pauses, fails or ends. Wake-ups include the slots' next changes.
 - **Retries** (`docs/decisions/0013`): only `Error::is_retryable()` errors (network, drop, stall, 5xx, 408, 429). A retrying job keeps its slot for `retries_before_yield` retries, then gives way if a queued job is waiting (queues behind every job that never gave way); fails after `max_retries`. Waits double from `first_wait` up to 60 s; `Retry-After` (seconds) can ask for up to 10 min. The count resets when bytes arrive or on a manual resume. Stalls: `tokio::time::timeout` around each network wait (`HttpConfig::stall_timeout`), never reqwest's `read_timeout` (it would fire while our throttle waits). Each run of a job (start, resume, retry) gets its own reqwest `Client` (`HttpBackend`), so it never reuses a pooled connection that died silently when the network changed (VPN, Wi-Fi); HTTP/2 connections are also pinged after 10 s of silence.
 - **Failures are `Problem`s** (`docs/decisions/0016`), never bare strings: a kind plus details, saved in the `problem_*` columns. Add a kind = a migration (CHECK list), a `Display` wording, an API `Problem` variant and UI messages.
+- **Speed history** (`docs/decisions/0044`): the actor feeds each `Event::Progress` to `SpeedHistory`, which keeps each job's speed as the UI's `nextRate` does (a moving average between reports), and adds them up once a second (an hour, in memory): `Manager::speed_history`.
 - **Settings** live in the single-row `settings` table; `Manager::start(backend, store)` loads them. They change through `Manager::change_settings` (several at once): one save and one `JobEvent::SettingsChanged` per change, none if nothing changed (`docs/decisions/0022`). A job's own settings (speed limit, priority) change the same way through `Manager::change_job(id, JobChange)`: one save and one `Changed` (`docs/decisions/0024`).
 - **Categories** (`docs/decisions/0011`, `0020`): every job has one. Two built-ins can't be removed: General (ID 1: unmatched extensions, default folder) and Other (folders of no category; no folder or extensions of its own; ID in `Actor::other`). `add(NewJob)` uses the caller's category, else, if the caller gave a folder, the category whose folder it is (preferring the extension's), else Other; both are fixed (`category_chosen`, never re-matched). Without either: the category owning the URL's extension, else General. Each extension belongs to one category at most. The job's folder is copied at add (caller's, else the category's, else `NoFolder`). Removing a category moves its jobs to General first (saved before the row is deleted); their files stay where they are. Moving a job to another category moves its file to that category's folder (`docs/decisions/0028`): a running job stops (`Stop::Move`, state and slot kept), its file moves in a task of its own (`Job::moving`, which refuses pause/resume/cancel/remove), then it carries on; a job that can't resume is refused while running; a category without a folder leaves the file in place. A category's `max_concurrent` caps its running jobs under the global cap. At the first response, an auto-matched job is re-matched by its real name; its folder follows (via `Placement`, before the file is created) only if it was in its category's folder (`docs/decisions/0012`). Migrations run with foreign keys off and check them before committing. The daemon never creates starter categories itself; the UI's first-start setup offers them (`docs/decisions/0020`).
 - **Saved views** (`docs/decisions/0026`): name + filters + sort/grouping, kept by the actor like categories (`Manager::add_view` …, `ViewChanged`/`ViewRemoved`). The engine checks and normalizes them but never filters jobs by them; front ends do. Removing a category replaces it with General in every view (saved before the category row goes).
@@ -335,7 +343,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - New crates inherit `edition`, `license`, `repository` and `publish` (false) from `[workspace.package]`, and set `[lints] workspace = true`. `ottie`, `ottie-core` and `ottie-api` set `publish = true` (the binary depends on the other two, so they're published first); their dependencies on each other need `path` + `version`. The Tauri app stays unpublished.
 - License header: published crates' entry files carry the MPL "Exhibit A" notice, because the root `LICENSE` file isn't packaged.
 - TypeScript: `strict`, no `any`. API types come only from `shared/api-types/` (`import type { Job } from '@ottie/api-types/Job'`). In the UI, `#lib/…` imports of TS files end in `.js` (`#lib/format.js`). Logic lives in plain `.ts` files with unit tests; components stay thin. Prettier formats (tabs, single quotes).
-- UI (`docs/decisions/0015`, `0021`): runes mode; styles in each component's `<style>` using the variables in `app.css` (colours, `--font`/`--mono`, `--radius-s/m/l`), never raw colours; the page talks to the daemon only through `api.ts`. Every theme must keep working: check light and dark when adding colours. Every page must also work at the desktop app's minimum size (720 × 480, `min_inner_size` in `app/src/main.rs`) and on a phone (360 px wide and up; under 40rem the tabs are a bar along the bottom; there and in windows under 40rem tall, the download list keeps a height of its own with the details panel under it, and the page scrolls). Pages are mirrored for languages written right to left (`docs/decisions/0042`): use logical properties (`margin-inline-start`, `inset-inline-end`, `text-align: start`, `style:inset-inline-start=…`), never left/right; a name, link or folder shown or typed gets `dir="auto"`; something drawn in a direction (a chart, an arrow) flips under `:dir(rtl)`. Two traps: a visually hidden `position: absolute` input needs a positioned parent, or it hangs from the window and makes it scroll; and a flex item with `overflow: hidden` shrinks below its content unless it's `flex: none`.
+- UI (`docs/decisions/0015`, `0021`): runes mode; styles in each component's `<style>` using the variables in `app.css` (colours, `--font`/`--mono`, `--radius-s/m/l`, `--radius-pill`, `--edge`), never raw colours; the page talks to the daemon only through `api.ts`. Every theme must keep working in both styles (`docs/decisions/0044`): a component's own styles are the legacy look, the rounded one goes on top under `:global([data-style='rounded'])` (with `--sunken`, `--raised` and their shadows); check light and dark, rounded and legacy, when adding colours or shapes. Every page must also work at the desktop app's minimum size (720 × 480, `min_inner_size` in `app/src/main.rs`) and on a phone (360 px wide and up; under 40rem the tabs are a bar along the bottom; there and in windows under 40rem tall, the download list keeps a height of its own with the details panel under it, and the page scrolls). Pages are mirrored for languages written right to left (`docs/decisions/0042`): use logical properties (`margin-inline-start`, `inset-inline-end`, `text-align: start`, `style:inset-inline-start=…`), never left/right; a name, link or folder shown or typed gets `dir="auto"`; something drawn in a direction (a chart, an arrow) flips under `:dir(rtl)`. Two traps: a visually hidden `position: absolute` input needs a positioned parent, or it hangs from the window and makes it scroll; and a flex item with `overflow: hidden` shrinks below its content unless it's `flex: none`.
 - Translations (`docs/decisions/0016`): no visible text in components or logic: every string is a message in `messages/en.json` *and* `fr.json` (French typography: no-break space before `: ? !` and inside « »); numbers, sizes and durations go through `format.ts` (`Intl`); daemon text is shown through `explain.ts`. Functions that build text take a `locale` parameter (default `getLocale()`) so tests can check both languages. Other languages (`docs/decisions/0041`): write a count as a label ("Pobierane: {count}"), not with plural forms; a new language is a file in `ui/messages/` and `app/messages/`, its tag in `project.inlang/settings.json`, its name in `NAMES` (`languages.ts`) and its file in `LANGUAGES` (`app/src/texts.rs`); once a native speaker has checked it, add it to `REVIEWED`. A language Outfit can't fully draw goes in the `:lang()` list in `app.css` (the system's font throughout; a test fails until it does) and in the table under "Languages and fonts". A language written right to left goes in `RIGHT_TO_LEFT` in `languages.ts` and `app/src/texts.rs`, and every placeholder in its file sits between U+2068 and U+2069 (a test checks). A language the browsers lack `Intl` data for (check in Edge: `Intl.NumberFormat.supportedLocalesOf`) gets a stand-in in `INTL` (`languages.ts`), and its tray texts follow the stand-in.
 - API docs (`docs/decisions/0030`): every handler has a `#[utoipa::path]` (route, body, answers, the `Reason` codes it can refuse with) and is registered with `routes!`; wire types derive `ToSchema` beside `TS`. Fields inside the tagged enums (`Problem`, `Reason`, `Event`) stay one word (utoipa ignores `rename_all_fields`; a test checks). A change in how to use the API also updates `docs/api/README.md`.
 - API errors (`docs/decisions/0016`): every refusal has a `Reason` code (`crates/api/src/types.rs`) besides the English `error`; a new engine `Error` variant gets a code in `error.rs`.
@@ -448,6 +456,7 @@ Done: ✅ and struck through.
    - ✅ ~~6c when everything has finished (desktop app)~~
 7. More features:
    - ✅ ~~7a clipboard monitoring (desktop app, `docs/decisions/0043`)~~
+   - ✅ ~~the rounded style, the look from before as legacy palettes, the new Dashboard and an hour of speed (`docs/decisions/0044`)~~
    - 7b yt-dlp backend (its own updates, apart from the app's)
    - then a look at "Later (TODO)" below together, to pick which come here
 8. Browser extension.

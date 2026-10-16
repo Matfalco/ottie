@@ -176,33 +176,36 @@
 <svelte:window onpointerdown={pointerdown} />
 
 <form bind:this={form} onsubmit={submit}>
-	<label class="field">
-		<Link size={15} aria-hidden="true" />
-		<input
-			bind:this={link}
-			bind:value={url}
-			dir="auto"
-			oninput={() => (step = null)}
-			onpaste={pasted}
-			type="url"
-			placeholder={m.add_placeholder()}
-			aria-label={m.add_label()}
-			required
-		/>
-	</label>
-	<button
-		type="button"
-		class="several"
-		onclick={several}
-		title={m.add_several()}
-		aria-label={m.add_several()}
-	>
-		<ListPlus size={16} aria-hidden="true" />
-	</button>
-	<button class="primary" disabled={adding || !url.trim()} aria-label={m.add_button()}>
-		<Plus size={16} aria-hidden="true" />
-		<span>{m.add_button()}</span>
-	</button>
+	<!-- The link and its buttons: one pill in the rounded style. -->
+	<div class="bar">
+		<label class="field">
+			<Link size={15} aria-hidden="true" />
+			<input
+				bind:this={link}
+				bind:value={url}
+				dir="auto"
+				oninput={() => (step = null)}
+				onpaste={pasted}
+				type="url"
+				placeholder={m.add_placeholder()}
+				aria-label={m.add_label()}
+				required
+			/>
+		</label>
+		<button
+			type="button"
+			class="several"
+			onclick={several}
+			title={m.add_several()}
+			aria-label={m.add_several()}
+		>
+			<ListPlus size={16} aria-hidden="true" />
+		</button>
+		<button class="primary" disabled={adding || !url.trim()} aria-label={m.add_button()}>
+			<Plus size={16} aria-hidden="true" />
+			<span>{m.add_button()}</span>
+		</button>
+	</div>
 
 	{#if step}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -328,6 +331,65 @@
 
 	.several {
 		padding: 0 0.55rem;
+	}
+
+	.bar {
+		display: contents;
+	}
+
+	/* Rounded (docs/decisions/0044): the field is a sunken pill holding
+	   both buttons at its end. */
+	:global([data-style='rounded']) .bar {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		gap: 0.3rem;
+		min-width: 0;
+		height: 3rem;
+		padding-inline: 1rem 0.3rem;
+		border-radius: 999px;
+		background: var(--input);
+		box-shadow: var(--sunken-shadow);
+	}
+
+	:global([data-style='rounded']) .bar:focus-within {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
+	}
+
+	:global([data-style='rounded']) .field {
+		height: 100%;
+		padding: 0;
+		border: none;
+		background: none;
+	}
+
+	:global([data-style='rounded']) .bar button {
+		height: 2.4rem;
+		border-radius: 999px;
+	}
+
+	:global([data-style='rounded']) .several {
+		width: 2.4rem;
+		justify-content: center;
+		padding: 0;
+		border-color: transparent;
+		background: none;
+		color: var(--muted);
+	}
+
+	:global([data-style='rounded']) .several:hover {
+		background: var(--hover);
+		color: var(--text);
+	}
+
+	:global([data-style='rounded']) .bar .primary {
+		padding: 0 1.1rem 0 0.9rem;
+	}
+
+	:global([data-style='rounded']) .step {
+		border-color: var(--edge);
+		border-radius: var(--radius-l);
 	}
 
 	.step {

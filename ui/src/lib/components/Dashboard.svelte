@@ -1,94 +1,127 @@
 <script lang="ts">
+	import type { Component } from 'svelte';
+	import type { Job } from '@ottie/api-types/Job';
+	import Check from '@lucide/svelte/icons/check';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import CircleAlert from '@lucide/svelte/icons/circle-alert';
+	import Clock from '@lucide/svelte/icons/clock';
+	import Download from '@lucide/svelte/icons/download';
+	import Pause from '@lucide/svelte/icons/pause';
+	import Play from '@lucide/svelte/icons/play';
 	import { resolve } from '$app/paths';
 	import { useApp } from '#lib/context.js';
+	import { filtersQuery, groupFilters, groupName, groupOf, type Group } from '#lib/filters.js';
 	import {
-		GROUPS,
-		filtersQuery,
-		groupFilters,
-		groupName,
-		groupOf,
-		type Group
-	} from '#lib/filters.js';
-	import { formatCount, formatSpeed } from '#lib/format.js';
+		displayName,
+		formatCount,
+		formatDuration,
+		formatPercent,
+		formatSpeed
+	} from '#lib/format.js';
+	import { currentSpeed } from '#lib/jobs.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { upNext } from '#lib/queue.js';
+	import { canReorder, waitingInOrder } from '#lib/queue.js';
+	import { SPANS, loadSpan, saveSpan, type Span } from '#lib/speed.js';
+	import { canPause, canResume, describe, fraction } from '#lib/status.js';
 	import AddCard from './AddCard.svelte';
 	import JobSummary from './JobSummary.svelte';
-	import RunningList from './RunningList.svelte';
 	import SpeedChart from './SpeedChart.svelte';
 
 	const { session, run } = useApp();
 	const downloads = resolve('/downloads');
-	/** How many finished downloads the dashboard lists. */
-	const LATEST = 5;
-	/** How many waiting downloads "Up next" lists. */
-	const NEXT = 3;
-	/** The Downloads page's four groups, in the mockup's order. */
-	const TILES: Group[] = ['running', 'waiting', 'attention', 'finished'];
+	/** How many downloads each card lists; "See all" shows the rest. */
+	const LISTED = 5;
 	const link = (group: Group) => downloads + filtersQuery(groupFilters(group));
+	/** Each card's icon, as on the Downloads page's groups. */
+	const ICONS: Record<Group, Component> = {
+		running: Download,
+		waiting: Clock,
+		attention: CircleAlert,
+		finished: Check
+	};
 
-	let counts = $derived(
-		Object.fromEntries(
-			GROUPS.map((group) => [group, session.list.filter((job) => groupOf(job) === group).length])
-		) as Record<Group, number>
-	);
+	let span: Span = $state(loadSpan());
+	let running = $derived(session.list.filter((job) => job.state === 'downloading'));
+	let waiting = $derived(waitingInOrder(session.list));
 	let attention = $derived(
 		session.list.filter((job) => job.state === 'failed' || job.state === 'retrying')
 	);
-	let running = $derived(session.list.filter((job) => job.state === 'downloading'));
-	let next = $derived(upNext(session.list).slice(0, NEXT));
-	let latest = $derived(session.list.filter((job) => job.state === 'completed').slice(0, LATEST));
+	let latest = $derived(session.list.filter((job) => job.state === 'completed'));
 	let speed = $derived(session.history.at(-1) ?? 0);
-	let peak = $derived(Math.max(0, ...session.history));
+	let peak = $derived(Math.max(0, ...session.history.slice(-span)));
+
+	function inGroup(group: Group): number {
+		return session.list.filter((job) => groupOf(job) === group).length;
+	}
+
+	function choose(chosen: Span) {
+		span = chosen;
+		saveSpan(chosen);
+	}
 </script>
 
 <div class="dashboard">
 	<AddCard />
 
-	<div class="tiles">
-		{#each TILES as group (group)}
-			<a class="card tile {group}" href={link(group)}>
-				<span class="label"><span class="dot" aria-hidden="true"></span>{groupName(group)}</span>
-				<span class="value">{formatCount(counts[group])}</span>
-			</a>
-		{/each}
-	</div>
+	<!-- The speed across the whole width, how far back it looks chosen here. -->
+	<section class="card speed" aria-labelledby="dash-speed">
+		<header>
+			<h2 id="dash-speed">{m.dash_speed()}</h2>
+			<div class="spans" role="radiogroup" aria-label={m.dash_span_label()}>
+				{#each SPANS as option (option)}
+					<label class:chosen={span === option}>
+						<input
+							type="radio"
+							name="span"
+							checked={span === option}
+							onchange={() => choose(option)}
+						/>
+						{formatDuration(option)}
+					</label>
+				{/each}
+			</div>
+			<span class="numbers">
+				{m.dash_now_peak({ now: formatSpeed(speed), peak: formatSpeed(peak) })}
+			</span>
+		</header>
+		<SpeedChart history={session.history} {span} />
+	</section>
 
-	<div class="row">
-		<section class="card speed" aria-labelledby="dash-speed">
-			<header>
-				<h2 id="dash-speed">{m.dash_speed()}</h2>
-				<span class="faint">{m.dash_last_minutes()}</span>
-				<span class="numbers">
-					{m.dash_now_peak({ now: formatSpeed(speed), peak: formatSpeed(peak) })}
-				</span>
-			</header>
-			<SpeedChart history={session.history} />
+	<!-- Then the Downloads page's four groups, two by two, each with its
+	     first downloads. -->
+	<div class="groups">
+		<section class="card" aria-labelledby="dash-running">
+			{@render head('running', running.length > 0 ? formatSpeed(speed) : null)}
+			{#if running.length > 0}
+				<ul>
+					{#each running.slice(0, LISTED) as job (job.id)}
+						{@render runningRow(job)}
+					{/each}
+				</ul>
+			{:else}
+				<p class="none">{m.dash_running_none()}</p>
+			{/if}
 		</section>
 
-		<section class="card now" aria-labelledby="dash-running">
-			<header>
-				<h2 id="dash-running">{m.dash_running()}</h2>
-				{#if running.length > 0 || next.length > 0}
-					<a href={link('running')}>{m.dash_see_all()}</a>
-				{/if}
-			</header>
-			<RunningList {running} {next} rates={session.rates} now={session.now} />
+		<section class="card" aria-labelledby="dash-waiting">
+			{@render head('waiting', null)}
+			{#if waiting.length > 0}
+				<ul>
+					{#each waiting.slice(0, LISTED) as job, index (job.id)}
+						{@render waitingRow(job, index + 1)}
+					{/each}
+				</ul>
+			{:else}
+				<p class="none">{m.dash_waiting_none()}</p>
+			{/if}
 		</section>
-	</div>
 
-	<div class="lists">
 		<section class="card" aria-labelledby="dash-attention">
-			<header>
-				<h2 id="dash-attention">{m.dash_attention()}</h2>
-				{#if attention.length > 0}
-					<span class="badge">{formatCount(attention.length)}</span>
-					<a href={link('attention')}>{m.dash_see_all()}</a>
-				{/if}
-			</header>
+			{@render head('attention', null)}
 			{#if attention.length > 0}
 				<ul>
-					{#each attention as job (job.id)}
+					{#each attention.slice(0, LISTED) as job (job.id)}
 						<JobSummary {job} now={session.now} onRun={(action) => run(action, [job])} />
 					{/each}
 				</ul>
@@ -98,15 +131,10 @@
 		</section>
 
 		<section class="card" aria-labelledby="dash-finished">
-			<header>
-				<h2 id="dash-finished">{m.dash_finished()}</h2>
-				{#if latest.length > 0}
-					<a href={link('finished')}>{m.dash_see_all()}</a>
-				{/if}
-			</header>
+			{@render head('finished', null)}
 			{#if latest.length > 0}
 				<ul>
-					{#each latest as job (job.id)}
+					{#each latest.slice(0, LISTED) as job (job.id)}
 						<JobSummary {job} now={session.now} />
 					{/each}
 				</ul>
@@ -116,6 +144,96 @@
 		</section>
 	</div>
 </div>
+
+<!-- A card's title: the group's icon and name, how many, a word on them, and
+     the way to all of them. -->
+{#snippet head(group: Group, note: string | null)}
+	{@const Icon = ICONS[group]}
+	{@const count = inGroup(group)}
+	<header>
+		<span class="icon {group}" aria-hidden="true"><Icon size={17} /></span>
+		<h2 id="dash-{group}">{groupName(group)}</h2>
+		{#if count > 0}
+			<span class="count {group}">{formatCount(count)}</span>
+		{/if}
+		{#if note}
+			<span class="note">{note}</span>
+		{/if}
+		{#if count > 0}
+			<a href={link(group)}>{m.dash_see_all()}</a>
+		{/if}
+	</header>
+{/snippet}
+
+<!-- A running download: the row fills up as it arrives. -->
+{#snippet runningRow(job: Job)}
+	{@const name = displayName(job)}
+	{@const bytesPerSec = currentSpeed(session.rates[job.id], session.now)}
+	{@const done = fraction(job)}
+	<li class="row running">
+		<span class="fill" class:unknown={done === null} style:width={`${(done ?? 0) * 100}%`}></span>
+		<span class="lead percent">{done === null ? '' : formatPercent(done)}</span>
+		<span class="text">
+			<span class="name" title={job.url} dir="auto">{name}</span>
+			<span class="line">
+				{describe(job, bytesPerSec, session.now, undefined, session.slotNames)}
+			</span>
+		</span>
+		{#if canPause(job)}
+			<button
+				class="round"
+				onclick={() => run('pause', [job])}
+				aria-label={m.pause_label({ name })}
+				title={m.pause()}
+			>
+				<Pause size={15} aria-hidden="true" />
+			</button>
+		{/if}
+	</li>
+{/snippet}
+
+<!-- A waiting download: its place in the queue, and the buttons to start it
+     or move it. -->
+{#snippet waitingRow(job: Job, place: number)}
+	{@const name = displayName(job)}
+	<li class="row">
+		<span class="lead place">{formatCount(place)}</span>
+		<span class="text">
+			<span class="name" title={job.url} dir="auto">{name}</span>
+			<span class="line">
+				{describe(job, 0, session.now, undefined, session.slotNames)}
+			</span>
+		</span>
+		{#if canResume(job)}
+			<button
+				class="round"
+				onclick={() => run('resume', [job])}
+				aria-label={m.resume_label({ name })}
+				title={m.resume()}
+			>
+				<Play size={15} aria-hidden="true" />
+			</button>
+		{/if}
+		<button
+			class="round"
+			disabled={!canReorder(session.list, [job], 'up')}
+			onclick={() => session.reorder([job.id], 'up')}
+			aria-label={m.queue_up_label({ name })}
+			title={m.queue_up()}
+		>
+			<ChevronUp size={16} aria-hidden="true" />
+		</button>
+		<button
+			class="round"
+			disabled={!canReorder(session.list, [job], 'down')}
+			onclick={() => session.reorder([job.id], 'down')}
+			aria-label={m.queue_down_label({ name })}
+			title={m.queue_down()}
+		>
+			<ChevronDown size={16} aria-hidden="true" />
+		</button>
+	</li>
+{/snippet}
 
 <style>
 	/* Uses the whole width of the window; cards wrap as it narrows. */
@@ -128,99 +246,33 @@
 	}
 
 	.card {
+		display: flex;
+		flex-direction: column;
 		min-width: 0;
 		padding: 1rem 1.15rem;
-		border: 1px solid var(--border);
+		border: 1px solid var(--edge);
 		border-radius: var(--radius-l);
 		background: var(--surface);
 	}
 
-	/* Four in a row, or two by two: never three and one. */
-	.tiles {
+	/* Two by two; one under the other when narrow. */
+	.groups {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.75rem;
 	}
 
-	@container page (max-width: 48rem) {
-		.tiles {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
+	@container page (max-width: 44rem) {
+		.groups {
+			grid-template-columns: minmax(0, 1fr);
 		}
-	}
-
-	.tile {
-		display: grid;
-		gap: 0.15rem;
-		color: var(--text);
-		text-decoration: none;
-	}
-
-	.tile:hover {
-		border-color: var(--muted);
-	}
-
-	.label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: var(--muted);
-	}
-
-	.dot {
-		width: 0.5rem;
-		height: 0.5rem;
-		border-radius: 50%;
-		background: var(--quiet);
-	}
-
-	.running .dot {
-		background: var(--progress);
-	}
-
-	.attention .dot {
-		background: var(--danger);
-	}
-
-	.attention .value {
-		color: var(--danger);
-	}
-
-	.finished .dot {
-		background: var(--ok);
-	}
-
-	.value {
-		font-size: 2rem;
-		font-weight: 600;
-		line-height: 1.15;
-	}
-
-	/* The graph takes what "Downloading now" leaves; below about 52rem they stack. */
-	.row {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.75rem;
-	}
-
-	.speed {
-		flex: 999 1 30rem;
-	}
-
-	.now {
-		flex: 1 1 20rem;
-	}
-
-	.lists {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
-		gap: 0.75rem;
 	}
 
 	header {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 0.4rem 0.75rem;
+		align-items: center;
+		gap: 0.4rem 0.65rem;
 		margin-bottom: 0.75rem;
 	}
 
@@ -230,9 +282,9 @@
 		font-weight: 600;
 	}
 
-	.faint {
-		color: var(--faint);
-		font-size: 0.9em;
+	/* Room above the graph for its top label. */
+	.speed header {
+		margin-bottom: 1.6rem;
 	}
 
 	.numbers {
@@ -241,9 +293,91 @@
 		font-size: 0.85rem;
 	}
 
-	/* Room above the graph for its top label. */
-	.speed header {
-		margin-bottom: 1.6rem;
+	/* How far back the graph looks: a segmented choice. Each holds its radio
+	   button, which needs a positioned parent. */
+	.spans {
+		display: flex;
+		padding: 2px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-pill);
+		background: var(--input);
+	}
+
+	.spans label {
+		position: relative;
+		padding: 0.15rem 0.7rem;
+		border-radius: var(--radius-pill);
+		color: var(--muted);
+		font-size: 0.85rem;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.spans label:hover {
+		color: var(--text);
+	}
+
+	.spans label.chosen {
+		background: var(--selected);
+		color: var(--text);
+		font-weight: 600;
+	}
+
+	.spans label:focus-within {
+		outline: 2px solid var(--focus);
+		outline-offset: -2px;
+	}
+
+	.spans input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	/* A group's icon, tinted with its colour. */
+	.icon {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 2.1rem;
+		height: 2.1rem;
+		border-radius: var(--radius-m);
+		--hue: var(--quiet);
+		background: color-mix(in srgb, var(--hue) 16%, transparent);
+		color: var(--hue);
+	}
+
+	.running {
+		--hue: var(--progress);
+	}
+
+	.waiting {
+		--hue: var(--muted);
+	}
+
+	.attention {
+		--hue: var(--danger);
+	}
+
+	.finished {
+		--hue: var(--ok);
+	}
+
+	.count {
+		min-width: 1.4rem;
+		padding: 0 0.45rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--hue) 16%, transparent);
+		color: var(--hue);
+		font-family: var(--mono);
+		font-size: 0.8rem;
+		line-height: 1.4rem;
+		text-align: center;
+	}
+
+	.note {
+		color: var(--faint);
+		font-size: 0.85rem;
 	}
 
 	header a {
@@ -258,17 +392,9 @@
 		text-decoration: underline;
 	}
 
-	.badge {
-		padding: 0 0.5rem;
-		border-radius: 999px;
-		background: var(--danger-bg);
-		color: var(--danger);
-		font-size: 0.8rem;
-		font-weight: 600;
-		line-height: 1.3rem;
-	}
-
 	ul {
+		display: grid;
+		gap: 0.4rem;
 		margin: 0;
 		padding: 0;
 		list-style: none;
@@ -279,19 +405,142 @@
 		color: var(--muted);
 	}
 
+	/* One download: what leads it (percent or place), its name and what's
+	   going on, then its buttons. */
+	.row {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 0.65rem;
+		min-height: 3.1rem;
+		padding: 0.35rem 0.4rem 0.35rem 0.5rem;
+		overflow: hidden;
+		border-radius: var(--radius-m);
+		background: var(--well);
+	}
+
+	/* A running one fills up as it arrives, its edge at how far it got. */
+	.fill {
+		position: absolute;
+		inset-block: 0;
+		inset-inline-start: 0;
+		border-inline-end: 3px solid var(--progress);
+		background: color-mix(in srgb, var(--progress) 20%, transparent);
+		transition: width 0.25s linear;
+	}
+
+	.fill.unknown {
+		display: none;
+	}
+
+	.lead,
+	.text,
+	.row button {
+		position: relative;
+	}
+
+	.lead {
+		flex: none;
+		width: 2.6rem;
+		text-align: center;
+	}
+
+	.percent {
+		color: var(--progress);
+		font-family: var(--mono);
+		font-size: 1rem;
+		font-weight: 500;
+	}
+
+	.place {
+		display: grid;
+		place-items: center;
+		height: 2.3rem;
+		border-radius: var(--radius-s);
+		background: var(--hover);
+		color: var(--muted);
+		font-family: var(--mono);
+	}
+
+	.text {
+		display: grid;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.name,
+	.line {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.name {
+		font-weight: 500;
+	}
+
+	.line {
+		color: var(--muted);
+		font-size: 0.85em;
+	}
+
+	.round {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		padding: 0;
+		border-color: transparent;
+		border-radius: 50%;
+		background: none;
+		color: var(--muted);
+	}
+
+	.round:hover:not(:disabled) {
+		background: var(--hover);
+		color: var(--text);
+	}
+
+	/* Rounded (docs/decisions/0044): the span choice as a sunken track with
+	   the chosen one raised. */
+	:global([data-style='rounded']) .spans {
+		padding: 0.2rem;
+		border: none;
+		background: var(--sunken);
+		box-shadow: var(--sunken-shadow);
+	}
+
+	:global([data-style='rounded']) .spans label {
+		padding: 0.2rem 0.8rem;
+	}
+
+	:global([data-style='rounded']) .spans label.chosen {
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
+	}
+
+	:global([data-style='rounded']) header a {
+		padding: 0.2rem 0.75rem;
+		border-radius: 999px;
+		background: var(--hover);
+		color: var(--text);
+	}
+
+	:global([data-style='rounded']) header a:hover {
+		background: var(--selected);
+		text-decoration: none;
+	}
+
 	@media (max-width: 40rem) {
 		.dashboard {
 			padding: 0.25rem 0.5rem 0.75rem;
 			gap: 0.5rem;
 		}
 
-		.tiles {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-			gap: 0.5rem;
-		}
-
-		.lists {
+		.groups {
 			grid-template-columns: minmax(0, 1fr);
+			gap: 0.5rem;
 		}
 	}
 </style>

@@ -21,9 +21,10 @@ export function isWaiting(job: Job): boolean {
 	return job.state === 'queued' || job.state === 'scheduled' || job.state === 'paused';
 }
 
-/** The queued downloads, in the order they will start. */
-export function upNext(jobs: Job[]): Job[] {
-	return jobs.filter((job) => job.state === 'queued').sort(byQueue);
+/** Every waiting download (queued, scheduled or paused), in queue order:
+ * the dashboard's Waiting card. */
+export function waitingInOrder(jobs: Job[]): Job[] {
+	return jobs.filter(isWaiting).sort(byQueue);
 }
 
 /** Whether moving the `selected` downloads `to` would change anything: one

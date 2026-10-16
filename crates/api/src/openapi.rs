@@ -32,6 +32,7 @@ const TOKEN: &str = "token";
         (name = "views", description = "Saved views of the downloads list"),
         (name = "schedule", description = "Time slots: when downloads run, stop or are limited"),
         (name = "settings", description = "What applies to the whole daemon"),
+        (name = "speed", description = "The total download speed over the last hour"),
         (name = "events", description = "Live changes over a WebSocket"),
         (name = "meta", description = "About the API itself"),
     ),

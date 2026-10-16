@@ -176,6 +176,8 @@ To keep an up-to-date copy of the list:
 
 `ranges` lists, for a download over several connections, each connection's part of the file (`start`, exclusive `end`, and `done` bytes from `start`). It's empty for one connection.
 
+For a speed graph, `GET /speed` gives the total download speed over the last hour, kept since the daemon started: `{"samples": [...]}`, all downloads' speed together in bytes per second, one sample per second, oldest first, at most 3600. Each download's speed is estimated from its progress and smoothed (a moving average), as Ottie's pages do; fetch it with the lists, then add your own samples from the `progress` events.
+
 ## Errors
 
 A refusal answers a status and a JSON body with English text and a **code**:

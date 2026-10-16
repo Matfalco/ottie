@@ -82,4 +82,18 @@
 		color: var(--faint);
 		font-size: 0.9rem;
 	}
+
+	/* Rounded (docs/decisions/0044): a raised card of its own under the
+	   list, rather than the pane's bottom. */
+	:global([data-style='rounded']) .details {
+		margin: 0.25rem 0.5rem 0.5rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		box-shadow: 0 -8px 24px rgb(0 0 0 / 16%);
+	}
+
+	:global([data-style='rounded']) .toggle {
+		border-radius: 50%;
+		background: var(--hover);
+	}
 </style>

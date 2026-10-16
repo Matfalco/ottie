@@ -232,6 +232,17 @@
 		container: page / inline-size;
 	}
 
+	/* Rounded (docs/decisions/0044): the page sits on a sheet, inset from
+	   the window's edges. */
+	:global([data-style='rounded']) main {
+		margin: 0 0.5rem 0.5rem;
+		padding-top: 0.75rem;
+		overflow: hidden;
+		border-radius: 1.6rem;
+		background: var(--bg);
+		box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+	}
+
 	.error {
 		display: flex;
 		justify-content: space-between;
@@ -254,6 +265,11 @@
 	@media (max-width: 40rem) {
 		main {
 			padding-bottom: 3.7rem;
+		}
+
+		:global([data-style='rounded']) main {
+			margin: 0 0.25rem;
+			border-radius: 1.2rem 1.2rem 0 0;
 		}
 	}
 </style>

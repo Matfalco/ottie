@@ -1788,6 +1788,47 @@
         }
       }
     },
+    "/api/v1/speed": {
+      "get": {
+        "tags": [
+          "speed"
+        ],
+        "summary": "The total download speed, one sample per second, oldest first: up to the\nlast hour, since the daemon started. Each running download's speed is\nestimated from its progress (smoothed), then they're added up. A client\nkeeps it going from the `progress` events.",
+        "operationId": "getSpeedHistory",
+        "responses": {
+          "200": {
+            "description": "Up to an hour of samples",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeedHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/stream/{ticket}": {
       "get": {
         "tags": [
@@ -3164,10 +3205,12 @@
       },
       "Palette": {
         "type": "string",
-        "description": "A light theme and a dark one that go together.",
+        "description": "A light theme and a dark one that go together. The legacy ones keep the\nlook from before the rounder shapes.",
         "enum": [
           "sea",
-          "neutral"
+          "neutral",
+          "seaLegacy",
+          "neutralLegacy"
         ]
       },
       "Preview": {
@@ -4572,6 +4615,24 @@
           "progress"
         ]
       },
+      "SpeedHistory": {
+        "type": "object",
+        "description": "The total download speed over the last hour.",
+        "required": [
+          "samples"
+        ],
+        "properties": {
+          "samples": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            },
+            "description": "All downloads' speed together in bytes per second, one sample per\nsecond, oldest first; the last is the latest. At most 3600."
+          }
+        }
+      },
       "StreamLink": {
         "type": "object",
         "description": "Answer to `POST /jobs/{id}/stream`.",
@@ -4708,6 +4769,10 @@
     {
       "name": "settings",
       "description": "What applies to the whole daemon"
+    },
+    {
+      "name": "speed",
+      "description": "The total download speed over the last hour"
     },
     {
       "name": "events",

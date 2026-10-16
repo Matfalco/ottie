@@ -128,4 +128,22 @@
 	.desktop .middle {
 		padding-inline-end: 0.25rem;
 	}
+
+	/* Rounded (docs/decisions/0044): on the window's colour, a little taller,
+	   the icon lifted by its shadow. */
+	:global([data-style='rounded']) header {
+		height: 3.5rem;
+		background: var(--frame);
+	}
+
+	:global([data-style='rounded']) .brand img {
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0;
+		filter: drop-shadow(0 3px 8px rgb(1 107 145 / 35%));
+	}
+
+	:global([data-style='rounded']) .desktop {
+		padding-inline-end: 0.4rem;
+	}
 </style>

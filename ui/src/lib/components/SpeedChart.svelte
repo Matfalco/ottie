@@ -1,37 +1,46 @@
 <script lang="ts">
 	import { formatDuration, formatSpeed } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { HISTORY_SECONDS, niceTop, paths, points, secondsAt } from '#lib/speed.js';
+	import { POINTS, niceTop, overSpan, paths, points, pointsAgo, type Span } from '#lib/speed.js';
 
 	interface Props {
 		/** One total-speed sample per second, oldest first. */
 		history: number[];
+		/** How far back it shows, in seconds. */
+		span: Span;
 	}
 
-	let { history }: Props = $props();
+	let { history, span }: Props = $props();
 
 	// Drawn in a fixed box and stretched to the card's width; strokes keep
 	// their width (`vector-effect`), labels are HTML so they don't stretch.
 	const WIDTH = 600;
 	const HEIGHT = 120;
 
-	let peak = $derived(Math.max(0, ...history));
+	/** A long span averages neighbouring seconds: `step` of them per point. */
+	let shown = $derived(overSpan(history, span));
+	let samples = $derived(shown.samples);
+	let peak = $derived(Math.max(0, ...samples));
 	let top = $derived(niceTop(peak));
-	let at = $derived(points(history, WIDTH, HEIGHT, top));
+	let at = $derived(points(samples, WIDTH, HEIGHT, top, POINTS));
 	let shape = $derived(paths(at, HEIGHT));
 	let summary = $derived(
-		m.dash_speed_chart({ now: formatSpeed(history.at(-1) ?? 0), peak: formatSpeed(peak) })
+		m.dash_speed_over({
+			time: formatDuration(span),
+			now: formatSpeed(samples.at(-1) ?? 0),
+			peak: formatSpeed(peak)
+		})
 	);
 
-	/** The sample under the pointer, as seconds before now. */
+	/** The point under the pointer, as points before the newest. */
 	let hovered: number | null = $state(null);
-	let hoveredIndex = $derived(hovered === null ? -1 : history.length - 1 - hovered);
+	let hoveredIndex = $derived(hovered === null ? -1 : samples.length - 1 - hovered);
 	let hoveredPoint = $derived(hoveredIndex >= 0 ? at[hoveredIndex] : undefined);
 
 	function move(event: PointerEvent & { currentTarget: HTMLElement }) {
 		const box = event.currentTarget.getBoundingClientRect();
 		const rtl = getComputedStyle(event.currentTarget).direction === 'rtl';
-		hovered = secondsAt(event.clientX, box.left, box.width, rtl);
+		hovered = pointsAgo(event.clientX, box.left, box.width, rtl, POINTS);
 	}
 
 	function ago(seconds: number): string {
@@ -48,6 +57,13 @@
 		onpointerleave={() => (hovered = null)}
 	>
 		<svg viewBox="0 0 {WIDTH} {HEIGHT}" preserveAspectRatio="none" aria-hidden="true">
+			<defs>
+				<!-- The rounded style's fill fades toward the bottom. -->
+				<linearGradient id="speed-fill" x1="0" y1="0" x2="0" y2="1">
+					<stop offset="0" class="fade-top" />
+					<stop offset="1" class="fade-bottom" />
+				</linearGradient>
+			</defs>
 			<line class="grid" x1="0" x2={WIDTH} y1="0.5" y2="0.5" />
 			<line class="grid" x1="0" x2={WIDTH} y1={HEIGHT / 2} y2={HEIGHT / 2} />
 			<line class="base" x1="0" x2={WIDTH} y1={HEIGHT - 0.5} y2={HEIGHT - 0.5} />
@@ -66,14 +82,14 @@
 				class:before={hoveredPoint.x > WIDTH / 2}
 				style:inset-inline-start={`${(hoveredPoint.x / WIDTH) * 100}%`}
 			>
-				<strong>{formatSpeed(history[hoveredIndex])}</strong>
-				<span>{ago(hovered)}</span>
+				<strong>{formatSpeed(samples[hoveredIndex])}</strong>
+				<span>{ago(hovered * shown.step)}</span>
 			</div>
 		{/if}
 	</div>
 	<figcaption>
-		<span>{ago(HISTORY_SECONDS)}</span>
-		<span>{m.dash_now()}</span>
+		<span>{ago(span)}</span>
+		<span class="now">{m.dash_now()}</span>
 	</figcaption>
 </figure>
 
@@ -129,6 +145,16 @@
 		stroke-linecap: round;
 	}
 
+	.fade-top {
+		stop-color: var(--progress);
+		stop-opacity: 0.4;
+	}
+
+	.fade-bottom {
+		stop-color: var(--progress);
+		stop-opacity: 0;
+	}
+
 	.crosshair {
 		stroke: var(--muted);
 		stroke-width: 1;
@@ -176,8 +202,48 @@
 	figcaption {
 		display: flex;
 		justify-content: space-between;
+		align-items: center;
 		margin-top: 0.3rem;
 		color: var(--muted);
 		font-size: 0.75rem;
+	}
+
+	/* Rounded (docs/decisions/0044): a thicker line over a fading fill, the
+	   grid dotted, the tooltip and "now" as pills. */
+	:global([data-style='rounded']) .area {
+		fill: url(#speed-fill);
+		opacity: 1;
+	}
+
+	:global([data-style='rounded']) .line {
+		stroke-width: 2.6;
+	}
+
+	:global([data-style='rounded']) .grid {
+		stroke-dasharray: 2 6;
+		stroke-linecap: round;
+	}
+
+	:global([data-style='rounded']) .tooltip {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		padding: 0.3rem 0.75rem;
+		border: none;
+		border-radius: 999px;
+		background: var(--text);
+		color: var(--bg);
+	}
+
+	:global([data-style='rounded']) .tooltip span {
+		color: var(--bg);
+		opacity: 0.7;
+	}
+
+	:global([data-style='rounded']) .now {
+		padding: 0.1rem 0.6rem;
+		border-radius: 999px;
+		background: var(--selected);
+		color: var(--text);
 	}
 </style>

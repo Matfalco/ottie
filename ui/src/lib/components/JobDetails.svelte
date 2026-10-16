@@ -27,6 +27,7 @@
 	import { canSchedule, fromField, timeChange, toField, type TimeKey } from '#lib/schedule.js';
 	import { amount, fraction } from '#lib/status.js';
 	import { canChoosePlayer } from '#lib/window.js';
+	import FileBar from './FileBar.svelte';
 	import LimitControl from './LimitControl.svelte';
 	import Switch from './Switch.svelte';
 	import { useApp } from '#lib/context.js';
@@ -122,10 +123,6 @@
 		}
 	}
 
-	function percent(fraction: number): string {
-		return `${fraction * 100}%`;
-	}
-
 	/** Sends a time once the field is left (typing a date fires `change` at
 	 * each part, which would stop and start a running download). A refused
 	 * or unfinished one shows the download's time again. */
@@ -214,35 +211,12 @@
 					<span>{amount(job)}</span>
 					<span class="muted">{done === null ? '' : formatPercent(done)}</span>
 				</div>
-				<div
-					class="bar"
+				<FileBar
+					{job}
+					size="detail"
 					role="img"
 					aria-label={m.det_map_label({ percent: formatPercent(done ?? 0) })}
-				>
-					{#if parts}
-						{#each parts as part (part.start)}
-							<span
-								class="range"
-								class:writing={part.writing}
-								style:inset-inline-start={percent(part.start)}
-								style:width={percent(part.end - part.start)}
-							>
-								<span
-									class="fill"
-									style:width={percent(
-										part.end > part.start
-											? (part.reached - part.start) / (part.end - part.start)
-											: 1
-									)}
-								></span>
-							</span>
-						{/each}
-					{:else}
-						<span class="range" style:width="100%">
-							<span class="fill" style:width={percent(done ?? 0)}></span>
-						</span>
-					{/if}
-				</div>
+				/>
 				<div class="map-foot">
 					<span class="mono">{connections(job)}</span>
 					{#if parts && parts.length > 1}
@@ -441,7 +415,7 @@
 	a.button {
 		padding: 0.4rem 0.85rem;
 		border: 1px solid var(--border);
-		border-radius: var(--radius-s);
+		border-radius: var(--radius-pill);
 		background: var(--surface);
 		color: inherit;
 		text-decoration: none;
@@ -514,71 +488,12 @@
 		color: var(--muted);
 	}
 
-	/* The bar maps the file: each range sits at its place, split from the
-	   next by a hairline in the panel's colour. */
-	.bar {
-		position: relative;
-		height: 0.85rem;
-		overflow: hidden;
-		border-radius: 4px;
-		background: var(--track);
-	}
-
-	.range {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		overflow: hidden;
-	}
-
-	.range + .range {
-		border-inline-start: 1px solid var(--well);
-	}
-
-	.fill {
-		position: relative;
-		display: block;
-		height: 100%;
-		background: var(--progress);
-		transition: width 0.25s linear;
-	}
-
-	/* Where a connection is writing right now. */
-	.writing .fill::after {
-		position: absolute;
-		top: 0;
-		inset-inline-end: 0;
-		bottom: 0;
-		width: 2px;
-		background: var(--arriving);
-		content: '';
-	}
-
 	.map-foot {
 		display: flex;
 		flex-wrap: wrap;
 		justify-content: space-between;
 		gap: 0.3rem 0.9rem;
 		color: var(--faint);
-	}
-
-	.completed .fill {
-		background: var(--ok);
-	}
-
-	.paused .fill,
-	.queued .fill,
-	.scheduled .fill,
-	.cancelled .fill {
-		background: var(--quiet);
-	}
-
-	.retrying .fill {
-		background: var(--warn);
-	}
-
-	.failed .fill {
-		background: var(--danger);
 	}
 
 	.problem {
@@ -700,7 +615,7 @@
 		height: 2rem;
 		padding: 0 0.6rem;
 		border: 1px solid var(--border);
-		border-radius: var(--radius-s);
+		border-radius: var(--radius-pill);
 		background: var(--input);
 	}
 
@@ -801,5 +716,65 @@
 			max-height: none;
 			overflow: visible;
 		}
+	}
+
+	/* Rounded (docs/decisions/0044): a raised card of its own under the
+	   list, rather than the pane's bottom. */
+	:global([data-style='rounded']) .details {
+		margin: 0.25rem 0.5rem 0.5rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		box-shadow: 0 -8px 24px rgb(0 0 0 / 16%);
+	}
+
+	:global([data-style='rounded']) .toggle {
+		border-radius: 50%;
+		background: var(--hover);
+	}
+
+	/* The link in a sunken pill; the folder too. */
+	:global([data-style='rounded']) .url,
+	:global([data-style='rounded']) .folder {
+		padding: 0.45rem 0.9rem;
+		border: none;
+		border-radius: 999px;
+		background: var(--input);
+		box-shadow: var(--sunken-shadow);
+	}
+
+	:global([data-style='rounded']) .folder {
+		padding-block: 0;
+	}
+
+	/* Priority: a sunken track, the chosen one raised. */
+	:global([data-style='rounded']) .segments {
+		gap: 0.15rem;
+		padding: 0.2rem;
+		border: none;
+		border-radius: 999px;
+		background: var(--sunken);
+		box-shadow: var(--sunken-shadow);
+	}
+
+	:global([data-style='rounded']) .segments label {
+		min-height: 1.8rem;
+		border-radius: 999px;
+	}
+
+	:global([data-style='rounded']) .segments label + label {
+		border-inline-start: none;
+	}
+
+	:global([data-style='rounded']) .segments label.chosen {
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
+	}
+
+	:global([data-style='rounded']) .problem {
+		border-radius: var(--radius-m);
+	}
+
+	:global([data-style='rounded']) .key {
+		border-radius: 999px;
 	}
 </style>

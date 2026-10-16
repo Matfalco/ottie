@@ -220,4 +220,13 @@
 			display: none;
 		}
 	}
+
+	/* Rounded (docs/decisions/0044): round buttons. */
+	:global([data-style='rounded']) button {
+		border-radius: 999px;
+	}
+
+	:global([data-style='rounded']) .filters {
+		padding: 0 0.85rem;
+	}
 </style>

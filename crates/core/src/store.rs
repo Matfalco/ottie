@@ -285,6 +285,35 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE jobs ADD COLUMN ignores_slots INTEGER NOT NULL DEFAULT 0
         CHECK (ignores_slots IN (0, 1));
      ALTER TABLE jobs ADD COLUMN held_by INTEGER CHECK (held_by >= 1);",
+    // 16: the legacy palettes (docs/decisions/0044). `settings` is rebuilt
+    // for the CHECK, as `jobs` was in 5.
+    "CREATE TABLE settings_new (
+        id                   INTEGER PRIMARY KEY CHECK (id = 1),
+        global_limit         INTEGER NOT NULL DEFAULT 0 CHECK (global_limit >= 0),
+        max_concurrent       INTEGER NOT NULL DEFAULT 3 CHECK (max_concurrent >= 1),
+        max_retries          INTEGER NOT NULL DEFAULT 10 CHECK (max_retries >= 0),
+        retries_before_yield INTEGER NOT NULL DEFAULT 3 CHECK (retries_before_yield >= 0),
+        retry_wait_ms        INTEGER NOT NULL DEFAULT 2000 CHECK (retry_wait_ms >= 0),
+        last_id_secs         INTEGER NOT NULL DEFAULT 0 CHECK (last_id_secs >= 0),
+        last_id_seq          INTEGER NOT NULL DEFAULT 0 CHECK (last_id_seq >= 0),
+        setup_done           INTEGER NOT NULL DEFAULT 0 CHECK (setup_done IN (0, 1)),
+        appearance_mode      TEXT CHECK (appearance_mode IN ('system', 'light', 'dark')),
+        appearance_palette   TEXT CHECK (appearance_palette IN ('sea', 'neutral',
+                                 'sea-legacy', 'neutral-legacy')),
+        language             TEXT CHECK (length(language) BETWEEN 2 AND 35
+                                 AND language NOT GLOB '*[^A-Za-z0-9-]*'),
+        stream_media         INTEGER NOT NULL DEFAULT 1 CHECK (stream_media IN (0, 1)),
+        max_batch            INTEGER NOT NULL DEFAULT 10000 CHECK (max_batch >= 1)
+     ) STRICT;
+     INSERT INTO settings_new (id, global_limit, max_concurrent, max_retries,
+            retries_before_yield, retry_wait_ms, last_id_secs, last_id_seq, setup_done,
+            appearance_mode, appearance_palette, language, stream_media, max_batch)
+        SELECT id, global_limit, max_concurrent, max_retries,
+            retries_before_yield, retry_wait_ms, last_id_secs, last_id_seq, setup_done,
+            appearance_mode, appearance_palette, language, stream_media, max_batch
+        FROM settings;
+     DROP TABLE settings;
+     ALTER TABLE settings_new RENAME TO settings;",
 ];
 
 /// Everything saved about one job.
@@ -1606,6 +1635,45 @@ mod tests {
         };
         store.save_settings(changed.clone());
         assert_eq!(store.load().await.unwrap().settings, changed);
+    }
+
+    #[test]
+    fn rebuilding_settings_for_legacy_palettes_keeps_them() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (i, sql) in MIGRATIONS[..15].iter().enumerate() {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", i + 1).unwrap();
+        }
+        conn.execute_batch(
+            "UPDATE settings SET global_limit = 7, max_concurrent = 2, max_retries = 4,
+                retries_before_yield = 1, retry_wait_ms = 500, last_id_secs = 9,
+                last_id_seq = 3, setup_done = 1, appearance_mode = 'dark',
+                appearance_palette = 'neutral', language = 'fr', stream_media = 0,
+                max_batch = 50",
+        )
+        .unwrap();
+        prepare(&mut conn).unwrap();
+
+        let settings = load_all(&conn).unwrap().settings;
+        assert_eq!(settings.global_limit, 7);
+        assert_eq!(settings.max_concurrent, 2);
+        assert_eq!(settings.retry.first_wait, Duration::from_millis(500));
+        assert_eq!(settings.max_batch, 50);
+        assert!(!settings.stream_media && settings.setup_done);
+        assert_eq!(settings.language.as_deref(), Some("fr"));
+        let neutral_dark = Appearance {
+            mode: AppearanceMode::Dark,
+            palette: Palette::Neutral,
+        };
+        assert_eq!(settings.appearance, Some(neutral_dark));
+        conn.execute("UPDATE settings SET appearance_palette = 'sea-legacy'", [])
+            .unwrap();
+        let palette = load_all(&conn)
+            .unwrap()
+            .settings
+            .appearance
+            .map(|a| a.palette);
+        assert_eq!(palette, Some(Palette::SeaLegacy));
     }
 
     fn videos() -> Category {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byQueue, canDrop, canReorder, carried, upNext } from './queue';
+import { byQueue, canDrop, canReorder, carried, waitingInOrder } from './queue';
 import { job } from './testing';
 
 const urgent = job({ id: 'u', priority: 'urgent', place: 9 });
@@ -17,8 +17,8 @@ describe('the queue', () => {
 		expect(ids([...jobs].sort(byQueue))).toEqual(['u', 'a', 'b', 'r', 'c', 's', 'l']);
 	});
 
-	it('lists what starts next, leaving out paused, scheduled and running downloads', () => {
-		expect(ids(upNext(jobs))).toEqual(['u', 'a', 'c', 'l']);
+	it('lists every waiting download in queue order, paused and scheduled ones too', () => {
+		expect(ids(waitingInOrder(jobs))).toEqual(['u', 'a', 'b', 'c', 's', 'l']);
 	});
 
 	it('can move a download past a waiting one of its priority', () => {

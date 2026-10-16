@@ -115,6 +115,24 @@ async fn job_goes_through_every_state() {
 }
 
 #[tokio::test]
+async fn the_speed_history_shows_a_running_download() {
+    let mut s = setup(3, 5).await;
+    let before = s.manager.speed_history().await.unwrap().len();
+    let id = s.add("one.bin").await;
+    s.wait_for(id, JobState::Downloading).await;
+    // A sample each second, the speed of the running download among them.
+    tokio::time::sleep(Duration::from_millis(2100)).await;
+
+    let history = s.manager.speed_history().await.unwrap();
+    assert!(
+        history.len() >= before + 2,
+        "{before} then {}",
+        history.len()
+    );
+    assert!(history.iter().any(|&speed| speed > 0), "{history:?}");
+}
+
+#[tokio::test]
 async fn queue_respects_max_concurrent() {
     let mut s = setup(1, 1).await;
     let ids = [

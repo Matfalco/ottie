@@ -11,12 +11,12 @@
 	import Trash from '@lucide/svelte/icons/trash';
 	import type { Action } from '#lib/bulk.js';
 	import { priorityName } from '#lib/details.js';
-	import { barParts } from '#lib/filemap.js';
 	import { displayName, formatAdded, formatBytes, formatPercent } from '#lib/format.js';
 	import { addedAt } from '#lib/jobs.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { Keys } from '#lib/selection.js';
 	import { canPause, canResume, describe, fraction, motion } from '#lib/status.js';
+	import FileBar from './FileBar.svelte';
 	import FileIcon from './FileIcon.svelte';
 	import { useApp } from '#lib/context.js';
 
@@ -69,8 +69,6 @@
 
 	let name = $derived(displayName(job));
 	let done = $derived(fraction(job));
-	// Several connections: one piece of the bar each.
-	let parts = $derived(barParts(job));
 	let moving = $derived(motion(job, speed, now, undefined, session.slotNames));
 	let added = $derived(addedAt(job.id));
 	let size = $derived(
@@ -157,26 +155,16 @@
 	<td class="size">{size}</td>
 	<td class="progress">
 		<div class="cell">
-			<div
-				class="bar"
-				class:unknown={done === null && job.state === 'downloading'}
-				class:split={parts !== null}
+			<!-- A small copy of the details panel's bar (docs/decisions/0044). -->
+			<FileBar
+				{job}
+				size="row"
 				role="progressbar"
 				aria-label={m.progress_label({ name })}
 				aria-valuemin={0}
 				aria-valuemax={100}
 				aria-valuenow={done === null ? undefined : Math.floor(done * 100)}
-			>
-				{#if parts}
-					{#each parts as part, index (index)}
-						<div class="piece" style:flex={`${part.share} 1 0`}>
-							<div class="fill" style:width={`${part.fill * 100}%`}></div>
-						</div>
-					{/each}
-				{:else}
-					<div class="fill" style:width={`${(done ?? 0) * 100}%`}></div>
-				{/if}
-			</div>
+			/>
 			<span class="percent">{done === null ? '' : formatPercent(done)}</span>
 		</div>
 	</td>
@@ -355,69 +343,6 @@
 		gap: 0.5rem;
 	}
 
-	.bar {
-		flex: 1;
-		height: 5px;
-		border-radius: 3px;
-		background: var(--track);
-		overflow: hidden;
-	}
-
-	.fill {
-		height: 100%;
-		border-radius: 3px;
-		background: var(--progress);
-		transition: width 0.25s linear;
-	}
-
-	/* One piece per connection, with a gap between them. */
-	.bar.split {
-		display: flex;
-		gap: 2px;
-		background: none;
-	}
-
-	.piece {
-		min-width: 2px;
-		overflow: hidden;
-		border-radius: 2px;
-		background: var(--track);
-	}
-
-	.piece .fill {
-		border-radius: 0;
-	}
-
-	.completed .fill {
-		background: var(--accent);
-	}
-
-	.paused .fill,
-	.cancelled .fill,
-	.queued .fill,
-	.scheduled .fill {
-		background: var(--muted);
-	}
-
-	.failed .fill {
-		background: var(--danger);
-	}
-
-	/* Size unknown: a moving stripe instead of a percentage. */
-	.unknown .fill {
-		width: 30% !important;
-		animation: slide 1.2s ease-in-out infinite alternate;
-	}
-
-	@keyframes slide {
-		from {
-			margin-inline-start: 0;
-		}
-		to {
-			margin-inline-start: 70%;
-		}
-	}
-
 	.percent {
 		width: 2.6rem;
 		color: var(--muted);
@@ -548,5 +473,37 @@
 		.left {
 			display: none;
 		}
+	}
+
+	/* Rounded (docs/decisions/0044): each row a rounded strip (on its cells:
+	   a row can't round its own corners), the selected one raised. */
+	:global([data-style='rounded']) tr:hover {
+		background: none;
+	}
+
+	:global([data-style='rounded']) td {
+		border-bottom: none;
+	}
+
+	:global([data-style='rounded']) tr:hover td {
+		background: var(--hover);
+	}
+
+	:global([data-style='rounded']) tr.selected td {
+		background: var(--selected);
+	}
+
+	:global([data-style='rounded']) td:first-child {
+		border-start-start-radius: var(--radius-m);
+		border-end-start-radius: var(--radius-m);
+	}
+
+	:global([data-style='rounded']) td:last-child {
+		border-start-end-radius: var(--radius-m);
+		border-end-end-radius: var(--radius-m);
+	}
+
+	:global([data-style='rounded']) .actions button {
+		border-radius: 50%;
 	}
 </style>

@@ -421,4 +421,46 @@
 			padding-top: 0.45rem;
 		}
 	}
+
+	/* Rounded (docs/decisions/0044): rows apart from each other (see
+	   JobRow), each group's title a tinted pill. */
+	:global([data-style='rounded']) table {
+		border-collapse: separate;
+		border-spacing: 0 2px;
+	}
+
+	:global([data-style='rounded']) th {
+		border-bottom: none;
+	}
+
+	:global([data-style='rounded']) .group th {
+		height: auto;
+		padding: 0.5rem 0.25rem 0.15rem;
+		border-bottom: none;
+		background: none;
+	}
+
+	:global([data-style='rounded']) .heading {
+		--hue: var(--quiet);
+		padding: 0.3rem 0.8rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--hue) 12%, transparent);
+	}
+
+	:global([data-style='rounded']) .running .heading {
+		--hue: var(--progress);
+	}
+
+	:global([data-style='rounded']) .attention .heading {
+		--hue: var(--danger);
+	}
+
+	:global([data-style='rounded']) .finished .heading {
+		--hue: var(--ok);
+	}
+
+	:global([data-style='rounded']) .dot {
+		border-radius: 50%;
+		background: var(--hue);
+	}
 </style>

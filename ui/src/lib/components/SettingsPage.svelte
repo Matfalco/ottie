@@ -25,6 +25,7 @@
 		THEMES,
 		lookOf,
 		previewFor,
+		styleFor,
 		type DeviceAppearance,
 		type Mode,
 		type Palette
@@ -85,9 +86,12 @@
 		dark: m.set_mode_dark
 	};
 
+	/** A legacy palette has its pair's name, a tag and a hint of its own. */
 	const PALETTE_NAMES: Record<Palette, { name: () => string; hint: () => string }> = {
 		sea: { name: m.set_palette_sea, hint: m.set_palette_sea_hint },
-		neutral: { name: m.set_palette_neutral, hint: m.set_palette_neutral_hint }
+		neutral: { name: m.set_palette_neutral, hint: m.set_palette_neutral_hint },
+		seaLegacy: { name: m.set_palette_sea, hint: m.set_palette_legacy_hint },
+		neutralLegacy: { name: m.set_palette_neutral, hint: m.set_palette_legacy_hint }
 	};
 
 	/** The choices besides a program of one's own. */
@@ -443,7 +447,12 @@
 								onchange={() => choose({ palette })}
 							/>
 							<span class="names">
-								<span>{PALETTE_NAMES[palette].name()}</span>
+								<span>
+									{PALETTE_NAMES[palette].name()}
+									{#if styleFor(palette) === 'legacy'}
+										<span class="tag">{m.set_palette_legacy()}</span>
+									{/if}
+								</span>
 								<span class="hint">{PALETTE_NAMES[palette].hint()}</span>
 							</span>
 							<span class="swatches" aria-hidden="true">
@@ -1005,7 +1014,7 @@
 	}
 
 	.card {
-		border: 1px solid var(--border);
+		border: 1px solid var(--edge);
 		border-radius: var(--radius-l);
 		background: var(--surface);
 	}
@@ -1116,6 +1125,18 @@
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.6rem 0.75rem;
+	}
+
+	/* "Legacy", after a palette's name. */
+	.tag {
+		margin-inline-start: 0.35rem;
+		padding: 0 0.45rem;
+		border-radius: 999px;
+		background: var(--input);
+		color: var(--muted);
+		font-size: 0.75rem;
+		font-weight: 500;
+		vertical-align: 0.1em;
 	}
 
 	.option input,
@@ -1369,5 +1390,68 @@
 		nav {
 			display: none;
 		}
+	}
+
+	/* Rounded (docs/decisions/0044): the sections as pills, the current one
+	   raised; cards without a band; round swatches; a stepper of round
+	   buttons around a sunken number. */
+	:global([data-style='rounded']) nav a {
+		border-radius: 999px;
+	}
+
+	:global([data-style='rounded']) nav a.current {
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
+	}
+
+	:global([data-style='rounded']) header {
+		border-bottom-color: var(--border-soft);
+		background: none;
+	}
+
+	:global([data-style='rounded']) .icon {
+		border-radius: var(--radius-m);
+	}
+
+	:global([data-style='rounded']) .swatches {
+		gap: 0;
+	}
+
+	:global([data-style='rounded']) .swatches span {
+		width: 1.9rem;
+		height: 1.9rem;
+		border: 2px solid var(--surface);
+		border-radius: 50%;
+		background: linear-gradient(135deg, var(--bg) 50%, var(--accent) 50%);
+	}
+
+	:global([data-style='rounded']) .swatches span + span {
+		margin-inline-start: -0.6rem;
+	}
+
+	:global([data-style='rounded']) .preview {
+		border-radius: var(--radius-m);
+	}
+
+	:global([data-style='rounded']) .stepper {
+		gap: 0.35rem;
+		overflow: visible;
+		border: none;
+	}
+
+	:global([data-style='rounded']) .stepper button {
+		border-radius: 50%;
+		background: var(--hover);
+	}
+
+	:global([data-style='rounded']) .stepper :global(.field input) {
+		border: none;
+		border-radius: 999px;
+		background: var(--input);
+		box-shadow: var(--sunken-shadow);
+	}
+
+	:global([data-style='rounded']) .problem {
+		border-radius: var(--radius-m);
 	}
 </style>

@@ -2,7 +2,13 @@
    are the sea pair, Pearl (light) and Slate (dark) the neutral one. The page
    picks one by setting `data-theme` on <html>; any element can set it too, to
    show another theme inside (the previews in Settings). Components use the
-   variables, never the raw colours. */
+   variables, never the raw colours.
+
+   Each theme comes in two styles (docs/decisions/0044), set by `data-style`
+   on <html>: `rounded` (pills, sunken tracks, the page on a sheet) and
+   `legacy` (the look from before, for the legacy palettes). A component's
+   own styles are the legacy look; the rounded one is added on top under
+   `[data-style='rounded']`, so dropping legacy later means folding those in. */
 :root,
 [data-theme='seafoam'] {
 	color-scheme: light;
@@ -47,6 +53,15 @@
 	--hue-4: #8a6510;
 	--hue-5: #a0346b;
 	--hue-6: #2f7a46;
+	/* The rounded style's surfaces (docs/decisions/0044): the window
+	   around the page, a sunken track, a raised pill on it, and the glow of
+	   what's arriving. */
+	--frame: #d6e8e2;
+	--sunken: #cfe2db;
+	--sunken-shadow: inset 0 1px 3px rgb(16 48 44 / 18%), 0 1px 0 rgb(255 255 255 / 70%);
+	--raised: linear-gradient(180deg, #ffffff, #f1f8f5);
+	--raised-shadow: 0 1px 3px rgb(16 48 44 / 20%), inset 0 1px 0 #ffffff;
+	--glow: rgb(255 138 92 / 55%);
 }
 
 [data-theme='lagoon'] {
@@ -86,6 +101,15 @@
 	--hue-4: #d9b45a;
 	--hue-5: #e58cb8;
 	--hue-6: #8fd6a6;
+	/* The rounded style's surfaces (docs/decisions/0044): the window
+	   around the page, a sunken track, a raised pill on it, and the glow of
+	   what's arriving. */
+	--frame: #04161a;
+	--sunken: #020c0f;
+	--sunken-shadow: inset 0 2px 5px rgb(0 0 0 / 55%), 0 1px 0 rgb(255 255 255 / 4%);
+	--raised: linear-gradient(180deg, #1a5f6d, #145360);
+	--raised-shadow: 0 2px 6px rgb(0 0 0 / 40%), inset 0 1px 0 rgb(255 255 255 / 10%);
+	--glow: rgb(127 224 208 / 75%);
 }
 
 [data-theme='pearl'] {
@@ -126,6 +150,15 @@
 	--hue-4: #8a6510;
 	--hue-5: #a0346b;
 	--hue-6: #2f7a46;
+	/* The rounded style's surfaces (docs/decisions/0044): the window
+	   around the page, a sunken track, a raised pill on it, and the glow of
+	   what's arriving. */
+	--frame: #e4e6e9;
+	--sunken: #dadde1;
+	--sunken-shadow: inset 0 1px 3px rgb(23 25 28 / 16%), 0 1px 0 rgb(255 255 255 / 70%);
+	--raised: linear-gradient(180deg, #ffffff, #f7f8f9);
+	--raised-shadow: 0 1px 3px rgb(23 25 28 / 18%), inset 0 1px 0 #ffffff;
+	--glow: rgb(255 138 92 / 55%);
 }
 
 [data-theme='slate'] {
@@ -165,6 +198,15 @@
 	--hue-4: #d9b45a;
 	--hue-5: #e58cb8;
 	--hue-6: #8fd6a6;
+	/* The rounded style's surfaces (docs/decisions/0044): the window
+	   around the page, a sunken track, a raised pill on it, and the glow of
+	   what's arriving. */
+	--frame: #0c0d0e;
+	--sunken: #070808;
+	--sunken-shadow: inset 0 2px 5px rgb(0 0 0 / 55%), 0 1px 0 rgb(255 255 255 / 4%);
+	--raised: linear-gradient(180deg, #304846, #263a39);
+	--raised-shadow: 0 2px 6px rgb(0 0 0 / 40%), inset 0 1px 0 rgb(255 255 255 / 10%);
+	--glow: rgb(255 194 71 / 65%);
 }
 
 /* The same in every theme. */
@@ -179,6 +221,10 @@
 	--radius-s: 8px;
 	--radius-m: 12px;
 	--radius-l: 18px;
+	/* Buttons, chips and single-line fields: pills in the rounded style. */
+	--radius-pill: var(--radius-s);
+	/* A card's outline: none in the rounded style, its colour does it. */
+	--edge: var(--border);
 	/* The window's close button, as Windows draws it. */
 	--close-hover: #c42b1c;
 	--on-close: #ffffff;
@@ -228,6 +274,15 @@
 :root:lang(ko) {
 	word-break: keep-all;
 	overflow-wrap: break-word;
+}
+
+/* Rounder shapes (docs/decisions/0044). */
+[data-style='rounded'] {
+	--radius-s: 10px;
+	--radius-m: 16px;
+	--radius-l: 24px;
+	--radius-pill: 999px;
+	--edge: transparent;
 }
 
 /* Before the script has picked a theme: no white flash for dark systems. */
@@ -300,4 +355,31 @@ select {
 :focus-visible {
 	outline: 2px solid var(--focus);
 	outline-offset: 2px;
+}
+
+/* The rounded style: the window's colour around the page (the page itself
+   sits on a sheet, see Shell), pill buttons and fields. `:where` keeps these
+   as weak as the plain element rules above, so a component's own shape
+   still wins. */
+:where([data-style='rounded']) body {
+	background: var(--frame);
+}
+
+:where([data-style='rounded']) button {
+	border-radius: var(--radius-pill);
+}
+
+:where([data-style='rounded']) button.primary {
+	box-shadow:
+		0 4px 12px rgb(0 0 0 / 18%),
+		inset 0 1px 0 rgb(255 255 255 / 30%);
+}
+
+:where([data-style='rounded']) input:not([type='checkbox'], [type='radio'], [type='range']),
+:where([data-style='rounded']) select {
+	border-radius: var(--radius-pill);
+}
+
+:where([data-style='rounded']) textarea {
+	border-radius: var(--radius-m);
 }

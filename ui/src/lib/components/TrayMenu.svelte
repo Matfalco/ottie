@@ -121,9 +121,8 @@
 		<hr />
 		<p class="status" role="status">{status}</p>
 		{#if connection === 'live' && running.shown.length > 0}
-			<!-- Like the dashboard's "Downloading now": each with its bar. -->
 			<div class="running">
-				<RunningList running={running.shown} next={[]} rates={session.rates} now={session.now} />
+				<RunningList running={running.shown} rates={session.rates} now={session.now} />
 				{#if running.more > 0}
 					<p class="more">{m.tray_more({ count: formatCount(running.more) })}</p>
 				{/if}

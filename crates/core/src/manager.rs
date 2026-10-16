@@ -11,6 +11,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use jiff::Zoned;
 use reqwest::Url;
 use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 
 use crate::backend::Backend;
@@ -25,6 +26,7 @@ use crate::playback::{self, Head, Playbacks};
 use crate::problem::Problem;
 use crate::settings::{RetryPolicy, Settings, SettingsChange};
 use crate::slot::{Effects, Slot, SlotId, SlotSettings};
+use crate::speed::SpeedHistory;
 use crate::store::{JobRecord, SlotRecord, Store};
 use crate::throttle::Limiter;
 use crate::view::{View, ViewId, ViewSettings};
@@ -128,6 +130,7 @@ impl Manager {
             yields: 0,
             wake_at: None,
             events: events.clone(),
+            speed: SpeedHistory::default(),
             playbacks: playbacks.clone(),
             internal,
             shutdown: None,
@@ -227,6 +230,13 @@ impl Manager {
 
     pub async fn settings(&self) -> Result<Settings, Error> {
         self.request(|reply| Command::Settings { reply }).await
+    }
+
+    /// The total download speed over the last hour, in bytes per second, one
+    /// sample per second, oldest first (docs/decisions/0044). Starts empty
+    /// when the manager starts.
+    pub async fn speed_history(&self) -> Result<Vec<u64>, Error> {
+        self.request(|reply| Command::SpeedHistory { reply }).await
     }
 
     /// Changes the settings given, all at once, and answers with all of them.
@@ -514,6 +524,9 @@ enum Command {
     },
     Settings {
         reply: Reply<Settings>,
+    },
+    SpeedHistory {
+        reply: Reply<Vec<u64>>,
     },
     ChangeSettings {
         change: SettingsChange,
@@ -851,6 +864,8 @@ struct Actor<B> {
     wake_at: Option<SystemTime>,
     ids: IdGenerator,
     events: broadcast::Sender<JobEvent>,
+    /// The total speed, second by second (from the progress reports).
+    speed: SpeedHistory,
     /// Where players read; each running job gets its own.
     playbacks: Playbacks,
     /// Cloned into each job task so it can report back.
@@ -868,6 +883,9 @@ impl<B: Backend> Actor<B> {
         self.check_times();
         self.schedule();
         let mut handles_alive = true;
+        let mut second = tokio::time::interval(Duration::from_secs(1));
+        // After a sleep, the time missed isn't made up with a burst of samples.
+        second.set_missed_tick_behavior(MissedTickBehavior::Skip);
         loop {
             // Asked of the wall clock each time round, so a clock that
             // changed meanwhile counts.
@@ -890,6 +908,7 @@ impl<B: Backend> Actor<B> {
                     self.check_times();
                     self.schedule();
                 }
+                _ = second.tick() => self.speed.tick(Instant::now()),
             }
             if self.shutdown.is_some() && !self.any_task_running() {
                 self.store.flush().await;
@@ -931,6 +950,9 @@ impl<B: Backend> Actor<B> {
             }
             Command::Settings { reply } => {
                 let _ = reply.send(Ok(self.settings.clone()));
+            }
+            Command::SpeedHistory { reply } => {
+                let _ = reply.send(Ok(self.speed.samples()));
             }
             Command::ChangeSettings { change, reply } => {
                 let _ = reply.send(Ok(self.change_settings(change)));
@@ -1099,6 +1121,7 @@ impl<B: Backend> Actor<B> {
                 total,
                 segments,
             } => {
+                self.speed.progress(id, downloaded, Instant::now());
                 job.download.downloaded = downloaded;
                 job.download.total = total;
                 // It works again: a later failure gets every retry anew.

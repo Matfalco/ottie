@@ -28,8 +28,13 @@
 <style>
 	.card {
 		padding: 0.6rem;
-		border: 1px solid var(--border);
+		border: 1px solid var(--edge);
 		border-radius: var(--radius-l);
 		background: var(--surface);
+	}
+
+	/* Rounded (docs/decisions/0044): a little more room around the pill. */
+	:global([data-style='rounded']) .card {
+		padding: 0.5rem;
 	}
 </style>

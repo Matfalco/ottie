@@ -75,4 +75,17 @@
 	button:focus-visible {
 		outline-offset: -2px;
 	}
+
+	/* Rounded (docs/decisions/0044): small rounded buttons. */
+	:global([data-style='rounded']) .window-controls {
+		align-items: center;
+		gap: 0.1rem;
+		height: auto;
+	}
+
+	:global([data-style='rounded']) button {
+		width: 2.2rem;
+		height: 2rem;
+		border-radius: var(--radius-s);
+	}
 </style>

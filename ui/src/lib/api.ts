@@ -20,6 +20,7 @@ import type { Reorder } from '@ottie/api-types/Reorder';
 import type { ReorderJobs } from '@ottie/api-types/ReorderJobs';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
+import type { SpeedHistory } from '@ottie/api-types/SpeedHistory';
 import type { StreamLink } from '@ottie/api-types/StreamLink';
 import type { AddedSlot } from '@ottie/api-types/AddedSlot';
 import type { AddedView } from '@ottie/api-types/AddedView';
@@ -168,6 +169,11 @@ export class Api {
 	/** The time slots in their order, and the daemon's time zone. */
 	listSlots(): Promise<SlotList> {
 		return this.request('GET', '/slots');
+	}
+
+	/** The total download speed over the last hour, one sample per second. */
+	speedHistory(): Promise<SpeedHistory> {
+		return this.request('GET', '/speed');
 	}
 
 	addSlot(slot: SlotBody): Promise<AddedSlot> {

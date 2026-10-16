@@ -4,6 +4,7 @@ import {
 	lookOf,
 	parseAppearance,
 	previewFor,
+	styleFor,
 	themeFor,
 	type DeviceAppearance
 } from './theme';
@@ -22,6 +23,20 @@ describe('themeFor', () => {
 	});
 });
 
+describe('styleFor', () => {
+	it('draws the legacy palettes as before, the others rounded', () => {
+		expect(styleFor('sea')).toBe('rounded');
+		expect(styleFor('neutral')).toBe('rounded');
+		expect(styleFor('seaLegacy')).toBe('legacy');
+		expect(styleFor('neutralLegacy')).toBe('legacy');
+	});
+
+	it('keeps the colours of the palette a legacy one comes from', () => {
+		expect(themeFor({ mode: 'dark', palette: 'seaLegacy' }, false)).toBe('lagoon');
+		expect(themeFor({ mode: 'light', palette: 'neutralLegacy' }, true)).toBe('pearl');
+	});
+});
+
 describe('previewFor', () => {
 	it('shows both themes of the palette when following the system', () => {
 		expect(previewFor('system', 'sea')).toEqual(['seafoam', 'lagoon']);
@@ -37,6 +52,7 @@ describe('parseAppearance', () => {
 			palette: 'neutral',
 			synced: false
 		});
+		expect(parseAppearance('{"mode":"light","palette":"seaLegacy"}').palette).toBe('seaLegacy');
 	});
 
 	it('falls back to the default for anything missing or unknown', () => {

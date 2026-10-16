@@ -12,7 +12,7 @@
 	import Shell from '#lib/components/Shell.svelte';
 	import { direction, followLanguage } from '#lib/languages.js';
 	import { getLocale } from '#lib/paraglide/runtime.js';
-	import { themeFor } from '#lib/theme.js';
+	import { styleFor, themeFor } from '#lib/theme.js';
 	import { forgetToken, loadToken, saveToken, tokenFromFragment } from '#lib/token.js';
 	import { tellLanguage } from '#lib/window.js';
 	import type { LayoutProps } from './$types';
@@ -37,13 +37,15 @@
 	// there) reloads this one too: the tray's menu stays loaded while hidden.
 	onMount(() => followLanguage(shown));
 
-	// The theme, set before anything is drawn, then kept up to date with the
-	// user's choice and the system's dark mode.
+	// The theme and its shapes, set before anything is drawn, then kept up
+	// to date with the user's choice and the system's dark mode.
 	const darkSystem = matchMedia('(prefers-color-scheme: dark)');
 	let systemDark = $state(darkSystem.matches);
 	document.documentElement.dataset.theme = themeFor(appearance, darkSystem.matches);
+	document.documentElement.dataset.style = styleFor(appearance.palette);
 	$effect(() => {
 		document.documentElement.dataset.theme = themeFor(appearance, systemDark);
+		document.documentElement.dataset.style = styleFor(appearance.palette);
 	});
 
 	onMount(() => {

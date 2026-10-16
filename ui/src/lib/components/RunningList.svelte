@@ -9,18 +9,15 @@
 	interface Props {
 		/** Downloading now. */
 		running: Job[];
-		/** Waiting for a slot, first in line first. */
-		next: Job[];
 		rates: Record<string, Rate>;
 		now: number;
 	}
 
-	let { running, next, rates, now }: Props = $props();
+	let { running, rates, now }: Props = $props();
 	const { session } = useApp();
 </script>
 
-<!-- The dashboard's "Downloading now" card: each running download with its
-     bar, then what's next in line. The tray menu shows it too, with nothing next. -->
+<!-- The tray menu's running downloads, each with its bar. -->
 {#if running.length > 0}
 	<ul class="running">
 		{#each running as job (job.id)}
@@ -41,19 +38,6 @@
 	</ul>
 {:else}
 	<p class="none">{m.dash_running_none()}</p>
-{/if}
-
-{#if next.length > 0}
-	<div class="next">
-		<h3>{m.dash_next()}</h3>
-		<ul>
-			{#each next as job (job.id)}
-				<li>
-					<span class="name" title={job.url} dir="auto">{displayName(job)}</span>
-				</li>
-			{/each}
-		</ul>
-	</div>
 {/if}
 
 <style>
@@ -98,6 +82,10 @@
 		background: var(--track);
 	}
 
+	:global([data-style='rounded']) .bar {
+		border-radius: 999px;
+	}
+
 	.fill {
 		display: block;
 		height: 100%;
@@ -132,29 +120,5 @@
 	.none {
 		margin: 0.5rem 0;
 		color: var(--muted);
-	}
-
-	.next {
-		display: grid;
-		gap: 0.4rem;
-		margin-top: 1rem;
-		padding-top: 0.75rem;
-		border-top: 1px solid var(--border-soft);
-	}
-
-	h3 {
-		margin: 0;
-		color: var(--faint);
-		font-size: 0.85em;
-		font-weight: 500;
-	}
-
-	.next ul {
-		gap: 0.3rem;
-	}
-
-	.next .name {
-		display: block;
-		font-weight: 400;
 	}
 </style>

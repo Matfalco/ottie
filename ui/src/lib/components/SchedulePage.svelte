@@ -262,7 +262,7 @@
 
 	.pane {
 		flex: none;
-		border: 1px solid var(--border);
+		border: 1px solid var(--edge);
 		border-radius: var(--radius-l);
 		background: var(--surface);
 		overflow: hidden;
