@@ -265,10 +265,16 @@
 		color: var(--muted);
 	}
 
+	/* The title, count and note on one baseline (the mono ones would sit
+	   higher if centred); the dot centred. */
 	.heading {
 		display: flex;
-		align-items: center;
+		align-items: baseline;
 		gap: 0.5rem;
+	}
+
+	.heading .dot {
+		align-self: center;
 	}
 
 	.dot {

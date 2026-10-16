@@ -71,8 +71,10 @@
 						onchange={() => onFilters(toggleStatus(filters, status))}
 					/>
 					<span class="dot status-{status}" aria-hidden="true"></span>
-					<span class="name">{statusName(status)}</span>
-					<span class="count">{countWhere((job) => statusOf(job) === status)}</span>
+					<span class="label">
+						<span class="name">{statusName(status)}</span>
+						<span class="count">{countWhere((job) => statusOf(job) === status)}</span>
+					</span>
 				</label>
 			{/each}
 		</fieldset>
@@ -87,8 +89,10 @@
 						onchange={() => onFilters(toggleCategory(filters, category.id, ids))}
 					/>
 					<span class="dot" style:background={categoryHue(category)} aria-hidden="true"></span>
-					<span class="name">{categoryName(category)}</span>
-					<span class="count">{countWhere((job) => job.category === category.id)}</span>
+					<span class="label">
+						<span class="name">{categoryName(category)}</span>
+						<span class="count">{countWhere((job) => job.category === category.id)}</span>
+					</span>
 				</label>
 			{/each}
 		</fieldset>
@@ -234,6 +238,16 @@
 	.box input {
 		margin: 0;
 		accent-color: var(--accent);
+	}
+
+	/* The name and its count on one baseline (each centred on its own, the
+	   smaller count sits too high). */
+	.label {
+		display: flex;
+		flex: 1;
+		align-items: baseline;
+		gap: 0.5rem;
+		min-width: 0;
 	}
 
 	.name {

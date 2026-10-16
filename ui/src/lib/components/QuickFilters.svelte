@@ -119,8 +119,10 @@
 		data-sveltekit-keepfocus
 	>
 		{#if view}<Bookmark size={13} aria-hidden="true" />{/if}
-		<span dir="auto">{name}</span>
-		<span class="count">{formatCount(count(jobs, target, now))}</span>
+		<span class="label">
+			<span dir="auto">{name}</span>
+			<span class="count">{formatCount(count(jobs, target, now))}</span>
+		</span>
 	</a>
 {/snippet}
 
@@ -156,6 +158,14 @@
 		background: var(--accent);
 		color: var(--on-accent);
 		font-weight: 600;
+	}
+
+	/* The name and its count on one baseline (each centred on its own, the
+	   smaller count sits too high). */
+	.label {
+		display: flex;
+		align-items: baseline;
+		gap: 0.45rem;
 	}
 
 	.count {

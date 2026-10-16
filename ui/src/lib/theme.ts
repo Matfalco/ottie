@@ -91,6 +91,17 @@ export function loadAppearance(): DeviceAppearance {
 	}
 }
 
+/** Calls `changed` with the appearance another window of this page (a tab,
+ * the desktop app's tray menu) saves. Returns what stops listening. */
+export function followSavedAppearance(changed: (next: DeviceAppearance) => void): () => void {
+	const saved = (event: StorageEvent) => {
+		// `null`: the whole storage was cleared.
+		if (event.key === KEY || event.key === null) changed(parseAppearance(event.newValue));
+	};
+	addEventListener('storage', saved);
+	return () => removeEventListener('storage', saved);
+}
+
 export function saveAppearance(appearance: DeviceAppearance): void {
 	try {
 		localStorage.setItem(KEY, JSON.stringify(appearance));

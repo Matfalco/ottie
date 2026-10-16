@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/state';
-	import { appearance } from '#lib/appearance.svelte.js';
+	import { appearance, followAppearance } from '#lib/appearance.svelte.js';
 	import icon from '#lib/assets/ottie.svg';
 	import Login from '#lib/components/Login.svelte';
 	import Shell from '#lib/components/Shell.svelte';
@@ -38,7 +38,8 @@
 	onMount(() => followLanguage(shown));
 
 	// The theme and its shapes, set before anything is drawn, then kept up
-	// to date with the user's choice and the system's dark mode.
+	// to date with the user's choice (in this window or another) and the
+	// system's dark mode.
 	const darkSystem = matchMedia('(prefers-color-scheme: dark)');
 	let systemDark = $state(darkSystem.matches);
 	document.documentElement.dataset.theme = themeFor(appearance, darkSystem.matches);
@@ -51,7 +52,11 @@
 	onMount(() => {
 		const follow = (event: MediaQueryListEvent) => (systemDark = event.matches);
 		darkSystem.addEventListener('change', follow);
-		return () => darkSystem.removeEventListener('change', follow);
+		const unfollow = followAppearance();
+		return () => {
+			darkSystem.removeEventListener('change', follow);
+			unfollow();
+		};
 	});
 
 	onMount(() => {
