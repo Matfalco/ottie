@@ -50,6 +50,7 @@
 		"stalled": "Server lõpetas andmete saatmise",
 		"incomplete": "Ühendus suleti liiga vara",
 		"remoteChanging": "Fail muutus serveris pidevalt",
-		"disk": "Faili ei saanud kirjutada ({detail})"
+		"disk": "Faili ei saanud kirjutada ({detail})",
+		"fileExists": "Selle nimega fail on juba kaustas"
 	}
 }

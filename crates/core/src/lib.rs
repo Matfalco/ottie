@@ -31,7 +31,7 @@ pub use backend::{Backend, HttpBackend};
 pub use category::{BuiltIn, Category, CategoryId, CategorySettings, Matched};
 pub use download::{Download, Event, Outcome, Placement, RestartReason, Segment, Validator};
 pub use error::Error;
-pub use filename::PART_SUFFIX;
+pub use filename::{Existing, PART_SUFFIX};
 pub use http::{HttpConfig, build_client, run};
 pub use id::JobId;
 pub use job::{JobChange, JobEvent, JobSnapshot, JobState, NewJob, Priority, Reorder};

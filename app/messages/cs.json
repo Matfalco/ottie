@@ -50,6 +50,7 @@
 		"stalled": "Server přestal posílat data",
 		"incomplete": "Spojení se ukončilo předčasně",
 		"remoteChanging": "Soubor se na serveru stále měnil",
-		"disk": "Soubor nelze zapsat ({detail})"
+		"disk": "Soubor nelze zapsat ({detail})",
+		"fileExists": "Soubor s tímto názvem už ve složce je"
 	}
 }

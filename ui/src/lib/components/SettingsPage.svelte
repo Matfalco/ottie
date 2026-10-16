@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Existing } from '@ottie/api-types/Existing';
 	import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 	import AppWindow from '@lucide/svelte/icons/app-window';
 	import Bell from '@lucide/svelte/icons/bell';
@@ -94,6 +95,14 @@
 		system: m.set_motion_system,
 		on: m.set_motion_on,
 		off: m.set_motion_off
+	};
+
+	/** What a download does with a file already there (docs/decisions/0049). */
+	const EXISTING: Existing[] = ['rename', 'replace', 'ask'];
+	const EXISTING_NAMES: Record<Existing, () => string> = {
+		rename: m.set_existing_rename,
+		replace: m.set_existing_replace,
+		ask: m.set_existing_ask
 	};
 
 	const PALETTE_NAMES: Record<Palette, { name: () => string; hint: () => string }> = {
@@ -575,6 +584,28 @@
 						label={m.set_stream_media()}
 						onChange={(streamMedia) => save({ streamMedia })}
 					/>
+				</div>
+				<div class="setting">
+					<label for="existing" class="names">
+						<span>{m.set_existing()}</span>
+						<span class="hint">{m.set_existing_hint()}</span>
+					</label>
+					<select
+						id="existing"
+						class="existing"
+						value={settings.existing}
+						onchange={(event) => {
+							const value = event.currentTarget.value;
+							const chosen = EXISTING.find((existing) => existing === value);
+							if (chosen) {
+								void save({ existing: chosen });
+							}
+						}}
+					>
+						{#each EXISTING as existing (existing)}
+							<option value={existing}>{EXISTING_NAMES[existing]()}</option>
+						{/each}
+					</select>
 				</div>
 				<div class="setting">
 					<span class="names">
@@ -1275,7 +1306,8 @@
 		gap: 0.4rem;
 	}
 
-	.motion {
+	.motion,
+	.existing {
 		min-width: 10rem;
 		padding: 0.35rem 0.6rem;
 	}

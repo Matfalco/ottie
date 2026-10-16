@@ -1,8 +1,7 @@
 # 0048: Animations
 
-In progress (2026-10-16): the first pass below is in, but some animations are
-still missing or barely visible in the desktop app; this needs further review
-before the slice is done.
+Done (2026-10-16): a first pass, then a second and a third after tries in the
+desktop app (below).
 
 **Why:** things appeared, vanished and jumped: a dialog popped, a removed row
 left a hole that closed at once, a download moved in the queue teleported.

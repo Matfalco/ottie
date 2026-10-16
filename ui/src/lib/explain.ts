@@ -38,6 +38,8 @@ export function explainProblem(
 			return m.problem_remote_changing({}, options);
 		case 'disk':
 			return m.problem_disk({ detail: problem.detail }, options);
+		case 'fileExists':
+			return m.problem_file_exists({ name: problem.name }, options);
 		case 'other':
 			return problem.detail;
 		default:

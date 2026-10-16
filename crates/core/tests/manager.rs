@@ -6,8 +6,8 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use ottie_core::{
-    CategoryId, Error, HttpBackend, JobChange, JobEvent, JobId, JobSnapshot, JobState, LinkPreview,
-    Manager, NewJob, Priority, Problem, Reorder, SettingsChange, Store,
+    CategoryId, Error, Existing, HttpBackend, JobChange, JobEvent, JobId, JobSnapshot, JobState,
+    LinkPreview, Manager, NewJob, Priority, Problem, Reorder, SettingsChange, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -702,6 +702,7 @@ async fn a_preview_tells_each_link_found_and_those_already_listed() {
         name,
         matched,
         known,
+        ..
     } = first
     else {
         panic!("expected a link, got {first:?}");
@@ -730,6 +731,108 @@ async fn a_preview_tells_each_link_found_and_those_already_listed() {
         .unwrap();
     assert!(matches!(
         &previews[..],
-        [LinkPreview::Link { matched, .. }] if matched.by_folder
+        [LinkPreview::Link { matched, exists: false, .. }] if matched.by_folder
     ));
+}
+
+#[tokio::test]
+async fn a_preview_tells_which_files_are_already_on_disk() {
+    let s = setup(3, 0).await;
+    std::fs::write(s.dir.path().join("a.bin"), b"mine").unwrap();
+    let text = format!(
+        "{} {}",
+        s.server.url("/files/a.bin"),
+        s.server.url("/files/b.bin")
+    );
+    let previews = s
+        .manager
+        .preview(&text, Some(s.dir.path().into()))
+        .await
+        .unwrap();
+    let exists: Vec<bool> = previews
+        .iter()
+        .map(|preview| matches!(preview, LinkPreview::Link { exists: true, .. }))
+        .collect();
+    assert_eq!(exists, [true, false]);
+}
+
+/// Puts a file of our own where `name` would be saved.
+fn already_there(s: &Setup, name: &str) {
+    std::fs::write(s.dir.path().join(name), b"mine").unwrap();
+}
+
+#[tokio::test]
+async fn a_file_already_there_is_kept_and_the_download_renamed() {
+    let mut s = setup(3, 0).await;
+    already_there(&s, "one.bin");
+    let id = s.add("one.bin").await;
+    let job = s.wait_for(id, JobState::Completed).await;
+    assert_eq!(job.file_name.as_deref(), Some("one (1).bin"));
+    s.assert_file(&job);
+    assert_eq!(
+        std::fs::read(s.dir.path().join("one.bin")).unwrap(),
+        b"mine"
+    );
+}
+
+#[tokio::test]
+async fn replacing_downloads_beside_the_file_then_takes_its_place() {
+    let mut s = setup(3, 0).await;
+    already_there(&s, "one.bin");
+    let url = s.server.url("/files/one.bin");
+    let new = NewJob::new(url)
+        .in_dir(s.dir.path())
+        .existing(Existing::Replace);
+    let id = s.manager.add(new).await.unwrap();
+    let job = s.wait_for(id, JobState::Completed).await;
+    assert_eq!(job.file_name.as_deref(), Some("one.bin"));
+    s.assert_file(&job);
+}
+
+#[tokio::test]
+async fn asking_stops_before_any_file_is_made_and_a_choice_resumes() {
+    let mut s = setup(3, 0).await;
+    let ask = SettingsChange {
+        existing: Some(Existing::Ask),
+        ..SettingsChange::default()
+    };
+    s.manager.change_settings(ask).await.unwrap();
+    already_there(&s, "one.bin");
+    let id = s.add("one.bin").await;
+    let job = s.wait_for(id, JobState::Failed).await;
+    assert_eq!(
+        job.problem,
+        Some(Problem::FileExists {
+            name: "one.bin".into()
+        })
+    );
+    assert_eq!(job.file_name, None);
+    let files = std::fs::read_dir(s.dir.path()).unwrap().count();
+    assert_eq!(files, 1, "only our own file");
+
+    // Resumed as it was, it asks again.
+    s.manager.resume(id).await.unwrap();
+    s.wait_for(id, JobState::Failed).await;
+    let replace = JobChange {
+        existing: Some(Existing::Replace),
+        ..JobChange::default()
+    };
+    s.manager.change_job(id, replace).await.unwrap();
+    s.manager.resume(id).await.unwrap();
+    let job = s.wait_for(id, JobState::Completed).await;
+    assert_eq!(job.file_name.as_deref(), Some("one.bin"));
+    s.assert_file(&job);
+}
+
+#[tokio::test]
+async fn asking_only_stops_when_the_name_is_taken() {
+    let mut s = setup(3, 0).await;
+    let ask = SettingsChange {
+        existing: Some(Existing::Ask),
+        ..SettingsChange::default()
+    };
+    s.manager.change_settings(ask).await.unwrap();
+    let id = s.add("one.bin").await;
+    let job = s.wait_for(id, JobState::Completed).await;
+    assert_eq!(job.file_name.as_deref(), Some("one.bin"));
 }

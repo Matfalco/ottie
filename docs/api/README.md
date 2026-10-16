@@ -131,7 +131,8 @@ curl -H "$AUTH" -H "Content-Type: application/json" \
      $API/jobs/preview
 # → {"links": [
 #      {"kind": "link", "url": "https://example.com/a.zip", "name": "a.zip",
-#       "matched": {"category": 1, "extension": "zip", "byFolder": false}, "known": false},
+#       "matched": {"category": 1, "extension": "zip", "byFolder": false}, "known": false,
+#       "exists": false},
 #      {"kind": "link", "url": "https://example.com/b.iso", …},
 #      {"kind": "invalid", "text": "ftp://example.com/c",
 #       "refused": {"error": "…", "code": "unsupportedScheme", "scheme": "ftp"}}]}
@@ -143,9 +144,24 @@ curl -H "$AUTH" -H "Content-Type: application/json" \
 #        "refused": [{"index": 1, "error": "…", "code": "categoryNotFound", "id": 3}]}
 ```
 
-`known: true` means a download of that same link is already on the list. Both endpoints refuse more links than the setting `maxBatch` allows (10,000 by default) with `tooManyLinks`, adding none.
+`known: true` means a download of that same link is already on the list, and `exists: true` that a file with the name it suggests is already in the folder it would go to (see below). Both endpoints refuse more links than the setting `maxBatch` allows (10,000 by default) with `tooManyLinks`, adding none.
 
 A link in the text can hold **sequences**, curl-style, and the preview lists every link they give: `[1-120]` (a leading zero pads: `[001-120]`), `[a-z]`, a step (`[0-100:10]`), a list (`{small,large}`, two items or more). Several in one link give every combination, the last changing fastest: `https://example.com/s[1-2]/{a,b}.jpg` gives `s1/a.jpg`, `s1/b.jpg`, `s2/a.jpg`, `s2/b.jpg`. Anything not well-formed stays as written (`http://[::1]/`, `a[]=1`, `{id}`), and `\[`, `\]`, `\{`, `\}` (and `\,` in a list) are the character itself. The cap counts a sequence as all the links it gives, before making any: `tooManyLinks` comes at once, with that count. `POST /jobs` and `POST /jobs/batch` take links as they are.
+
+## A file already there
+
+When a download's name is taken in its folder at the server's first response (by the name the server gives, which may differ from the link's), it does what its `existing` says: `"rename"` saves it under the first free name (`name (1).ext`), `"replace"` downloads it beside the file and puts it in its place once complete (a failed download leaves the file as it was), `"ask"` stops it before anything is written: it fails with the problem `{"code": "fileExists", "name": …}` until it's resumed with another answer. A download without one of its own follows the setting `existing` (`"rename"` by default).
+
+```bash
+# Replace the file if it's there
+curl -H "$AUTH" -H "Content-Type: application/json" \
+     -d '{"url": "https://example.com/file.iso", "existing": "replace"}' $API/jobs
+
+# A download that stopped to ask: rename it after all, then resume it
+curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH \
+     -d '{"existing": "rename"}' $API/jobs/2026.10.13-14.28.59-1
+curl -H "$AUTH" -X POST $API/jobs/2026.10.13-14.28.59-1/resume
+```
 
 ## Live events
 

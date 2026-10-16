@@ -162,6 +162,7 @@ struct Problems {
     incomplete: String,
     remote_changing: String,
     disk: String,
+    file_exists: String,
 }
 
 impl Texts {
@@ -403,6 +404,7 @@ impl Texts {
             Some(Problem::Incomplete) => texts.incomplete.clone(),
             Some(Problem::RemoteChanging) => texts.remote_changing.clone(),
             Some(Problem::Disk { detail: d }) => detail(&texts.disk, d),
+            Some(Problem::FileExists) => texts.file_exists.clone(),
             Some(Problem::Other { detail }) => detail.clone(),
             Some(Problem::Unknown) | None => english.unwrap_or_default().to_owned(),
         }
@@ -633,6 +635,10 @@ mod tests {
         assert_eq!(
             en.reason(Some(&disk), None),
             "Couldn’t write the file (disk full)"
+        );
+        assert_eq!(
+            fr.reason(Some(&Problem::FileExists), None),
+            "Un fichier de ce nom est déjà dans le dossier"
         );
         assert_eq!(
             en.reason(Some(&Problem::Unknown), Some("Something new")),

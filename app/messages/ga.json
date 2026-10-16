@@ -50,6 +50,7 @@
 		"stalled": "Stop an freastalaí ag seoladh sonraí",
 		"incomplete": "Dúnadh an ceangal róluath",
 		"remoteChanging": "Bhí an comhad ag athrú an t-am ar fad ar an bhfreastalaí",
-		"disk": "Níorbh fhéidir an comhad a scríobh ({detail})"
+		"disk": "Níorbh fhéidir an comhad a scríobh ({detail})",
+		"fileExists": "Tá comhad leis an ainm seo san fhillteán cheana"
 	}
 }

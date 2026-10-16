@@ -50,6 +50,7 @@
 		"stalled": "O servidor parou de enviar dados",
 		"incomplete": "A conexão fechou antes da hora",
 		"remoteChanging": "O arquivo mudava sem parar no servidor",
-		"disk": "Não foi possível gravar o arquivo ({detail})"
+		"disk": "Não foi possível gravar o arquivo ({detail})",
+		"fileExists": "Já existe um arquivo com este nome na pasta"
 	}
 }

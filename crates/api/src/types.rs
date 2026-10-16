@@ -160,6 +160,46 @@ pub struct AddJob {
     #[serde(default)]
     #[ts(optional, type = "number")]
     pub stop_at: Option<u64>,
+    /// What to do if a file with its name is already in its folder, when the
+    /// server answers. Default: the settings' `existing`.
+    #[serde(default)]
+    #[ts(optional)]
+    pub existing: Option<Existing>,
+}
+
+/// What a download does when a file with its name is already in its folder
+/// (docs/decisions/0049).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum Existing {
+    /// Saved under the first free name: `name (1).ext`, `name (2).ext`…
+    Rename,
+    /// Downloaded beside it, then takes its place once complete.
+    Replace,
+    /// Stops before downloading anything: it fails with the problem
+    /// `fileExists` until resumed with another choice (`PATCH /jobs/{id}`).
+    Ask,
+}
+
+impl From<Existing> for ottie_core::Existing {
+    fn from(existing: Existing) -> Self {
+        match existing {
+            Existing::Rename => ottie_core::Existing::Rename,
+            Existing::Replace => ottie_core::Existing::Replace,
+            Existing::Ask => ottie_core::Existing::Ask,
+        }
+    }
+}
+
+impl From<ottie_core::Existing> for Existing {
+    fn from(existing: ottie_core::Existing) -> Self {
+        match existing {
+            ottie_core::Existing::Rename => Existing::Rename,
+            ottie_core::Existing::Replace => Existing::Replace,
+            ottie_core::Existing::Ask => Existing::Ask,
+        }
+    }
 }
 
 /// Answer to `POST /jobs`.
@@ -243,6 +283,8 @@ pub enum FoundLink {
         matched: Matched,
         /// A download of this same link is already on the list.
         known: bool,
+        /// A file named `name` is already in the folder it would be saved in.
+        exists: bool,
     },
     /// One that can't: `refused` says why (`invalidUrl` or
     /// `unsupportedScheme`).
@@ -716,6 +758,11 @@ pub struct JobChange {
     #[ts(optional, type = "number | null")]
     #[schema(value_type = Option<u64>)]
     pub stop_at: Option<Option<u64>>,
+    /// What to do if a file with its name is already in its folder: for one
+    /// that stopped to ask (`fileExists`), choose, then resume it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub existing: Option<Existing>,
 }
 
 /// A field that's there, even as `null` (`Some(None)`), as opposed to one
@@ -752,6 +799,7 @@ impl From<JobChange> for ottie_core::JobChange {
             streaming: change.streaming,
             start_at: change.start_at.map(|at| at.map(from_millis)),
             stop_at: change.stop_at.map(|at| at.map(from_millis)),
+            existing: change.existing.map(Into::into),
         }
     }
 }
@@ -857,6 +905,9 @@ pub struct Settings {
     /// The language those devices show, as a tag like `en` or `pt-BR`; null:
     /// each shows its own system's. A device without it keeps its own.
     pub language: Option<String>,
+    /// What a download does when a file with its name is already in its
+    /// folder, unless the one adding it said (`existing` in `POST /jobs`).
+    pub existing: Existing,
 }
 
 /// Body of `PATCH /settings`: only the fields given change, all at once.
@@ -898,6 +949,9 @@ pub struct SettingsChange {
     #[ts(optional, type = "string | null")]
     #[schema(value_type = Option<String>)]
     pub language: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub existing: Option<Existing>,
 }
 
 /// How the front ends look: light, dark or as the system says, and which
@@ -980,6 +1034,11 @@ pub enum Problem {
     /// Writing the file failed; `detail` is English.
     Disk {
         detail: String,
+    },
+    /// A file named `name` is already in the folder, and the download asks
+    /// what to do: resume it after choosing `existing` (`PATCH /jobs/{id}`).
+    FileExists {
+        name: String,
     },
     Other {
         detail: String,
@@ -1214,11 +1273,14 @@ impl From<ottie_core::LinkPreview> for FoundLink {
                 name,
                 matched,
                 known,
+                exists,
+                ..
             } => FoundLink::Link {
                 url: url.to_string(),
                 name,
                 matched: matched.into(),
                 known,
+                exists,
             },
             ottie_core::LinkPreview::Invalid { text, error } => FoundLink::Invalid {
                 text,
@@ -1242,6 +1304,7 @@ impl From<ottie_core::Settings> for Settings {
             stream_media: settings.stream_media,
             appearance: settings.appearance.map(Appearance::from),
             language: settings.language,
+            existing: settings.existing.into(),
         }
     }
 }
@@ -1263,6 +1326,7 @@ impl From<SettingsChange> for ottie_core::SettingsChange {
             setup_done: change.setup_done,
             appearance: change.appearance.map(ottie_core::Appearance::from),
             language: change.language,
+            existing: change.existing.map(Into::into),
         }
     }
 }
@@ -1336,6 +1400,7 @@ impl From<ottie_core::Problem> for Problem {
             P::Incomplete { received, expected } => Problem::Incomplete { received, expected },
             P::RemoteChanging => Problem::RemoteChanging,
             P::Disk { detail } => Problem::Disk { detail },
+            P::FileExists { name } => Problem::FileExists { name },
             P::Other { detail } => Problem::Other { detail },
         }
     }

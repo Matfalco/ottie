@@ -50,6 +50,7 @@
 		"stalled": "Sabar ta daina aika bayanai",
 		"incomplete": "Haɗin ya rufe da wuri",
 		"remoteChanging": "Fayil ɗin ya ci gaba da canzawa a sabar",
-		"disk": "Ba a iya rubuta fayil ɗin ba ({detail})"
+		"disk": "Ba a iya rubuta fayil ɗin ba ({detail})",
+		"fileExists": "Akwai fayil mai wannan suna a babban fayil ɗin tuni"
 	}
 }

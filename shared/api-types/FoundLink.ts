@@ -22,4 +22,8 @@ matched: Matched,
 /**
  * A download of this same link is already on the list.
  */
-known: boolean, } | { "kind": "invalid", text: string, refused: ApiError, };
+known: boolean, 
+/**
+ * A file named `name` is already in the folder it would be saved in.
+ */
+exists: boolean, } | { "kind": "invalid", text: string, refused: ApiError, };

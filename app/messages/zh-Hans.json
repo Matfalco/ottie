@@ -50,6 +50,7 @@
 		"stalled": "服务器停止发送数据",
 		"incomplete": "连接提前关闭",
 		"remoteChanging": "服务器上的文件一直在变化",
-		"disk": "无法写入文件（{detail}）"
+		"disk": "无法写入文件（{detail}）",
+		"fileExists": "文件夹中已有同名文件"
 	}
 }

@@ -2,18 +2,22 @@
 	import { onMount, untrack } from 'svelte';
 	import FileUp from '@lucide/svelte/icons/file-up';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
-	import { automaticLabel, type Choice } from '#lib/adding.js';
+	import { automaticLabel, existingByDefault, type Choice } from '#lib/adding.js';
 	import {
 		SHOWN_AT_ONCE,
 		afterAdding,
 		choiceOf,
 		chooseForAll,
 		chosenRows,
+		onDiskForAll,
+		onDiskRows,
 		requests,
 		rowNote,
 		rowsOf,
+		sentRows,
 		textOf,
 		tickAll,
+		type OnDisk,
 		type Row
 	} from '#lib/batch.js';
 	import { categoryName } from '#lib/categories.js';
@@ -40,6 +44,8 @@
 	let rows: Row[] = $state([]);
 	/** The category last chosen for all; new links get it too. */
 	let forAll = $state<Choice>('auto');
+	/** What the files already there get, last chosen for all of them. */
+	let onDisk = $state<OnDisk>(untrack(() => existingByDefault(session.settings?.existing)));
 	let looking = $state(false);
 	let adding = $state(false);
 	/** Why the links couldn't be read or added. */
@@ -54,6 +60,9 @@
 	/** Other isn't picked: a folder of no category puts a download there. */
 	let choices = $derived(session.categoryList.filter((category) => category.builtIn !== 'other'));
 	let chosen = $derived(chosenRows(rows));
+	/** Ticked, less the files already there that are skipped. */
+	let sent = $derived(sentRows(rows));
+	let onDiskCount = $derived(onDiskRows(rows).length);
 	let addable = $derived(rows.filter((row) => row.found.kind === 'link').length);
 	let all = $derived(addable > 0 && chosen.length === addable);
 
@@ -79,7 +88,7 @@
 		}
 		looking = false;
 		if (answer.ok) {
-			rows = rowsOf(answer.value.links, rows, forAll);
+			rows = rowsOf(answer.value.links, rows, forAll, onDisk);
 			problem = null;
 		} else {
 			problem = answer.why;
@@ -123,9 +132,13 @@
 		rows = chooseForAll(rows, forAll);
 	}
 
+	function setOnDisk(value: OnDisk) {
+		onDisk = value;
+		rows = onDiskForAll(rows, onDisk);
+	}
+
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
-		const sent = chosen;
 		if (sent.length === 0) {
 			return;
 		}
@@ -200,7 +213,7 @@
 					onchange={() => (rows = tickAll(rows, !all))}
 				/>
 				<span>{m.batch_found({ count: formatCount(rows.length) })}</span>
-				<span class="muted">{m.batch_chosen({ count: formatCount(chosen.length) })}</span>
+				<span class="muted">{m.batch_chosen({ count: formatCount(sent.length) })}</span>
 				{#if looking}
 					<span class="muted looking">{m.batch_looking()}</span>
 				{/if}
@@ -208,7 +221,8 @@
 			<ul>
 				{#each rows.slice(0, shown) as row (row.found.kind === 'link' ? row.found.url : row.found.text)}
 					{@const note = rowNote(row)}
-					<li class:off={!row.chosen}>
+					{@const skipped = row.found.kind === 'link' && row.found.exists && row.onDisk === 'skip'}
+					<li class:off={!row.chosen || skipped}>
 						{#if row.found.kind === 'link'}
 							{@const found = row.found}
 							<input type="checkbox" bind:checked={row.chosen} aria-label={found.name} />
@@ -218,6 +232,18 @@
 								<span class="url" title={found.url} dir="auto">{found.url}</span>
 								{#if note}
 									<span class="note" class:bad={row.refused !== null}>{note}</span>
+								{/if}
+								{#if found.exists}
+									<span class="note disk">
+										{m.batch_exists()}
+										<select
+											value={row.onDisk}
+											aria-label={m.batch_existing_of({ name: found.name })}
+											onchange={(event) => (row.onDisk = event.currentTarget.value as OnDisk)}
+										>
+											{@render onDiskOptions()}
+										</select>
+									</span>
 								{/if}
 							</span>
 							<select
@@ -283,6 +309,15 @@
 			</label>
 		</div>
 
+		{#if onDiskCount > 0}
+			<label class="disk-all" in:unfold out:unfold>
+				<span class="legend">{m.batch_existing_all({ count: formatCount(onDiskCount) })}</span>
+				<select value={onDisk} onchange={(event) => setOnDisk(event.currentTarget.value as OnDisk)}>
+					{@render onDiskOptions()}
+				</select>
+			</label>
+		{/if}
+
 		{#if problem}
 			<p class="problem" role="alert" in:unfold out:unfold>{problem}</p>
 		{:else if notice}
@@ -291,12 +326,18 @@
 
 		<div class="buttons">
 			<button type="button" onclick={onClose}>{m.add_cancel()}</button>
-			<button class="primary" disabled={adding || chosen.length === 0}>
-				{m.batch_add({ count: formatCount(chosen.length) })}
+			<button class="primary" disabled={adding || sent.length === 0}>
+				{m.batch_add({ count: formatCount(sent.length) })}
 			</button>
 		</div>
 	</form>
 </dialog>
+
+{#snippet onDiskOptions()}
+	<option value="rename">{m.existing_rename()}</option>
+	<option value="replace">{m.existing_replace()}</option>
+	<option value="skip">{m.existing_skip()}</option>
+{/snippet}
 
 <style>
 	dialog {
@@ -447,6 +488,26 @@
 
 	.note.bad {
 		color: var(--danger);
+	}
+
+	/* A file already there: what it gets, beside the note. */
+	.note.disk {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.note.disk select {
+		width: auto;
+		padding: 0.1rem 0.4rem;
+		font-size: 0.8rem;
+	}
+
+	.disk-all {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem 0.75rem;
 	}
 
 	li select {

@@ -58,6 +58,7 @@
 		"stalled": "The server stopped sending data",
 		"incomplete": "The connection closed early",
 		"remoteChanging": "The file kept changing on the server",
-		"disk": "Couldn’t write the file ({detail})"
+		"disk": "Couldn’t write the file ({detail})",
+		"fileExists": "A file with this name is already in the folder"
 	}
 }

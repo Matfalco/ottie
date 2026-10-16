@@ -50,6 +50,7 @@
 		"stalled": "Il server ha smesso di inviare dati",
 		"incomplete": "La connessione si è chiusa troppo presto",
 		"remoteChanging": "Il file continuava a cambiare sul server",
-		"disk": "Impossibile scrivere il file ({detail})"
+		"disk": "Impossibile scrivere il file ({detail})",
+		"fileExists": "Nella cartella c’è già un file con questo nome"
 	}
 }

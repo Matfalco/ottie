@@ -50,6 +50,7 @@
 		"stalled": "Poslužitelj je prestao slati podatke",
 		"incomplete": "Veza se prerano zatvorila",
 		"remoteChanging": "Datoteka se na poslužitelju stalno mijenjala",
-		"disk": "Datoteku nije moguće zapisati ({detail})"
+		"disk": "Datoteku nije moguće zapisati ({detail})",
+		"fileExists": "Datoteka s tim imenom već je u mapi"
 	}
 }

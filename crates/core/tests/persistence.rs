@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ottie_core::{
-    Appearance, AppearanceMode, CategoryId, CategorySettings, Error, HttpBackend, HttpConfig,
-    JobChange, JobId, JobSnapshot, JobState, Manager, NewJob, PART_SUFFIX, Palette, Priority,
-    Reorder, RetryPolicy, Settings, SettingsChange, Store,
+    Appearance, AppearanceMode, CategoryId, CategorySettings, Error, Existing, HttpBackend,
+    HttpConfig, JobChange, JobId, JobSnapshot, JobState, Manager, NewJob, PART_SUFFIX, Palette,
+    Priority, Reorder, RetryPolicy, Settings, SettingsChange, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -252,6 +252,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         setup_done: Some(true),
         appearance: Some(appearance),
         language: Some(Some("fr".into())),
+        existing: Some(Existing::Replace),
         ..SettingsChange::default()
     };
     manager.change_settings(change).await.unwrap();
@@ -276,6 +277,7 @@ async fn settings_priorities_and_limits_survive_a_restart() {
         setup_done: true,
         appearance: Some(appearance),
         language: Some("fr".into()),
+        existing: Existing::Replace,
     };
     assert_eq!(manager.settings().await.unwrap(), expected);
     let job = &manager.list().await.unwrap()[0];

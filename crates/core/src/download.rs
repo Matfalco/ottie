@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use reqwest::Url;
 
 use crate::error::Error;
-use crate::filename;
+use crate::filename::{self, Existing};
 
 /// Everything needed to start or resume one download. This is the state that
 /// will be persisted, so a download can resume after a restart.
@@ -32,6 +32,10 @@ pub struct Download {
     /// Moves a download that has no file yet to another folder once its real
     /// name is known. Used once, then cleared; not saved.
     pub placement: Option<Placement>,
+    /// What to do when a file with its name is already in the folder: at the
+    /// first response, and when the file is complete. Set for each run (the
+    /// job's choice, else the setting's); not saved here.
+    pub existing: Existing,
 }
 
 /// Where to save a download once its real file name is known (from
@@ -84,6 +88,7 @@ impl Download {
             resumable: false,
             segments: Vec::new(),
             placement: None,
+            existing: Existing::default(),
         })
     }
 

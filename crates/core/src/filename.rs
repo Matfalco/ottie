@@ -154,15 +154,54 @@ pub fn part_name(name: &str) -> String {
     format!("{name}{PART_SUFFIX}")
 }
 
+/// What to do when a file with a download's name is already in its folder
+/// (docs/decisions/0049).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Existing {
+    /// Save it under the first free name: `name (1)`, `name (2)`…
+    #[default]
+    Rename,
+    /// Download it beside the file, which it replaces once complete.
+    Replace,
+    /// Stop before downloading anything, so someone decides.
+    Ask,
+}
+
+impl Existing {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Existing::Rename => "rename",
+            Existing::Replace => "replace",
+            Existing::Ask => "ask",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "rename" => Some(Existing::Rename),
+            "replace" => Some(Existing::Replace),
+            "ask" => Some(Existing::Ask),
+            _ => None,
+        }
+    }
+}
+
+/// Whether a file (or folder) named `name` is in `dir`.
+pub async fn exists(dir: &Path, name: &str) -> io::Result<bool> {
+    fs::try_exists(dir.join(name)).await
+}
+
 /// Picks the first free name among `name`, `name (1)`, `name (2)`… and creates
 /// its `.part.ottie` file. `create_new` makes the reservation atomic, so two
-/// downloads can't grab the same name.
-pub async fn reserve(dir: &Path, name: &str) -> io::Result<(String, File)> {
+/// downloads can't grab the same name. With `replace`, a finished file
+/// named `name` doesn't count: the download will replace it (but another
+/// download's `.part.ottie` still does).
+pub async fn reserve(dir: &Path, name: &str, replace: bool) -> io::Result<(String, File)> {
     // A category's folder may not exist yet.
     fs::create_dir_all(dir).await?;
     for n in 0..MAX_COLLISION_ATTEMPTS {
         let candidate = numbered(name, n);
-        if fs::try_exists(dir.join(&candidate)).await? {
+        if !(replace && n == 0) && fs::try_exists(dir.join(&candidate)).await? {
             continue;
         }
         let part = dir.join(part_name(&candidate));
@@ -181,8 +220,13 @@ pub async fn reserve(dir: &Path, name: &str) -> io::Result<(String, File)> {
 }
 
 /// Renames the `.part.ottie` file to the first free name. Normally that's `name`,
-/// unless a file with that name appeared while we were downloading.
-pub async fn finalize(dir: &Path, name: &str, part: &Path) -> io::Result<String> {
+/// unless a file with that name appeared while we were downloading. With
+/// `replace`, it takes `name` whatever is there (the file is replaced).
+pub async fn finalize(dir: &Path, name: &str, part: &Path, replace: bool) -> io::Result<String> {
+    if replace {
+        fs::rename(part, dir.join(name)).await?;
+        return Ok(name.to_owned());
+    }
     for n in 0..MAX_COLLISION_ATTEMPTS {
         let candidate = numbered(name, n);
         let target = dir.join(&candidate);
@@ -209,7 +253,7 @@ pub async fn relocate(from: &Path, name: &str, finished: bool, to: &Path) -> io:
     }
     // The new name is reserved as a `.part.ottie`, which the file then
     // replaces; a finished file gets its real name back at the end.
-    let (candidate, file) = reserve(to, name).await?;
+    let (candidate, file) = reserve(to, name, false).await?;
     drop(file); // Windows won't replace a file that's still open.
     let part = to.join(part_name(&candidate));
     if let Err(err) = move_file(&source, &part).await {
@@ -219,7 +263,7 @@ pub async fn relocate(from: &Path, name: &str, finished: bool, to: &Path) -> io:
     if !finished {
         return Ok(candidate);
     }
-    match finalize(to, &candidate, &part).await {
+    match finalize(to, &candidate, &part, false).await {
         Ok(name) => Ok(name),
         Err(err) => {
             // Put it back rather than leave it half-moved.
@@ -440,6 +484,33 @@ mod tests {
         assert_eq!(std::fs::read(to.join("song.mp3")).unwrap(), b"old");
         assert!(!to.join("song (1).mp3.part.ottie").exists());
         assert!(!from.join("song.mp3").exists());
+    }
+
+    #[tokio::test]
+    async fn replacing_reserves_the_name_and_takes_it_at_the_end() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("song.mp3"), b"old").unwrap();
+        let (name, file) = reserve(dir.path(), "song.mp3", true).await.unwrap();
+        drop(file);
+        assert_eq!(name, "song.mp3");
+        // The old file stays until the new one is complete.
+        assert_eq!(std::fs::read(dir.path().join("song.mp3")).unwrap(), b"old");
+        let part = dir.path().join("song.mp3.part.ottie");
+        std::fs::write(&part, b"new").unwrap();
+        let name = finalize(dir.path(), "song.mp3", &part, true).await.unwrap();
+        assert_eq!(name, "song.mp3");
+        assert_eq!(std::fs::read(dir.path().join("song.mp3")).unwrap(), b"new");
+        assert!(!part.exists());
+    }
+
+    #[tokio::test]
+    async fn replacing_still_leaves_another_download_its_name() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("song.mp3.part.ottie"), b"busy").unwrap();
+        let (name, _file) = reserve(dir.path(), "song.mp3", true).await.unwrap();
+        assert_eq!(name, "song (1).mp3");
+        let (renamed, _file) = reserve(dir.path(), "song.mp3", false).await.unwrap();
+        assert_eq!(renamed, "song (2).mp3");
     }
 
     #[tokio::test]

@@ -66,7 +66,7 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/category.rs    CategoryId (General = 1), CategorySettings, extension matching
   src/backend.rs     Backend trait, HttpBackend
   src/store.rs       SQLite on its own thread: schema migrations, save/load jobs and settings
-  src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media, max_batch; SettingsChange (applied all at once)
+  src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media, max_batch, existing; SettingsChange (applied all at once)
   src/view.rs        saved views: ViewSettings (filters + sort/grouping), ViewId, normalizing
   src/webmark.rs     the Mark of the Web on finished files (Windows' Zone.Identifier stream, 0045)
   src/slot.rs        time slots: SlotSettings (target, days or date, hours, effects), whether one covers
@@ -84,6 +84,7 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/playback.rs    where players read each job (Playback, one head per reader) and whether it's in
                      streaming mode, for segmented.rs; which extensions are media
   src/filename.rs    names from URL / Content-Disposition, sanitizing, collision-free names, .part.ottie → final rename,
+                     Existing (a name taken: rename, replace, ask; 0049),
                      relocate (a job's file into another folder; copy + delete between drives)
   tests/support/     in-process axum test server with fault injection
   examples/fetch.rs  manual CLI try-out
@@ -101,7 +102,7 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
                      once), POST /jobs/preview (the links in some text; both take bodies up to 64 MB)
   src/categories.rs  GET/POST /categories, PUT/DELETE /categories/{id}, POST /categories/match
   src/settings.rs    GET/PATCH /settings: max concurrent, global limit, retry policy, shared
-                     appearance + language, setupDone, streamMedia, maxBatch; the ranges people may choose (its tests
+                     appearance + language, setupDone, streamMedia, maxBatch, existing; the ranges people may choose (its tests
                      write them to shared/api-types/Ranges.ts)
   src/views.rs       GET/POST /views, PUT/DELETE /views/{id} (saved views)
   src/slots.rs       GET/POST /slots (with the time zone), PUT/DELETE /slots/{id}, POST /slots/reorder
@@ -342,7 +343,7 @@ Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 3
 - **Saved views** (`docs/decisions/0026`): name + filters + sort/grouping, kept by the actor like categories (`Manager::add_view` …, `ViewChanged`/`ViewRemoved`). The engine checks and normalizes them but never filters jobs by them; front ends do. Removing a category replaces it with General in every view (saved before the category row goes).
 - **Persistence** (`docs/decisions/0008`): SQLite holds jobs, and later categories, settings and per-segment progress. `STRICT` tables, numbered migrations in `store.rs` (never edit a released one). Saves happen on add, on every state change (inside `transition`), on `Event::Started` (file name + validator known) and progress at most every 2 s. **From 2c: flush file data before saving the progress that covers it.** On load, running jobs become Queued and `downloaded` is reset from the `.part.ottie` length.
 - **Shutdown keeps running jobs running** in the database (it doesn't mark them Paused), so the next start continues them; user-paused jobs stay paused.
-- **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Names come from `Content-Disposition` (`filename*`, then `filename`), else the final URL; chosen once at the first response. Sanitize them; never write outside the target folder; resolve collisions with ` (1)`, ` (2)`. Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files). On Windows the finished file gets the Mark of the Web (`webmark.rs`, `docs/decisions/0045`), unless policy says not to.
+- **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Names come from `Content-Disposition` (`filename*`, then `filename`), else the final URL; chosen once at the first response. Sanitize them; never write outside the target folder. A name already taken in the folder (`docs/decisions/0049`) follows the job's `existing`, else the setting's: Rename (` (1)`, ` (2)`), Replace (reserves the name itself, renamed over the old file only once complete; another download's `.part.ottie` still counts as taken) or Ask (`Error::FileExists` before any file is made: the job fails with `Problem::FileExists`). Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files). On Windows the finished file gets the Mark of the Web (`webmark.rs`, `docs/decisions/0045`), unless policy says not to.
 - **Cancellation:** `tokio_util::sync::CancellationToken`, raced against network reads with `tokio::select! { biased; … }`. Pausing must stop all segments promptly and leave state consistent.
 - **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; native FTP/SFTP (7j) and yt-dlp (step 9) plug in beside it, so keep HTTP assumptions inside the HTTP backend.
 
@@ -438,7 +439,7 @@ Ottie embeds two fonts, Outfit and DM Mono for numbers in columns (`docs/decisio
 
 ## Build order
 
-Done: ✅ and struck through.
+Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review.
 
 1. ✅ ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~
 2. ✅ Engine slices:
@@ -487,11 +488,11 @@ Done: ✅ and struck through.
    - ✅ ~~one look: the legacy palettes go, their CSS folded in (`docs/decisions/0047`)~~
    - ✅ ~~7b open the file and its folder, Pause all / Resume all in the main window (`docs/decisions/0045`)~~
    - ✅ ~~7c keyboard shortcuts (`docs/decisions/0046`)~~
-   - 7d animations (dialogs, menus, rows coming and going, the queue's reorder), none under
-     `prefers-reduced-motion`: in progress (`docs/decisions/0048`), some still missing, needs review
-   - 7e a file already on disk: the add step says so (preview and at the first response) and offers
-     rename, overwrite or skip; a setting decides when nobody is asked (extension, clipboard), rename
-     by default as today
+   - ✅ ~~7d animations (dialogs, menus, rows coming and going, the queue's reorder, toggles and what
+     unfolds), none under `prefers-reduced-motion` (`docs/decisions/0048`)~~
+   - 🟡 7e a file already on disk: the add step asks (rename, replace, or skip), at the first response a
+     download does what was chosen, else the setting (rename, replace or ask; `docs/decisions/0049`).
+     Built, not reviewed yet
    - 7f onboarding in several steps, each skippable (and the whole of it): e.g. language + look,
      starter categories, downloads folder, sign-in and closing (desktop app), notifications, later the
      extension and other devices

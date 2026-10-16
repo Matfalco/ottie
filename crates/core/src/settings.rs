@@ -2,6 +2,8 @@
 
 use std::time::Duration;
 
+use crate::filename::Existing;
+
 /// Settings that apply to the whole manager. Stored as the single row of the
 /// `settings` table; the defaults here match the table's.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +27,9 @@ pub struct Settings {
     /// The language those devices show, as a tag like `en` or `pt-BR`;
     /// `None`: each shows its own system's (docs/decisions/0041).
     pub language: Option<String>,
+    /// What a download does when a file with its name is already in its
+    /// folder, unless the one adding it chose (docs/decisions/0049).
+    pub existing: Existing,
 }
 
 impl Default for Settings {
@@ -38,6 +43,7 @@ impl Default for Settings {
             setup_done: false,
             appearance: None,
             language: None,
+            existing: Existing::Rename,
         }
     }
 }
@@ -58,6 +64,7 @@ impl Settings {
             setup_done,
             appearance,
             language,
+            existing,
         } = change;
         if let Some(limit) = global_limit {
             self.global_limit = limit;
@@ -89,6 +96,9 @@ impl Settings {
         if let Some(language) = language {
             self.language = language;
         }
+        if let Some(existing) = existing {
+            self.existing = existing;
+        }
     }
 }
 
@@ -106,6 +116,7 @@ pub struct SettingsChange {
     pub appearance: Option<Appearance>,
     /// `Some(None)`: back to each device's system language.
     pub language: Option<Option<String>>,
+    pub existing: Option<Existing>,
 }
 
 /// What happens when a download fails with an error that may go away (a

@@ -1,6 +1,6 @@
 // Adding several links at once (docs/decisions/0036): the links the daemon
-// found in some text, which of them to add and in which category, then what
-// became of each.
+// found in some text, which of them to add and in which category, what to
+// do with the files already there (0049), then what became of each.
 
 import type { AddJob } from '@ottie/api-types/AddJob';
 import type { AddedJobs } from '@ottie/api-types/AddedJobs';
@@ -10,6 +10,10 @@ import { explainRefusal } from './explain';
 import { m } from './paraglide/messages.js';
 import { getLocale, type Locale } from './paraglide/runtime.js';
 
+/** What a link whose file is already in the folder gets: a new name, the
+ * old file replaced once it's complete, or not added. */
+export type OnDisk = 'rename' | 'replace' | 'skip';
+
 /** One link of the list. */
 export interface Row {
 	found: FoundLink;
@@ -17,6 +21,8 @@ export interface Row {
 	chosen: boolean;
 	/** Automatic, or the category picked for it. */
 	choice: Choice;
+	/** If its file is already there (`found.exists`). */
+	onDisk: OnDisk;
 	/** Why the daemon refused it when adding (in the page's language). */
 	refused: string | null;
 }
@@ -37,9 +43,14 @@ export function holdsSeveral(text: string): boolean {
 }
 
 /** Rows for the links found. A link already listed keeps how it was set;
- * a new one gets `choice` and is ticked unless it can't be added or is
- * already on the download list. */
-export function rowsOf(links: FoundLink[], previous: Row[], choice: Choice): Row[] {
+ * a new one gets `choice` and `onDisk`, and is ticked unless it can't be
+ * added or is already on the download list. */
+export function rowsOf(
+	links: FoundLink[],
+	previous: Row[],
+	choice: Choice,
+	onDisk: OnDisk = 'rename'
+): Row[] {
 	const before = new Map(previous.map((row) => [key(row.found), row]));
 	return links.map((found) => {
 		const kept = before.get(key(found));
@@ -47,7 +58,7 @@ export function rowsOf(links: FoundLink[], previous: Row[], choice: Choice): Row
 			return { ...kept, found };
 		}
 		const addable = found.kind === 'link' && !found.known;
-		return { found, chosen: addable, choice, refused: null };
+		return { found, chosen: addable, choice, onDisk, refused: null };
 	});
 }
 
@@ -55,16 +66,42 @@ function key(found: FoundLink): string {
 	return found.kind === 'link' ? found.url : `invalid ${found.text}`;
 }
 
-/** The rows that would be added. */
+/** The rows ticked. */
 export function chosenRows(rows: Row[]): Row[] {
 	return rows.filter((row) => row.chosen && row.found.kind === 'link');
 }
 
-/** Each chosen row's request for `POST /jobs/batch`, in order. */
-export function requests(chosen: Row[], folder: string): AddJob[] {
-	return chosen.flatMap((row) =>
-		row.found.kind === 'link' ? [jobRequest(row.found.url, row.choice, folder)] : []
-	);
+/** The rows whose file is already in the folder they'd go to. */
+export function onDiskRows(rows: Row[]): Row[] {
+	return rows.filter((row) => row.found.kind === 'link' && row.found.exists);
+}
+
+/** The rows that would be added: ticked, and not skipped for a file
+ * already there. */
+export function sentRows(rows: Row[]): Row[] {
+	return chosenRows(rows).filter((row) => !(isOnDisk(row) && row.onDisk === 'skip'));
+}
+
+function isOnDisk(row: Row): boolean {
+	return row.found.kind === 'link' && row.found.exists;
+}
+
+/** Each row's request for `POST /jobs/batch`, in order. A file already
+ * there gets what was chosen for it, which then stays whatever the setting
+ * says; the others leave it to the setting, for the name the server gives. */
+export function requests(sent: Row[], folder: string): AddJob[] {
+	return sent.flatMap((row) => {
+		if (row.found.kind !== 'link') {
+			return [];
+		}
+		const existing = isOnDisk(row) && row.onDisk !== 'skip' ? row.onDisk : null;
+		return [jobRequest(row.found.url, row.choice, folder, null, undefined, existing)];
+	});
+}
+
+/** Every row set to `onDisk` (for all the files already there). */
+export function onDiskForAll(rows: Row[], onDisk: OnDisk): Row[] {
+	return rows.map((row) => ({ ...row, onDisk }));
 }
 
 /** A category menu's value as a choice ("auto", or a category's ID). */

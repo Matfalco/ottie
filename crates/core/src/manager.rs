@@ -18,7 +18,7 @@ use crate::backend::Backend;
 use crate::category::{self, BuiltIn, Category, CategoryId, CategorySettings, Matched};
 use crate::download::{Download, Event, Outcome, Placement};
 use crate::error::Error;
-use crate::filename;
+use crate::filename::{self, Existing};
 use crate::id::{IdGenerator, JobId};
 use crate::job::{JobChange, JobEvent, JobSnapshot, JobState, NewJob, Priority, Reorder};
 use crate::links::{self, Found, LinkPreview};
@@ -172,12 +172,32 @@ impl Manager {
         // cap is checked here too, before a sequence makes its links.
         let max = self.settings().await?.max_batch;
         let found = links::find(text, max)?;
-        self.request(|reply| Command::Preview {
-            found,
-            dest_dir,
-            reply,
+        let mut previews = self
+            .request(|reply| Command::Preview {
+                found,
+                dest_dir,
+                reply,
+            })
+            .await?;
+        // The disk is looked at here too, all in one go off the async threads.
+        previews = tokio::task::spawn_blocking(move || {
+            for preview in &mut previews {
+                if let LinkPreview::Link {
+                    name,
+                    folder: Some(folder),
+                    exists,
+                    ..
+                } = preview
+                {
+                    *exists = folder.join(&*name).exists();
+                }
+            }
+            previews
         })
         .await
+        // Only when the runtime is shutting down: nothing in there panics.
+        .map_err(|_| Error::ManagerStopped)?;
+        Ok(previews)
     }
 
     /// Returns once the job has actually stopped and its `.part.ottie` file is flushed.
@@ -706,6 +726,9 @@ struct Job {
     /// when the slot ends, even while Ottie isn't running, it's known
     /// whether to keep the job paused.
     held_by: Option<SlotId>,
+    /// What to do when a file with its name is already in its folder;
+    /// `None`: the setting's (docs/decisions/0049).
+    existing: Option<Existing>,
     /// Present while a task is downloading this job.
     task: Option<Task>,
     /// Present while its category is changing and its file moving there.
@@ -770,6 +793,7 @@ impl Job {
             stop_at: record.stop_at,
             ignores_slots: record.ignores_slots,
             held_by,
+            existing: record.existing,
             task: None,
             moving: None,
             last_saved: None,
@@ -1199,12 +1223,24 @@ impl<B: Backend> Actor<B> {
             .map(|job| job.download.url.as_str())
             .collect();
         let previews = found.into_iter().map(|found| match found {
-            Found::Link(url) => LinkPreview::Link {
-                name: filename::from_url(&url),
-                matched: self.matched(&url, dest_dir),
-                known: known.contains(url.as_str()),
-                url,
-            },
+            Found::Link(url) => {
+                let matched = self.matched(&url, dest_dir);
+                let folder = match dest_dir {
+                    Some(dir) => Some(dir.to_owned()),
+                    None => self
+                        .categories
+                        .get(&matched.category)
+                        .and_then(|c| c.folder.clone()),
+                };
+                LinkPreview::Link {
+                    name: filename::from_url(&url),
+                    matched,
+                    known: known.contains(url.as_str()),
+                    folder,
+                    exists: false, // looked at by `Manager::preview`
+                    url,
+                }
+            }
             Found::Invalid { text, error } => LinkPreview::Invalid { text, error },
         });
         Ok(previews.collect())
@@ -1285,6 +1321,7 @@ impl<B: Backend> Actor<B> {
                 stop_at: new.stop_at,
                 ignores_slots: false,
                 held_by,
+                existing: new.existing,
                 task: None,
                 moving: None,
                 last_saved: None,
@@ -1304,8 +1341,10 @@ impl<B: Backend> Actor<B> {
             streaming,
             start_at,
             stop_at,
+            existing,
         } = change;
         let speed_limit = speed_limit.filter(|&limit| limit != job.speed_limit);
+        let existing = existing.filter(|&existing| Some(existing) != job.existing);
         let priority = priority.filter(|&priority| priority != job.priority);
         // Chosen now, even if it stays as it was: the file type no longer decides.
         let streaming = streaming.filter(|&on| on != job.streaming || !job.streaming_chosen);
@@ -1339,8 +1378,16 @@ impl<B: Backend> Actor<B> {
                 return Err(Error::StopBeforeStart);
             }
         }
-        if speed_limit.is_none() && priority.is_none() && streaming.is_none() && !times {
+        if speed_limit.is_none()
+            && priority.is_none()
+            && streaming.is_none()
+            && existing.is_none()
+            && !times
+        {
             return Ok(());
+        }
+        if existing.is_some() {
+            job.existing = existing;
         }
         if let Some(limit) = speed_limit {
             job.speed_limit = limit;
@@ -2450,6 +2497,7 @@ impl<B: Backend> Actor<B> {
         // The task works on its own copy and hands it back when it ends.
         let mut download = job.download.clone();
         download.placement = placement;
+        download.existing = job.existing.unwrap_or(self.settings.existing);
         let backend = Arc::clone(&self.backend);
         let internal = self.internal.clone();
         // The job's speed budget lives as long as the task does.
@@ -2678,6 +2726,7 @@ impl<B: Backend> Actor<B> {
             stop_at: job.stop_at,
             ignores_slots: job.ignores_slots,
             held_by: job.held_by,
+            existing: job.existing,
         })
     }
 

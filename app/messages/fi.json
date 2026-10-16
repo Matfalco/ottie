@@ -50,6 +50,7 @@
 		"stalled": "Palvelin lakkasi lähettämästä dataa",
 		"incomplete": "Yhteys katkesi liian aikaisin",
 		"remoteChanging": "Tiedosto muuttui jatkuvasti palvelimella",
-		"disk": "Tiedostoa ei voitu kirjoittaa ({detail})"
+		"disk": "Tiedostoa ei voitu kirjoittaa ({detail})",
+		"fileExists": "Kansiossa on jo samanniminen tiedosto"
 	}
 }

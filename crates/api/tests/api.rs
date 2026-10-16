@@ -11,10 +11,10 @@ use axum::routing::get;
 use futures_util::StreamExt;
 use ottie_api::{
     AddJob, AddJobs, Added, AddedCategory, AddedJobs, AddedView, AddedWithin, ApiError, Appearance,
-    AppearanceMode, Arrangement, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL, Event,
-    FoundLink, Job, JobState, Matched, Palette, Preview, PreviewLinks, Priority, Problem, Reason,
-    Reorder, ReorderJobs, Settings, SettingsChange, SortDirection, SortKey, SpeedHistory,
-    StreamLink, TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
+    AppearanceMode, Arrangement, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL, Event, Existing,
+    FoundLink, Job, JobChange, JobState, Matched, Palette, Preview, PreviewLinks, Priority,
+    Problem, Reason, Reorder, ReorderJobs, Settings, SettingsChange, SortDirection, SortKey,
+    SpeedHistory, StreamLink, TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
 };
 use ottie_api::{AddedSlot, Day, ReorderSlots, Slot, SlotDownloads, SlotList};
 use ottie_core::{HttpBackend, Manager, Store};
@@ -107,6 +107,7 @@ impl Daemon {
             streaming: None,
             start_at: None,
             stop_at: None,
+            existing: None,
         }
     }
 
@@ -275,6 +276,45 @@ async fn the_speed_history_gives_a_sample_per_second() {
     assert!(
         after.iter().all(|&bytes| bytes == 0),
         "nothing was downloading"
+    );
+}
+
+#[tokio::test]
+async fn a_download_whose_file_is_there_asks_then_replaces_it() {
+    let d = start().await;
+    std::fs::write(d.dir.path().join("file.bin"), b"mine").unwrap();
+    let job = AddJob {
+        existing: Some(Existing::Ask),
+        ..d.new_job("file.bin")
+    };
+    let response = d.post("/jobs").json(&job).send().await.unwrap();
+    let id = response.json::<Added>().await.unwrap().id;
+    d.wait_until(&id, JobState::Failed).await;
+    let problem = d.job(&id).await.problem;
+    assert_eq!(
+        problem,
+        Some(Problem::FileExists {
+            name: "file.bin".into()
+        })
+    );
+
+    let replace = JobChange {
+        existing: Some(Existing::Replace),
+        ..JobChange::default()
+    };
+    let request = d
+        .client
+        .patch(d.url(&format!("/jobs/{id}")))
+        .bearer_auth(TOKEN);
+    let changed = request.json(&replace).send().await.unwrap();
+    assert_eq!(changed.status(), StatusCode::NO_CONTENT);
+    let resumed = d.post(&format!("/jobs/{id}/resume")).send().await.unwrap();
+    assert_eq!(resumed.status(), StatusCode::NO_CONTENT);
+    d.wait_until(&id, JobState::Completed).await;
+    assert_eq!(d.job(&id).await.file_name.as_deref(), Some("file.bin"));
+    assert_ne!(
+        std::fs::read(d.dir.path().join("file.bin")).unwrap(),
+        b"mine"
     );
 }
 
@@ -728,6 +768,7 @@ async fn a_preview_lists_the_links_in_some_text() {
             name: "file.bin".into(),
             matched: general,
             known: true,
+            exists: false,
         }
     );
     let FoundLink::Link {
@@ -987,6 +1028,7 @@ async fn settings_are_read_and_changed() {
         stream_media: true,
         appearance: None,
         language: None,
+        existing: Existing::Rename,
     };
     assert_eq!(settings().await, defaults, "a new daemon offers the setup");
 
@@ -1003,6 +1045,7 @@ async fn settings_are_read_and_changed() {
         "streamMedia": false,
         "appearance": { "mode": "dark", "palette": "neutral" },
         "language": "fr",
+        "existing": "ask",
     });
     let response = patch(change).await.unwrap();
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
@@ -1018,6 +1061,7 @@ async fn settings_are_read_and_changed() {
             palette: Palette::Neutral,
         }),
         language: Some("fr".into()),
+        existing: Existing::Ask,
         ..defaults
     };
     assert_eq!(settings().await, changed);

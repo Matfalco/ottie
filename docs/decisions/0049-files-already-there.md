@@ -1,0 +1,19 @@
+# 0049: A file already there
+
+Accepted 2026-10-16. Builds on `docs/decisions/0007` (`.part.ottie` names), `0036` (several links at once) and `0043` (the clipboard).
+
+**Why:** a download whose name is taken in its folder was always saved as `name (1).ext`. That's safe, but someone downloading a newer version of a file wants it replaced, and someone who already has the file may not want it again. The add step can't be sure of the name (the server may give another at its first response), and links added without a question (the clipboard's "added at once", later the browser extension) have nobody to ask.
+
+**Decision** (Mathieu's choices):
+- **Three answers** (`Existing`): **Rename** (as before, the first free `name (n).ext`), **Replace**, **Ask**. A setting (`existing` in `GET/PATCH /settings`, Settings → Downloads, Rename by default) decides when nobody was asked; each download may carry its own (`existing` in `POST /jobs`, `PATCH /jobs/{id}`), saved with it, used at each run.
+- **The add step asks** when the daemon says the file is already there: `POST /jobs/preview` tells, for each link, whether a file with the name it suggests is in the folder it would go to (`exists`; looked at off the actor, in one go). One link: two chips, Rename and Replace, under "“name” is already in this folder" (Cancel is the third answer), the setting's answer chosen first (Rename if it says Ask). Several links: those rows say "Already in the folder" with a menu each (Rename, Replace, Skip), and one menu under the list sets them all; Skip leaves them out of the add. What was chosen is sent with each such link, so it stays whatever the setting says; the others leave it to the setting.
+- **At the first response** the engine checks the real name in the real folder (after a category's folder took it): Rename reserves the first free name; Replace reserves the name itself (another download's `.part.ottie` still counts as taken: then it renames); Ask stops before any file is made.
+- **Replace at the end:** the new file downloads to its `.part.ottie` beside the old one and is renamed over it once complete. A failed or cancelled download leaves the old file as it was; both need room meanwhile. If the old one can't be replaced (open in a program on Windows), the download fails with a disk problem. A file that appears while downloading is replaced only under Replace, else renamed as before.
+- **Ask = failed, with a reason:** the download fails with the problem `fileExists` (its name), in the Failed group, notified as a failure by the desktop app (its own switch). Its details offer **Rename** and **Replace** instead of Try again: the answer is saved (`PATCH /jobs/{id}`), then it resumes. Resumed as it was (Resume all), it asks again. Remove is the "skip". `FileExists` is never an answer to a request, so it has no `Reason` code.
+- Moving a file to another category's folder (`0028`) still renames.
+
+**Alternatives:**
+- **Skip** as a setting: a link sent from the browser would seem to do nothing. Ask stops it visibly, and Remove skips it in one click.
+- **A state of its own** ("waiting for you"): clearer words, but a new state touches the state machine, the four status groups, filters, views and every language.
+- **Replacing at the start** (deleting the old file first): frees the room at once, but a failed download leaves neither.
+- Asking the server for the real name in the add step (a request per link): slow for a list of thousands, and some links work only once.

@@ -13,6 +13,7 @@
 	import { categoryName } from '#lib/categories.js';
 	import {
 		PRIORITIES,
+		asksAboutFile,
 		canStream,
 		facts,
 		isPlayable,
@@ -92,6 +93,8 @@
 	let name = $derived(displayName(job));
 	let status = $derived(statusOf(job));
 	let primary = $derived(primaryAction(job));
+	/** It stopped because its file is already there: rename or replace? */
+	let asks = $derived(asksAboutFile(job));
 	let done = $derived(fraction(job));
 	/** Finished or cancelled: its own settings no longer matter, so only
 	 * where it is stays (its few facts go with it, under the bar). */
@@ -172,6 +175,13 @@
 		}
 	}
 
+	/** Answers the question about its file, then starts it again. */
+	async function choose(existing: 'rename' | 'replace') {
+		if (await onChange({ existing })) {
+			onRun('resume');
+		}
+	}
+
 	function moved(event: Event & { currentTarget: HTMLSelectElement }) {
 		const id = Number(event.currentTarget.value);
 		if (id !== job.category) {
@@ -195,7 +205,14 @@
 			{/if}
 		</div>
 		<div class="buttons">
-			{#if primary}
+			{#if asks}
+				<button class="primary" title={m.det_rename_hint()} onclick={() => choose('rename')}>
+					{m.existing_rename()}
+				</button>
+				<button title={m.det_replace_hint()} onclick={() => choose('replace')}>
+					{m.existing_replace()}
+				</button>
+			{:else if primary}
 				<button class="primary" onclick={() => onRun(primary.action)}>{primary.label}</button>
 			{:else if onOpen && canOpen(job)}
 				<button class="primary" onclick={onOpen}>

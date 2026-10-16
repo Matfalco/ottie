@@ -50,6 +50,7 @@
 		"stalled": "Serwer przestał wysyłać dane",
 		"incomplete": "Połączenie zostało zamknięte za wcześnie",
 		"remoteChanging": "Plik na serwerze ciągle się zmieniał",
-		"disk": "Nie można zapisać pliku ({detail})"
+		"disk": "Nie można zapisać pliku ({detail})",
+		"fileExists": "Plik o tej nazwie jest już w folderze"
 	}
 }

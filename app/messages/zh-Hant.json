@@ -50,6 +50,7 @@
 		"stalled": "伺服器停止傳送資料",
 		"incomplete": "連線提前關閉",
 		"remoteChanging": "伺服器上的檔案一直在變動",
-		"disk": "無法寫入檔案（{detail}）"
+		"disk": "無法寫入檔案（{detail}）",
+		"fileExists": "資料夾中已有同名檔案"
 	}
 }

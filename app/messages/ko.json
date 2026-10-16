@@ -50,6 +50,7 @@
 		"stalled": "서버가 데이터 전송을 멈췄습니다",
 		"incomplete": "연결이 일찍 끊겼습니다",
 		"remoteChanging": "서버의 파일이 계속 바뀌었습니다",
-		"disk": "파일을 쓸 수 없습니다({detail})"
+		"disk": "파일을 쓸 수 없습니다({detail})",
+		"fileExists": "같은 이름의 파일이 이미 폴더에 있습니다"
 	}
 }

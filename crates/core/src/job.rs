@@ -5,6 +5,7 @@ use reqwest::Url;
 
 use crate::category::{Category, CategoryId};
 use crate::download::{RestartReason, Segment};
+use crate::filename::Existing;
 use crate::id::JobId;
 use crate::problem::Problem;
 use crate::settings::Settings;
@@ -193,6 +194,9 @@ pub struct NewJob {
     pub start_at: Option<SystemTime>,
     /// Pauses then if it hasn't finished. Must be after `start_at`.
     pub stop_at: Option<SystemTime>,
+    /// What to do when a file with its name is already in its folder.
+    /// `None`: [`Settings::existing`], when the time comes.
+    pub existing: Option<Existing>,
 }
 
 impl NewJob {
@@ -204,6 +208,7 @@ impl NewJob {
             streaming: None,
             start_at: None,
             stop_at: None,
+            existing: None,
         }
     }
 
@@ -216,6 +221,12 @@ impl NewJob {
 
     pub fn in_category(mut self, category: CategoryId) -> Self {
         self.category = Some(category);
+        self
+    }
+
+    /// What to do if a file with its name is already in its folder.
+    pub fn existing(mut self, existing: Existing) -> Self {
+        self.existing = Some(existing);
         self
     }
 
@@ -251,6 +262,9 @@ pub struct JobChange {
     pub start_at: Option<Option<SystemTime>>,
     /// `Some(Some(at))`: pause then; `Some(None)`: no stop time.
     pub stop_at: Option<Option<SystemTime>>,
+    /// What to do when a file with its name is already in its folder (at
+    /// its first response, or a resume after it stopped to ask).
+    pub existing: Option<Existing>,
 }
 
 /// A copy of a job's public state, for listing and events.

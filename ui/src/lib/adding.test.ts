@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { automaticLabel, defaultFolder, jobRequest, streamsByDefault } from './adding';
+import {
+	automaticLabel,
+	defaultFolder,
+	existingByDefault,
+	jobRequest,
+	streamsByDefault
+} from './adding';
 import type { Categories } from './categories';
 import { category, plain } from './testing';
 
@@ -64,6 +70,18 @@ describe('adding', () => {
 			url: 'https://a.com/f',
 			stopAt: 9
 		});
+	});
+
+	it('sends what to do with a file already there only once asked', () => {
+		const times = { start: null, stop: null };
+		expect(jobRequest('https://a.com/f', 'auto', '', null, times, 'replace')).toEqual({
+			url: 'https://a.com/f',
+			existing: 'replace'
+		});
+		expect(existingByDefault('replace')).toBe('replace');
+		expect(existingByDefault('rename')).toBe('rename');
+		expect(existingByDefault('ask')).toBe('rename');
+		expect(existingByDefault(undefined)).toBe('rename');
 	});
 
 	it('streams videos and music by default, if the settings say so', () => {

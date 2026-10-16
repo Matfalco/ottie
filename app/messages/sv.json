@@ -50,6 +50,7 @@
 		"stalled": "Servern slutade skicka data",
 		"incomplete": "Anslutningen stängdes för tidigt",
 		"remoteChanging": "Filen ändrades hela tiden på servern",
-		"disk": "Kunde inte skriva filen ({detail})"
+		"disk": "Kunde inte skriva filen ({detail})",
+		"fileExists": "En fil med det här namnet finns redan i mappen"
 	}
 }

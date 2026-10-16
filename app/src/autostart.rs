@@ -11,6 +11,8 @@ use anyhow::{Context, Result};
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
+#[cfg(target_os = "linux")]
+use tauri::Manager;
 
 /// What the system's entry passes to the app.
 pub const ARG: &str = "--autostart";
@@ -128,7 +130,7 @@ fn launcher(app: &AppHandle) -> Result<AutoLaunch> {
     let exe = std::env::current_exe().context("can't find where the app is")?;
     // On Linux, an AppImage runs from a temporary mount: start the file itself.
     #[cfg(target_os = "linux")]
-    let exe = app.env().appimage.unwrap_or(exe);
+    let exe = app.env().appimage.map_or(exe, std::path::PathBuf::from);
     #[cfg(not(target_os = "linux"))]
     let _ = app;
     let mut builder = AutoLaunchBuilder::new();

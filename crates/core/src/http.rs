@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::download::{Download, Event, Outcome, RestartReason, Validator, check_scheme};
 use crate::error::Error;
-use crate::filename;
+use crate::filename::{self, Existing};
 use crate::playback::Playback;
 use crate::segmented::{self, Segmented};
 use crate::throttle::Throttle;
@@ -204,7 +204,16 @@ async fn open(
         {
             dl.dest_dir = folder.to_owned();
         }
-        let (name, file) = filename::reserve(&dl.dest_dir, &suggested).await?;
+        let replace = match dl.existing {
+            Existing::Rename => false,
+            Existing::Replace => true,
+            Existing::Ask if filename::exists(&dl.dest_dir, &suggested).await? => {
+                // Nothing written: it asks before any file is made.
+                return Err(Error::FileExists { name: suggested });
+            }
+            Existing::Ask => false,
+        };
+        let (name, file) = filename::reserve(&dl.dest_dir, &suggested, replace).await?;
         tracing::debug!(url = %redact(&dl.url), %name, "starting download");
         dl.file_name = Some(name.clone());
         learn(dl, &response);
@@ -489,7 +498,9 @@ async fn complete(dl: &mut Download, name: &str) -> Result<Outcome, Error> {
         _ => dl.total = Some(dl.downloaded),
     }
     let part = dl.dest_dir.join(filename::part_name(name));
-    let final_name = filename::finalize(&dl.dest_dir, name, &part).await?;
+    // A file that appeared meanwhile is replaced only if asked to.
+    let replace = dl.existing == Existing::Replace;
+    let final_name = filename::finalize(&dl.dest_dir, name, &part, replace).await?;
     let path = dl.dest_dir.join(&final_name);
     webmark::mark(&path, &dl.url).await;
     dl.file_name = Some(final_name);

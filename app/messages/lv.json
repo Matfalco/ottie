@@ -50,6 +50,7 @@
 		"stalled": "Serveris pārtrauca sūtīt datus",
 		"incomplete": "Savienojums aizvērās par agru",
 		"remoteChanging": "Fails serverī nepārtraukti mainījās",
-		"disk": "Failu neizdevās ierakstīt ({detail})"
+		"disk": "Failu neizdevās ierakstīt ({detail})",
+		"fileExists": "Fails ar šādu nosaukumu jau ir mapē"
 	}
 }

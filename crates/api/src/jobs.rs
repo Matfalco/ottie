@@ -91,6 +91,9 @@ fn new_job(body: AddJob) -> Result<NewJob, Failure> {
     if let Some(at) = body.stop_at {
         job = job.stopping_at(from_millis(at));
     }
+    if let Some(existing) = body.existing {
+        job = job.existing(existing.into());
+    }
     Ok(job)
 }
 

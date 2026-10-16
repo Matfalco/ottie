@@ -13,6 +13,7 @@ import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
 import type { SlotBody } from '@ottie/api-types/SlotBody';
 import type { ViewBody } from '@ottie/api-types/ViewBody';
+import type { Looked } from './adding';
 import { Api, ApiFailure, Unauthorized } from './api';
 import type { Action } from './bulk';
 import { GENERAL, applyCategoryEvent, sorted, type Categories } from './categories';
@@ -109,6 +110,21 @@ export class Session {
 	/** The links in `text`, and what adding each would do. */
 	preview(text: string, destDir?: string): Promise<Answer<Preview>> {
 		return this.answer(() => this.api.previewLinks(text, destDir));
+	}
+
+	/** What adding the one link `url` (saved in `destDir`, if given) would
+	 * do: its category, its name and whether that file is already there;
+	 * null if the daemon can't tell (adding it will say why). */
+	async look(url: string, destDir?: string): Promise<Looked | null> {
+		try {
+			const { links } = await this.api.previewLinks(url, destDir);
+			const [found] = links;
+			return links.length === 1 && found.kind === 'link'
+				? { matched: found.matched, name: found.name, exists: found.exists }
+				: null;
+		} catch {
+			return null;
+		}
 	}
 
 	/** The category a download of `url` (saved in `destDir`, if given)

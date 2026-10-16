@@ -3,6 +3,7 @@
 //! sequences in them (0037).
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use reqwest::Url;
 
@@ -34,6 +35,10 @@ pub enum LinkPreview {
         matched: Matched,
         /// A download of this same link is already on the list.
         known: bool,
+        /// The folder it would be saved in, if it has one.
+        folder: Option<PathBuf>,
+        /// A file named `name` is already in that folder (docs/decisions/0049).
+        exists: bool,
     },
     Invalid {
         text: String,

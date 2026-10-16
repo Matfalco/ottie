@@ -50,6 +50,7 @@
 		"stalled": "Iseva iyekile ukuthumela idatha",
 		"incomplete": "Uxhumano luvaleke ngaphambi kwesikhathi",
 		"remoteChanging": "Ifayela liqhubekile lishintsha kuseva",
-		"disk": "Ayikwazanga ukubhala ifayela ({detail})"
+		"disk": "Ayikwazanga ukubhala ifayela ({detail})",
+		"fileExists": "Ifayela elinaleli gama selivele likhona kufolda"
 	}
 }

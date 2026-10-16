@@ -41,10 +41,10 @@ use utoipa_axum::routes;
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
 pub use types::{
     AddJob, AddJobs, Added, AddedCategory, AddedJobs, AddedView, AddedWithin, ApiError, Appearance,
-    AppearanceMode, Arrangement, BuiltIn, ByteRange, Category, CategoryBody, Event, FoundLink, Job,
-    JobChange, JobState, MatchLink, Matched, MoveJob, Palette, Preview, PreviewLinks, Priority,
-    Problem, Reason, RefusedJob, Reorder, ReorderJobs, Settings, SettingsChange, SortDirection,
-    SortKey, SpeedHistory, StreamLink, View, ViewBody, ViewFilters,
+    AppearanceMode, Arrangement, BuiltIn, ByteRange, Category, CategoryBody, Event, Existing,
+    FoundLink, Job, JobChange, JobState, MatchLink, Matched, MoveJob, Palette, Preview,
+    PreviewLinks, Priority, Problem, Reason, RefusedJob, Reorder, ReorderJobs, Settings,
+    SettingsChange, SortDirection, SortKey, SpeedHistory, StreamLink, View, ViewBody, ViewFilters,
 };
 pub use types::{AddedSlot, Day, ReorderSlots, Slot, SlotBody, SlotDownloads, SlotList};
 pub use ui::UiSource;

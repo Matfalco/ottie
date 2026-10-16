@@ -25,6 +25,9 @@ pub enum Problem {
     RemoteChanging,
     /// Writing the file failed (disk full, no permission…).
     Disk { detail: String },
+    /// A file named `name` is already in the folder, and the download asks
+    /// whether to rename or replace (docs/decisions/0049).
+    FileExists { name: String },
     /// Anything else; `detail` is the English message.
     Other { detail: String },
 }
@@ -53,6 +56,7 @@ impl From<&Error> for Problem {
             Error::Io(e) => Problem::Disk {
                 detail: e.to_string(),
             },
+            Error::FileExists { name } => Problem::FileExists { name: name.clone() },
             other => Problem::Other {
                 detail: other.to_string(),
             },
@@ -77,6 +81,7 @@ impl fmt::Display for Problem {
                 write!(f, "the file kept changing on the server while downloading")
             }
             Problem::Disk { detail } => write!(f, "file error: {detail}"),
+            Problem::FileExists { name } => write!(f, "{name} is already in the folder"),
             Problem::Other { detail } => f.write_str(detail),
         }
     }
@@ -104,6 +109,10 @@ mod tests {
 
         let disk = Error::Io(std::io::Error::other("disk full"));
         assert_eq!(Problem::from(&disk).to_string(), disk.to_string());
+        let exists = Error::FileExists {
+            name: "film.mkv".into(),
+        };
+        assert_eq!(Problem::from(&exists).to_string(), exists.to_string());
         let other = Error::ManagerStopped;
         assert_eq!(Problem::from(&other).to_string(), other.to_string());
     }

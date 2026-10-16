@@ -20,6 +20,9 @@ describe('explainProblem', () => {
 		expect(say({ code: 'network', detail: 'connection refused' }, 'fr')).toBe(
 			'Erreur réseau (connection refused)'
 		);
+		expect(say({ code: 'fileExists', name: 'film.mkv' })).toBe(
+			'“film.mkv” is already in the folder'
+		);
 		expect(say({ code: 'other', detail: 'something' })).toBe('something');
 	});
 

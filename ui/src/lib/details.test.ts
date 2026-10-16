@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { Job } from '@ottie/api-types/Job';
-import { PRIORITIES, canStream, facts, isPlayable, primaryAction, priorityName } from './details';
+import {
+	PRIORITIES,
+	asksAboutFile,
+	canStream,
+	facts,
+	isPlayable,
+	primaryAction,
+	priorityName
+} from './details';
 import { job, plain } from './testing';
 
 const MB = 1024 * 1024;
@@ -19,6 +27,11 @@ describe('details', () => {
 			label: 'Try again'
 		});
 		expect(primaryAction(job({ state: 'paused' }), 'fr')?.action).toBe('resume');
+		// Its own choices instead: rename or replace (docs/decisions/0049).
+		const asking = job({ state: 'failed', problem: { code: 'fileExists', name: 'a.zip' } });
+		expect(asksAboutFile(asking)).toBe(true);
+		expect(primaryAction(asking, 'en')).toBeNull();
+		expect(asksAboutFile(job({ state: 'failed' }))).toBe(false);
 		expect(primaryAction(job({ state: 'completed' }), 'en')).toBeNull();
 		expect(primaryAction(job({ state: 'scheduled' }), 'en')).toEqual({
 			action: 'resume',

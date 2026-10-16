@@ -30,7 +30,8 @@
 		categories={session.categories}
 		categoryList={session.categoryList}
 		streamMedia={session.settings?.streamMedia ?? true}
-		onMatch={(url, folder) => session.match(url, folder)}
+		existing={session.settings?.existing}
+		onLook={(url, folder) => session.look(url, folder)}
 		onAdd={add}
 		onSeveral={(text) => (several = text)}
 	/>

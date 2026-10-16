@@ -15,6 +15,7 @@ use tokio::sync::oneshot;
 use crate::category::{BuiltIn, Category, CategoryId, CategorySettings};
 use crate::download::{Download, Segment, Validator};
 use crate::error::Error;
+use crate::filename::Existing;
 use crate::id::JobId;
 use crate::job::{JobState, Priority};
 use crate::problem::Problem;
@@ -346,6 +347,63 @@ const MIGRATIONS: &[&str] = &[
         FROM settings;
      DROP TABLE settings;
      ALTER TABLE settings_new RENAME TO settings;",
+    // 18: what to do when a file with a download's name is already in its
+    // folder (docs/decisions/0049): the setting, each job's own choice
+    // (NULL: the setting's), and the problem of one that stopped to ask.
+    // `jobs` is rebuilt for the CHECK, as in 14.
+    "CREATE TABLE jobs_new (
+        id_secs          INTEGER NOT NULL,
+        id_seq           INTEGER NOT NULL,
+        url              TEXT    NOT NULL,
+        dest_dir         TEXT    NOT NULL,
+        file_name        TEXT,
+        state            TEXT    NOT NULL CHECK (state IN ('queued', 'connecting',
+                             'downloading', 'paused', 'completed', 'failed', 'cancelled',
+                             'retrying', 'scheduled')),
+        total            INTEGER,
+        downloaded       INTEGER NOT NULL DEFAULT 0,
+        validator_kind   TEXT    CHECK (validator_kind IN ('etag', 'last-modified')),
+        validator_value  TEXT,
+        resumable        INTEGER NOT NULL DEFAULT 0 CHECK (resumable IN (0, 1)),
+        error            TEXT,
+        priority         TEXT    NOT NULL DEFAULT 'normal'
+                             CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+        speed_limit      INTEGER NOT NULL DEFAULT 0 CHECK (speed_limit >= 0),
+        category_id      INTEGER NOT NULL DEFAULT 1 REFERENCES categories (id),
+        category_chosen  INTEGER NOT NULL DEFAULT 0 CHECK (category_chosen IN (0, 1)),
+        problem_kind     TEXT    CHECK (problem_kind IN ('network', 'redirect', 'http-status',
+                             'stalled', 'incomplete', 'remote-changing', 'disk', 'file-exists',
+                             'other')),
+        problem_number   INTEGER,
+        problem_total    INTEGER,
+        problem_detail   TEXT,
+        streaming        INTEGER NOT NULL DEFAULT 0 CHECK (streaming IN (0, 1)),
+        streaming_chosen INTEGER NOT NULL DEFAULT 0 CHECK (streaming_chosen IN (0, 1)),
+        queue_place      INTEGER NOT NULL DEFAULT 0 CHECK (queue_place >= 0),
+        start_at         INTEGER CHECK (start_at >= 0),
+        stop_at          INTEGER CHECK (stop_at >= 0),
+        ignores_slots    INTEGER NOT NULL DEFAULT 0 CHECK (ignores_slots IN (0, 1)),
+        held_by          INTEGER CHECK (held_by >= 1),
+        existing         TEXT    CHECK (existing IN ('rename', 'replace', 'ask')),
+        PRIMARY KEY (id_secs, id_seq)
+     ) STRICT;
+     INSERT INTO jobs_new (id_secs, id_seq, url, dest_dir, file_name, state, total,
+                           downloaded, validator_kind, validator_value, resumable, error,
+                           priority, speed_limit, category_id, category_chosen,
+                           problem_kind, problem_number, problem_total, problem_detail,
+                           streaming, streaming_chosen, queue_place, start_at, stop_at,
+                           ignores_slots, held_by)
+        SELECT id_secs, id_seq, url, dest_dir, file_name, state, total,
+               downloaded, validator_kind, validator_value, resumable, error,
+               priority, speed_limit, category_id, category_chosen,
+               problem_kind, problem_number, problem_total, problem_detail,
+               streaming, streaming_chosen, queue_place, start_at, stop_at,
+               ignores_slots, held_by
+        FROM jobs;
+     DROP TABLE jobs;
+     ALTER TABLE jobs_new RENAME TO jobs;
+     ALTER TABLE settings ADD COLUMN existing TEXT NOT NULL DEFAULT 'rename'
+        CHECK (existing IN ('rename', 'replace', 'ask'));",
 ];
 
 /// Everything saved about one job.
@@ -374,6 +432,8 @@ pub(crate) struct JobRecord {
     /// While `Scheduled`: the slot holding it, so the one that ends can keep
     /// it paused, even across a restart.
     pub held_by: Option<SlotId>,
+    /// What to do when its file's name is taken; `None`: the setting's.
+    pub existing: Option<Existing>,
 }
 
 /// A time slot with its place in the list (lower comes first, and wins).
@@ -684,9 +744,9 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
                            priority, speed_limit, category_id, category_chosen,
                            problem_kind, problem_number, problem_total, problem_detail,
                            streaming, streaming_chosen, queue_place, start_at, stop_at,
-                           ignores_slots, held_by)
+                           ignores_slots, held_by, existing)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                 ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)
+                 ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)
          ON CONFLICT (id_secs, id_seq) DO UPDATE SET
              url = excluded.url, dest_dir = excluded.dest_dir,
              file_name = excluded.file_name, state = excluded.state,
@@ -701,7 +761,7 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
              streaming = excluded.streaming, streaming_chosen = excluded.streaming_chosen,
              queue_place = excluded.queue_place, start_at = excluded.start_at,
              stop_at = excluded.stop_at, ignores_slots = excluded.ignores_slots,
-             held_by = excluded.held_by",
+             held_by = excluded.held_by, existing = excluded.existing",
     )?
     .execute(params![
         secs,
@@ -731,6 +791,7 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
         record.stop_at.map(unix_millis),
         record.ignores_slots,
         record.held_by.map(|slot| slot.0),
+        record.existing.map(Existing::as_str),
     ])?;
     tx.prepare_cached("DELETE FROM segments WHERE job_secs = ?1 AND job_seq = ?2")?
         .execute(params![secs, seq])?;
@@ -788,7 +849,7 @@ fn load_jobs(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
                 category_id, category_chosen,
                 problem_kind, problem_number, problem_total, problem_detail,
                 streaming, streaming_chosen, queue_place, start_at, stop_at, ignores_slots,
-                held_by
+                held_by, existing
          FROM jobs ORDER BY id_secs, id_seq",
     )?;
     let mut rows = stmt.query([])?;
@@ -855,6 +916,7 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         resumable: row.get(10)?,
         segments: Vec::new(), // filled in by `load`
         placement: None,
+        existing: Existing::default(),
     };
     Ok(Ok(JobRecord {
         id,
@@ -872,6 +934,11 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         stop_at: row.get::<_, Option<u64>>(24)?.map(from_unix_millis),
         ignores_slots: row.get(25)?,
         held_by: row.get::<_, Option<u32>>(26)?.map(SlotId),
+        // The CHECK allows only known names.
+        existing: row
+            .get::<_, Option<String>>(27)?
+            .as_deref()
+            .and_then(Existing::parse),
     }))
 }
 
@@ -898,6 +965,7 @@ fn problem_columns(problem: &Problem) -> (&'static str, Option<u64>, Option<u64>
         }
         Problem::RemoteChanging => ("remote-changing", None, None, None),
         Problem::Disk { detail } => ("disk", None, None, Some(detail)),
+        Problem::FileExists { name } => ("file-exists", None, None, Some(name)),
         Problem::Other { detail } => ("other", None, None, Some(detail)),
     }
 }
@@ -924,6 +992,7 @@ fn problem_from_row(row: &Row) -> rusqlite::Result<Option<Problem>> {
         }
         ("remote-changing", ..) => Some(Problem::RemoteChanging),
         ("disk", _, _, Some(detail)) => Some(Problem::Disk { detail }),
+        ("file-exists", _, _, Some(name)) => Some(Problem::FileExists { name }),
         ("other", _, _, Some(detail)) => Some(Problem::Other { detail }),
         _ => None,
     };
@@ -938,7 +1007,7 @@ fn load_settings(conn: &Connection) -> Result<Settings, Error> {
     Ok(conn.query_row(
         "SELECT global_limit, max_concurrent, max_retries, retries_before_yield, retry_wait_ms,
                 setup_done, appearance_mode, appearance_palette, language, stream_media,
-                max_batch
+                max_batch, existing
          FROM settings WHERE id = 1",
         [],
         |row| {
@@ -964,6 +1033,8 @@ fn load_settings(conn: &Connection) -> Result<Settings, Error> {
                 setup_done: row.get(5)?,
                 appearance,
                 language: row.get(8)?,
+                // The CHECK allows only known names.
+                existing: Existing::parse(&row.get::<_, String>(11)?).unwrap_or_default(),
             })
         },
     )?)
@@ -976,7 +1047,7 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
         "UPDATE settings SET global_limit = ?1, max_concurrent = ?2, max_retries = ?3,
                 retries_before_yield = ?4, retry_wait_ms = ?5, setup_done = ?6,
                 appearance_mode = ?7, appearance_palette = ?8, language = ?9,
-                stream_media = ?10, max_batch = ?11
+                stream_media = ?10, max_batch = ?11, existing = ?12
          WHERE id = 1",
         params![
             settings.global_limit,
@@ -990,6 +1061,7 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
             settings.language,
             settings.stream_media,
             settings.max_batch,
+            settings.existing.as_str(),
         ],
     )?;
     Ok(())
@@ -1391,6 +1463,7 @@ mod tests {
             stop_at: Some(UNIX_EPOCH + Duration::from_millis(1_760_300_000_123)),
             ignores_slots: true,
             held_by: Some(SlotId(3)),
+            existing: Some(Existing::Replace),
         }
     }
 
@@ -1540,6 +1613,9 @@ mod tests {
             Problem::Disk {
                 detail: "disk full".into(),
             },
+            Problem::FileExists {
+                name: "film.mkv".into(),
+            },
             Problem::Other {
                 detail: "something".into(),
             },
@@ -1555,6 +1631,53 @@ mod tests {
             store.save(r.clone());
         }
         assert_eq!(store.load().await.unwrap().jobs, records);
+    }
+
+    #[test]
+    fn rebuilding_jobs_for_existing_files_keeps_them() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (i, sql) in MIGRATIONS[..17].iter().enumerate() {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", i + 1).unwrap();
+        }
+        conn.execute_batch(
+            "INSERT INTO jobs (id_secs, id_seq, url, dest_dir, file_name, state, total,
+                               downloaded, priority, speed_limit, problem_kind,
+                               problem_detail, error, streaming, streaming_chosen, queue_place,
+                               start_at, stop_at, ignores_slots, held_by)
+             VALUES (5, 1, 'https://example.com/a.zip', '/d', 'a.zip', 'scheduled', 100, 40,
+                     'high', 7, 'disk', 'disk full', 'file error: disk full', 1, 1, 3,
+                     1000, 2000, 1, 4);",
+        )
+        .unwrap();
+        prepare(&mut conn).unwrap();
+
+        let loaded = load_all(&conn).unwrap();
+        assert_eq!(loaded.settings.existing, Existing::Rename);
+        let [job] = &loaded.jobs[..] else {
+            panic!("expected one job, got {:?}", loaded.jobs);
+        };
+        assert_eq!(job.state, JobState::Scheduled);
+        assert_eq!(job.download.file_name.as_deref(), Some("a.zip"));
+        assert_eq!(
+            (job.download.total, job.download.downloaded),
+            (Some(100), 40)
+        );
+        assert_eq!(
+            (job.priority, job.speed_limit, job.place),
+            (Priority::High, 7, 3)
+        );
+        assert_eq!(
+            job.problem,
+            Some(Problem::Disk {
+                detail: "disk full".into()
+            })
+        );
+        assert!(job.streaming && job.streaming_chosen && job.ignores_slots);
+        assert_eq!(job.start_at, Some(from_unix_millis(1000)));
+        assert_eq!(job.stop_at, Some(from_unix_millis(2000)));
+        assert_eq!(job.held_by, Some(SlotId(4)));
+        assert_eq!(job.existing, None);
     }
 
     #[test]
@@ -1664,6 +1787,7 @@ mod tests {
                 palette: Palette::Neutral,
             }),
             language: Some("pt-BR".into()),
+            existing: Existing::Ask,
         };
         store.save_settings(changed.clone());
         assert_eq!(store.load().await.unwrap().settings, changed);

@@ -9,7 +9,8 @@ function link(name: string, categoryId = 2): FoundLink {
 		url: `https://example.com:8080/files/${name}`,
 		name,
 		matched: { category: categoryId, extension: 'zip', byFolder: false },
-		known: false
+		known: false,
+		exists: false
 	};
 }
 

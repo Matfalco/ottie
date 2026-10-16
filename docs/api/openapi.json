@@ -2342,6 +2342,17 @@
             ],
             "description": "An absolute folder. Default: the category's folder."
           },
+          "existing": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Existing",
+                "description": "What to do if a file with its name is already in its folder, when the\nserver answers. Default: the settings' `existing`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "startAt": {
             "type": [
               "integer",
@@ -2927,6 +2938,15 @@
         ],
         "description": "A message on the `GET /events` WebSocket. Connect first, then fetch\n`GET /jobs`, then apply events in order (insert-or-replace by `id`, or\ndrop on `removed`)."
       },
+      "Existing": {
+        "type": "string",
+        "description": "What a download does when a file with its name is already in its folder\n(docs/decisions/0049).",
+        "enum": [
+          "rename",
+          "replace",
+          "ask"
+        ]
+      },
       "FoundLink": {
         "oneOf": [
           {
@@ -2937,9 +2957,14 @@
               "name",
               "matched",
               "known",
+              "exists",
               "kind"
             ],
             "properties": {
+              "exists": {
+                "type": "boolean",
+                "description": "A file named `name` is already in the folder it would be saved in."
+              },
               "kind": {
                 "type": "string",
                 "enum": [
@@ -3154,6 +3179,17 @@
         "type": "object",
         "description": "Body of `PATCH /jobs/{id}`: the job's own settings to change; a field\nleft out stays as it is.",
         "properties": {
+          "existing": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Existing",
+                "description": "What to do if a file with its name is already in its folder: for one\nthat stopped to ask (`fileExists`), choose, then resume it."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "priority": {
             "oneOf": [
               {
@@ -3465,6 +3501,25 @@
                 ]
               },
               "detail": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A file named `name` is already in the folder, and the download asks\nwhat to do: resume it after choosing `existing` (`PATCH /jobs/{id}`).",
+            "required": [
+              "name",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "fileExists"
+                ]
+              },
+              "name": {
                 "type": "string"
               }
             }
@@ -4283,7 +4338,8 @@
           "retriesBeforeYield",
           "firstRetryWaitMs",
           "maxBatch",
-          "streamMedia"
+          "streamMedia",
+          "existing"
         ],
         "properties": {
           "appearance": {
@@ -4296,6 +4352,10 @@
                 "type": "null"
               }
             ]
+          },
+          "existing": {
+            "$ref": "#/components/schemas/Existing",
+            "description": "What a download does when a file with its name is already in its\nfolder, unless the one adding it said (`existing` in `POST /jobs`)."
           },
           "firstRetryWaitMs": {
             "type": "integer",
@@ -4358,6 +4418,16 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/Appearance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "existing": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Existing"
               },
               {
                 "type": "null"

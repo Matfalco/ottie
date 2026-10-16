@@ -50,6 +50,7 @@
 		"stalled": "Serverul a încetat să trimită date",
 		"incomplete": "Conexiunea s-a închis prea devreme",
 		"remoteChanging": "Fișierul se tot schimba pe server",
-		"disk": "Fișierul nu a putut fi scris ({detail})"
+		"disk": "Fișierul nu a putut fi scris ({detail})",
+		"fileExists": "Un fișier cu acest nume este deja în folder"
 	}
 }

@@ -47,6 +47,11 @@ pub enum Error {
     #[error("file error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// A file with the download's name is already in its folder, and the
+    /// download asks what to do (docs/decisions/0049).
+    #[error("{name} is already in the folder")]
+    FileExists { name: String },
+
     #[error("no job with ID {0}")]
     JobNotFound(JobId),
 

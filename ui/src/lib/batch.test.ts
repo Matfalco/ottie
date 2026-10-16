@@ -6,21 +6,25 @@ import {
 	chooseForAll,
 	chosenRows,
 	holdsSeveral,
+	onDiskForAll,
+	onDiskRows,
 	requests,
 	rowNote,
 	rowsOf,
+	sentRows,
 	textOf,
 	tickAll
 } from './batch';
 import { plain } from './testing';
 
-function link(name: string, known = false): FoundLink {
+function link(name: string, known = false, exists = false): FoundLink {
 	return {
 		kind: 'link',
 		url: `https://example.com/${name}`,
 		name,
 		matched: { category: 1, extension: 'zip', byFolder: false },
-		known
+		known,
+		exists
 	};
 }
 
@@ -98,6 +102,36 @@ describe('batch', () => {
 		expect(requests(chosenRows(rows), '')).toEqual([
 			{ url: 'https://example.com/a.zip' },
 			{ url: 'https://example.com/b.zip', category: 3 }
+		]);
+	});
+
+	it('asks what to do with each file already there, one choice for all', () => {
+		let rows = rowsOf(
+			[link('a.zip'), link('b.zip', false, true), link('c.zip', false, true)],
+			[],
+			'auto',
+			'replace'
+		);
+		expect(onDiskRows(rows).map((row) => row.found)).toEqual([
+			link('b.zip', false, true),
+			link('c.zip', false, true)
+		]);
+		expect(requests(sentRows(rows), '')).toEqual([
+			{ url: 'https://example.com/a.zip' },
+			{ url: 'https://example.com/b.zip', existing: 'replace' },
+			{ url: 'https://example.com/c.zip', existing: 'replace' }
+		]);
+		// Skipped for all, then one of them renamed after all.
+		rows = onDiskForAll(rows, 'skip');
+		rows[2].onDisk = 'rename';
+		expect(sentRows(rows).map((row) => row.found)).toEqual([
+			link('a.zip'),
+			link('c.zip', false, true)
+		]);
+		expect(chosenRows(rows)).toHaveLength(3);
+		expect(requests(sentRows(rows), '')).toEqual([
+			{ url: 'https://example.com/a.zip' },
+			{ url: 'https://example.com/c.zip', existing: 'rename' }
 		]);
 	});
 

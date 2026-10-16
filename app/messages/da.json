@@ -50,6 +50,7 @@
 		"stalled": "Serveren holdt op med at sende data",
 		"incomplete": "Forbindelsen lukkede for tidligt",
 		"remoteChanging": "Filen blev ved med at ændre sig på serveren",
-		"disk": "Kunne ikke skrive filen ({detail})"
+		"disk": "Kunne ikke skrive filen ({detail})",
+		"fileExists": "Der findes allerede en fil med dette navn i mappen"
 	}
 }

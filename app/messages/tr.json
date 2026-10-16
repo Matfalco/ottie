@@ -50,6 +50,7 @@
 		"stalled": "Sunucu veri göndermeyi bıraktı",
 		"incomplete": "Bağlantı erken kapandı",
 		"remoteChanging": "Sunucudaki dosya sürekli değişti",
-		"disk": "Dosya yazılamadı ({detail})"
+		"disk": "Dosya yazılamadı ({detail})",
+		"fileExists": "Bu adda bir dosya zaten klasörde"
 	}
 }

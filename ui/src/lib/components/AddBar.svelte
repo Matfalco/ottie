@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { AddJob } from '@ottie/api-types/AddJob';
 	import type { Category } from '@ottie/api-types/Category';
-	import type { Matched } from '@ottie/api-types/Matched';
+	import type { Existing } from '@ottie/api-types/Existing';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
 	import Link from '@lucide/svelte/icons/link';
 	import ListPlus from '@lucide/svelte/icons/list-plus';
@@ -9,13 +9,15 @@
 	import {
 		automaticLabel,
 		defaultFolder,
+		existingByDefault,
 		jobRequest,
 		streamsByDefault,
-		type Choice
+		type Choice,
+		type Looked
 	} from '#lib/adding.js';
 	import { holdsSeveral } from '#lib/batch.js';
 	import { categoryName, type Categories } from '#lib/categories.js';
-	import { drop } from '#lib/moving.svelte.js';
+	import { drop, unfold } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { fromField, inOrder } from '#lib/schedule.js';
 	import { canPickFolder, pickFolder } from '#lib/window.js';
@@ -27,9 +29,11 @@
 		categoryList: Category[];
 		/** The settings start videos and music in streaming mode. */
 		streamMedia: boolean;
-		/** The category the link would get (in that folder, if given); null
-		 * if the daemon can't tell. */
-		onMatch: (url: string, folder?: string) => Promise<Matched | null>;
+		/** What the settings do with a file already there, once known. */
+		existing: Existing | undefined;
+		/** What adding the link would do (in that folder, if given); null if
+		 * the daemon can't tell. */
+		onLook: (url: string, folder?: string) => Promise<Looked | null>;
 		/** Resolves to true once the daemon has accepted the download. */
 		onAdd: (job: AddJob) => Promise<boolean>;
 		/** Opens the list for adding several links, starting from `text`. */
@@ -37,11 +41,12 @@
 	}
 
 	interface Step {
-		/** What the daemon matched, once it has answered. */
-		matched: Matched | null;
+		/** What the daemon said, once it has answered. */
+		looked: Looked | null;
 	}
 
-	let { categories, categoryList, streamMedia, onMatch, onAdd, onSeveral }: Props = $props();
+	let { categories, categoryList, streamMedia, existing, onLook, onAdd, onSeveral }: Props =
+		$props();
 	let form: HTMLFormElement;
 	let link: HTMLInputElement;
 	let url = $state('');
@@ -54,10 +59,15 @@
 	/** The start and stop time fields (`datetime-local`); empty: none. */
 	let start = $state('');
 	let stop = $state('');
+	/** For a file already there: renamed, or replaced once complete. */
+	let onDisk = $state<'rename' | 'replace'>('rename');
 	let adding = $state(false);
 
-	let fallback = $derived(step && defaultFolder(choice, step.matched, categories));
-	let streams = $derived(streaming ?? streamsByDefault(step?.matched ?? null, streamMedia));
+	let matched = $derived(step?.looked?.matched ?? null);
+	/** The name of the file already there, if one is. */
+	let taken = $derived(step?.looked?.exists ? step.looked.name : null);
+	let fallback = $derived(step && defaultFolder(choice, matched, categories));
+	let streams = $derived(streaming ?? streamsByDefault(matched, streamMedia));
 	let times = $derived({ start: fromField(start), stop: fromField(stop) });
 	let ordered = $derived(inOrder(times.start, times.stop));
 	/** Other isn't picked: a folder of no category puts a download there. */
@@ -85,7 +95,8 @@
 			return;
 		}
 		adding = true;
-		const added = await onAdd(jobRequest(url, choice, folder, streaming, times));
+		const asked = taken === null ? null : onDisk;
+		const added = await onAdd(jobRequest(url, choice, folder, streaming, times, asked));
 		adding = false;
 		if (added) {
 			url = '';
@@ -93,24 +104,26 @@
 		}
 	}
 
-	/** Shows the step, then fills in what the daemon matched. */
+	/** Shows the step, then fills in what the daemon said. */
 	async function open() {
-		step = { matched: null };
+		step = { looked: null };
 		choice = 'auto';
 		folder = '';
 		streaming = null;
 		start = '';
 		stop = '';
+		onDisk = existingByDefault(existing);
 		await rematch();
 	}
 
-	/** Asks the daemon where the link goes now (the folder may decide). */
+	/** Asks the daemon where the link goes now (the folder may decide, and
+	 * a file may be there already). */
 	async function rematch() {
 		const current = step;
 		const asked = folder.trim();
-		const matched = await onMatch(url.trim(), asked || undefined);
+		const looked = await onLook(url.trim(), asked || undefined);
 		if (step === current && step && folder.trim() === asked) {
-			step.matched = matched;
+			step.looked = looked;
 		}
 	}
 
@@ -229,7 +242,7 @@
 					<label class="choice">
 						<!-- svelte-ignore a11y_autofocus -->
 						<input type="radio" name="category" value="auto" bind:group={choice} autofocus />
-						<span>{automaticLabel(step.matched, categories)}</span>
+						<span>{automaticLabel(matched, categories)}</span>
 					</label>
 					{#each choices as category (category.id)}
 						<label class="choice">
@@ -264,6 +277,23 @@
 					{/if}
 				</span>
 			</label>
+
+			{#if taken !== null}
+				<fieldset in:unfold out:unfold>
+					<legend>{m.add_exists({ name: taken })}</legend>
+					<div class="choices">
+						<label class="choice">
+							<input type="radio" name="existing" value="rename" bind:group={onDisk} />
+							<span>{m.existing_rename()}</span>
+						</label>
+						<label class="choice">
+							<input type="radio" name="existing" value="replace" bind:group={onDisk} />
+							<span>{m.existing_replace()}</span>
+						</label>
+					</div>
+					<small>{m.add_exists_hint()}</small>
+				</fieldset>
+			{/if}
 
 			<div class="streaming">
 				<Switch on={streams} label={m.add_streaming()} onChange={(on) => (streaming = on)} />

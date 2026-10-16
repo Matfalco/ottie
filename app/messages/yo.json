@@ -50,6 +50,7 @@
 		"stalled": "Sáfà ti dáwọ́ fífi dátà ránṣẹ́ dúró",
 		"incomplete": "Ìsopọ̀ ti pa ní kùtùkùtù",
 		"remoteChanging": "Fáìlì náà ń yí padà lórí sáfà ṣáá",
-		"disk": "Kò lè kọ fáìlì náà ({detail})"
+		"disk": "Kò lè kọ fáìlì náà ({detail})",
+		"fileExists": "Fáìlì tí ó ní orúkọ yìí ti wà nínú fódà náà"
 	}
 }

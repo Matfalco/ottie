@@ -50,6 +50,7 @@
 		"stalled": "Server berhenti mengirim data",
 		"incomplete": "Koneksi terputus sebelum selesai",
 		"remoteChanging": "File di server terus berubah",
-		"disk": "File tidak dapat ditulis ({detail})"
+		"disk": "File tidak dapat ditulis ({detail})",
+		"fileExists": "File dengan nama ini sudah ada di folder"
 	}
 }

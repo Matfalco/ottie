@@ -50,6 +50,7 @@
 		"stalled": "Serveris nustojo siųsti duomenis",
 		"incomplete": "Ryšys užsidarė per anksti",
 		"remoteChanging": "Failas serveryje nuolat keitėsi",
-		"disk": "Nepavyko įrašyti failo ({detail})"
+		"disk": "Nepavyko įrašyti failo ({detail})",
+		"fileExists": "Failas tokiu pavadinimu jau yra aplanke"
 	}
 }

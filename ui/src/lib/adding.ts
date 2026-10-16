@@ -1,8 +1,9 @@
 // The step between pasting a link and adding it: which category (the one
-// its file type matches, or one the user picks), which folder, and whether
-// it comes in streaming mode.
+// its file type matches, or one the user picks), which folder, whether it
+// comes in streaming mode, and what to do if its file is already there.
 
 import type { AddJob } from '@ottie/api-types/AddJob';
+import type { Existing } from '@ottie/api-types/Existing';
 import type { Matched } from '@ottie/api-types/Matched';
 import { categoryName, type Categories } from './categories';
 import { extensionKind, isMedia } from './filetypes';
@@ -11,6 +12,16 @@ import { getLocale, type Locale } from './paraglide/runtime.js';
 
 /** Automatic, or a category's ID (the user's choice, which stays). */
 export type Choice = 'auto' | number;
+
+/** What the daemon says adding a link would do. */
+export interface Looked {
+	/** The category it would get. */
+	matched: Matched;
+	/** The file name the link suggests; the server may give another. */
+	name: string;
+	/** A file with that name is already in the folder it would go to. */
+	exists: boolean;
+}
 
 /** "Automatic: Videos (.mp4)", or "Music (its folder)" when the folder
  * decided; just "Automatic" until the daemon answers. */
@@ -53,6 +64,12 @@ export function streamsByDefault(matched: Matched | null, streamMedia: boolean):
 	return streamMedia && matched?.extension != null && isMedia(extensionKind(matched.extension));
 }
 
+/** What a file already there gets when someone is asked: the setting's
+ * answer, unless it's to ask (then rename, which keeps both). */
+export function existingByDefault(setting: Existing | undefined): 'rename' | 'replace' {
+	return setting === 'replace' ? 'replace' : 'rename';
+}
+
 /** A start and a stop time, in milliseconds; null for none. */
 export interface Times {
 	start: number | null;
@@ -61,13 +78,15 @@ export interface Times {
 
 /** The body of `POST /jobs`. Automatic sends no category, so the daemon
  * may still move it once it knows the file's real name; `streaming` null
- * leaves streaming mode to the daemon the same way. */
+ * leaves streaming mode to the daemon the same way, and `existing` null
+ * what happens to a file already there (the setting's, docs/decisions/0049). */
 export function jobRequest(
 	url: string,
 	choice: Choice,
 	folder: string,
 	streaming: boolean | null = null,
-	times: Times = { start: null, stop: null }
+	times: Times = { start: null, stop: null },
+	existing: Existing | null = null
 ): AddJob {
 	const job: AddJob = { url: url.trim() };
 	if (choice !== 'auto') {
@@ -84,6 +103,9 @@ export function jobRequest(
 	}
 	if (times.stop !== null) {
 		job.stopAt = times.stop;
+	}
+	if (existing !== null) {
+		job.existing = existing;
 	}
 	return job;
 }

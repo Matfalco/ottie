@@ -71,6 +71,7 @@ pub enum Problem {
     Disk {
         detail: String,
     },
+    FileExists,
     Other {
         detail: String,
     },
@@ -306,6 +307,10 @@ mod tests {
         assert_eq!(
             problem(r#"{"code":"stalled","seconds":30}"#),
             Problem::Stalled
+        );
+        assert_eq!(
+            problem(r#"{"code":"fileExists","name":"a.zip"}"#),
+            Problem::FileExists
         );
         assert_eq!(problem(r#"{"code":"someday"}"#), Problem::Unknown);
     }

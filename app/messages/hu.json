@@ -50,6 +50,7 @@
 		"stalled": "A szerver abbahagyta az adatküldést",
 		"incomplete": "A kapcsolat túl korán lezárult",
 		"remoteChanging": "A fájl folyamatosan változott a szerveren",
-		"disk": "A fájlt nem sikerült írni ({detail})"
+		"disk": "A fájlt nem sikerült írni ({detail})",
+		"fileExists": "Már van ilyen nevű fájl a mappában"
 	}
 }

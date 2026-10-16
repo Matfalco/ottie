@@ -50,6 +50,7 @@
 		"stalled": "Seva imeacha kutuma data",
 		"incomplete": "Muunganisho ulifungwa mapema",
 		"remoteChanging": "Faili iliendelea kubadilika kwenye seva",
-		"disk": "Haikuweza kuandika faili ({detail})"
+		"disk": "Haikuweza kuandika faili ({detail})",
+		"fileExists": "Faili yenye jina hili tayari iko kwenye folda"
 	}
 }

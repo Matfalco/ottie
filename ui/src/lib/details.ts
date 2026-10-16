@@ -28,7 +28,14 @@ export function priorityName(priority: Priority, locale: Locale = getLocale()): 
 	}
 }
 
-/** The panel's main button: what you'd most likely do next, if anything. */
+/** It stopped because a file with its name is already in its folder: the
+ * panel asks whether to rename it or replace that file (docs/decisions/0049). */
+export function asksAboutFile(job: Job): boolean {
+	return job.state === 'failed' && job.problem?.code === 'fileExists';
+}
+
+/** The panel's main button: what you'd most likely do next, if anything
+ * (none for one that asks about its file: the panel's choices take its place). */
 export function primaryAction(
 	job: Job,
 	locale: Locale = getLocale()
@@ -40,7 +47,7 @@ export function primaryAction(
 	if (canPause(job)) {
 		return { action: 'pause', label: m.pause({}, options) };
 	}
-	if (job.state === 'failed') {
+	if (job.state === 'failed' && !asksAboutFile(job)) {
 		return { action: 'resume', label: m.det_try_again({}, options) };
 	}
 	if (job.state === 'paused') {

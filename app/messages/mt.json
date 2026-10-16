@@ -50,6 +50,7 @@
 		"stalled": "Is-server waqaf jibgħat id-data",
 		"incomplete": "Il-konnessjoni ngħalqet kmieni wisq",
 		"remoteChanging": "Il-fajl baqa’ jinbidel fuq is-server",
-		"disk": "Il-fajl ma setax jinkiteb ({detail})"
+		"disk": "Il-fajl ma setax jinkiteb ({detail})",
+		"fileExists": "Diġà hemm fajl b’dan l-isem fil-folder"
 	}
 }

@@ -50,6 +50,7 @@
 		"stalled": "Máy chủ ngừng gửi dữ liệu",
 		"incomplete": "Kết nối bị đóng sớm",
 		"remoteChanging": "Tệp trên máy chủ liên tục thay đổi",
-		"disk": "Không thể ghi tệp ({detail})"
+		"disk": "Không thể ghi tệp ({detail})",
+		"fileExists": "Một tệp cùng tên đã có trong thư mục"
 	}
 }
