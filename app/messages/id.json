@@ -30,6 +30,10 @@
 	"cancelSoon": ["Batalkan tidur ({time})", "Batalkan hibernasi ({time})", "Batalkan mematikan ({time})"],
 	"cancelHow": "Anda bisa membatalkannya dari menu Ottie di baki sistem.",
 	"cant": ["Ottie tidak dapat menidurkan komputer", "Ottie tidak dapat menghibernasi komputer", "Ottie tidak dapat mematikan komputer"],
+	"watchClipboard": "Pantau papan klip",
+	"added": "Ditambahkan dari papan klip",
+	"addedCount": "Unduhan ditambahkan: {count}",
+	"notAdded": "Ottie tidak dapat menambahkan tautan yang disalin",
 	"problems": {
 		"network": "Kesalahan jaringan ({detail})",
 		"redirect": "Pengalihan tidak valid ({detail})",

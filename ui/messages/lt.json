@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Atšaukiama Ottie meniu arba puslapyje Atsisiuntimai",
 	"set_finish_waits": "Laukti suplanuotų atsisiuntimų",
 	"set_finish_waits_hint": "Išjungta: baigta, kai dabar nebelieka ką vykdyti",
-	"finish_quit": "Išeiti iš Ottie"
+	"finish_quit": "Išeiti iš Ottie",
+	"caught_one": "Nukopijuota nuoroda",
+	"caught_several": "Nukopijuotos nuorodos: {count}",
+	"caught_others": "Kitos: {count}",
+	"caught_more": "Daugiau…",
+	"caught_more_hint": "Pasirinkite kategoriją ir aplanką Ottie",
+	"caught_ignore": "Nepaisyti",
+	"caught_failed": "Ottie dabar negali perskaityti šių nuorodų.",
+	"set_clipboard": "Iškarpinė",
+	"set_clipboard_hint": "Atsisiųskite nuorodas, kurias nukopijuojate kitose programose",
+	"set_watch_clipboard": "Stebėti iškarpinę",
+	"set_watch_clipboard_hint": "Tik nuorodos į failų tipus, kuriuos nurodo jūsų kategorijos. Ne tai, ką kopijuojate Ottie, ir ne tai, ką slaptažodžių tvarkyklė pažymi kaip privatų.",
+	"set_copied": "Kai nukopijuojama atsisiuntimo nuoroda",
+	"set_copied_ask": "Klausti",
+	"set_copied_ask_hint": "Mažas langas ekrano kampe ją pasiūlo netrukdydamas jums",
+	"set_copied_add": "Pridėti iš karto",
+	"set_copied_add_hint": "Į jos kategoriją, su pranešimu",
+	"setup_clipboard_hint": "Ottie siūlo atsisiuntimo nuorodas, kurias nukopijuojate kitose programose. Tai galėsite vėliau pakeisti skiltyje Nustatymai → Iškarpinė."
 }

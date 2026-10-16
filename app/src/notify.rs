@@ -47,17 +47,22 @@ impl News {
 /// A download's name: its file's, else the end of its address (a download
 /// that failed before the server answered has no file yet).
 fn name(job: &Job) -> String {
-    if let Some(name) = &job.file_name {
-        return name.clone();
+    match &job.file_name {
+        Some(name) => name.clone(),
+        None => name_of(&job.url),
     }
-    let Ok(url) = Url::parse(&job.url) else {
-        return job.url.clone();
+}
+
+/// The end of a link's address, as a name.
+pub fn name_of(link: &str) -> String {
+    let Ok(url) = Url::parse(link) else {
+        return link.to_owned();
     };
     // Never the query: it can hold a signature or a token.
     let last = url
         .path_segments()
         .and_then(|mut segments| segments.rfind(|segment| !segment.is_empty()));
-    last.or(url.host_str()).unwrap_or(&job.url).to_owned()
+    last.or(url.host_str()).unwrap_or(link).to_owned()
 }
 
 /// What a notification tells, which chooses its sound.
@@ -194,8 +199,8 @@ pub fn show(app: &AppHandle, notes: Vec<Note>, prefs: &Prefs) {
 }
 
 /// A notification of the app's own, whatever notifications are set to: the
-/// countdown before the computer goes, or why it couldn't (0040). The
-/// system's sound, as for a warning.
+/// countdown before the computer goes, or why it couldn't (0040), links
+/// added from the clipboard, or why not (0043). The system's sound.
 pub fn warn(app: &AppHandle, title: String, body: Option<String>) {
     let builder = app.notification().builder().title(title);
     let builder = match body {

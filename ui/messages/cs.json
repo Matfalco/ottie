@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Zrušíte ho v nabídce Ottie nebo na stránce Stahování",
 	"set_finish_waits": "Čekat na naplánovaná stahování",
 	"set_finish_waits_hint": "Vypnuto: hotovo, jakmile teď nic nezbývá spustit",
-	"finish_quit": "Ukončit Ottie"
+	"finish_quit": "Ukončit Ottie",
+	"caught_one": "Zkopírovaný odkaz",
+	"caught_several": "Zkopírované odkazy: {count}",
+	"caught_others": "Další: {count}",
+	"caught_more": "Více…",
+	"caught_more_hint": "Vyberte kategorii a složku v Ottie",
+	"caught_ignore": "Ignorovat",
+	"caught_failed": "Ottie teď nemůže tyto odkazy přečíst.",
+	"set_clipboard": "Schránka",
+	"set_clipboard_hint": "Stahujte odkazy, které zkopírujete v jiných aplikacích",
+	"set_watch_clipboard": "Sledovat schránku",
+	"set_watch_clipboard_hint": "Jen odkazy na typy souborů z vašich kategorií. Ne to, co zkopírujete v Ottie, ani to, co správce hesel označí jako soukromé.",
+	"set_copied": "Když se zkopíruje odkaz ke stažení",
+	"set_copied_ask": "Zeptat se",
+	"set_copied_ask_hint": "Malé okno v rohu obrazovky ho nabídne, aniž by vás vyrušilo",
+	"set_copied_add": "Přidat hned",
+	"set_copied_add_hint": "Do jeho kategorie, s oznámením",
+	"setup_clipboard_hint": "Ottie nabízí odkazy ke stažení, které zkopírujete v jiných aplikacích. Později to můžete změnit v Nastavení → Schránka."
 }

@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Ighairi kwenye menyu ya Ottie au ukurasa wa Vipakuliwa",
 	"set_finish_waits": "Subiri vipakuliwa vilivyoratibiwa",
 	"set_finish_waits_hint": "Imezimwa: imekamilika mara hakuna kilichobaki kuendesha sasa",
-	"finish_quit": "Acha Ottie"
+	"finish_quit": "Acha Ottie",
+	"caught_one": "Kiungo kilichonakiliwa",
+	"caught_several": "Viungo vilivyonakiliwa: {count}",
+	"caught_others": "Vingine: {count}",
+	"caught_more": "Zaidi…",
+	"caught_more_hint": "Chagua kategoria na folda katika Ottie",
+	"caught_ignore": "Puuza",
+	"caught_failed": "Ottie haiwezi kusoma viungo hivi sasa.",
+	"set_clipboard": "Ubao wa kunakili",
+	"set_clipboard_hint": "Pakua viungo unavyonakili katika programu nyingine",
+	"set_watch_clipboard": "Fuatilia ubao wa kunakili",
+	"set_watch_clipboard_hint": "Viungo vya aina za faili zilizoorodheshwa na kategoria zako pekee. Si unachonakili katika Ottie, wala kile ambacho kidhibiti cha manenosiri kinaweka alama ya faragha.",
+	"set_copied": "Kiungo cha kupakua kinaponakiliwa",
+	"set_copied_ask": "Uliza",
+	"set_copied_ask_hint": "Dirisha dogo kwenye kona ya skrini linakipendekeza bila kukukatiza",
+	"set_copied_add": "Kiongeze mara moja",
+	"set_copied_add_hint": "Katika kategoria yake, pamoja na arifa",
+	"setup_clipboard_hint": "Ottie inapendekeza viungo vya kupakua unavyonakili katika programu nyingine. Unaweza kubadilisha hili baadaye katika Mipangilio → Ubao wa kunakili."
 }

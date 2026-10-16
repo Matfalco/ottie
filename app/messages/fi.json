@@ -30,6 +30,10 @@
 	"cancelSoon": ["Peruuta lepotila ({time})", "Peruuta horrostila ({time})", "Peruuta sammutus ({time})"],
 	"cancelHow": "Voit perua sen Ottien valikosta ilmoitusalueella.",
 	"cant": ["Ottie ei voinut siirtää tietokonetta lepotilaan", "Ottie ei voinut siirtää tietokonetta horrostilaan", "Ottie ei voinut sammuttaa tietokonetta"],
+	"watchClipboard": "Seuraa leikepöytää",
+	"added": "Lisätty leikepöydältä",
+	"addedCount": "Lisätyt lataukset: {count}",
+	"notAdded": "Ottie ei voinut lisätä kopioitua linkkiä",
 	"problems": {
 		"network": "Verkkovirhe ({detail})",
 		"redirect": "Virheellinen uudelleenohjaus ({detail})",

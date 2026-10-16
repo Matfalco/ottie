@@ -30,6 +30,10 @@
 	"cancelSoon": ["Cealaigh an codladh ({time})", "Cealaigh an geimhriú ({time})", "Cealaigh an múchadh ({time})"],
 	"cancelHow": "Is féidir é a chealú ó roghchlár Ottie sa tráidire.",
 	"cant": ["Níorbh fhéidir le Ottie an ríomhaire a chur a chodladh", "Níorbh fhéidir le Ottie an ríomhaire a chur i ngeimhriú", "Níorbh fhéidir le Ottie an ríomhaire a mhúchadh"],
+	"watchClipboard": "Súil a choinneáil ar an ngearrthaisce",
+	"added": "Curtha leis ón ngearrthaisce",
+	"addedCount": "Íoslódálacha curtha leis: {count}",
+	"notAdded": "Níorbh fhéidir le Ottie an nasc cóipeáilte a chur leis",
 	"problems": {
 		"network": "Earráid líonra ({detail})",
 		"redirect": "Atreorú lochtach ({detail})",

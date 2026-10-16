@@ -30,6 +30,10 @@
 	"cancelSoon": ["Fagilé sísùn ({time})", "Fagilé oorun jíjìn ({time})", "Fagilé pípa ({time})"],
 	"cancelHow": "O lè fagilé e láti inú àkójọ àṣàyàn Ottie nínú àtẹ.",
 	"cant": ["Ottie kò lè mú kọ̀ǹpútà sùn", "Ottie kò lè mú kọ̀ǹpútà wọ oorun jíjìn", "Ottie kò lè pa kọ̀ǹpútà"],
+	"watchClipboard": "Máa ṣọ́ pátákó ìdàkọ",
+	"added": "A fi kún un láti pátákó ìdàkọ",
+	"addedCount": "Àwọn ìgbàsílẹ̀ tí a fi kún: {count}",
+	"notAdded": "Ottie kò lè fi ìjápọ̀ tí a dà kọ kún un",
 	"problems": {
 		"network": "Àṣìṣe nẹ́tíwọ́ọ̀kì ({detail})",
 		"redirect": "Ìtọ́sọ́nà burúkú ({detail})",

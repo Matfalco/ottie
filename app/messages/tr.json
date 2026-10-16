@@ -30,6 +30,10 @@
 	"cancelSoon": ["Uykuyu iptal et ({time})", "Hazırda beklemeyi iptal et ({time})", "Kapanmayı iptal et ({time})"],
 	"cancelHow": "Sistem tepsisindeki Ottie menüsünden iptal edebilirsiniz.",
 	"cant": ["Ottie bilgisayarı uyku moduna geçiremedi", "Ottie bilgisayarı hazırda bekletemedi", "Ottie bilgisayarı kapatamadı"],
+	"watchClipboard": "Panoyu izle",
+	"added": "Panodan eklendi",
+	"addedCount": "Eklenen indirmeler: {count}",
+	"notAdded": "Ottie kopyalanan bağlantıyı ekleyemedi",
 	"problems": {
 		"network": "Ağ hatası ({detail})",
 		"redirect": "Hatalı yönlendirme ({detail})",

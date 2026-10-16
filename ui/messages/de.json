@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Abbrechen über Otties Menü oder die Seite Downloads",
 	"set_finish_waits": "Auf geplante Downloads warten",
 	"set_finish_waits_hint": "Aus: fertig, sobald jetzt nichts mehr laufen muss",
-	"finish_quit": "Ottie beenden"
+	"finish_quit": "Ottie beenden",
+	"caught_one": "Kopierter Link",
+	"caught_several": "Kopierte Links: {count}",
+	"caught_others": "{count} weitere",
+	"caught_more": "Mehr…",
+	"caught_more_hint": "Kategorie und Ordner in Ottie wählen",
+	"caught_ignore": "Ignorieren",
+	"caught_failed": "Ottie kann diese Links gerade nicht lesen.",
+	"set_clipboard": "Zwischenablage",
+	"set_clipboard_hint": "Links herunterladen, die Sie in anderen Apps kopieren",
+	"set_watch_clipboard": "Zwischenablage überwachen",
+	"set_watch_clipboard_hint": "Nur Links zu Dateitypen, die Ihre Kategorien auflisten. Nicht, was Sie in Ottie kopieren, und nicht, was ein Passwortmanager als privat markiert.",
+	"set_copied": "Wenn ein Download-Link kopiert wird",
+	"set_copied_ask": "Nachfragen",
+	"set_copied_ask_hint": "Ein kleines Fenster in der Bildschirmecke bietet ihn an, ohne Sie zu unterbrechen",
+	"set_copied_add": "Sofort hinzufügen",
+	"set_copied_add_hint": "In seine Kategorie, mit einer Benachrichtigung",
+	"setup_clipboard_hint": "Ottie bietet Download-Links an, die Sie in anderen Apps kopieren. Sie können das später unter Einstellungen → Zwischenablage ändern."
 }

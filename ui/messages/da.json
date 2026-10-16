@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Annuller den i Otties menu eller på siden Downloads",
 	"set_finish_waits": "Vent på planlagte downloads",
 	"set_finish_waits_hint": "Fra: færdig, så snart der ikke er mere at køre nu",
-	"finish_quit": "Afslut Ottie"
+	"finish_quit": "Afslut Ottie",
+	"caught_one": "Kopieret link",
+	"caught_several": "Kopierede links: {count}",
+	"caught_others": "Flere: {count}",
+	"caught_more": "Mere…",
+	"caught_more_hint": "Vælg kategori og mappe i Ottie",
+	"caught_ignore": "Ignorer",
+	"caught_failed": "Ottie kan ikke læse linkene lige nu.",
+	"set_clipboard": "Udklipsholder",
+	"set_clipboard_hint": "Download links, du kopierer i andre apps",
+	"set_watch_clipboard": "Hold øje med udklipsholderen",
+	"set_watch_clipboard_hint": "Kun links til filtyper, som dine kategorier angiver. Ikke det, du kopierer i Ottie, og ikke det, en adgangskodeadministrator markerer som privat.",
+	"set_copied": "Når et downloadlink kopieres",
+	"set_copied_ask": "Spørg",
+	"set_copied_ask_hint": "Et lille vindue i skærmens hjørne tilbyder det uden at forstyrre dig",
+	"set_copied_add": "Tilføj med det samme",
+	"set_copied_add_hint": "I sin kategori, med en notifikation",
+	"setup_clipboard_hint": "Ottie tilbyder downloadlinks, du kopierer i andre apps. Du kan ændre det senere under Indstillinger → Udklipsholder."
 }

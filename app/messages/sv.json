@@ -30,6 +30,10 @@
 	"cancelSoon": ["Avbryt strömsparläge ({time})", "Avbryt viloläge ({time})", "Avbryt avstängning ({time})"],
 	"cancelHow": "Du kan avbryta i Otties meny i meddelandefältet.",
 	"cant": ["Ottie kunde inte försätta datorn i strömsparläge", "Ottie kunde inte försätta datorn i viloläge", "Ottie kunde inte stänga av datorn"],
+	"watchClipboard": "Bevaka urklipp",
+	"added": "Tillagd från urklipp",
+	"addedCount": "Tillagda nedladdningar: {count}",
+	"notAdded": "Ottie kunde inte lägga till den kopierade länken",
 	"problems": {
 		"network": "Nätverksfel ({detail})",
 		"redirect": "Felaktig omdirigering ({detail})",

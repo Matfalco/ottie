@@ -15,9 +15,11 @@
 		canStartAtSignIn,
 		pickFolder,
 		setStartup,
+		setWatchClipboard,
 		type Startup
 	} from '#lib/window.js';
 	import CategoryEditor from './CategoryEditor.svelte';
+	import Switch from './Switch.svelte';
 
 	const { session } = useApp();
 
@@ -32,6 +34,8 @@
 	/** In the desktop app: what starts at sign-in (docs/decisions/0039). */
 	const offerStartup = canStartAtSignIn();
 	let startup: Startup = $state(FIRST_STARTUP);
+	/** …and whether it watches the clipboard (0043): off unless chosen. */
+	let watchClipboard = $state(false);
 
 	async function browse() {
 		const chosen = await pickFolder(downloads);
@@ -55,10 +59,12 @@
 
 	async function finish(skip: boolean) {
 		saving = true;
-		// Skipping skips the categories; the sign-in choice is above both buttons.
+		// Skipping skips the categories; the desktop app's choices are above
+		// both buttons.
 		if (offerStartup) {
 			try {
 				await setStartup(startup);
+				await setWatchClipboard(watchClipboard);
 			} catch {
 				problem = m.set_app_failed();
 				saving = false;
@@ -154,6 +160,21 @@
 					{/each}
 				</ul>
 				<small>{m.setup_startup_hint()}</small>
+			</section>
+
+			<section>
+				<h2 class="heading">{m.set_clipboard()}</h2>
+				<div class="clipboard">
+					<span class="choice">
+						<span class="choice-name">{m.set_watch_clipboard()}</span>
+						<small>{m.setup_clipboard_hint()}</small>
+					</span>
+					<Switch
+						on={watchClipboard}
+						label={m.set_watch_clipboard()}
+						onChange={(on) => (watchClipboard = on)}
+					/>
+				</div>
 			</section>
 		{/if}
 
@@ -351,6 +372,17 @@
 		flex: none;
 		margin: 0;
 		accent-color: var(--accent);
+	}
+
+	.clipboard {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		background: var(--surface);
 	}
 
 	.choice {

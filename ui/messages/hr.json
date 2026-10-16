@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Otkazuje se u izborniku Ottie ili na stranici Preuzimanja",
 	"set_finish_waits": "Čekaj zakazana preuzimanja",
 	"set_finish_waits_hint": "Isključeno: gotovo čim sada više ništa ne treba pokrenuti",
-	"finish_quit": "Izađi iz Ottieja"
+	"finish_quit": "Izađi iz Ottieja",
+	"caught_one": "Kopirana poveznica",
+	"caught_several": "Kopirane poveznice: {count}",
+	"caught_others": "Ostale: {count}",
+	"caught_more": "Više…",
+	"caught_more_hint": "Odaberite kategoriju i mapu u Ottieju",
+	"caught_ignore": "Zanemari",
+	"caught_failed": "Ottie trenutačno ne može pročitati ove poveznice.",
+	"set_clipboard": "Međuspremnik",
+	"set_clipboard_hint": "Preuzimajte poveznice koje kopirate u drugim aplikacijama",
+	"set_watch_clipboard": "Prati međuspremnik",
+	"set_watch_clipboard_hint": "Samo poveznice na vrste datoteka iz vaših kategorija. Ne ono što kopirate u Ottieju, ni ono što upravitelj lozinki označi kao privatno.",
+	"set_copied": "Kad se kopira poveznica za preuzimanje",
+	"set_copied_ask": "Pitaj",
+	"set_copied_ask_hint": "Mali prozor u kutu zaslona ponudi je, a da vas ne prekida",
+	"set_copied_add": "Dodaj odmah",
+	"set_copied_add_hint": "U njezinu kategoriju, uz obavijest",
+	"setup_clipboard_hint": "Ottie nudi poveznice za preuzimanje koje kopirate u drugim aplikacijama. To možete kasnije promijeniti u Postavke → Međuspremnik."
 }

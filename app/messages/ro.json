@@ -30,6 +30,10 @@
 	"cancelSoon": ["Anulează repausul ({time})", "Anulează hibernarea ({time})", "Anulează închiderea ({time})"],
 	"cancelHow": "Poți anula din meniul Ottie din zona de notificare.",
 	"cant": ["Ottie nu a putut pune calculatorul în repaus", "Ottie nu a putut hiberna calculatorul", "Ottie nu a putut închide calculatorul"],
+	"watchClipboard": "Urmărește clipboardul",
+	"added": "Adăugat din clipboard",
+	"addedCount": "Descărcări adăugate: {count}",
+	"notAdded": "Ottie nu a putut adăuga linkul copiat",
 	"problems": {
 		"network": "Eroare de rețea ({detail})",
 		"redirect": "Redirecționare greșită ({detail})",

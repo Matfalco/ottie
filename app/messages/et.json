@@ -30,6 +30,10 @@
 	"cancelSoon": ["Tühista unerežiim ({time})", "Tühista talveuni ({time})", "Tühista väljalülitus ({time})"],
 	"cancelHow": "Saad selle tühistada Ottie menüüs teavitusalal.",
 	"cant": ["Ottie ei saanud arvutit unerežiimi panna", "Ottie ei saanud arvutit talveunerežiimi panna", "Ottie ei saanud arvutit välja lülitada"],
+	"watchClipboard": "Jälgi lõikelauda",
+	"added": "Lisatud lõikelaualt",
+	"addedCount": "Lisatud allalaadimised: {count}",
+	"notAdded": "Ottie ei saanud kopeeritud linki lisada",
 	"problems": {
 		"network": "Võrguviga ({detail})",
 		"redirect": "Vigane ümbersuunamine ({detail})",

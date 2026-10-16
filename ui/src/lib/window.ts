@@ -1,8 +1,8 @@
 // The desktop app around the page, when it runs inside it. The app hides the
 // system title bar (docs/decisions/0019), so the page draws its own and needs
 // the window's buttons; it can also open the system folder picker. In a
-// browser there's neither. It also chooses what plays a download, and hears
-// from the tray.
+// browser there's neither. It also chooses what plays a download, hears
+// from the tray, and offers links copied elsewhere.
 
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -102,11 +102,19 @@ export type Notify = 'each' | 'all' | 'never';
  * the app starts in the tray, only the daemon starts, or nothing. */
 export type Startup = 'tray' | 'daemon' | 'off';
 
-/** The desktop app's own settings (docs/decisions/0034, 0035, 0038, 0039). */
+/** What a link copied elsewhere does (docs/decisions/0043): it's offered
+ * in a small window, or added at once. */
+export type Copied = 'ask' | 'add';
+
+/** The desktop app's own settings (docs/decisions/0034, 0035, 0038, 0039,
+ * 0043). */
 export interface Desktop {
 	startup: Startup;
 	/** Closing the window keeps Ottie running in the tray. */
 	closeToTray: boolean;
+	/** Links copied elsewhere are caught (to file types a category lists). */
+	watchClipboard: boolean;
+	copied: Copied;
 	notify: Notify;
 	/** A failed download is notified (after its last retry). */
 	notifyFailed: boolean;
@@ -124,6 +132,12 @@ export function desktop(): Promise<Desktop> {
 	return invoke<Desktop>('desktop');
 }
 
+/** Calls `onChange` whenever they change, in any window. Returns a function
+ * that stops listening. */
+export function followDesktop(onChange: (desktop: Desktop) => void): () => void {
+	return follow<Desktop>('desktop', onChange);
+}
+
 /** Whether Ottie can start at sign-in (only the desktop app). */
 export function canStartAtSignIn(): boolean {
 	return isTauri();
@@ -135,6 +149,14 @@ export function setStartup(startup: Startup): Promise<Desktop> {
 
 export function setCloseToTray(on: boolean): Promise<Desktop> {
 	return invoke<Desktop>('set_close_to_tray', { on });
+}
+
+export function setWatchClipboard(on: boolean): Promise<Desktop> {
+	return invoke<Desktop>('set_watch_clipboard', { on });
+}
+
+export function setCopied(copied: Copied): Promise<Desktop> {
+	return invoke<Desktop>('set_copied', { copied });
 }
 
 export function setNotify(notify: Notify): Promise<Desktop> {
@@ -224,9 +246,15 @@ export function finishing(): Promise<Finishing> {
 /** Calls `onChange` whenever any of it changes, in any window. Returns a
  * function that stops listening. */
 export function followFinishing(onChange: (finishing: Finishing) => void): () => void {
+	return follow<Finishing>('finish', onChange);
+}
+
+/** Calls `onEvent` with each of the app's `name` events. Returns a function
+ * that stops listening. */
+function follow<T>(name: string, onEvent: (payload: T) => void): () => void {
 	let stopped = false;
 	let unlisten: (() => void) | null = null;
-	listen<Finishing>('finish', (event) => onChange(event.payload)).then(
+	listen<T>(name, (event) => onEvent(event.payload)).then(
 		(stop) => (stopped ? stop() : (unlisten = stop)),
 		() => {}
 	);
@@ -269,4 +297,41 @@ export function finishNow(): Promise<void> {
 /** The countdown's window: says how tall it is, so the app can size it. */
 export function countdownReady(height: number): void {
 	invoke('countdown_ready', { height }).catch(() => {});
+}
+
+/** The links copied elsewhere that the clipboard's window offers
+ * (docs/decisions/0043). */
+export function caughtLinks(): Promise<string[]> {
+	return invoke<string[]>('caught');
+}
+
+/** Calls `onChange` when they change (ask `caughtLinks` again). Returns a
+ * function that stops listening. */
+export function followCaught(onChange: () => void): () => void {
+	return follow<unknown>('caught', onChange);
+}
+
+/** The clipboard's window: says how tall it is, so the app can size and
+ * place it (and show it). */
+export function caughtReady(height: number): void {
+	invoke('caught_ready', { height }).catch(() => {});
+}
+
+/** These links are dealt with (added or ignored): the window hides unless
+ * others came meanwhile. */
+export function caughtDone(links: string[]): Promise<void> {
+	return invoke('caught_done', { links });
+}
+
+/** These links go to the main window's list, to choose their categories
+ * and folder. */
+export function caughtMore(links: string[]): Promise<void> {
+	return invoke('caught_more', { links });
+}
+
+/** In the main window: calls `onLinks` with the links' text when the
+ * clipboard's window sends them (More…). Nothing in a browser. Returns a
+ * function that stops listening. */
+export function followAddLinks(onLinks: (text: string) => void): () => void {
+	return isTauri() ? follow<string>('add-links', onLinks) : () => {};
 }

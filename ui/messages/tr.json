@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Ottie menüsünden veya İndirmeler sayfasından iptal edilir",
 	"set_finish_waits": "Zamanlanmış indirmeleri bekle",
 	"set_finish_waits_hint": "Kapalı: şu an çalışacak bir şey kalmayınca biter",
-	"finish_quit": "Ottie’den çık"
+	"finish_quit": "Ottie’den çık",
+	"caught_one": "Kopyalanan bağlantı",
+	"caught_several": "Kopyalanan bağlantılar: {count}",
+	"caught_others": "Diğer: {count}",
+	"caught_more": "Seçenekler…",
+	"caught_more_hint": "Ottie’de kategoriyi ve klasörü seçin",
+	"caught_ignore": "Yoksay",
+	"caught_failed": "Ottie bu bağlantıları şu an okuyamıyor.",
+	"set_clipboard": "Pano",
+	"set_clipboard_hint": "Diğer uygulamalarda kopyaladığınız bağlantıları indirin",
+	"set_watch_clipboard": "Panoyu izle",
+	"set_watch_clipboard_hint": "Yalnızca kategorilerinizdeki dosya türlerine giden bağlantılar. Ottie’de kopyaladıklarınız ve bir parola yöneticisinin gizli olarak işaretledikleri hariç.",
+	"set_copied": "Bir indirme bağlantısı kopyalandığında",
+	"set_copied_ask": "Sor",
+	"set_copied_ask_hint": "Ekranın köşesindeki küçük bir pencere, işinizi bölmeden bunu önerir",
+	"set_copied_add": "Hemen ekle",
+	"set_copied_add_hint": "Kategorisine, bir bildirimle",
+	"setup_clipboard_hint": "Ottie, diğer uygulamalarda kopyaladığınız indirme bağlantılarını önerir. Bunu daha sonra Ayarlar → Pano bölümünde değiştirebilirsiniz."
 }

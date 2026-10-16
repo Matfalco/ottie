@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Batalkan dari menu Ottie atau halaman Unduhan",
 	"set_finish_waits": "Tunggu unduhan terjadwal",
 	"set_finish_waits_hint": "Nonaktif: selesai begitu tidak ada lagi yang perlu berjalan sekarang",
-	"finish_quit": "Keluar dari Ottie"
+	"finish_quit": "Keluar dari Ottie",
+	"caught_one": "Tautan disalin",
+	"caught_several": "Tautan disalin: {count}",
+	"caught_others": "Lainnya: {count}",
+	"caught_more": "Lainnya…",
+	"caught_more_hint": "Pilih kategori dan folder di Ottie",
+	"caught_ignore": "Abaikan",
+	"caught_failed": "Ottie tidak dapat membaca tautan ini sekarang.",
+	"set_clipboard": "Papan klip",
+	"set_clipboard_hint": "Unduh tautan yang Anda salin di aplikasi lain",
+	"set_watch_clipboard": "Pantau papan klip",
+	"set_watch_clipboard_hint": "Hanya tautan ke jenis file yang tercantum di kategori Anda. Bukan yang Anda salin di Ottie, dan bukan yang ditandai pribadi oleh pengelola kata sandi.",
+	"set_copied": "Saat tautan unduhan disalin",
+	"set_copied_ask": "Tanya",
+	"set_copied_ask_hint": "Jendela kecil di sudut layar menawarkannya tanpa mengganggu Anda",
+	"set_copied_add": "Langsung tambahkan",
+	"set_copied_add_hint": "Ke kategorinya, dengan notifikasi",
+	"setup_clipboard_hint": "Ottie menawarkan tautan unduhan yang Anda salin di aplikasi lain. Anda bisa mengubahnya nanti di Pengaturan → Papan klip."
 }

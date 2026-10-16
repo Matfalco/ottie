@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Az Ottie menüjében vagy a Letöltések oldalon szakítható meg",
 	"set_finish_waits": "Várakozás az ütemezett letöltésekre",
 	"set_finish_waits_hint": "Ki: kész, amint most már semmi sem fut",
-	"finish_quit": "Kilépés az Ottie-ból"
+	"finish_quit": "Kilépés az Ottie-ból",
+	"caught_one": "Másolt link",
+	"caught_several": "Másolt linkek: {count}",
+	"caught_others": "További: {count}",
+	"caught_more": "Továbbiak…",
+	"caught_more_hint": "Válaszd ki a kategóriát és a mappát az Ottie-ban",
+	"caught_ignore": "Kihagyás",
+	"caught_failed": "Az Ottie most nem tudja beolvasni ezeket a linkeket.",
+	"set_clipboard": "Vágólap",
+	"set_clipboard_hint": "A más alkalmazásokban másolt linkek letöltése",
+	"set_watch_clipboard": "Vágólap figyelése",
+	"set_watch_clipboard_hint": "Csak a kategóriáidban szereplő fájltípusokra mutató linkek. Nem az, amit az Ottie-ban másolsz, és nem az, amit egy jelszókezelő privátnak jelöl.",
+	"set_copied": "Ha letöltési linket másolsz",
+	"set_copied_ask": "Kérdezzen",
+	"set_copied_ask_hint": "Egy kis ablak a képernyő sarkában felajánlja, anélkül hogy megzavarna",
+	"set_copied_add": "Azonnal hozzáadja",
+	"set_copied_add_hint": "A kategóriájába, értesítéssel",
+	"setup_clipboard_hint": "Az Ottie felajánlja a más alkalmazásokban másolt letöltési linkeket. Ezt később módosíthatod itt: Beállítások → Vágólap."
 }

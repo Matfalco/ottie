@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Peru se Ottien valikosta tai Lataukset-sivulta",
 	"set_finish_waits": "Odota ajastettuja latauksia",
 	"set_finish_waits_hint": "Pois: valmis heti, kun nyt ei ole enää ajettavaa",
-	"finish_quit": "Lopeta Ottie"
+	"finish_quit": "Lopeta Ottie",
+	"caught_one": "Kopioitu linkki",
+	"caught_several": "Kopioidut linkit: {count}",
+	"caught_others": "Muut: {count}",
+	"caught_more": "Lisää…",
+	"caught_more_hint": "Valitse luokka ja kansio Ottiessa",
+	"caught_ignore": "Ohita",
+	"caught_failed": "Ottie ei voi lukea näitä linkkejä juuri nyt.",
+	"set_clipboard": "Leikepöytä",
+	"set_clipboard_hint": "Lataa linkit, jotka kopioit muissa sovelluksissa",
+	"set_watch_clipboard": "Seuraa leikepöytää",
+	"set_watch_clipboard_hint": "Vain linkit tiedostotyyppeihin, jotka luokkasi luettelevat. Ei sitä, mitä kopioit Ottiessa, eikä sitä, minkä salasanojen hallinta merkitsee yksityiseksi.",
+	"set_copied": "Kun latauslinkki kopioidaan",
+	"set_copied_ask": "Kysy",
+	"set_copied_ask_hint": "Pieni ikkuna näytön kulmassa tarjoaa sitä keskeyttämättä työtäsi",
+	"set_copied_add": "Lisää heti",
+	"set_copied_add_hint": "Omaan luokkaansa, ilmoituksen kera",
+	"setup_clipboard_hint": "Ottie tarjoaa latauslinkit, jotka kopioit muissa sovelluksissa. Voit muuttaa tämän myöhemmin kohdassa Asetukset → Leikepöytä."
 }

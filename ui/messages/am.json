@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "ከOttie ምናሌ ወይም ከውርዶች ገጽ ይሰርዙት",
 	"set_finish_waits": "የታቀዱ ውርዶችን ጠብቅ",
 	"set_finish_waits_hint": "ጠፍቷል: አሁን የሚሄድ ነገር ሲያልቅ ይጠናቀቃል",
-	"finish_quit": "ከOttie ውጣ"
+	"finish_quit": "ከOttie ውጣ",
+	"caught_one": "የተቀዳ አገናኝ",
+	"caught_several": "የተቀዱ አገናኞች፦ {count}",
+	"caught_others": "ሌሎች፦ {count}",
+	"caught_more": "ተጨማሪ…",
+	"caught_more_hint": "በOttie ውስጥ ምድብና አቃፊ ይምረጡ",
+	"caught_ignore": "ተው",
+	"caught_failed": "Ottie እነዚህን አገናኞች አሁን ማንበብ አልቻለም።",
+	"set_clipboard": "ቅንጥብ ሰሌዳ",
+	"set_clipboard_hint": "በሌሎች መተግበሪያዎች የሚቀዷቸውን አገናኞች ያውርዱ",
+	"set_watch_clipboard": "ቅንጥብ ሰሌዳን ተከታተል",
+	"set_watch_clipboard_hint": "ምድቦችዎ ወደሚዘረዝሯቸው የፋይል ዓይነቶች የሚያመሩ አገናኞች ብቻ። በOttie ውስጥ የሚቀዱትን ወይም የይለፍ ቃል አቀናባሪ የግል ብሎ ምልክት ያደረገበትን አይጨምርም።",
+	"set_copied": "የማውረጃ አገናኝ ሲቀዳ",
+	"set_copied_ask": "ጠይቅ",
+	"set_copied_ask_hint": "በማያ ገጹ ጥግ ያለ ትንሽ መስኮት ሥራዎን ሳያቋርጥ ያቀርበዋል",
+	"set_copied_add": "ወዲያውኑ አክል",
+	"set_copied_add_hint": "ወደ ምድቡ፣ ከማሳወቂያ ጋር",
+	"setup_clipboard_hint": "Ottie በሌሎች መተግበሪያዎች የሚቀዷቸውን የማውረጃ አገናኞች ያቀርባል። ይህን በኋላ በቅንብሮች → ቅንጥብ ሰሌዳ ውስጥ መቀየር ይችላሉ።"
 }

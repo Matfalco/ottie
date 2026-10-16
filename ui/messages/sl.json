@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Prekličete ga v meniju Ottie ali na strani Prenosi",
 	"set_finish_waits": "Počakaj na načrtovane prenose",
 	"set_finish_waits_hint": "Izklopljeno: konec, takoj ko zdaj ni več ničesar za zagnati",
-	"finish_quit": "Zapri Ottie"
+	"finish_quit": "Zapri Ottie",
+	"caught_one": "Kopirana povezava",
+	"caught_several": "Kopirane povezave: {count}",
+	"caught_others": "Druge: {count}",
+	"caught_more": "Več…",
+	"caught_more_hint": "Izberite kategorijo in mapo v Ottieju",
+	"caught_ignore": "Prezri",
+	"caught_failed": "Ottie trenutno ne more prebrati teh povezav.",
+	"set_clipboard": "Odložišče",
+	"set_clipboard_hint": "Prenašajte povezave, ki jih kopirate v drugih aplikacijah",
+	"set_watch_clipboard": "Spremljaj odložišče",
+	"set_watch_clipboard_hint": "Samo povezave do vrst datotek iz vaših kategorij. Ne tisto, kar kopirate v Ottieju, in ne tisto, kar upravitelj gesel označi kot zasebno.",
+	"set_copied": "Ko je kopirana povezava za prenos",
+	"set_copied_ask": "Vprašaj",
+	"set_copied_ask_hint": "Majhno okno v kotu zaslona jo ponudi, ne da bi vas zmotilo",
+	"set_copied_add": "Dodaj takoj",
+	"set_copied_add_hint": "V njeno kategorijo, z obvestilom",
+	"setup_clipboard_hint": "Ottie ponudi povezave za prenos, ki jih kopirate v drugih aplikacijah. To lahko pozneje spremenite v Nastavitve → Odložišče."
 }

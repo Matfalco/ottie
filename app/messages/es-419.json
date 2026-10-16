@@ -30,6 +30,10 @@
 	"cancelSoon": ["Cancelar suspensión ({time})", "Cancelar hibernación ({time})", "Cancelar apagado ({time})"],
 	"cancelHow": "Se puede cancelar desde el menú de Ottie en la bandeja del sistema.",
 	"cant": ["Ottie no pudo suspender la computadora", "Ottie no pudo hibernar la computadora", "Ottie no pudo apagar la computadora"],
+	"watchClipboard": "Vigilar el portapapeles",
+	"added": "Agregado desde el portapapeles",
+	"addedCount": "Descargas agregadas: {count}",
+	"notAdded": "Ottie no pudo agregar el enlace copiado",
 	"problems": {
 		"network": "Error de red ({detail})",
 		"redirect": "Redirección no válida ({detail})",

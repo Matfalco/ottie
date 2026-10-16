@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Soke shi daga menu na Ottie ko shafin Saukewa",
 	"set_finish_waits": "Jira saukewa da aka tsara",
 	"set_finish_waits_hint": "A kashe: ya ƙare da zarar babu abin da ya rage don gudana yanzu",
-	"finish_quit": "Fita daga Ottie"
+	"finish_quit": "Fita daga Ottie",
+	"caught_one": "Mahaɗin da aka kwafa",
+	"caught_several": "Mahaɗan da aka kwafa: {count}",
+	"caught_others": "Sauran: {count}",
+	"caught_more": "Ƙari…",
+	"caught_more_hint": "Zaɓi rukuni da babban fayil a Ottie",
+	"caught_ignore": "Yi watsi",
+	"caught_failed": "Ottie ba zai iya karanta waɗannan mahaɗan yanzu ba.",
+	"set_clipboard": "Allon kwafi",
+	"set_clipboard_hint": "Sauke mahaɗan da kake kwafa a wasu manhajoji",
+	"set_watch_clipboard": "Sa ido kan allon kwafi",
+	"set_watch_clipboard_hint": "Mahaɗan nau’ikan fayil da rukunoninka suka lissafa kawai. Ba abin da kake kwafa a Ottie ba, ko abin da manajan kalmar sirri ya yi wa alamar sirri.",
+	"set_copied": "Idan aka kwafi mahaɗin saukewa",
+	"set_copied_ask": "Tambaya",
+	"set_copied_ask_hint": "Ƙaramar taga a kusurwar allo za ta gabatar da shi ba tare da katse ka ba",
+	"set_copied_add": "Ƙara shi nan take",
+	"set_copied_add_hint": "A rukuninsa, tare da sanarwa",
+	"setup_clipboard_hint": "Ottie yana gabatar da mahaɗan saukewa da kake kwafa a wasu manhajoji. Za ka iya canza wannan daga baya a Saituna → Allon kwafi."
 }

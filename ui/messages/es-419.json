@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Se cancela desde el menú de Ottie o la página Descargas",
 	"set_finish_waits": "Esperar las descargas programadas",
 	"set_finish_waits_hint": "Desactivado: termina en cuanto no queda nada por ejecutar ahora",
-	"finish_quit": "Salir de Ottie"
+	"finish_quit": "Salir de Ottie",
+	"caught_one": "Enlace copiado",
+	"caught_several": "Enlaces copiados: {count}",
+	"caught_others": "{count} más",
+	"caught_more": "Más…",
+	"caught_more_hint": "Elige la categoría y la carpeta en Ottie",
+	"caught_ignore": "Ignorar",
+	"caught_failed": "Ottie no puede leer estos enlaces en este momento.",
+	"set_clipboard": "Portapapeles",
+	"set_clipboard_hint": "Descarga los enlaces que copias en otras apps",
+	"set_watch_clipboard": "Vigilar el portapapeles",
+	"set_watch_clipboard_hint": "Solo enlaces a los tipos de archivo de tus categorías. Ni lo que copias en Ottie ni lo que un administrador de contraseñas marca como privado.",
+	"set_copied": "Cuando se copia un enlace de descarga",
+	"set_copied_ask": "Preguntar",
+	"set_copied_ask_hint": "Una pequeña ventana en la esquina de la pantalla te lo ofrece, sin interrumpir lo que haces",
+	"set_copied_add": "Agregarlo de inmediato",
+	"set_copied_add_hint": "En su categoría, con una notificación",
+	"setup_clipboard_hint": "Ottie te ofrece los enlaces de descarga que copias en otras apps. Puedes cambiarlo más tarde en Configuración → Portapapeles."
 }

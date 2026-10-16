@@ -20,9 +20,10 @@
 	let { children }: LayoutProps = $props();
 	let token: string | null = $state(null);
 	let ready = $state(false);
-	/** The desktop app's tray menu and countdown window: no shell around
-	 * them (docs/decisions/0034, 0040). */
-	const bare = page.route.id === '/tray' || page.route.id === '/finish';
+	/** The desktop app's tray menu, countdown window and the window for
+	 * links copied elsewhere: no shell around them (docs/decisions/0034,
+	 * 0040, 0043). */
+	const bare = ['/tray', '/finish', '/caught'].includes(page.route.id ?? '');
 
 	// For screen readers, spell checking and hyphenation, and which way the
 	// page runs: mirrored for a language written right to left. (Changing

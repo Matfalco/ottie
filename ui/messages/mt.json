@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Ikkanċellah mill-menu ta’ Ottie jew mill-paġna Tniżżiliet",
 	"set_finish_waits": "Stenna t-tniżżiliet skedati",
 	"set_finish_waits_hint": "Mitfi: lest hekk kif ma jibqa’ xejn x’jitħaddem issa",
-	"finish_quit": "Oħroġ minn Ottie"
+	"finish_quit": "Oħroġ minn Ottie",
+	"caught_one": "Ħolqa kkupjata",
+	"caught_several": "Ħoloq ikkupjati: {count}",
+	"caught_others": "Oħrajn: {count}",
+	"caught_more": "Aktar…",
+	"caught_more_hint": "Agħżel il-kategorija u l-folder f’Ottie",
+	"caught_ignore": "Injora",
+	"caught_failed": "Ottie ma jistax jaqra dawn il-ħoloq bħalissa.",
+	"set_clipboard": "Clipboard",
+	"set_clipboard_hint": "Niżżel ħoloq li tikkopja f’apps oħra",
+	"set_watch_clipboard": "Osserva l-clipboard",
+	"set_watch_clipboard_hint": "Ħoloq biss għat-tipi ta’ fajls li jelenkaw il-kategoriji tiegħek. Mhux dak li tikkopja f’Ottie, u lanqas dak li maniġer tal-passwords jimmarka bħala privat.",
+	"set_copied": "Meta tiġi kkupjata ħolqa biex tniżżel",
+	"set_copied_ask": "Staqsi",
+	"set_copied_ask_hint": "Tieqa żgħira fil-kantuniera tal-iskrin toffriha, mingħajr ma tinterrompik",
+	"set_copied_add": "Żidha minnufih",
+	"set_copied_add_hint": "Fil-kategorija tagħha, b’notifika",
+	"setup_clipboard_hint": "Ottie joffri l-ħoloq biex tniżżel li tikkopja f’apps oħra. Tista’ tbiddel dan aktar tard f’Issettjar → Clipboard."
 }

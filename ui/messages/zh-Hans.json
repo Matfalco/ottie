@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "可在 Ottie 菜单或“下载”页面中取消",
 	"set_finish_waits": "等待已计划的下载",
 	"set_finish_waits_hint": "关闭：当前没有要运行的下载时即算完成",
-	"finish_quit": "退出 Ottie"
+	"finish_quit": "退出 Ottie",
+	"caught_one": "复制的链接",
+	"caught_several": "复制的链接：{count}",
+	"caught_others": "还有 {count} 个",
+	"caught_more": "更多…",
+	"caught_more_hint": "在 Ottie 中选择分类和文件夹",
+	"caught_ignore": "忽略",
+	"caught_failed": "Ottie 暂时无法读取这些链接。",
+	"set_clipboard": "剪贴板",
+	"set_clipboard_hint": "下载你在其他应用中复制的链接",
+	"set_watch_clipboard": "监视剪贴板",
+	"set_watch_clipboard_hint": "只限指向你的分类所列文件类型的链接。不包括你在 Ottie 中复制的内容，也不包括密码管理器标记为私密的内容。",
+	"set_copied": "复制下载链接时",
+	"set_copied_ask": "询问",
+	"set_copied_ask_hint": "屏幕角落的小窗口会提供它，不会打断你",
+	"set_copied_add": "立即添加",
+	"set_copied_add_hint": "加入其分类，并发送通知",
+	"setup_clipboard_hint": "Ottie 会提供你在其他应用中复制的下载链接。以后可以在“设置 → 剪贴板”中修改。"
 }

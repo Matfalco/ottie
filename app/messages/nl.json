@@ -30,6 +30,10 @@
 	"cancelSoon": ["Slaapstand annuleren ({time})", "Sluimerstand annuleren ({time})", "Uitschakelen annuleren ({time})"],
 	"cancelHow": "Annuleren kan via het menu van Ottie in het systeemvak.",
 	"cant": ["Ottie kon de computer niet in slaapstand zetten", "Ottie kon de computer niet in sluimerstand zetten", "Ottie kon de computer niet uitschakelen"],
+	"watchClipboard": "Klembord in de gaten houden",
+	"added": "Toegevoegd vanaf het klembord",
+	"addedCount": "Downloads toegevoegd: {count}",
+	"notAdded": "Ottie kon de gekopieerde link niet toevoegen",
 	"problems": {
 		"network": "Netwerkfout ({detail})",
 		"redirect": "Ongeldige omleiding ({detail})",

@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Anulujesz je w menu Ottie lub na stronie Pobierania",
 	"set_finish_waits": "Czekaj na zaplanowane pobierania",
 	"set_finish_waits_hint": "Wyłączone: koniec, gdy teraz nic nie zostało do uruchomienia",
-	"finish_quit": "Zamknij Ottie"
+	"finish_quit": "Zamknij Ottie",
+	"caught_one": "Skopiowany link",
+	"caught_several": "Skopiowane linki: {count}",
+	"caught_others": "Pozostałe: {count}",
+	"caught_more": "Więcej…",
+	"caught_more_hint": "Wybierz kategorię i folder w Ottie",
+	"caught_ignore": "Ignoruj",
+	"caught_failed": "Ottie nie może teraz odczytać tych linków.",
+	"set_clipboard": "Schowek",
+	"set_clipboard_hint": "Pobieraj linki skopiowane w innych aplikacjach",
+	"set_watch_clipboard": "Obserwuj schowek",
+	"set_watch_clipboard_hint": "Tylko linki do typów plików z Twoich kategorii. Nie to, co kopiujesz w Ottie, ani to, co menedżer haseł oznacza jako prywatne.",
+	"set_copied": "Gdy zostanie skopiowany link do pobrania",
+	"set_copied_ask": "Pytaj",
+	"set_copied_ask_hint": "Małe okno w rogu ekranu zaproponuje go, nie przerywając Ci pracy",
+	"set_copied_add": "Dodaj od razu",
+	"set_copied_add_hint": "Do jego kategorii, z powiadomieniem",
+	"setup_clipboard_hint": "Ottie proponuje linki do pobrania skopiowane w innych aplikacjach. Możesz to później zmienić w Ustawienia → Schowek."
 }

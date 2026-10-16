@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "To var atcelt Ottie izvēlnē vai lapā Lejupielādes",
 	"set_finish_waits": "Gaidīt ieplānotās lejupielādes",
 	"set_finish_waits_hint": "Izslēgts: pabeigts, tiklīdz tagad vairs nav ko palaist",
-	"finish_quit": "Iziet no Ottie"
+	"finish_quit": "Iziet no Ottie",
+	"caught_one": "Nokopēta saite",
+	"caught_several": "Nokopētās saites: {count}",
+	"caught_others": "Citas: {count}",
+	"caught_more": "Vairāk…",
+	"caught_more_hint": "Izvēlieties kategoriju un mapi programmā Ottie",
+	"caught_ignore": "Ignorēt",
+	"caught_failed": "Ottie pašlaik nevar nolasīt šīs saites.",
+	"set_clipboard": "Starpliktuve",
+	"set_clipboard_hint": "Lejupielādējiet saites, ko kopējat citās lietotnēs",
+	"set_watch_clipboard": "Uzraudzīt starpliktuvi",
+	"set_watch_clipboard_hint": "Tikai saites uz failu tipiem, ko norāda jūsu kategorijas. Ne to, ko kopējat programmā Ottie, ne to, ko paroļu pārvaldnieks atzīmē kā privātu.",
+	"set_copied": "Kad tiek nokopēta lejupielādes saite",
+	"set_copied_ask": "Jautāt",
+	"set_copied_ask_hint": "Neliels logs ekrāna stūrī to piedāvā, jūs netraucējot",
+	"set_copied_add": "Pievienot uzreiz",
+	"set_copied_add_hint": "Tās kategorijā, ar paziņojumu",
+	"setup_clipboard_hint": "Ottie piedāvā lejupielādes saites, ko kopējat citās lietotnēs. To vēlāk varēsiet mainīt sadaļā Iestatījumi → Starpliktuve."
 }

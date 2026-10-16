@@ -122,6 +122,14 @@ pub struct Texts {
     pub cancel_how: String,
     /// It couldn't sleep, hibernate, shut down.
     cant: [String; 3],
+    /// The tray's switch for clipboard monitoring (docs/decisions/0043).
+    pub watch_clipboard: String,
+    /// A notification's title: links copied elsewhere were added…
+    pub added: String,
+    /// …`{count}` of them, at least 2…
+    added_count: String,
+    /// …or couldn't be.
+    pub not_added: String,
     problems: Problems,
     /// Written right to left: every text comes embedded as such.
     #[serde(skip)]
@@ -187,6 +195,9 @@ impl Texts {
                 &mut texts.finish_hibernate,
                 &mut texts.finish_shut_down,
                 &mut texts.cancel_how,
+                &mut texts.watch_clipboard,
+                &mut texts.added,
+                &mut texts.not_added,
             ] {
                 *text = embedded(true, std::mem::take(text));
             }
@@ -342,6 +353,11 @@ impl Texts {
     /// "3 files downloaded".
     pub fn files(&self, count: usize) -> String {
         self.shown(self.files.replace("{count}", &self.count(count)))
+    }
+
+    /// "3 downloads added".
+    pub fn added_count(&self, count: usize) -> String {
+        self.shown(self.added_count.replace("{count}", &self.count(count)))
     }
 
     /// Why a download failed; the daemon's English for codes this app

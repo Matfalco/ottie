@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Fagilé e láti inú àkójọ àṣàyàn Ottie tàbí ojú-ìwé Àwọn ìgbàsílẹ̀",
 	"set_finish_waits": "Dúró de àwọn ìgbàsílẹ̀ tí a ti ṣètò",
 	"set_finish_waits_hint": "Pípa: ó parí ní kété tí kò sí ohun tó kù láti ṣiṣẹ́ báyìí",
-	"finish_quit": "Jáde nínú Ottie"
+	"finish_quit": "Jáde nínú Ottie",
+	"caught_one": "Ìjápọ̀ tí a dà kọ",
+	"caught_several": "Àwọn ìjápọ̀ tí a dà kọ: {count}",
+	"caught_others": "Àwọn yòókù: {count}",
+	"caught_more": "Síi…",
+	"caught_more_hint": "Yan ẹ̀ka àti fódà nínú Ottie",
+	"caught_ignore": "Fojú fò ó",
+	"caught_failed": "Ottie kò lè ka àwọn ìjápọ̀ wọ̀nyí báyìí.",
+	"set_clipboard": "Pátákó ìdàkọ",
+	"set_clipboard_hint": "Gba àwọn ìjápọ̀ tí o dà kọ nínú áàpù mìíràn sílẹ̀",
+	"set_watch_clipboard": "Máa ṣọ́ pátákó ìdàkọ",
+	"set_watch_clipboard_hint": "Àwọn ìjápọ̀ sí irú fáìlì tí àwọn ẹ̀ka rẹ tò nìkan. Kì í ṣe ohun tí o dà kọ nínú Ottie, tàbí ohun tí olùṣàkóso ọ̀rọ̀ aṣínà sàmì sí bí àṣírí.",
+	"set_copied": "Nígbà tí a bá dà ìjápọ̀ ìgbàsílẹ̀ kọ",
+	"set_copied_ask": "Béèrè",
+	"set_copied_ask_hint": "Fèrèsé kékeré kan ní igun ojú-ìwé yóò fi í hàn láìdí iṣẹ́ rẹ lọ́wọ́",
+	"set_copied_add": "Fi kún un lẹ́sẹ̀kẹsẹ̀",
+	"set_copied_add_hint": "Sínú ẹ̀ka rẹ̀, pẹ̀lú ìfitónilétí",
+	"setup_clipboard_hint": "Ottie máa ń fi àwọn ìjápọ̀ ìgbàsílẹ̀ tí o dà kọ nínú áàpù mìíràn hàn. O lè yí èyí padà lẹ́yìn náà ní Ètò → Pátákó ìdàkọ."
 }

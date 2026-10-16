@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Cancel it from Ottie’s menu or the Downloads page",
 	"set_finish_waits": "Wait for scheduled downloads",
 	"set_finish_waits_hint": "Off: finished as soon as nothing is left to run now",
-	"finish_quit": "Quit Ottie"
+	"finish_quit": "Quit Ottie",
+	"caught_one": "Copied link",
+	"caught_several": "Copied links: {count}",
+	"caught_others": "{count} more",
+	"caught_more": "More…",
+	"caught_more_hint": "Choose the category and folder in Ottie",
+	"caught_ignore": "Ignore",
+	"caught_failed": "Ottie can’t read these links right now.",
+	"set_clipboard": "Clipboard",
+	"set_clipboard_hint": "Download links you copy in other apps",
+	"set_watch_clipboard": "Watch the clipboard",
+	"set_watch_clipboard_hint": "Only links to the file types your categories list. Not what you copy in Ottie, nor what a password manager marks as private.",
+	"set_copied": "When a download link is copied",
+	"set_copied_ask": "Ask",
+	"set_copied_ask_hint": "A small window in the corner of the screen offers it, without interrupting what you’re doing",
+	"set_copied_add": "Add it right away",
+	"set_copied_add_hint": "In its category, with a notification",
+	"setup_clipboard_hint": "Ottie offers the download links you copy in other apps. You can change this later in Settings → Clipboard."
 }

@@ -30,6 +30,10 @@
 	"cancelSoon": ["Hủy ngủ ({time})", "Hủy ngủ đông ({time})", "Hủy tắt máy ({time})"],
 	"cancelHow": "Bạn có thể hủy từ menu của Ottie trên khay hệ thống.",
 	"cant": ["Ottie không thể cho máy tính ngủ", "Ottie không thể cho máy tính ngủ đông", "Ottie không thể tắt máy tính"],
+	"watchClipboard": "Theo dõi bảng nhớ tạm",
+	"added": "Đã thêm từ bảng nhớ tạm",
+	"addedCount": "Lượt tải đã thêm: {count}",
+	"notAdded": "Ottie không thể thêm liên kết đã sao chép",
 	"problems": {
 		"network": "Lỗi mạng ({detail})",
 		"redirect": "Chuyển hướng không hợp lệ ({detail})",

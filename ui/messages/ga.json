@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Cealaigh é ó roghchlár Ottie nó ón leathanach Íoslódálacha",
 	"set_finish_waits": "Fan le híoslódálacha sceidealaithe",
 	"set_finish_waits_hint": "As: críochnaithe a luaithe nach bhfuil aon rud fágtha le rith anois",
-	"finish_quit": "Scoir de Ottie"
+	"finish_quit": "Scoir de Ottie",
+	"caught_one": "Nasc cóipeáilte",
+	"caught_several": "Naisc chóipeáilte: {count}",
+	"caught_others": "Tuilleadh: {count}",
+	"caught_more": "Tuilleadh…",
+	"caught_more_hint": "Roghnaigh an chatagóir agus an fillteán in Ottie",
+	"caught_ignore": "Déan neamhaird de",
+	"caught_failed": "Ní féidir le Ottie na naisc seo a léamh faoi láthair.",
+	"set_clipboard": "Gearrthaisce",
+	"set_clipboard_hint": "Íoslódáil naisc a chóipeálann tú in aipeanna eile",
+	"set_watch_clipboard": "Súil a choinneáil ar an ngearrthaisce",
+	"set_watch_clipboard_hint": "Naisc chuig na cineálacha comhad atá i do chatagóirí amháin. Ní an méid a chóipeálann tú in Ottie, ná an méid a mharcálann bainisteoir pasfhocal mar phríobháideach.",
+	"set_copied": "Nuair a chóipeáiltear nasc íoslódála",
+	"set_copied_ask": "Fiafraigh",
+	"set_copied_ask_hint": "Tairgeann fuinneog bheag i gcúinne an scáileáin é, gan cur isteach ort",
+	"set_copied_add": "Cuir leis láithreach",
+	"set_copied_add_hint": "Ina chatagóir féin, le fógra",
+	"setup_clipboard_hint": "Tairgeann Ottie na naisc íoslódála a chóipeálann tú in aipeanna eile. Is féidir é seo a athrú níos déanaí in Socruithe → Gearrthaisce."
 }

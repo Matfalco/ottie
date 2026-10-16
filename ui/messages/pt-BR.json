@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Cancele pelo menu do Ottie ou pela página Downloads",
 	"set_finish_waits": "Esperar os downloads agendados",
 	"set_finish_waits_hint": "Desativado: termina assim que não sobrar nada para rodar agora",
-	"finish_quit": "Sair do Ottie"
+	"finish_quit": "Sair do Ottie",
+	"caught_one": "Link copiado",
+	"caught_several": "Links copiados: {count}",
+	"caught_others": "Outros: {count}",
+	"caught_more": "Mais…",
+	"caught_more_hint": "Escolha a categoria e a pasta no Ottie",
+	"caught_ignore": "Ignorar",
+	"caught_failed": "O Ottie não consegue ler estes links agora.",
+	"set_clipboard": "Área de transferência",
+	"set_clipboard_hint": "Baixe os links que você copia em outros apps",
+	"set_watch_clipboard": "Monitorar a área de transferência",
+	"set_watch_clipboard_hint": "Só links para os tipos de arquivo das suas categorias. Nem o que você copia no Ottie, nem o que um gerenciador de senhas marca como privado.",
+	"set_copied": "Quando um link de download é copiado",
+	"set_copied_ask": "Perguntar",
+	"set_copied_ask_hint": "Uma pequena janela no canto da tela o oferece, sem interromper o que você está fazendo",
+	"set_copied_add": "Adicionar na hora",
+	"set_copied_add_hint": "Na categoria dele, com uma notificação",
+	"setup_clipboard_hint": "O Ottie oferece os links de download que você copia em outros apps. Você pode mudar isso depois em Configurações → Área de transferência."
 }

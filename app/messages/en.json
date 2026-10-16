@@ -38,6 +38,10 @@
 		"Ottie couldn’t hibernate the computer",
 		"Ottie couldn’t shut down the computer"
 	],
+	"watchClipboard": "Watch the clipboard",
+	"added": "Added from the clipboard",
+	"addedCount": "{count} downloads added",
+	"notAdded": "Ottie couldn’t add the copied link",
 	"problems": {
 		"network": "Network error ({detail})",
 		"redirect": "Bad redirect ({detail})",

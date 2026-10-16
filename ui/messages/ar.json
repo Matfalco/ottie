@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "يُلغى من قائمة Ottie أو صفحة التنزيلات",
 	"set_finish_waits": "انتظار التنزيلات المجدولة",
 	"set_finish_waits_hint": "متوقف: ينتهي بمجرد ألا يبقى شيء للتشغيل الآن",
-	"finish_quit": "إنهاء Ottie"
+	"finish_quit": "إنهاء Ottie",
+	"caught_one": "رابط منسوخ",
+	"caught_several": "روابط منسوخة: ⁨{count}⁩",
+	"caught_others": "غيرها: ⁨{count}⁩",
+	"caught_more": "المزيد…",
+	"caught_more_hint": "اختر الفئة والمجلد في Ottie",
+	"caught_ignore": "تجاهل",
+	"caught_failed": "تعذّر على Ottie قراءة هذه الروابط الآن.",
+	"set_clipboard": "الحافظة",
+	"set_clipboard_hint": "نزّل الروابط التي تنسخها في تطبيقات أخرى",
+	"set_watch_clipboard": "مراقبة الحافظة",
+	"set_watch_clipboard_hint": "الروابط إلى أنواع الملفات التي تذكرها فئاتك فقط. لا ما تنسخه في Ottie، ولا ما يضع عليه مدير كلمات المرور علامة «خاص».",
+	"set_copied": "عند نسخ رابط تنزيل",
+	"set_copied_ask": "اسأل",
+	"set_copied_ask_hint": "تعرضه نافذة صغيرة في زاوية الشاشة دون أن تقاطع ما تفعله",
+	"set_copied_add": "أضفه فورًا",
+	"set_copied_add_hint": "إلى فئته، مع إشعار",
+	"setup_clipboard_hint": "يعرض Ottie روابط التنزيل التي تنسخها في تطبيقات أخرى. يمكنك تغيير ذلك لاحقًا في الإعدادات ← الحافظة."
 }

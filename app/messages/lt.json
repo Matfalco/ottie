@@ -30,6 +30,10 @@
 	"cancelSoon": ["Atšaukti miego režimą ({time})", "Atšaukti užmigdymą ({time})", "Atšaukti išjungimą ({time})"],
 	"cancelHow": "Atšaukti galite Ottie meniu pranešimų srityje.",
 	"cant": ["Ottie nepavyko perjungti kompiuterio į miego režimą", "Ottie nepavyko užmigdyti kompiuterio", "Ottie nepavyko išjungti kompiuterio"],
+	"watchClipboard": "Stebėti iškarpinę",
+	"added": "Pridėta iš iškarpinės",
+	"addedCount": "Pridėti atsisiuntimai: {count}",
+	"notAdded": "Ottie nepavyko pridėti nukopijuotos nuorodos",
 	"problems": {
 		"network": "Tinklo klaida ({detail})",
 		"redirect": "Netinkamas peradresavimas ({detail})",

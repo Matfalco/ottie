@@ -30,6 +30,10 @@
 	"cancelSoon": ["Annuler la mise en veille ({time})", "Annuler la veille prolongée ({time})", "Annuler l’extinction ({time})"],
 	"cancelHow": "Vous pouvez l’annuler depuis le menu d’Ottie, dans la zone de notification.",
 	"cant": ["Ottie n’a pas pu mettre l’ordinateur en veille", "Ottie n’a pas pu mettre l’ordinateur en veille prolongée", "Ottie n’a pas pu éteindre l’ordinateur"],
+	"watchClipboard": "Surveiller le presse-papiers",
+	"added": "Ajouté depuis le presse-papiers",
+	"addedCount": "{count} téléchargements ajoutés",
+	"notAdded": "Ottie n’a pas pu ajouter le lien copié",
 	"problems": {
 		"network": "Erreur réseau ({detail})",
 		"redirect": "Redirection invalide ({detail})",

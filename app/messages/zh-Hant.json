@@ -30,6 +30,10 @@
 	"cancelSoon": ["取消睡眠（{time}）", "取消休眠（{time}）", "取消關機（{time}）"],
 	"cancelHow": "可在系統匣的 Ottie 選單中取消。",
 	"cant": ["Ottie 無法讓電腦睡眠", "Ottie 無法讓電腦休眠", "Ottie 無法關閉電腦"],
+	"watchClipboard": "監看剪貼簿",
+	"added": "已從剪貼簿加入",
+	"addedCount": "已加入 {count} 個下載",
+	"notAdded": "Ottie 無法加入複製的連結",
 	"problems": {
 		"network": "網路錯誤（{detail}）",
 		"redirect": "重新導向錯誤（{detail}）",

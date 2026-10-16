@@ -6,6 +6,7 @@
 
 mod autostart;
 mod client;
+mod clipboard;
 mod config;
 mod daemon;
 mod finish;
@@ -42,10 +43,10 @@ const PROJECT: &str = "https://github.com/Matfalco/ottie/";
 /// (docs/decisions/0031), set what closing does, when to notify
 /// (docs/decisions/0035), what happens at sign-in (0039) and the tray's
 /// language, in Ottie's tray menu, open the window, quit, and hide the
-/// menu (docs/decisions/0034), and choose what happens when everything has
-/// finished, or cancel it (0040). Only these, and only for the daemon's
-/// pages.
-const PAGE_PERMISSIONS: [&str; 34] = [
+/// menu (docs/decisions/0034), choose what happens when everything has
+/// finished, or cancel it (0040), and watch the clipboard, then offer what
+/// it caught (0043). Only these, and only for the daemon's pages.
+const PAGE_PERMISSIONS: [&str; 40] = [
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
@@ -67,6 +68,8 @@ const PAGE_PERMISSIONS: [&str; 34] = [
     "allow-desktop",
     "allow-set-startup",
     "allow-set-close-to-tray",
+    "allow-set-watch-clipboard",
+    "allow-set-copied",
     "allow-set-notify",
     "allow-set-notify-failed",
     "allow-set-sounds",
@@ -89,6 +92,11 @@ const PAGE_PERMISSIONS: [&str; 34] = [
     "allow-cancel-finish",
     "allow-finish-now",
     "allow-countdown-ready",
+    // The window offering links copied elsewhere (`clipboard.rs`).
+    "allow-caught",
+    "allow-caught-ready",
+    "allow-caught-done",
+    "allow-caught-more",
 ];
 
 /// The daemon this app started, if it did: stopped when the app quits.
@@ -110,6 +118,8 @@ fn main() -> tauri::Result<()> {
             prefs::desktop,
             prefs::set_startup,
             prefs::set_close_to_tray,
+            prefs::set_watch_clipboard,
+            prefs::set_copied,
             prefs::set_notify,
             prefs::set_notify_failed,
             prefs::set_sounds,
@@ -127,7 +137,11 @@ fn main() -> tauri::Result<()> {
             finish::set_finish_waits,
             finish::cancel_finish,
             finish::finish_now,
-            finish::countdown_ready
+            finish::countdown_ready,
+            clipboard::caught,
+            clipboard::caught_ready,
+            clipboard::caught_done,
+            clipboard::caught_more
         ])
         .setup(|app| {
             app.manage(player::Chosen::load(app.handle()));
@@ -173,8 +187,10 @@ async fn start(app: &AppHandle, shown: bool) -> anyhow::Result<()> {
     let daemon = Arc::new(Daemon::new(&connection.link)?);
     app.manage(popup::Popup::new(&connection.link));
     app.manage(finish::Finisher::new(&connection.link));
+    app.manage(clipboard::Catcher::new(&connection.link, daemon.clone()));
     open_window(app, connection.link, shown)?;
     tray::start(app, daemon)?;
+    clipboard::start(app);
     Ok(())
 }
 
@@ -203,7 +219,7 @@ fn open_window(app: &AppHandle, link: Url, shown: bool) -> tauri::Result<()> {
             // The daemon's address is only known now, hence a runtime capability.
             .remote(daemon.ascii_serialization())
             .local(false)
-            .windows([WINDOW, popup::LABEL, finish::LABEL]),
+            .windows([WINDOW, popup::LABEL, finish::LABEL, clipboard::LABEL]),
         CapabilityBuilder::permission,
     );
     app.add_capability(page)?;
@@ -251,7 +267,8 @@ fn open_window(app: &AppHandle, link: Url, shown: bool) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Brings the window forward: from the tray, or a second launch.
+/// Brings the window forward: from the tray, a second launch, or the
+/// clipboard's More….
 fn show(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(WINDOW) {
         // Best effort: the user can still find the window themselves.

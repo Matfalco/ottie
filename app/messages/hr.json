@@ -30,6 +30,10 @@
 	"cancelSoon": ["Otkaži mirovanje ({time})", "Otkaži hibernaciju ({time})", "Otkaži isključivanje ({time})"],
 	"cancelHow": "Možete otkazati u izborniku Ottie u području obavijesti.",
 	"cant": ["Ottie nije mogao prebaciti računalo u mirovanje", "Ottie nije mogao prebaciti računalo u hibernaciju", "Ottie nije mogao isključiti računalo"],
+	"watchClipboard": "Prati međuspremnik",
+	"added": "Dodano iz međuspremnika",
+	"addedCount": "Dodana preuzimanja: {count}",
+	"notAdded": "Ottie nije mogao dodati kopiranu poveznicu",
 	"problems": {
 		"network": "Mrežna pogreška ({detail})",
 		"redirect": "Neispravno preusmjeravanje ({detail})",

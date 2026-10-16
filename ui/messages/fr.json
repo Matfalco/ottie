@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "À annuler depuis le menu d’Ottie ou la page Téléchargements",
 	"set_finish_waits": "Attendre les téléchargements planifiés",
 	"set_finish_waits_hint": "Désactivé : terminé dès qu’il ne reste rien à lancer maintenant",
-	"finish_quit": "Quitter Ottie"
+	"finish_quit": "Quitter Ottie",
+	"caught_one": "Lien copié",
+	"caught_several": "Liens copiés : {count}",
+	"caught_others": "{count} de plus",
+	"caught_more": "Plus…",
+	"caught_more_hint": "Choisir la catégorie et le dossier dans Ottie",
+	"caught_ignore": "Ignorer",
+	"caught_failed": "Ottie ne peut pas lire ces liens pour le moment.",
+	"set_clipboard": "Presse-papiers",
+	"set_clipboard_hint": "Télécharger les liens copiés dans d’autres applications",
+	"set_watch_clipboard": "Surveiller le presse-papiers",
+	"set_watch_clipboard_hint": "Seulement les liens vers les types de fichiers de vos catégories. Ni ce que vous copiez dans Ottie, ni ce qu’un gestionnaire de mots de passe marque comme privé.",
+	"set_copied": "Quand un lien de téléchargement est copié",
+	"set_copied_ask": "Demander",
+	"set_copied_ask_hint": "Une petite fenêtre dans le coin de l’écran le propose, sans interrompre ce que vous faites",
+	"set_copied_add": "L’ajouter tout de suite",
+	"set_copied_add_hint": "Dans sa catégorie, avec une notification",
+	"setup_clipboard_hint": "Ottie propose les liens de téléchargement que vous copiez dans d’autres applications. Vous pourrez le changer dans Paramètres → Presse-papiers."
 }

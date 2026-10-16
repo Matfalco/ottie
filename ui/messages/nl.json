@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Annuleren via het menu van Ottie of de pagina Downloads",
 	"set_finish_waits": "Wachten op geplande downloads",
 	"set_finish_waits_hint": "Uit: klaar zodra er nu niets meer hoeft te draaien",
-	"finish_quit": "Ottie afsluiten"
+	"finish_quit": "Ottie afsluiten",
+	"caught_one": "Gekopieerde link",
+	"caught_several": "Gekopieerde links: {count}",
+	"caught_others": "Overige: {count}",
+	"caught_more": "Meer…",
+	"caught_more_hint": "Kies de categorie en map in Ottie",
+	"caught_ignore": "Negeren",
+	"caught_failed": "Ottie kan deze links nu niet lezen.",
+	"set_clipboard": "Klembord",
+	"set_clipboard_hint": "Download links die je in andere apps kopieert",
+	"set_watch_clipboard": "Klembord in de gaten houden",
+	"set_watch_clipboard_hint": "Alleen links naar bestandstypen die je categorieën noemen. Niet wat je in Ottie kopieert, en niet wat een wachtwoordbeheerder als privé markeert.",
+	"set_copied": "Als er een downloadlink wordt gekopieerd",
+	"set_copied_ask": "Vragen",
+	"set_copied_ask_hint": "Een klein venster in de hoek van het scherm biedt hem aan, zonder je te storen",
+	"set_copied_add": "Meteen toevoegen",
+	"set_copied_add_hint": "In zijn categorie, met een melding",
+	"setup_clipboard_hint": "Ottie biedt downloadlinks aan die je in andere apps kopieert. Je kunt dit later wijzigen in Instellingen → Klembord."
 }

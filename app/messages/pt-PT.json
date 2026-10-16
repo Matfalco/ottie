@@ -30,6 +30,10 @@
 	"cancelSoon": ["Cancelar suspensão ({time})", "Cancelar hibernação ({time})", "Cancelar encerramento ({time})"],
 	"cancelHow": "Pode cancelar no menu do Ottie, na área de notificação.",
 	"cant": ["O Ottie não conseguiu suspender o computador", "O Ottie não conseguiu hibernar o computador", "O Ottie não conseguiu encerrar o computador"],
+	"watchClipboard": "Vigiar a área de transferência",
+	"added": "Adicionado a partir da área de transferência",
+	"addedCount": "Transferências adicionadas: {count}",
+	"notAdded": "O Ottie não conseguiu adicionar o link copiado",
 	"problems": {
 		"network": "Erro de rede ({detail})",
 		"redirect": "Redirecionamento inválido ({detail})",

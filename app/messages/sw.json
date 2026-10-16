@@ -30,6 +30,10 @@
 	"cancelSoon": ["Ghairi kulala ({time})", "Ghairi hibaneti ({time})", "Ghairi kuzima ({time})"],
 	"cancelHow": "Unaweza kughairi kwenye menyu ya Ottie kwenye trei.",
 	"cant": ["Ottie haikuweza kulaza kompyuta", "Ottie haikuweza kuhibaneti kompyuta", "Ottie haikuweza kuzima kompyuta"],
+	"watchClipboard": "Fuatilia ubao wa kunakili",
+	"added": "Imeongezwa kutoka ubao wa kunakili",
+	"addedCount": "Vipakuliwa vilivyoongezwa: {count}",
+	"notAdded": "Ottie haikuweza kuongeza kiungo kilichonakiliwa",
 	"problems": {
 		"network": "Hitilafu ya mtandao ({detail})",
 		"redirect": "Uelekezaji mbaya ({detail})",

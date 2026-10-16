@@ -2,22 +2,26 @@
 //! (docs/decisions/0034): whether closing the window keeps Ottie in the tray,
 //! when to notify (docs/decisions/0035) and with which sounds (0038), what
 //! starting at sign-in starts (0039), what happens when everything has
-//! finished (0040), the language the page shows (for the tray's texts and
+//! finished (0040), whether it watches the clipboard and what a copied
+//! link does (0043), the language the page shows (for the tray's texts and
 //! notifications), and the last total speed limit (for the tray's "Limit
 //! speed").
 
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 use crate::autostart::{self, Mode, Startup};
+use crate::clipboard::Copied;
 use crate::config;
 use crate::finish::{self, CountdownIn, Finish};
 use crate::notify::Kind;
 use crate::sound::{self, Sound, Sounds};
 
 const FILE: &str = "app.json";
+/// What the pages hear when the part they see changes, with a `Desktop`.
+const EVENT: &str = "desktop";
 /// A language tag (`en`, `pt-BR`) is never this long.
 const MAX_LANGUAGE: usize = 35;
 
@@ -49,6 +53,9 @@ pub struct Prefs {
     /// Downloads waiting for their start time or held by a slot count as
     /// not finished.
     pub finish_waits_for_scheduled: bool,
+    /// Links copied elsewhere are offered or added (opt-in).
+    pub watch_clipboard: bool,
+    pub copied: Copied,
     /// The page's language, as it said last.
     pub language: Option<String>,
     /// The total limit last set (bytes per second), by anyone.
@@ -70,6 +77,8 @@ impl Default for Prefs {
             countdown: finish::DEFAULT_COUNTDOWN,
             countdown_in: CountdownIn::Window,
             finish_waits_for_scheduled: true,
+            watch_clipboard: false,
+            copied: Copied::Ask,
             language: None,
             last_limit: None,
         }
@@ -101,14 +110,16 @@ pub enum Notify {
     Never,
 }
 
-/// The part the page sees and changes, in Settings → Desktop app and
-/// Notifications.
+/// The part the page sees and changes, in Settings → Desktop app,
+/// Clipboard and Notifications, and the tray menu.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Desktop {
     /// What happens at sign-in: the system's entry, then `Prefs::startup`.
     pub startup: Startup,
     pub close_to_tray: bool,
+    pub watch_clipboard: bool,
+    pub copied: Copied,
     pub notify: Notify,
     pub notify_failed: bool,
     pub sounds: Sounds,
@@ -125,6 +136,8 @@ impl Desktop {
         Desktop {
             startup: autostart::current(app, prefs.startup),
             close_to_tray: prefs.close_to_tray,
+            watch_clipboard: prefs.watch_clipboard,
+            copied: prefs.copied,
             notify: prefs.notify,
             notify_failed: prefs.notify_failed,
             sounds: prefs.sounds,
@@ -201,6 +214,24 @@ pub fn set_close_to_tray(
 }
 
 #[tauri::command]
+pub fn set_watch_clipboard(
+    app: AppHandle,
+    saved: State<'_, Saved>,
+    on: bool,
+) -> Result<Desktop, String> {
+    change_desktop(&app, &saved, |prefs| prefs.watch_clipboard = on)
+}
+
+#[tauri::command]
+pub fn set_copied(
+    app: AppHandle,
+    saved: State<'_, Saved>,
+    copied: Copied,
+) -> Result<Desktop, String> {
+    change_desktop(&app, &saved, |prefs| prefs.copied = copied)
+}
+
+#[tauri::command]
 pub fn set_notify(
     app: AppHandle,
     saved: State<'_, Saved>,
@@ -272,15 +303,19 @@ pub fn play_sound(sound: String) -> Result<(), String> {
     }
 }
 
-fn change_desktop(
+/// Every window hears of it: the tray menu and Settings show the same.
+pub fn change_desktop(
     app: &AppHandle,
     saved: &Saved,
     change: impl FnOnce(&mut Prefs),
 ) -> Result<Desktop, String> {
-    saved
+    let prefs = saved
         .change(app, change)
-        .map(|prefs| Desktop::new(app, prefs))
-        .map_err(|err| format!("{err:#}"))
+        .map_err(|err| format!("{err:#}"))?;
+    let desktop = Desktop::new(app, prefs);
+    // Best effort: a page that misses it shows the change when it asks again.
+    let _ = app.emit(EVENT, &desktop);
+    Ok(desktop)
 }
 
 /// The page says which language it shows, each time it loads; the tray
@@ -315,6 +350,8 @@ mod tests {
         assert_eq!((prefs.finish, prefs.finish_once), (Finish::Nothing, None));
         assert_eq!(prefs.countdown, 60);
         assert!(prefs.finish_waits_for_scheduled);
+        assert!(!prefs.watch_clipboard);
+        assert_eq!(prefs.copied, Copied::Ask);
         assert_eq!(prefs.language.as_deref(), Some("fr"));
         assert_eq!(prefs.last_limit, None);
     }

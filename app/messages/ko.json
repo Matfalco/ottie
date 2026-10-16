@@ -30,6 +30,10 @@
 	"cancelSoon": ["절전 취소 ({time})", "최대 절전 취소 ({time})", "시스템 종료 취소 ({time})"],
 	"cancelHow": "알림 영역의 Ottie 메뉴에서 취소할 수 있습니다.",
 	"cant": ["Ottie가 컴퓨터를 절전 모드로 전환하지 못했습니다", "Ottie가 컴퓨터를 최대 절전 모드로 전환하지 못했습니다", "Ottie가 컴퓨터를 종료하지 못했습니다"],
+	"watchClipboard": "클립보드 감시",
+	"added": "클립보드에서 추가됨",
+	"addedCount": "추가된 다운로드: {count}개",
+	"notAdded": "Ottie가 복사한 링크를 추가하지 못했습니다",
 	"problems": {
 		"network": "네트워크 오류({detail})",
 		"redirect": "잘못된 리디렉션({detail})",

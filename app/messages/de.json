@@ -30,6 +30,10 @@
 	"cancelSoon": ["Energiesparmodus abbrechen ({time})", "Ruhezustand abbrechen ({time})", "Herunterfahren abbrechen ({time})"],
 	"cancelHow": "Abbrechen geht über Otties Menü im Infobereich.",
 	"cant": ["Ottie konnte den Computer nicht in den Energiesparmodus versetzen", "Ottie konnte den Computer nicht in den Ruhezustand versetzen", "Ottie konnte den Computer nicht herunterfahren"],
+	"watchClipboard": "Zwischenablage überwachen",
+	"added": "Aus der Zwischenablage hinzugefügt",
+	"addedCount": "{count} Downloads hinzugefügt",
+	"notAdded": "Ottie konnte den kopierten Link nicht hinzufügen",
 	"problems": {
 		"network": "Netzwerkfehler ({detail})",
 		"redirect": "Ungültige Weiterleitung ({detail})",

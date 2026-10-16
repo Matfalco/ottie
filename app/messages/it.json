@@ -30,6 +30,10 @@
 	"cancelSoon": ["Annulla sospensione ({time})", "Annulla ibernazione ({time})", "Annulla spegnimento ({time})"],
 	"cancelHow": "Puoi annullarlo dal menu di Ottie nell’area di notifica.",
 	"cant": ["Ottie non è riuscito a sospendere il computer", "Ottie non è riuscito a ibernare il computer", "Ottie non è riuscito a spegnere il computer"],
+	"watchClipboard": "Controlla gli appunti",
+	"added": "Aggiunto dagli appunti",
+	"addedCount": "Download aggiunti: {count}",
+	"notAdded": "Ottie non è riuscito ad aggiungere il link copiato",
 	"problems": {
 		"network": "Errore di rete ({detail})",
 		"redirect": "Reindirizzamento non valido ({detail})",

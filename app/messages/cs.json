@@ -30,6 +30,10 @@
 	"cancelSoon": ["Zrušit uspání ({time})", "Zrušit hibernaci ({time})", "Zrušit vypnutí ({time})"],
 	"cancelHow": "Zrušit to můžete v nabídce Ottie v oznamovací oblasti.",
 	"cant": ["Ottie nemohl uspat počítač", "Ottie nemohl přepnout počítač do hibernace", "Ottie nemohl vypnout počítač"],
+	"watchClipboard": "Sledovat schránku",
+	"added": "Přidáno ze schránky",
+	"addedCount": "Přidaná stahování: {count}",
+	"notAdded": "Ottie nemohl přidat zkopírovaný odkaz",
 	"problems": {
 		"network": "Chyba sítě ({detail})",
 		"redirect": "Chybné přesměrování ({detail})",

@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Cancela-se no menu do Ottie ou na página Transferências",
 	"set_finish_waits": "Esperar pelas transferências agendadas",
 	"set_finish_waits_hint": "Desativado: termina assim que não houver nada para executar agora",
-	"finish_quit": "Sair do Ottie"
+	"finish_quit": "Sair do Ottie",
+	"caught_one": "Link copiado",
+	"caught_several": "Links copiados: {count}",
+	"caught_others": "Outros: {count}",
+	"caught_more": "Mais…",
+	"caught_more_hint": "Escolha a categoria e a pasta no Ottie",
+	"caught_ignore": "Ignorar",
+	"caught_failed": "O Ottie não consegue ler estes links agora.",
+	"set_clipboard": "Área de transferência",
+	"set_clipboard_hint": "Transfira os links que copia noutras apps",
+	"set_watch_clipboard": "Vigiar a área de transferência",
+	"set_watch_clipboard_hint": "Só links para os tipos de ficheiro das suas categorias. Nem o que copia no Ottie, nem o que um gestor de palavras-passe marca como privado.",
+	"set_copied": "Quando um link de transferência é copiado",
+	"set_copied_ask": "Perguntar",
+	"set_copied_ask_hint": "Uma pequena janela no canto do ecrã propõe-no, sem interromper o que está a fazer",
+	"set_copied_add": "Adicionar já",
+	"set_copied_add_hint": "Na sua categoria, com uma notificação",
+	"setup_clipboard_hint": "O Ottie propõe os links de transferência que copia noutras apps. Pode alterar isto mais tarde em Definições → Área de transferência."
 }

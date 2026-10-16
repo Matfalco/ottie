@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Hủy từ menu của Ottie hoặc trang Tải xuống",
 	"set_finish_waits": "Chờ các tải xuống đã lên lịch",
 	"set_finish_waits_hint": "Tắt: xong ngay khi không còn gì cần chạy lúc này",
-	"finish_quit": "Thoát Ottie"
+	"finish_quit": "Thoát Ottie",
+	"caught_one": "Liên kết đã sao chép",
+	"caught_several": "Liên kết đã sao chép: {count}",
+	"caught_others": "Còn lại: {count}",
+	"caught_more": "Tùy chọn…",
+	"caught_more_hint": "Chọn danh mục và thư mục trong Ottie",
+	"caught_ignore": "Bỏ qua",
+	"caught_failed": "Ottie hiện không đọc được các liên kết này.",
+	"set_clipboard": "Bảng nhớ tạm",
+	"set_clipboard_hint": "Tải xuống liên kết bạn sao chép trong ứng dụng khác",
+	"set_watch_clipboard": "Theo dõi bảng nhớ tạm",
+	"set_watch_clipboard_hint": "Chỉ các liên kết tới loại tệp mà danh mục của bạn liệt kê. Không gồm những gì bạn sao chép trong Ottie, hay nội dung trình quản lý mật khẩu đánh dấu là riêng tư.",
+	"set_copied": "Khi một liên kết tải xuống được sao chép",
+	"set_copied_ask": "Hỏi",
+	"set_copied_ask_hint": "Một cửa sổ nhỏ ở góc màn hình đề xuất nó mà không làm gián đoạn bạn",
+	"set_copied_add": "Thêm ngay",
+	"set_copied_add_hint": "Vào danh mục của nó, kèm thông báo",
+	"setup_clipboard_hint": "Ottie đề xuất các liên kết tải xuống bạn sao chép trong ứng dụng khác. Bạn có thể thay đổi sau trong Cài đặt → Bảng nhớ tạm."
 }

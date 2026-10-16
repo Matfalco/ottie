@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Tühista see Ottie menüüs või lehel Allalaadimised",
 	"set_finish_waits": "Oota ajastatud allalaadimisi",
 	"set_finish_waits_hint": "Väljas: valmis kohe, kui praegu pole enam midagi käivitada",
-	"finish_quit": "Välju Ottiest"
+	"finish_quit": "Välju Ottiest",
+	"caught_one": "Kopeeritud link",
+	"caught_several": "Kopeeritud lingid: {count}",
+	"caught_others": "Veel: {count}",
+	"caught_more": "Rohkem…",
+	"caught_more_hint": "Vali Ottie’s kategooria ja kaust",
+	"caught_ignore": "Eira",
+	"caught_failed": "Ottie ei saa neid linke praegu lugeda.",
+	"set_clipboard": "Lõikelaud",
+	"set_clipboard_hint": "Laadi alla linke, mida kopeerid teistes rakendustes",
+	"set_watch_clipboard": "Jälgi lõikelauda",
+	"set_watch_clipboard_hint": "Ainult lingid failitüüpidele, mis on sinu kategooriates. Mitte see, mida kopeerid Ottie’s, ega see, mille paroolihaldur privaatseks märgib.",
+	"set_copied": "Kui allalaadimislink kopeeritakse",
+	"set_copied_ask": "Küsi",
+	"set_copied_ask_hint": "Väike aken ekraani nurgas pakub seda sind segamata",
+	"set_copied_add": "Lisa kohe",
+	"set_copied_add_hint": "Oma kategooriasse, teavitusega",
+	"setup_clipboard_hint": "Ottie pakub allalaadimislinke, mida kopeerid teistes rakendustes. Seda saad hiljem muuta jaotises Sätted → Lõikelaud."
 }

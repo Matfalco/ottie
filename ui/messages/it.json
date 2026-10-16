@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Si annulla dal menu di Ottie o dalla pagina Download",
 	"set_finish_waits": "Attendi i download programmati",
 	"set_finish_waits_hint": "Disattivato: finito appena non resta nulla da avviare ora",
-	"finish_quit": "Esci da Ottie"
+	"finish_quit": "Esci da Ottie",
+	"caught_one": "Link copiato",
+	"caught_several": "Link copiati: {count}",
+	"caught_others": "Altri: {count}",
+	"caught_more": "Altro…",
+	"caught_more_hint": "Scegli la categoria e la cartella in Ottie",
+	"caught_ignore": "Ignora",
+	"caught_failed": "Ottie non riesce a leggere questi link al momento.",
+	"set_clipboard": "Appunti",
+	"set_clipboard_hint": "Scarica i link che copi in altre app",
+	"set_watch_clipboard": "Controlla gli appunti",
+	"set_watch_clipboard_hint": "Solo i link ai tipi di file delle tue categorie. Non ciò che copi in Ottie, né ciò che un gestore di password segna come privato.",
+	"set_copied": "Quando viene copiato un link di download",
+	"set_copied_ask": "Chiedi",
+	"set_copied_ask_hint": "Una piccola finestra nell’angolo dello schermo lo propone, senza interrompere ciò che stai facendo",
+	"set_copied_add": "Aggiungilo subito",
+	"set_copied_add_hint": "Nella sua categoria, con una notifica",
+	"setup_clipboard_hint": "Ottie propone i link di download che copi in altre app. Potrai cambiarlo in seguito in Impostazioni → Appunti."
 }

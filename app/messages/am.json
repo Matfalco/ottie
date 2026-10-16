@@ -30,6 +30,10 @@
 	"cancelSoon": ["ማንቀላፋትን ሰርዝ ({time})", "ሃይበርኔትን ሰርዝ ({time})", "መጥፋትን ሰርዝ ({time})"],
 	"cancelHow": "በትሬው ውስጥ ካለው የOttie ምናሌ መሰረዝ ይችላሉ።",
 	"cant": ["Ottie ኮምፒውተሩን ማንቀላፋት አልቻለም", "Ottie ኮምፒውተሩን ሃይበርኔት ማድረግ አልቻለም", "Ottie ኮምፒውተሩን ማጥፋት አልቻለም"],
+	"watchClipboard": "ቅንጥብ ሰሌዳን ተከታተል",
+	"added": "ከቅንጥብ ሰሌዳ ታክሏል",
+	"addedCount": "የታከሉ ውርዶች፦ {count}",
+	"notAdded": "Ottie የተቀዳውን አገናኝ ማከል አልቻለም",
 	"problems": {
 		"network": "የአውታረ መረብ ስህተት ({detail})",
 		"redirect": "መጥፎ አቅጣጫ ማዞር ({detail})",

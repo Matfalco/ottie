@@ -30,6 +30,10 @@
 	"cancelSoon": ["Alvó állapot megszakítása ({time})", "Hibernálás megszakítása ({time})", "Leállítás megszakítása ({time})"],
 	"cancelHow": "Az Ottie menüjében, az értesítési területen szakíthatod meg.",
 	"cant": ["Az Ottie nem tudta alvó állapotba helyezni a számítógépet", "Az Ottie nem tudta hibernálni a számítógépet", "Az Ottie nem tudta leállítani a számítógépet"],
+	"watchClipboard": "Vágólap figyelése",
+	"added": "Hozzáadva a vágólapról",
+	"addedCount": "Hozzáadott letöltések: {count}",
+	"notAdded": "Az Ottie nem tudta hozzáadni a másolt linket",
 	"problems": {
 		"network": "Hálózati hiba ({detail})",
 		"redirect": "Hibás átirányítás ({detail})",

@@ -16,6 +16,8 @@
 	import { isLocale, locales } from '#lib/paraglide/runtime.js';
 	import { Session, type Answer } from '#lib/session.svelte.js';
 	import { syncSteps } from '#lib/sync.js';
+	import { followAddLinks } from '#lib/window.js';
+	import BatchDialog from './BatchDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import NavMenu from './NavMenu.svelte';
 	import Setup from './Setup.svelte';
@@ -43,6 +45,9 @@
 	// svelte-ignore state_referenced_locally
 	const session = new Session(token, onUnauthorized);
 	let question: Question | null = $state(null);
+	/** Links copied elsewhere, sent by the desktop app's window (More…), in
+	 * the list for adding several, while it's open (docs/decisions/0043). */
+	let copied: string | null = $state(null);
 	/** The first start: the setup page replaces the app until it's done. */
 	let settingUp = $derived(session.settings?.setupDone === false);
 
@@ -79,6 +84,8 @@
 		session.start();
 		return () => session.stop();
 	});
+
+	onMount(() => followAddLinks((text) => (copied = text)));
 
 	async function add(job: AddJob): Promise<boolean> {
 		const added = await session.add(job);
@@ -177,6 +184,13 @@
 		</main>
 	{/if}
 </div>
+
+{#if copied !== null && !settingUp}
+	<!-- Keyed: links sent again start the list again. -->
+	{#key copied}
+		<BatchDialog text={copied} onClose={() => (copied = null)} />
+	{/key}
+{/if}
 
 {#if question}
 	<ConfirmDialog

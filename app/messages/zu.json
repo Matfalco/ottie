@@ -30,6 +30,10 @@
 	"cancelSoon": ["Khansela ukulala ({time})", "Khansela ukulala isikhathi eside ({time})", "Khansela ukuvala ({time})"],
 	"cancelHow": "Ungakukhansela kumenyu ye-Ottie kuthreyi.",
 	"cant": ["I-Ottie ayikwazanga ukulalisa ikhompyutha", "I-Ottie ayikwazanga ukulalisa ikhompyutha isikhathi eside", "I-Ottie ayikwazanga ukuvala ikhompyutha"],
+	"watchClipboard": "Qapha ibhodi lokunamathisela",
+	"added": "Kungezwe kusuka ebhodini lokunamathisela",
+	"addedCount": "Okulandiwe okungeziwe: {count}",
+	"notAdded": "U-Ottie akakwazanga ukwengeza isixhumanisi esikopishiwe",
 	"problems": {
 		"network": "Iphutha lenethiwekhi ({detail})",
 		"redirect": "Ukuqondisa kabusha okubi ({detail})",

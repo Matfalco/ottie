@@ -30,6 +30,10 @@
 	"cancelSoon": ["Ikkanċella l-irqad ({time})", "Ikkanċella l-ibbernazzjoni ({time})", "Ikkanċella t-tifi ({time})"],
 	"cancelHow": "Tista’ tikkanċellah mill-menu ta’ Ottie fit-tray.",
 	"cant": ["Ottie ma setax ipoġġi l-kompjuter jorqod", "Ottie ma setax idaħħal il-kompjuter f’ibbernazzjoni", "Ottie ma setax jitfi l-kompjuter"],
+	"watchClipboard": "Osserva l-clipboard",
+	"added": "Miżjud mill-clipboard",
+	"addedCount": "Tniżżiliet miżjuda: {count}",
+	"notAdded": "Ottie ma setax iżid il-ħolqa kkupjata",
 	"problems": {
 		"network": "Żball fin-netwerk ({detail})",
 		"redirect": "Ridirezzjoni ħażina ({detail})",

@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Kukhansele kumenyu ye-Ottie noma ekhasini le-Okulandiwe",
 	"set_finish_waits": "Linda okulandwayo okuhleliwe",
 	"set_finish_waits_hint": "Kuvaliwe: kuqediwe uma kungasekho okufanele kusebenze manje",
-	"finish_quit": "Phuma ku-Ottie"
+	"finish_quit": "Phuma ku-Ottie",
+	"caught_one": "Isixhumanisi esikopishiwe",
+	"caught_several": "Izixhumanisi ezikopishiwe: {count}",
+	"caught_others": "Ezinye: {count}",
+	"caught_more": "Okwengeziwe…",
+	"caught_more_hint": "Khetha isigaba nefolda ku-Ottie",
+	"caught_ignore": "Ziba",
+	"caught_failed": "U-Ottie akakwazi ukufunda lezi zixhumanisi manje.",
+	"set_clipboard": "Ibhodi lokunamathisela",
+	"set_clipboard_hint": "Landa izixhumanisi ozikopisha kwezinye izinhlelo",
+	"set_watch_clipboard": "Qapha ibhodi lokunamathisela",
+	"set_watch_clipboard_hint": "Izixhumanisi eziya ezinhlotsheni zamafayela ezibalwe yizigaba zakho kuphela. Hhayi lokho okukopisha ku-Ottie, noma lokho umphathi wamaphasiwedi akumaka njengokuyimfihlo.",
+	"set_copied": "Uma kukopishwa isixhumanisi sokulanda",
+	"set_copied_ask": "Buza",
+	"set_copied_ask_hint": "Iwindi elincane ekhoneni lesikrini liyakunikeza ngaphandle kokukuphazamisa",
+	"set_copied_add": "Kwengeze ngokushesha",
+	"set_copied_add_hint": "Esigabeni saso, nesaziso",
+	"setup_clipboard_hint": "U-Ottie unikeza izixhumanisi zokulanda ozikopisha kwezinye izinhlelo. Ungakushintsha lokhu kamuva ku-Izilungiselelo → Ibhodi lokunamathisela."
 }

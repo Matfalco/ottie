@@ -30,6 +30,10 @@
 	"cancelSoon": ["Anuluj uśpienie ({time})", "Anuluj hibernację ({time})", "Anuluj wyłączenie ({time})"],
 	"cancelHow": "Możesz to anulować w menu Ottie w zasobniku.",
 	"cant": ["Ottie nie udało się uśpić komputera", "Ottie nie udało się zahibernować komputera", "Ottie nie udało się wyłączyć komputera"],
+	"watchClipboard": "Obserwuj schowek",
+	"added": "Dodano ze schowka",
+	"addedCount": "Dodane pobierania: {count}",
+	"notAdded": "Ottie nie udało się dodać skopiowanego linku",
 	"problems": {
 		"network": "Błąd sieci ({detail})",
 		"redirect": "Nieprawidłowe przekierowanie ({detail})",

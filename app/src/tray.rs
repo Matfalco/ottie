@@ -2,7 +2,7 @@
 //! (`popup.rs`), which has the limit's field. The system's menu below (open
 //! the window, see what runs and how far it has come, pause or resume everything, switch the total
 //! limit or pick one, choose what happens when everything has finished or cancel it
-//! (docs/decisions/0040), quit) is there while the daemon can't be reached, since
+//! (docs/decisions/0040), watch the clipboard or not (0043), quit) is there while the daemon can't be reached, since
 //! Ottie's menu is its page, and always on Linux, whose trays report no
 //! clicks. What it shows comes from the daemon's events (`status.rs`); what
 //! it does goes through the daemon's API, like any other front end.
@@ -38,6 +38,7 @@ const FINISH: &str = "finish";
 /// A choice's item: `finish-<its place in Finish::ALL>`.
 const FINISH_CHOICE: &str = "finish-";
 const CANCEL_FINISH: &str = "finish-cancel";
+const WATCH_CLIPBOARD: &str = "watch-clipboard";
 const QUIT: &str = "quit";
 
 /// The limits offered in the system's menu, in bytes per second, as on the
@@ -139,6 +140,7 @@ struct Items {
     finish_choices: Vec<(Finish, CheckMenuItem<Wry>)>,
     /// In the menu only during a countdown.
     cancel_finish: MenuItem<Wry>,
+    watch_clipboard: CheckMenuItem<Wry>,
     quit: MenuItem<Wry>,
 }
 
@@ -189,6 +191,14 @@ pub fn start(app: &AppHandle, daemon: Arc<Daemon>) -> tauri::Result<()> {
             })
             .collect::<tauri::Result<_>>()?,
         cancel_finish: MenuItem::with_id(app, CANCEL_FINISH, "", true, None::<&str>)?,
+        watch_clipboard: CheckMenuItem::with_id(
+            app,
+            WATCH_CLIPBOARD,
+            &texts.watch_clipboard,
+            true,
+            false,
+            None::<&str>,
+        )?,
         quit: MenuItem::with_id(app, QUIT, &texts.quit, true, None::<&str>)?,
     };
     let presets: Vec<&dyn IsMenuItem<Wry>> = items
@@ -213,6 +223,7 @@ pub fn start(app: &AppHandle, daemon: Arc<Daemon>) -> tauri::Result<()> {
             &items.limit,
             &items.limits,
             &items.finish,
+            &items.watch_clipboard,
             &PredefinedMenuItem::separator(app)?,
             &items.quit,
         ],
@@ -273,6 +284,12 @@ fn chosen(app: &AppHandle, event: MenuEvent) {
         }
         QUIT => app.exit(0),
         CANCEL_FINISH => finish::cancel(app),
+        WATCH_CLIPBOARD => {
+            let saved = app.state::<prefs::Saved>();
+            let on = !saved.get().watch_clipboard;
+            // Failed: the next refresh shows what's saved.
+            let _ = prefs::change_desktop(app, &saved, |prefs| prefs.watch_clipboard = on);
+        }
         PAUSE_ALL => {
             tauri::async_runtime::spawn(async move { pause_all(&daemon).await });
         }
@@ -387,6 +404,7 @@ async fn refresh(
             for (finish, item) in &items.finish_choices {
                 let _ = item.set_text(texts.choice(*finish));
             }
+            let _ = items.watch_clipboard.set_text(&texts.watch_clipboard);
         }
         let summary = *summaries.borrow();
         let limit = if summary.global_limit > 0 {
@@ -472,6 +490,7 @@ async fn refresh(
         // Checked by the items themselves: a click ticks one before the
         // daemon has answered, and nothing else would untick it if that failed.
         tick_if(&items.limit, summary.global_limit > 0);
+        tick_if(&items.watch_clipboard, prefs.watch_clipboard);
         for (limit, item) in &items.presets {
             tick_if(item, summary.global_limit == *limit);
         }

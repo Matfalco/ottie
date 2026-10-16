@@ -1,5 +1,6 @@
 //! The app as a client of the daemon's HTTP API, like every other front end
-//! (CLAUDE.md, Architecture): what the tray and notifications read and do.
+//! (CLAUDE.md, Architecture): what the tray, notifications and clipboard
+//! monitoring read and do.
 //! Only the fields they need are read; the rest of each answer is ignored.
 
 use std::time::Duration;
@@ -71,6 +72,52 @@ pub enum Problem {
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub global_limit: u64,
+}
+
+/// Something in a text that looks like a link (`FoundLink` in the API).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Found {
+    Link {
+        /// Normalized, as it would be added.
+        url: String,
+        matched: Matched,
+        /// A download of this link is on the list already.
+        known: bool,
+    },
+    /// Can't be added (`invalid`), or from a newer daemon.
+    #[serde(other)]
+    Other,
+}
+
+/// The category a link would get; only its extension matters here.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct Matched {
+    pub extension: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Preview {
+    links: Vec<Found>,
+}
+
+/// A category: only the file types it takes (lowercase, without the dot).
+#[derive(Debug, Clone, Deserialize)]
+pub struct Category {
+    pub extensions: Vec<String>,
+}
+
+/// What `POST /jobs/batch` answers: one ID per job sent, null if refused…
+#[derive(Debug, Clone, Deserialize)]
+pub struct Added {
+    pub ids: Vec<Option<String>>,
+    /// …and why, in English.
+    pub refused: Vec<Refused>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Refused {
+    pub error: String,
 }
 
 /// A message on the events stream; the others don't matter to the app.
@@ -146,6 +193,38 @@ impl Daemon {
         Ok(self.get("settings").await?.json().await?)
     }
 
+    pub async fn categories(&self) -> Result<Vec<Category>> {
+        Ok(self.get("categories").await?.json().await?)
+    }
+
+    /// The links in some text, as the daemon reads them.
+    pub async fn preview(&self, text: &str) -> Result<Vec<Found>> {
+        let preview: Preview = self
+            .send(
+                self.http
+                    .post(self.url("jobs/preview")?)
+                    .json(&json!({ "text": text })),
+            )
+            .await?
+            .json()
+            .await?;
+        Ok(preview.links)
+    }
+
+    /// Adds these links, each in its automatic category.
+    pub async fn add(&self, urls: &[String]) -> Result<Added> {
+        let jobs: Vec<_> = urls.iter().map(|url| json!({ "url": url })).collect();
+        Ok(self
+            .send(
+                self.http
+                    .post(self.url("jobs/batch")?)
+                    .json(&json!({ "jobs": jobs })),
+            )
+            .await?
+            .json()
+            .await?)
+    }
+
     pub async fn pause(&self, id: &str) -> Result<()> {
         self.post(&format!("jobs/{id}/pause")).await
     }
@@ -156,20 +235,18 @@ impl Daemon {
 
     /// Bytes per second for all downloads together; 0 = no limit.
     pub async fn set_global_limit(&self, limit: u64) -> Result<()> {
-        self.http
-            .patch(self.url("settings")?)
-            .bearer_auth(&self.token)
-            .json(&json!({ "globalLimit": limit }))
-            .send()
-            .await?
-            .error_for_status()?;
+        let change = json!({ "globalLimit": limit });
+        self.send(self.http.patch(self.url("settings")?).json(&change))
+            .await?;
         Ok(())
     }
 
     async fn get(&self, path: &str) -> Result<reqwest::Response> {
-        Ok(self
-            .http
-            .get(self.url(path)?)
+        self.send(self.http.get(self.url(path)?)).await
+    }
+
+    async fn send(&self, request: reqwest::RequestBuilder) -> Result<reqwest::Response> {
+        Ok(request
             .bearer_auth(&self.token)
             .send()
             .await?
@@ -177,12 +254,7 @@ impl Daemon {
     }
 
     async fn post(&self, path: &str) -> Result<()> {
-        self.http
-            .post(self.url(path)?)
-            .bearer_auth(&self.token)
-            .send()
-            .await?
-            .error_for_status()?;
+        self.send(self.http.post(self.url(path)?)).await?;
         Ok(())
     }
 }
@@ -231,6 +303,31 @@ mod tests {
                 settings: Settings { global_limit: 1024 }
             }
         ));
+    }
+
+    #[test]
+    fn found_links_read_only_what_the_clipboard_needs() {
+        let found: Preview = serde_json::from_str(
+            r#"{"links":[
+                {"kind":"link","url":"https://x.org/a.zip","name":"a.zip",
+                 "matched":{"category":3,"extension":"zip","byFolder":false},"known":false},
+                {"kind":"invalid","text":"ftp://x","refused":{"code":"unsupportedScheme"}}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            found.links,
+            [
+                Found::Link {
+                    url: "https://x.org/a.zip".to_owned(),
+                    matched: Matched {
+                        extension: Some("zip".to_owned())
+                    },
+                    known: false
+                },
+                Found::Other
+            ]
+        );
     }
 
     #[test]

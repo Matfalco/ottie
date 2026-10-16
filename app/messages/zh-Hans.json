@@ -30,6 +30,10 @@
 	"cancelSoon": ["取消睡眠（{time}）", "取消休眠（{time}）", "取消关机（{time}）"],
 	"cancelHow": "可在托盘中的 Ottie 菜单里取消。",
 	"cant": ["Ottie 无法让电脑睡眠", "Ottie 无法让电脑休眠", "Ottie 无法关闭电脑"],
+	"watchClipboard": "监视剪贴板",
+	"added": "已从剪贴板添加",
+	"addedCount": "已添加 {count} 个下载",
+	"notAdded": "Ottie 无法添加复制的链接",
 	"problems": {
 		"network": "网络错误（{detail}）",
 		"redirect": "重定向错误（{detail}）",

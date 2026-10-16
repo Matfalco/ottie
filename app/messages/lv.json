@@ -30,6 +30,10 @@
 	"cancelSoon": ["Atcelt miega režīmu ({time})", "Atcelt hibernāciju ({time})", "Atcelt izslēgšanu ({time})"],
 	"cancelHow": "To var atcelt Ottie izvēlnē paziņojumu apgabalā.",
 	"cant": ["Ottie neizdevās pārslēgt datoru miega režīmā", "Ottie neizdevās hibernēt datoru", "Ottie neizdevās izslēgt datoru"],
+	"watchClipboard": "Uzraudzīt starpliktuvi",
+	"added": "Pievienots no starpliktuves",
+	"addedCount": "Pievienotās lejupielādes: {count}",
+	"notAdded": "Ottie nevarēja pievienot nokopēto saiti",
 	"problems": {
 		"network": "Tīkla kļūda ({detail})",
 		"redirect": "Nepareiza novirzīšana ({detail})",

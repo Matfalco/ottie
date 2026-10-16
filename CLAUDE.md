@@ -23,7 +23,7 @@
 - Must-haves: pause/resume (including after a restart or crash), multi-connection downloads, and speed limits at three levels (per download, per category, global), adjustable while downloads run.
 - **Play while downloading** (uGet can): a short-lived play link (`POST /jobs/{id}/stream` → `GET /stream/{ticket}/{name}`, no token, range support) serves a partial file, so the browser, VLC/mpv or an Android player can play a video before it finishes, locally or from a remote daemon (`docs/decisions/0029`). The download order follows the player and, in a per-download streaming mode, stays in order and fetches the last chunk early (many MP4s keep their index at the end).
 - **Translated UI:** in the system's language by default (a device or every device can choose another), English as the fallback. English and French, then languages in batches (EU, Latin America, Asia, Africa; `docs/decisions/0041`): de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR, then the rest of the EU in Latin script (sv, ro, cs, hu, da, fi, sk, hr, sl, lt, lv, et, ga, mt), Greek and Cyrillic (el, bg, uk), Asia (zh-Hans, zh-Hant, ja, ko, id, hi, vi, tr), Africa (sw, am, ha, yo, zu), and right to left, with the whole page mirrored (ar, fa, ur; `docs/decisions/0042`). Each is one JSON file in `ui/messages/` and, for the tray, one in `app/messages/`; daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
-- uGet features to bring over time: categories (folder + file-type rules), queue with max concurrent downloads, opt-in clipboard monitoring, batch/URL-list import, scheduler.
+- uGet features to bring over time: categories (folder + file-type rules), queue with max concurrent downloads, opt-in clipboard monitoring (desktop app, `docs/decisions/0043`), batch/URL-list import, scheduler.
 
 ## Stack
 
@@ -50,7 +50,7 @@ Android app (Tauri) ──────┘    (on Android, core + api run inside 
 
 - **The HTTP API is the only contract.** Every client talks to the engine through it. It's documented in `docs/api/` (`docs/decisions/0030`): a guide, and `openapi.json` generated from the handlers. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart, the player), never for download operations. The app's own commands are listed in `app/build.rs` and granted to the daemon's pages in `PAGE_PERMISSIONS`; a page never passes a program or path to run.
 - **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
-- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). At sign-in (`0039`) the system starts the app with `--autostart`: hidden in the tray, or, per `app.json`, it only starts `ottie serve` on its own (log in the app's log folder) and quits. A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable), the tooltip and notifications (finished: all at once by default, or each, or never; failed: a switch; `docs/decisions/0035`; with their sounds: the system's, silent, a set of Ottie's or one for each kind, `0038`), with its own texts in `app/messages/`. When everything has finished (`0040`) it can quit, or put the computer to sleep, hibernate it or shut it down after a countdown (a small window on the daemon's `/finish` page, or a notification), chosen every time in Settings or for once from the tray menu or the Downloads page. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
+- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). At sign-in (`0039`) the system starts the app with `--autostart`: hidden in the tray, or, per `app.json`, it only starts `ottie serve` on its own (log in the app's log folder) and quits. A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable), the tooltip and notifications (finished: all at once by default, or each, or never; failed: a switch; `docs/decisions/0035`; with their sounds: the system's, silent, a set of Ottie's or one for each kind, `0038`), with its own texts in `app/messages/`. When everything has finished (`0040`) it can quit, or put the computer to sleep, hibernate it or shut it down after a countdown (a small window on the daemon's `/finish` page, or a notification), chosen every time in Settings or for once from the tray menu or the Downloads page. It can watch the clipboard (`0043`, opt-in): a link copied elsewhere to a file type a category lists is offered in a small window that never takes the focus (the daemon's `/caught` page; Download, More… opens the main window's list, Ignore), or added at once with a notification. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
 - **Headless:** the daemon runs standalone (systemd user service, Docker) and serves the built web UI itself.
 
@@ -123,7 +123,8 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
                      started on exit
   src/daemon.rs      find or start `ottie serve --managed` (the sidecar next to the app), ready / stop; at
                      sign-in, `ottie serve` on its own
-  src/client.rs      the app as an API client: events WebSocket, jobs, settings, pause/resume, limit
+  src/client.rs      the app as an API client: events WebSocket, jobs, settings, pause/resume, limit,
+                     categories' file types, links in a text (preview), adding several
   src/status.rs      follows the events (reconnects), sums them up once a second for the tray (counts, speed, progress of those of known size),
                      and passes downloads that finished or failed to notify.rs
   src/notify.rs      notifications (0035): what to tell (each, all at once, failed), with which sound, a click
@@ -141,14 +142,21 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
                      Cancel / now; commands finish / set_finish / set_finish_once / set_countdown /
                      set_countdown_in / set_finish_waits / cancel_finish / finish_now / countdown_ready; the
                      pages hear changes as the `finish` event. OTTIE_POWER_DRY_RUN: the countdown only prints
+  src/clipboard.rs   clipboard monitoring (0043): a thread looks twice a second (arboard; on Windows only
+                     after the change counter moves, never what password managers mark private), the daemon
+                     says which links count, then the window on /caught (in the corner nearest the tray
+                     icon, not focusable) or added at once; commands caught / caught_ready / caught_done /
+                     caught_more, events `caught` (its page) and `add-links` (the main window)
   src/power.rs       sleep, hibernate, shut down and whether the computer can: the system's calls (windows-sys on
                      Windows, logind via systemctl/busctl on Linux)
   src/texts.rs       the tray's and notifications' texts from messages/<tag>.json (the page's tag, else
                      the bare language), speeds, counts and failure reasons per language; right-to-left
                      ones embedded as such (0042)
   src/prefs.rs       app.json: close to tray, notifications and their sounds, what sign-in starts, what happens
-                     when everything has finished, the page's language, last total limit; commands desktop / set_startup / set_close_to_tray / set_notify / set_notify_failed / set_sounds /
-                     set_sound / play_sound / set_language
+                     when everything has finished, watching the clipboard and what a copied link does, the
+                     page's language, last total limit; commands desktop / set_startup / set_close_to_tray /
+                     set_watch_clipboard / set_copied / set_notify / set_notify_failed / set_sounds /
+                     set_sound / play_sound / set_language; the pages hear changes as the `desktop` event
   src/config.rs      load/save the app's JSON settings files in its config folder
   src/player.rs      "Play with" (0031): system's player via a .m3u, browser, or a picked program;
                      saved in the app's config folder; commands player / set_play_with / choose_player
@@ -163,11 +171,13 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
   package.json       pnpm package `app`: the Tauri CLI
 ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [exists]
   src/hooks.client.ts  which language the page shows: Paraglide strategies that save nothing (0041)
-  src/routes/        +layout.svelte (fonts, app.css, theme, favicon, token → Login | Shell; /tray without),
+  src/routes/        +layout.svelte (fonts, app.css, theme, favicon, token → Login | Shell; /tray, /finish
+                     and /caught without),
                      +layout.ts (ssr = false), +page.svelte (Dashboard), downloads/+page.svelte
                      (Downloads, ?status= filter), categories/+page.svelte, schedule/+page.svelte,
                      settings/+page.svelte, tray/+page.svelte (the desktop app's tray menu: TrayMenu),
-                     finish/+page.svelte (its countdown window: Countdown)
+                     finish/+page.svelte (its countdown window: Countdown), caught/+page.svelte (its
+                     window for links copied elsewhere: Caught)
   src/lib/api.ts     fetch + WebSocket client for /api/v1 (Unauthorized, ApiFailure)
   src/lib/session.svelte.ts  live job list: events WebSocket, reconnect, buffered resync
   src/lib/context.ts what every page shares (session, run): Svelte createContext
@@ -194,18 +204,21 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      batch.ts (several links at once: when a paste opens the list, its rows, what to
                      add, what was refused, 0036), sounds.ts (the notification sounds' choices: sets, or one for each kind, 0038),
                      finish.ts (when everything has finished: the choices in words, what this computer
-                     can't do, the countdown's text, 0040)
+                     can't do, the countdown's text, 0040),
+                     caught.ts (links copied elsewhere: the window's rows and title, how long it stays,
+                     what was added or refused, 0043)
                      plain logic, unit-tested (*.test.ts, Vitest)
   src/lib/appearance.svelte.ts  the appearance chosen on this device (state shared by layout, shell
                      (follows the shared one, docs/decisions/0022) and Settings)
   src/lib/window.ts  the desktop app: its window (minimize/maximize/close), the folder picker,
                      and how Play opens a player (the app's commands, 0031), and what happens when
-                     everything has finished (0040)
+                     everything has finished (0040), and the clipboard's links (0043)
   src/lib/finish.svelte.ts  that, live in a page: asked once, then the app's `finish` events, the countdown's clock
   src/lib/explain.ts   daemon codes (Problem, Reason) → the page's language; English fallback
   src/lib/testing.ts   test helpers (sample job)
   src/lib/components/  Shell (TitleBar with NavMenu tabs + SpeedChip (limit popup: LimitControl + RatePresets), page,
-                       dialog; Setup on first start, with the sign-in choice in the desktop app),
+                       dialog, BatchDialog for links sent by More… in the clipboard's window; Setup on first
+                       start, with the sign-in and clipboard choices in the desktop app),
                        Dashboard (AddCard, tiles, SpeedChart, RunningList, JobSummary),
                        Downloads (AddCard, then one pane: Toolbar + MoveMenu + FinishMenu (desktop app), QuickFilters (with the
                        saved views' pills + their menu) or FilterPanel, ViewDialog (name a view),
@@ -216,11 +229,12 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        SchedulePage (WeekView: drag a slot or its edges, click to edit; then the
                        slots' rows with SlotEditor inline),
                        SettingsPage (section list; appearance + sync, language: LanguagePicker; downloads;
-                       desktop app (sign-in, closing), notifications + playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
+                       desktop app (sign-in, closing), clipboard, notifications + playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
                        TitleBar (+ WindowControls; folds to fit: tab icons, slot chip, logo name), AddCard (AddBar: link, then category + folder step;
                        BatchDialog: several links, from a paste, the list button or a file),
                        FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu), Countdown (its
-                       countdown window before sleep, hibernate or shut down)
+                       countdown window before sleep, hibernate or shut down), Caught (its window for links
+                       copied elsewhere)
   messages/<tag>.json  every UI text, per language (Paraglide); project.inlang/ its settings (the locales)
   src/app.css        the four themes as variables under [data-theme] (docs/decisions/0021), fonts (Outfit +
                      DM Mono, else the system's; see "Languages and fonts" below, 0041), radii
@@ -296,11 +310,11 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Shutdown keeps running jobs running** in the database (it doesn't mark them Paused), so the next start continues them; user-paused jobs stay paused.
 - **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Names come from `Content-Disposition` (`filename*`, then `filename`), else the final URL; chosen once at the first response. Sanitize them; never write outside the target folder; resolve collisions with ` (1)`, ` (2)`. Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files).
 - **Cancellation:** `tokio_util::sync::CancellationToken`, raced against network reads with `tokio::select! { biased; … }`. Pausing must stop all segments promptly and leave state consistent.
-- **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; yt-dlp (step 6) and later native FTP/SFTP plug in beside it, so keep HTTP assumptions inside the HTTP backend.
+- **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; yt-dlp (step 7) and later native FTP/SFTP plug in beside it, so keep HTTP assumptions inside the HTTP backend.
 
 ## Platform gotchas
 
-- **TLS:** rustls everywhere. No OpenSSL/native-tls; it breaks Android and Windows builds. On Android, `rustls-platform-verifier` must be initialised with the app's JNI context and ships a small Kotlin component. Check its docs in the Android step (8).
+- **TLS:** rustls everywhere. No OpenSSL/native-tls; it breaks Android and Windows builds. On Android, `rustls-platform-verifier` must be initialised with the app's JNI context and ships a small Kotlin component. Check its docs in the Android step (9).
 - **Android background work:** downloads must keep going when the app is in the background. Android 15 limits `dataSync` foreground services to 6 hours per 24 h; prefer user-initiated data transfer jobs. This needs a small Kotlin Tauri plugin. Check current Android docs before implementing.
 - **Android storage:** the engine needs a seekable file. Write `.part.ottie` files to app storage and publish finished files to Downloads through MediaStore.
 - **Android browser integration:** no reliable extension route (Chrome for Android has no extensions; Firefox for Android only partly supports the downloads API). Take URLs from the share sheet and "Open with" intent filters instead.
@@ -428,14 +442,16 @@ Done: ✅ and struck through.
    - ✅ ~~5j several links at once (`docs/decisions/0036`)~~
    - ✅ ~~5k sequences in one link (`[001-120]`, curl-style; `docs/decisions/0037`)~~
    - ✅ ~~5l starting at sign-in (`docs/decisions/0039`)~~
-6. Scheduler (`docs/decisions/0040`), clipboard monitoring, yt-dlp backend (its own updates, apart from the app's):
+6. ✅ Scheduler (`docs/decisions/0040`):
    - ✅ ~~6a a download's own start and stop time (the `Scheduled` state)~~
    - ✅ ~~6b time slots + the Schedule tab~~
    - ✅ ~~6c when everything has finished (desktop app)~~
-   - 6d clipboard monitoring
-   - 6e yt-dlp
-7. Browser extension.
-8. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.
+7. More features:
+   - ✅ ~~7a clipboard monitoring (desktop app, `docs/decisions/0043`)~~
+   - 7b yt-dlp backend (its own updates, apart from the app's)
+   - then a look at "Later (TODO)" below together, to pick which come here
+8. Browser extension.
+9. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.
 
 Languages, a batch per slice, between the steps above (`docs/decisions/0041`; no Russian or Hebrew for now):
 - ✅ ~~L1 "System" by default (also as the shared language), matching the system's tag, unreviewed note; de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR~~
@@ -449,7 +465,7 @@ Each translation is drafted, then checked by a native speaker when one helps (a 
 
 ## Open decisions
 
-- Extension pairing: both, a native messaging host when installed (zero-config, can start the daemon) and the token as the fallback (remote daemon, portable setup). Details in step 7.
+- Extension pairing: both, a native messaging host when installed (zero-config, can start the daemon) and the token as the fallback (remote daemon, portable setup). Details in step 8.
 - yt-dlp: bundled or found, how it updates, ffmpeg, format choice.
 
 Settled: no uGet import; no aria2 (its HTTP strengths are in our engine already) and no BitTorrent/magnet links.

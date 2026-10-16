@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "इसे Ottie के मेनू या डाउनलोड पेज से रद्द करें",
 	"set_finish_waits": "शेड्यूल किए गए डाउनलोड का इंतज़ार करें",
 	"set_finish_waits_hint": "बंद: जैसे ही अभी चलाने को कुछ न बचे, पूरा",
-	"finish_quit": "Ottie बंद करें"
+	"finish_quit": "Ottie बंद करें",
+	"caught_one": "कॉपी किया गया लिंक",
+	"caught_several": "कॉपी किए गए लिंक: {count}",
+	"caught_others": "और: {count}",
+	"caught_more": "और विकल्प…",
+	"caught_more_hint": "Ottie में श्रेणी और फ़ोल्डर चुनें",
+	"caught_ignore": "अनदेखा करें",
+	"caught_failed": "Ottie अभी इन लिंक को नहीं पढ़ सकता।",
+	"set_clipboard": "क्लिपबोर्ड",
+	"set_clipboard_hint": "दूसरे ऐप में कॉपी किए गए लिंक डाउनलोड करें",
+	"set_watch_clipboard": "क्लिपबोर्ड पर नज़र रखें",
+	"set_watch_clipboard_hint": "सिर्फ़ उन फ़ाइल प्रकारों के लिंक जो आपकी श्रेणियों में हैं। Ottie में कॉपी की गई चीज़ें नहीं, और न वह जिसे पासवर्ड मैनेजर निजी चिह्नित करे।",
+	"set_copied": "जब डाउनलोड लिंक कॉपी हो",
+	"set_copied_ask": "पूछें",
+	"set_copied_ask_hint": "स्क्रीन के कोने में एक छोटी विंडो इसे पेश करती है, आपके काम में रुकावट डाले बिना",
+	"set_copied_add": "तुरंत जोड़ें",
+	"set_copied_add_hint": "उसकी श्रेणी में, एक सूचना के साथ",
+	"setup_clipboard_hint": "Ottie दूसरे ऐप में कॉपी किए गए डाउनलोड लिंक पेश करता है। इसे बाद में सेटिंग्स → क्लिपबोर्ड में बदल सकते हैं।"
 }

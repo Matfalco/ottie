@@ -30,6 +30,10 @@
 	"cancelSoon": ["Soke barci ({time})", "Soke dogon barci ({time})", "Soke kashewa ({time})"],
 	"cancelHow": "Za ka iya soke shi daga menu na Ottie a cikin tire.",
 	"cant": ["Ottie bai iya sa kwamfuta ta yi barci ba", "Ottie bai iya sa kwamfuta ta yi dogon barci ba", "Ottie bai iya kashe kwamfuta ba"],
+	"watchClipboard": "Sa ido kan allon kwafi",
+	"added": "An ƙara daga allon kwafi",
+	"addedCount": "Saukewar da aka ƙara: {count}",
+	"notAdded": "Ottie bai iya ƙara mahaɗin da aka kwafa ba",
 	"problems": {
 		"network": "Kuskuren hanyar sadarwa ({detail})",
 		"redirect": "Mummunan turawa ({detail})",

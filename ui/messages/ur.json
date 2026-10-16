@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "اسے Ottie کے مینو یا ڈاؤن لوڈز کے صفحے سے منسوخ کریں",
 	"set_finish_waits": "طے شدہ ڈاؤن لوڈز کا انتظار کریں",
 	"set_finish_waits_hint": "بند: جیسے ہی ابھی چلانے کو کچھ نہ بچے، مکمل",
-	"finish_quit": "Ottie بند کریں"
+	"finish_quit": "Ottie بند کریں",
+	"caught_one": "کاپی کیا گیا لنک",
+	"caught_several": "کاپی کیے گئے لنکس: ⁨{count}⁩",
+	"caught_others": "دیگر: ⁨{count}⁩",
+	"caught_more": "مزید…",
+	"caught_more_hint": "Ottie میں زمرہ اور فولڈر منتخب کریں",
+	"caught_ignore": "نظر انداز کریں",
+	"caught_failed": "Ottie ابھی یہ لنکس نہیں پڑھ سکتا۔",
+	"set_clipboard": "کلپ بورڈ",
+	"set_clipboard_hint": "دوسری ایپس میں کاپی کیے گئے لنکس ڈاؤن لوڈ کریں",
+	"set_watch_clipboard": "کلپ بورڈ پر نظر رکھیں",
+	"set_watch_clipboard_hint": "صرف ان فائل اقسام کے لنکس جو آپ کے زمروں میں درج ہیں۔ نہ وہ جو آپ Ottie میں کاپی کرتے ہیں، نہ وہ جسے پاس ورڈ مینیجر نجی کا نشان لگائے۔",
+	"set_copied": "جب ڈاؤن لوڈ لنک کاپی ہو",
+	"set_copied_ask": "پوچھیں",
+	"set_copied_ask_hint": "اسکرین کے کونے میں ایک چھوٹی ونڈو اسے پیش کرتی ہے، آپ کے کام میں خلل ڈالے بغیر",
+	"set_copied_add": "فوراً شامل کریں",
+	"set_copied_add_hint": "اس کے زمرے میں، ایک اطلاع کے ساتھ",
+	"setup_clipboard_hint": "Ottie دوسری ایپس میں کاپی کیے گئے ڈاؤن لوڈ لنکس پیش کرتا ہے۔ آپ اسے بعد میں ترتیبات ← کلپ بورڈ میں بدل سکتے ہیں۔"
 }

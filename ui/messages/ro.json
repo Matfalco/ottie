@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Se anulează din meniul Ottie sau din pagina Descărcări",
 	"set_finish_waits": "Așteaptă descărcările programate",
 	"set_finish_waits_hint": "Dezactivat: gata imediat ce nu mai e nimic de rulat acum",
-	"finish_quit": "Ieși din Ottie"
+	"finish_quit": "Ieși din Ottie",
+	"caught_one": "Link copiat",
+	"caught_several": "Linkuri copiate: {count}",
+	"caught_others": "Altele: {count}",
+	"caught_more": "Mai mult…",
+	"caught_more_hint": "Alegeți categoria și dosarul în Ottie",
+	"caught_ignore": "Ignorați",
+	"caught_failed": "Ottie nu poate citi aceste linkuri acum.",
+	"set_clipboard": "Clipboard",
+	"set_clipboard_hint": "Descărcați linkurile pe care le copiați în alte aplicații",
+	"set_watch_clipboard": "Urmărește clipboardul",
+	"set_watch_clipboard_hint": "Doar linkuri către tipurile de fișiere din categoriile dvs. Nu ce copiați în Ottie și nici ce un manager de parole marchează ca privat.",
+	"set_copied": "Când se copiază un link de descărcare",
+	"set_copied_ask": "Întreabă",
+	"set_copied_ask_hint": "O fereastră mică în colțul ecranului îl propune, fără să vă întrerupă",
+	"set_copied_add": "Adaugă imediat",
+	"set_copied_add_hint": "În categoria sa, cu o notificare",
+	"setup_clipboard_hint": "Ottie vă propune linkurile de descărcare pe care le copiați în alte aplicații. Puteți schimba asta mai târziu în Setări → Clipboard."
 }

@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Ottie のメニューか「ダウンロード」ページでキャンセルできます",
 	"set_finish_waits": "予約済みのダウンロードを待つ",
 	"set_finish_waits_hint": "オフ：今実行するものがなくなった時点で完了",
-	"finish_quit": "Ottie を終了"
+	"finish_quit": "Ottie を終了",
+	"caught_one": "コピーしたリンク",
+	"caught_several": "コピーしたリンク：{count} 件",
+	"caught_others": "ほか {count} 件",
+	"caught_more": "その他…",
+	"caught_more_hint": "Ottie でカテゴリとフォルダを選ぶ",
+	"caught_ignore": "無視",
+	"caught_failed": "Ottie は今これらのリンクを読み取れません。",
+	"set_clipboard": "クリップボード",
+	"set_clipboard_hint": "ほかのアプリでコピーしたリンクをダウンロード",
+	"set_watch_clipboard": "クリップボードを監視",
+	"set_watch_clipboard_hint": "カテゴリに登録したファイル形式へのリンクだけが対象です。Ottie 内でコピーしたものや、パスワードマネージャーが非公開とした内容は除きます。",
+	"set_copied": "ダウンロードリンクをコピーしたとき",
+	"set_copied_ask": "確認する",
+	"set_copied_ask_hint": "画面の隅の小さなウィンドウで提案します。作業は中断されません",
+	"set_copied_add": "すぐに追加",
+	"set_copied_add_hint": "そのカテゴリに追加し、通知します",
+	"setup_clipboard_hint": "ほかのアプリでコピーしたダウンロードリンクを Ottie が提案します。あとで「設定 → クリップボード」で変更できます。"
 }

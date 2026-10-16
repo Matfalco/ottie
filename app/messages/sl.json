@@ -30,6 +30,10 @@
 	"cancelSoon": ["Prekliči spanje ({time})", "Prekliči mirovanje ({time})", "Prekliči izklop ({time})"],
 	"cancelHow": "Prekličete ga lahko v meniju Ottie v sistemski vrstici.",
 	"cant": ["Ottie ni mogel preklopiti računalnika v spanje", "Ottie ni mogel preklopiti računalnika v mirovanje", "Ottie ni mogel izklopiti računalnika"],
+	"watchClipboard": "Spremljaj odložišče",
+	"added": "Dodano iz odložišča",
+	"addedCount": "Dodani prenosi: {count}",
+	"notAdded": "Ottie ni mogel dodati kopirane povezave",
 	"problems": {
 		"network": "Napaka omrežja ({detail})",
 		"redirect": "Napačna preusmeritev ({detail})",

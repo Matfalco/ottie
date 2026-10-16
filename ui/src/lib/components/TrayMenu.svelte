@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Check from '@lucide/svelte/icons/check';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import { onMount } from 'svelte';
@@ -11,11 +12,15 @@
 	import { pauseSteps, resumeTargets, trayRunning, trayStatus } from '#lib/tray.js';
 	import {
 		cancelFinish,
+		desktop as desktopSetting,
+		followDesktop,
 		hideMenu,
 		menuReady,
 		quitApp,
 		setFinishOnce,
+		setWatchClipboard,
 		showMain,
+		type Desktop,
 		type Finish
 	} from '#lib/window.js';
 	import LimitControl from './LimitControl.svelte';
@@ -46,15 +51,23 @@
 	const countdown = $derived(finishing?.running ?? null);
 	/** The choices are listed under their item. */
 	let choosing = $state(false);
+	/** The desktop app's settings, for watching the clipboard (docs/decisions/0043). */
+	let desktop: Desktop | null = $state(null);
 
 	let menu: HTMLElement;
 
 	onMount(() => {
 		session?.start();
 		live.start();
+		const unfollow = followDesktop((next) => (desktop = next));
+		desktopSetting().then(
+			(next) => (desktop = next),
+			() => {}
+		);
 		return () => {
 			session?.stop();
 			live.stop();
+			unfollow();
 		};
 	});
 
@@ -164,6 +177,20 @@
 				</div>
 			{/if}
 		{/if}
+		{#if desktop}
+			{@const watching = desktop.watchClipboard}
+			<button
+				class="item check"
+				role="menuitemcheckbox"
+				aria-checked={watching}
+				onclick={pick(() => setWatchClipboard(!watching))}
+			>
+				<span>{m.set_watch_clipboard()}</span>
+				{#if watching}
+					<Check size={14} aria-hidden="true" />
+				{/if}
+			</button>
+		{/if}
 		{#if connection === 'live' && limit !== null}
 			<hr />
 			<div class="limit">
@@ -254,7 +281,8 @@
 		font-size: 0.8rem;
 	}
 
-	.choose {
+	.choose,
+	.check {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;

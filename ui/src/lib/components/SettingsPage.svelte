@@ -2,6 +2,7 @@
 	import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 	import AppWindow from '@lucide/svelte/icons/app-window';
 	import Bell from '@lucide/svelte/icons/bell';
+	import ClipboardCopy from '@lucide/svelte/icons/clipboard-copy';
 	import Copy from '@lucide/svelte/icons/copy';
 	import Download from '@lucide/svelte/icons/download';
 	import Paintbrush from '@lucide/svelte/icons/palette';
@@ -42,9 +43,11 @@
 		canChoosePlayer,
 		choosePlayer,
 		desktop as desktopSetting,
+		followDesktop,
 		player as playerSetting,
 		playSound,
 		setCloseToTray,
+		setCopied,
 		setCountdown,
 		setCountdownIn,
 		setFinish,
@@ -55,6 +58,8 @@
 		setSound,
 		setSounds,
 		setStartup,
+		setWatchClipboard,
+		type Copied,
 		type CountdownIn,
 		type Desktop,
 		type Finish,
@@ -113,8 +118,16 @@
 	};
 	const COUNTDOWN_CHOICES = Object.keys(COUNTDOWN_NAMES) as CountdownIn[];
 
+	/** What a link copied elsewhere does (docs/decisions/0043). */
+	const COPIED_NAMES: Record<Copied, { name: () => string; hint: () => string }> = {
+		ask: { name: m.set_copied_ask, hint: m.set_copied_ask_hint },
+		add: { name: m.set_copied_add, hint: m.set_copied_add_hint }
+	};
+	const COPIED_CHOICES = Object.keys(COPIED_NAMES) as Copied[];
+
 	/** Only the desktop app can start a player (docs/decisions/0031), stay
-	 * in the tray (0034), notify (0035) or start at sign-in (0039). */
+	 * in the tray (0034), notify (0035), start at sign-in (0039) or watch
+	 * the clipboard (0043). */
 	const inApp = canChoosePlayer();
 
 	/** The sections, top to bottom, for the list at the start. */
@@ -124,6 +137,7 @@
 		...(inApp
 			? [
 					{ id: 'set-app', label: m.set_app },
+					{ id: 'set-clipboard', label: m.set_clipboard },
 					{ id: 'set-finish', label: m.finish_title },
 					{ id: 'set-notifications', label: m.set_notifications },
 					{ id: 'set-playing', label: m.set_playing }
@@ -153,6 +167,8 @@
 	let notify: Notify = $state('all');
 	/** The sign-in choice shown, put back the same way. */
 	let startup: Startup = $state('off');
+	/** What a copied link does, the same way. */
+	let copyChoice: Copied = $state('ask');
 
 	/** When everything has finished, as the desktop app has it. */
 	const live = new LiveFinishing();
@@ -166,7 +182,12 @@
 		desktopSetting().then(showDesktop, () => (problem = m.set_app_failed()));
 		onMount(() => {
 			live.start();
-			return () => live.stop();
+			// Also changed from the tray menu.
+			const unfollow = followDesktop(showDesktop);
+			return () => {
+				live.stop();
+				unfollow();
+			};
 		});
 	}
 
@@ -184,6 +205,7 @@
 		desktop = answer;
 		notify = answer.notify;
 		startup = answer.startup;
+		copyChoice = answer.copied;
 	}
 
 	async function changeDesktop(change: () => Promise<Desktop>) {
@@ -193,6 +215,7 @@
 			problem = m.set_app_failed();
 			notify = desktop?.notify ?? 'all';
 			startup = desktop?.startup ?? 'off';
+			copyChoice = desktop?.copied ?? 'ask';
 		}
 	}
 
@@ -554,6 +577,49 @@
 							onChange={(on) => changeDesktop(() => setCloseToTray(on))}
 						/>
 					</div>
+				{:else}
+					<p class="waiting">{m.connection_connecting()}</p>
+				{/if}
+			</section>
+
+			<section id="set-clipboard" class="card" aria-labelledby="clipboard-title">
+				<header>
+					<span class="icon" aria-hidden="true"><ClipboardCopy size={16} /></span>
+					<h2 id="clipboard-title">{m.set_clipboard()}</h2>
+					<p class="hint">{m.set_clipboard_hint()}</p>
+				</header>
+				{#if desktop}
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_watch_clipboard()}</span>
+							<span class="hint">{m.set_watch_clipboard_hint()}</span>
+						</span>
+						<Switch
+							on={desktop.watchClipboard}
+							label={m.set_watch_clipboard()}
+							onChange={(on) => changeDesktop(() => setWatchClipboard(on))}
+						/>
+					</div>
+					<fieldset class="last" disabled={!desktop.watchClipboard}>
+						<legend>{m.set_copied()}</legend>
+						<div class="options copies">
+							{#each COPIED_CHOICES as choice (choice)}
+								<label class="option row" class:chosen={copyChoice === choice}>
+									<input
+										type="radio"
+										name="copied"
+										value={choice}
+										bind:group={copyChoice}
+										onchange={() => changeDesktop(() => setCopied(choice))}
+									/>
+									<span class="names">
+										<span>{COPIED_NAMES[choice].name()}</span>
+										<span class="hint">{COPIED_NAMES[choice].hint()}</span>
+									</span>
+								</label>
+							{/each}
+						</div>
+					</fieldset>
 				{:else}
 					<p class="waiting">{m.connection_connecting()}</p>
 				{/if}
@@ -1243,11 +1309,14 @@
 	.notifies,
 	.startups,
 	.finishes,
-	.countdowns {
+	.countdowns,
+	.copies {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	/* A choice this computer can't make: listed, greyed out, with why. */
+	/* A choice this computer can't make: listed, greyed out, with why. Or
+	   one that applies only once a switch above is on. */
+	fieldset:disabled .option,
 	.option.unable {
 		opacity: 0.55;
 		cursor: default;

@@ -10,6 +10,8 @@ fn main() {
         "desktop",
         "set_startup",
         "set_close_to_tray",
+        "set_watch_clipboard",
+        "set_copied",
         "set_notify",
         "set_notify_failed",
         "set_sounds",
@@ -28,6 +30,10 @@ fn main() {
         "cancel_finish",
         "finish_now",
         "countdown_ready",
+        "caught",
+        "caught_ready",
+        "caught_done",
+        "caught_more",
     ]);
     if let Err(err) = tauri_build::try_build(Attributes::new().app_manifest(manifest)) {
         panic!("{err:#}");

@@ -581,5 +581,22 @@
 	"set_countdown_notification_hint": "Avbryt den i Otties meny eller på sidan Nedladdningar",
 	"set_finish_waits": "Vänta på schemalagda nedladdningar",
 	"set_finish_waits_hint": "Av: klart så fort inget är kvar att köra nu",
-	"finish_quit": "Avsluta Ottie"
+	"finish_quit": "Avsluta Ottie",
+	"caught_one": "Kopierad länk",
+	"caught_several": "Kopierade länkar: {count}",
+	"caught_others": "Fler: {count}",
+	"caught_more": "Mer…",
+	"caught_more_hint": "Välj kategori och mapp i Ottie",
+	"caught_ignore": "Ignorera",
+	"caught_failed": "Ottie kan inte läsa länkarna just nu.",
+	"set_clipboard": "Urklipp",
+	"set_clipboard_hint": "Ladda ner länkar som du kopierar i andra appar",
+	"set_watch_clipboard": "Bevaka urklipp",
+	"set_watch_clipboard_hint": "Bara länkar till filtyper som dina kategorier listar. Inte det du kopierar i Ottie, och inte det en lösenordshanterare märker som privat.",
+	"set_copied": "När en nedladdningslänk kopieras",
+	"set_copied_ask": "Fråga",
+	"set_copied_ask_hint": "Ett litet fönster i skärmens hörn erbjuder den, utan att störa dig",
+	"set_copied_add": "Lägg till direkt",
+	"set_copied_add_hint": "I sin kategori, med en avisering",
+	"setup_clipboard_hint": "Ottie erbjuder nedladdningslänkar som du kopierar i andra appar. Du kan ändra det senare under Inställningar → Urklipp."
 }
