@@ -34,6 +34,10 @@
 	"added": "Agregado desde el portapapeles",
 	"addedCount": "Descargas agregadas: {count}",
 	"notAdded": "Ottie no pudo agregar el enlace copiado",
+	"runTitle": "¿Ejecutar este programa?",
+	"runText": "“{name}” es un programa: puede cambiar cualquier cosa en esta computadora. Ejecútalo solo si confías en su origen.",
+	"run": "Ejecutar",
+	"cancel": "Cancelar",
 	"problems": {
 		"network": "Error de red ({detail})",
 		"redirect": "Redirección no válida ({detail})",

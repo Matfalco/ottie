@@ -25,6 +25,7 @@ mod store;
 mod stream;
 mod throttle;
 mod view;
+mod webmark;
 
 pub use backend::{Backend, HttpBackend};
 pub use category::{BuiltIn, Category, CategoryId, CategorySettings, Matched};

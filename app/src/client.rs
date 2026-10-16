@@ -40,6 +40,17 @@ pub struct Job {
     pub error: Option<String>,
 }
 
+/// Where a download's file is (docs/decisions/0045): `GET /jobs/{id}`, read
+/// for opening it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Placed {
+    pub state: String,
+    pub dest_dir: String,
+    /// Known once the server has answered.
+    pub file_name: Option<String>,
+}
+
 /// Why a download failed (`Problem` in the API), with what the
 /// notification says.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -189,6 +200,11 @@ impl Daemon {
         Ok(self.get("jobs").await?.json().await?)
     }
 
+    /// Where one download's file is. `id` must be a job ID (`is_job_id`).
+    pub async fn placed(&self, id: &str) -> Result<Placed> {
+        Ok(self.get(&format!("jobs/{id}")).await?.json().await?)
+    }
+
     pub async fn settings(&self) -> Result<Settings> {
         Ok(self.get("settings").await?.json().await?)
     }
@@ -257,6 +273,16 @@ impl Daemon {
         self.send(self.http.post(self.url(path)?)).await?;
         Ok(())
     }
+}
+
+/// Whether `id` looks like a job ID (`2026.10.13-14.28.59-1`): digits, dots
+/// and dashes only, so it can't lead to another path of the API.
+pub fn is_job_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_digit() || b == b'.' || b == b'-')
 }
 
 /// The token in a signed-in link's fragment (`#token=…`).
@@ -328,6 +354,14 @@ mod tests {
                 Found::Other
             ]
         );
+    }
+
+    #[test]
+    fn only_job_ids_reach_the_api() {
+        assert!(is_job_id("2026.10.13-14.28.59-1"));
+        assert!(!is_job_id(""));
+        assert!(!is_job_id("../settings"));
+        assert!(!is_job_id("1/pause"));
     }
 
     #[test]

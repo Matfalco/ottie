@@ -34,6 +34,10 @@
 	"added": "Đã thêm từ bảng nhớ tạm",
 	"addedCount": "Lượt tải đã thêm: {count}",
 	"notAdded": "Ottie không thể thêm liên kết đã sao chép",
+	"runTitle": "Chạy chương trình này?",
+	"runText": "“{name}” là một chương trình: nó có thể thay đổi bất cứ thứ gì trên máy tính này. Chỉ chạy nếu bạn tin tưởng nguồn gốc của nó.",
+	"run": "Chạy",
+	"cancel": "Hủy",
 	"problems": {
 		"network": "Lỗi mạng ({detail})",
 		"redirect": "Chuyển hướng không hợp lệ ({detail})",

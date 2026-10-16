@@ -1,4 +1,4 @@
-//! `/jobs`: list, add (one or several), pause, resume, cancel, remove,
+//! `/jobs`: list, one, add (one or several), pause, resume, cancel, remove,
 //! change a job's own settings, reorder the queue, change category, and
 //! which links some text holds.
 
@@ -27,6 +27,27 @@ use crate::types::{
 pub(crate) async fn list(State(state): State<AppState>) -> Result<Json<Vec<Job>>, Failure> {
     let jobs = state.manager.list().await?;
     Ok(Json(jobs.into_iter().map(Job::from).collect()))
+}
+
+/// One download.
+#[utoipa::path(
+    get,
+    path = "/jobs/{id}",
+    operation_id = "getJob",
+    tag = "jobs",
+    params(("id" = String, Path, description = "Job ID, like `2026.10.13-14.28.59-1`")),
+    responses(
+        (status = OK, description = "The download", body = Job),
+        (status = BAD_REQUEST, description = "`invalidJobId`", body = ApiError),
+        (status = NOT_FOUND, description = "`jobNotFound`", body = ApiError),
+    )
+)]
+pub(crate) async fn get(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Job>, Failure> {
+    let job = state.manager.job(id.parse::<JobId>()?).await?;
+    Ok(Json(job.into()))
 }
 
 /// Queues a download. It starts as soon as a slot is free, or waits for

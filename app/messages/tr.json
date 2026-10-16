@@ -34,6 +34,10 @@
 	"added": "Panodan eklendi",
 	"addedCount": "Eklenen indirmeler: {count}",
 	"notAdded": "Ottie kopyalanan bağlantıyı ekleyemedi",
+	"runTitle": "Bu program çalıştırılsın mı?",
+	"runText": "“{name}” bir programdır: bu bilgisayardaki her şeyi değiştirebilir. Yalnızca kaynağına güveniyorsanız çalıştırın.",
+	"run": "Çalıştır",
+	"cancel": "İptal",
 	"problems": {
 		"network": "Ağ hatası ({detail})",
 		"redirect": "Hatalı yönlendirme ({detail})",

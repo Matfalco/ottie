@@ -9,6 +9,7 @@ mod client;
 mod clipboard;
 mod config;
 mod daemon;
+mod files;
 mod finish;
 mod notify;
 mod player;
@@ -45,8 +46,9 @@ const PROJECT: &str = "https://github.com/Matfalco/ottie/";
 /// language, in Ottie's tray menu, open the window, quit, and hide the
 /// menu (docs/decisions/0034), choose what happens when everything has
 /// finished, or cancel it (0040), and watch the clipboard, then offer what
-/// it caught (0043). Only these, and only for the daemon's pages.
-const PAGE_PERMISSIONS: [&str; 40] = [
+/// it caught (0043), and open a download's file or folder (0045), named by
+/// its ID. Only these, and only for the daemon's pages.
+const PAGE_PERMISSIONS: [&str; 42] = [
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
@@ -97,6 +99,9 @@ const PAGE_PERMISSIONS: [&str; 40] = [
     "allow-caught-ready",
     "allow-caught-done",
     "allow-caught-more",
+    // Open and Show in folder (`files.rs`).
+    "allow-open-file",
+    "allow-show-in-folder",
 ];
 
 /// The daemon this app started, if it did: stopped when the app quits.
@@ -141,7 +146,9 @@ fn main() -> tauri::Result<()> {
             clipboard::caught,
             clipboard::caught_ready,
             clipboard::caught_done,
-            clipboard::caught_more
+            clipboard::caught_more,
+            files::open_file,
+            files::show_in_folder
         ])
         .setup(|app| {
             app.manage(player::Chosen::load(app.handle()));
@@ -185,6 +192,7 @@ async fn start(app: &AppHandle, shown: bool) -> anyhow::Result<()> {
     let connection = daemon::connect(&daemon::sidecar()?).await?;
     *owned(app) = connection.started;
     let daemon = Arc::new(Daemon::new(&connection.link)?);
+    app.manage(daemon.clone());
     app.manage(popup::Popup::new(&connection.link));
     app.manage(finish::Finisher::new(&connection.link));
     app.manage(clipboard::Catcher::new(&connection.link, daemon.clone()));

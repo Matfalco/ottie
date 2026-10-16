@@ -34,6 +34,10 @@
 	"added": "Tillagd från urklipp",
 	"addedCount": "Tillagda nedladdningar: {count}",
 	"notAdded": "Ottie kunde inte lägga till den kopierade länken",
+	"runTitle": "Köra det här programmet?",
+	"runText": "”{name}” är ett program: det kan ändra vad som helst på datorn. Kör det bara om du litar på var det kommer ifrån.",
+	"run": "Kör",
+	"cancel": "Avbryt",
 	"problems": {
 		"network": "Nätverksfel ({detail})",
 		"redirect": "Felaktig omdirigering ({detail})",

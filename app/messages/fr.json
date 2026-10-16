@@ -34,6 +34,10 @@
 	"added": "Ajouté depuis le presse-papiers",
 	"addedCount": "{count} téléchargements ajoutés",
 	"notAdded": "Ottie n’a pas pu ajouter le lien copié",
+	"runTitle": "Lancer ce programme ?",
+	"runText": "« {name} » est un programme : il peut tout modifier sur cet ordinateur. Ne le lancez que si vous faites confiance à sa provenance.",
+	"run": "Lancer",
+	"cancel": "Annuler",
 	"problems": {
 		"network": "Erreur réseau ({detail})",
 		"redirect": "Redirection invalide ({detail})",

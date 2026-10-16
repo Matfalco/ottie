@@ -1,8 +1,9 @@
 // The desktop app around the page, when it runs inside it. The app hides the
 // system title bar (docs/decisions/0019), so the page draws its own and needs
 // the window's buttons; it can also open the system folder picker. In a
-// browser there's neither. It also chooses what plays a download, hears
-// from the tray, and offers links copied elsewhere.
+// browser there's neither. It also opens a download's file or folder,
+// chooses what plays a download, hears from the tray, and offers links
+// copied elsewhere.
 
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -62,6 +63,36 @@ export function canPickFolder(): boolean {
 export async function pickFolder(start?: string): Promise<string | null> {
 	const chosen = await open({ directory: true, defaultPath: start || undefined });
 	return typeof chosen === 'string' ? chosen : null;
+}
+
+/** Why a download's file or folder couldn't open (docs/decisions/0045):
+ * it's not there any more, or the app couldn't. */
+export type OpenRefusal = 'gone' | 'failed';
+
+/** Whether downloads' files and folders can be opened here (only in the
+ * desktop app). */
+export function canOpenFiles(): boolean {
+	return isTauri();
+}
+
+/** Opens a finished download's file; the app asks first before running a
+ * program. Resolves to null, or why it couldn't. */
+export function openFile(id: string): Promise<OpenRefusal | null> {
+	return refusal(invoke('open_file', { id }));
+}
+
+/** Opens the download's folder with its file selected. */
+export function showInFolder(id: string): Promise<OpenRefusal | null> {
+	return refusal(invoke('show_in_folder', { id }));
+}
+
+async function refusal(done: Promise<unknown>): Promise<OpenRefusal | null> {
+	try {
+		await done;
+		return null;
+	} catch (why) {
+		return why === 'gone' ? 'gone' : 'failed';
+	}
 }
 
 /** What "Play" opens in the desktop app (docs/decisions/0031). */

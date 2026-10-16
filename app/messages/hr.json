@@ -34,6 +34,10 @@
 	"added": "Dodano iz međuspremnika",
 	"addedCount": "Dodana preuzimanja: {count}",
 	"notAdded": "Ottie nije mogao dodati kopiranu poveznicu",
+	"runTitle": "Pokrenuti ovaj program?",
+	"runText": "„{name}” je program: može promijeniti bilo što na ovom računalu. Pokrenite ga samo ako vjerujete njegovu izvoru.",
+	"run": "Pokreni",
+	"cancel": "Odustani",
 	"problems": {
 		"network": "Mrežna pogreška ({detail})",
 		"redirect": "Neispravno preusmjeravanje ({detail})",

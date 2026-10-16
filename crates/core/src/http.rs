@@ -21,6 +21,7 @@ use crate::filename;
 use crate::playback::Playback;
 use crate::segmented::{self, Segmented};
 use crate::throttle::Throttle;
+use crate::webmark;
 
 const MAX_REDIRECTS: usize = 10;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -490,6 +491,7 @@ async fn complete(dl: &mut Download, name: &str) -> Result<Outcome, Error> {
     let part = dl.dest_dir.join(filename::part_name(name));
     let final_name = filename::finalize(&dl.dest_dir, name, &part).await?;
     let path = dl.dest_dir.join(&final_name);
+    webmark::mark(&path, &dl.url).await;
     dl.file_name = Some(final_name);
     dl.segments.clear();
     Ok(Outcome::Completed { path })

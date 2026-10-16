@@ -34,6 +34,10 @@
 	"added": "Adăugat din clipboard",
 	"addedCount": "Descărcări adăugate: {count}",
 	"notAdded": "Ottie nu a putut adăuga linkul copiat",
+	"runTitle": "Rulezi acest program?",
+	"runText": "„{name}” este un program: poate modifica orice pe acest computer. Rulează-l doar dacă ai încredere în sursa lui.",
+	"run": "Rulează",
+	"cancel": "Anulează",
 	"problems": {
 		"network": "Eroare de rețea ({detail})",
 		"redirect": "Redirecționare greșită ({detail})",

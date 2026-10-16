@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Job } from '@ottie/api-types/Job';
 	import type { JobChange } from '@ottie/api-types/JobChange';
 	import type { View } from '@ottie/api-types/View';
 	import { resolve } from '$app/paths';
@@ -12,6 +13,7 @@
 		sortBy,
 		type Arrangement
 	} from '#lib/arrange.js';
+	import { pauseSteps, resumeTargets } from '#lib/bulk.js';
 	import { useApp } from '#lib/context.js';
 	import {
 		NO_FILTERS,
@@ -23,11 +25,13 @@
 		type Filters
 	} from '#lib/filters.js';
 	import { currentSpeed } from '#lib/jobs.js';
+	import { openProblem, toOpen } from '#lib/opening.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { canReorder, type Reorder } from '#lib/queue.js';
 	import { NOTHING, keepShown, selectAll, type Selection } from '#lib/selection.js';
 	import { isFinished } from '#lib/status.js';
 	import { viewBody } from '#lib/views.js';
+	import { canOpenFiles, openFile, showInFolder } from '#lib/window.js';
 	import AddCard from './AddCard.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import FilterPanel from './FilterPanel.svelte';
@@ -75,6 +79,11 @@
 			session.list.some((job) => job.category === category.id)
 		)
 	);
+	// Pause all and Resume all act on every download, not only those shown.
+	let steps = $derived(pauseSteps(session.list));
+	let resumable = $derived(resumeTargets(session.list));
+	/** In the desktop app, a download's file and folder open (docs/decisions/0045). */
+	const opens = canOpenFiles();
 	let facts = $derived({
 		speed: session.history.at(-1) ?? 0,
 		running: session.list.filter(isActive).length,
@@ -121,8 +130,30 @@
 		return why;
 	}
 
-	/** File-manager keys: Ctrl+A, Escape, Delete. Not while typing or while
-	 * a dialog is open. */
+	/** Opens a finished download's file, or says why it can't. */
+	async function openJob(job: Job) {
+		const why = await openFile(job.id);
+		if (why !== null) {
+			session.error = openProblem(why, job, false);
+		}
+	}
+
+	/** Opens a download's folder with its file selected. */
+	async function reveal(job: Job) {
+		const why = await showInFolder(job.id);
+		if (why !== null) {
+			session.error = openProblem(why, job, true);
+		}
+	}
+
+	/** The waiting downloads first, so pausing a running one doesn't start them. */
+	async function pauseAll() {
+		await session.run('pause', steps.waiting);
+		await session.run('pause', steps.running);
+	}
+
+	/** File-manager keys: Ctrl+A, Escape, Delete, Enter (opens the one
+	 * finished download selected). Not while typing or while a dialog is open. */
 	function keydown(event: KeyboardEvent) {
 		const target = event.target;
 		const typing =
@@ -139,6 +170,16 @@
 			selection = NOTHING;
 		} else if (event.key === 'Delete' && selected.length > 0) {
 			void run('remove', selected);
+		} else if (
+			event.key === 'Enter' &&
+			opens &&
+			!(target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement)
+		) {
+			const job = toOpen(selected);
+			if (job) {
+				event.preventDefault();
+				void openJob(job);
+			}
 		}
 	}
 </script>
@@ -168,6 +209,10 @@
 				active={activeCount(filters)}
 				{open}
 				onToggle={() => (open = !open)}
+				canPauseAll={steps.waiting.length + steps.running.length > 0}
+				canResumeAll={resumable.length > 0}
+				onPauseAll={() => void pauseAll()}
+				onResumeAll={() => void session.run('resume', resumable)}
 			/>
 			{#if open}
 				{#key resets}
@@ -220,6 +265,7 @@
 				note={(group) => groupNote(group, facts)}
 				onSelect={(chosen) => (selection = chosen)}
 				onRun={run}
+				onOpen={opens ? openJob : null}
 				onSort={(sort) => setArrangement(sortBy(arrangement, sort))}
 				onReorder={(ids, to) => void session.reorder(ids, to)}
 			/>
@@ -239,6 +285,8 @@
 				onMove={(category) => session.move([job.id], category)}
 				onChange={(change) => changeJob(job.id, change)}
 				getLink={() => session.streamLink(job.id)}
+				onOpen={opens ? () => void openJob(job) : null}
+				onShowFolder={opens ? () => void reveal(job) : null}
 			/>
 		{:else}
 			<DetailsEmpty

@@ -34,6 +34,10 @@
 	"added": "Pridané zo schránky",
 	"addedCount": "Pridané sťahovania: {count}",
 	"notAdded": "Ottie nemohol pridať skopírovaný odkaz",
+	"runTitle": "Spustiť tento program?",
+	"runText": "„{name}“ je program: môže na tomto počítači zmeniť čokoľvek. Spustite ho, len ak dôverujete jeho pôvodu.",
+	"run": "Spustiť",
+	"cancel": "Zrušiť",
 	"problems": {
 		"network": "Chyba siete ({detail})",
 		"redirect": "Chybné presmerovanie ({detail})",

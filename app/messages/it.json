@@ -34,6 +34,10 @@
 	"added": "Aggiunto dagli appunti",
 	"addedCount": "Download aggiunti: {count}",
 	"notAdded": "Ottie non è riuscito ad aggiungere il link copiato",
+	"runTitle": "Eseguire questo programma?",
+	"runText": "«{name}» è un programma: può modificare qualsiasi cosa su questo computer. Eseguilo solo se ti fidi della sua provenienza.",
+	"run": "Esegui",
+	"cancel": "Annulla",
 	"problems": {
 		"network": "Errore di rete ({detail})",
 		"redirect": "Reindirizzamento non valido ({detail})",

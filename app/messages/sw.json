@@ -34,6 +34,10 @@
 	"added": "Imeongezwa kutoka ubao wa kunakili",
 	"addedCount": "Vipakuliwa vilivyoongezwa: {count}",
 	"notAdded": "Ottie haikuweza kuongeza kiungo kilichonakiliwa",
+	"runTitle": "Uendeshe programu hii?",
+	"runText": "“{name}” ni programu: inaweza kubadilisha chochote kwenye kompyuta hii. Iendeshe tu ikiwa unaamini ilikotoka.",
+	"run": "Endesha",
+	"cancel": "Ghairi",
 	"problems": {
 		"network": "Hitilafu ya mtandao ({detail})",
 		"redirect": "Uelekezaji mbaya ({detail})",

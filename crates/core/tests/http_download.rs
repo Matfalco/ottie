@@ -137,6 +137,28 @@ async fn downloads_whole_file() {
     );
 }
 
+/// Windows warns before running it, as for a browser's download
+/// (docs/decisions/0045).
+#[cfg(windows)]
+#[tokio::test]
+async fn a_finished_file_carries_the_mark_of_the_web() {
+    let s = setup().await;
+    let mut dl = s.download("/files/setup.exe?key=secret");
+    let (result, _) = run_collect(&s.client, &mut dl, None).await;
+    let Outcome::Completed { path } = result.unwrap() else {
+        panic!("not completed");
+    };
+    let mut stream = path.into_os_string();
+    stream.push(":Zone.Identifier");
+    let mark = std::fs::read_to_string(stream).unwrap();
+    assert!(mark.contains("ZoneId=3"), "{mark}");
+    assert!(
+        mark.contains(&format!("HostUrl={}", s.server.url("/files/setup.exe"))),
+        "{mark}"
+    );
+    assert!(!mark.contains("secret"), "{mark}");
+}
+
 #[tokio::test]
 async fn pause_then_resume_is_byte_identical() {
     let s = setup().await;

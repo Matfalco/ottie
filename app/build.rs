@@ -34,6 +34,8 @@ fn main() {
         "caught_ready",
         "caught_done",
         "caught_more",
+        "open_file",
+        "show_in_folder",
     ]);
     if let Err(err) = tauri_build::try_build(Attributes::new().app_manifest(manifest)) {
         panic!("{err:#}");

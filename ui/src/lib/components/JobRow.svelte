@@ -30,6 +30,8 @@
 		now: number;
 		onClick: (keys: Keys) => void;
 		onRun: (action: Action) => void;
+		/** A double-click opens its file; null if it can't. */
+		onOpen: (() => void) | null;
 		/** The table has a column of grips (grouped by status). */
 		grip: boolean;
 		/** It can be dragged in the queue (it's waiting). */
@@ -51,6 +53,7 @@
 		now,
 		onClick,
 		onRun,
+		onOpen,
 		grip,
 		movable,
 		carried,
@@ -90,6 +93,13 @@
 		onClick({ toggle: event.ctrlKey || event.metaKey, range: event.shiftKey });
 	}
 
+	/** On the row, not on its own buttons and checkbox. */
+	function doubleClick(event: MouseEvent) {
+		if (!(event.target instanceof Element && event.target.closest('button, input, a'))) {
+			onOpen?.();
+		}
+	}
+
 	/** The row's own buttons and checkbox don't change the selection like a row click. */
 	function run(event: MouseEvent, action: Action) {
 		event.stopPropagation();
@@ -108,6 +118,7 @@
 	class:drop-after={drop === 'after'}
 	data-id={job.id}
 	onclick={click}
+	ondblclick={onOpen ? doubleClick : undefined}
 >
 	{#if grip}
 		<td class="grip">

@@ -34,6 +34,10 @@
 	"added": "Adicionado a partir da área de transferência",
 	"addedCount": "Transferências adicionadas: {count}",
 	"notAdded": "O Ottie não conseguiu adicionar o link copiado",
+	"runTitle": "Executar este programa?",
+	"runText": "«{name}» é um programa: pode alterar tudo neste computador. Execute-o apenas se confiar na sua origem.",
+	"run": "Executar",
+	"cancel": "Cancelar",
 	"problems": {
 		"network": "Erro de rede ({detail})",
 		"redirect": "Redirecionamento inválido ({detail})",

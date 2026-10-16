@@ -5,6 +5,8 @@
 	import Ban from '@lucide/svelte/icons/ban';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import CirclePause from '@lucide/svelte/icons/circle-pause';
+	import CirclePlay from '@lucide/svelte/icons/circle-play';
 	import Eraser from '@lucide/svelte/icons/eraser';
 	import Funnel from '@lucide/svelte/icons/funnel';
 	import Pause from '@lucide/svelte/icons/pause';
@@ -40,6 +42,12 @@
 		/** Whether "Filters and sorting" is open. */
 		open: boolean;
 		onToggle: () => void;
+		/** Whether Pause all and Resume all would do anything (every download,
+		 * shown or not). */
+		canPauseAll: boolean;
+		canResumeAll: boolean;
+		onPauseAll: () => void;
+		onResumeAll: () => void;
 	}
 
 	let {
@@ -55,7 +63,11 @@
 		total,
 		active,
 		open,
-		onToggle
+		onToggle,
+		canPauseAll,
+		canResumeAll,
+		onPauseAll,
+		onResumeAll
 	}: Props = $props();
 
 	const BUTTONS: { action: Action; icon: Component; label: () => string }[] = [
@@ -100,6 +112,26 @@
 		<span class="count">{m.selected_count({ count: formatCount(selected.length) })}</span>
 	{/if}
 	<span class="spacer"></span>
+	<button
+		class="all"
+		disabled={!canPauseAll}
+		onclick={onPauseAll}
+		aria-label={m.pause_all()}
+		title={m.pause_all()}
+	>
+		<CirclePause size={15} aria-hidden="true" />
+		<span>{m.pause_all()}</span>
+	</button>
+	<button
+		class="all"
+		disabled={!canResumeAll}
+		onclick={onResumeAll}
+		aria-label={m.resume_all()}
+		title={m.resume_all()}
+	>
+		<CirclePlay size={15} aria-hidden="true" />
+		<span>{m.resume_all()}</span>
+	</button>
 	{#if canFinish()}
 		<FinishMenu />
 	{/if}
@@ -212,6 +244,13 @@
 		font-size: 0.75em;
 		line-height: 1.15rem;
 		text-align: center;
+	}
+
+	/* Pause all and Resume all: their names only on a wide page. */
+	@container page (max-width: 72rem) {
+		.all span {
+			display: none;
+		}
 	}
 
 	/* Narrow: icons only (each button keeps its name for screen readers). */

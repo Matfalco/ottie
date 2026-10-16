@@ -34,6 +34,10 @@
 	"added": "Dodano ze schowka",
 	"addedCount": "Dodane pobierania: {count}",
 	"notAdded": "Ottie nie udało się dodać skopiowanego linku",
+	"runTitle": "Uruchomić ten program?",
+	"runText": "„{name}” to program: może zmienić wszystko na tym komputerze. Uruchom go tylko wtedy, gdy ufasz jego źródłu.",
+	"run": "Uruchom",
+	"cancel": "Anuluj",
 	"problems": {
 		"network": "Błąd sieci ({detail})",
 		"redirect": "Nieprawidłowe przekierowanie ({detail})",

@@ -34,6 +34,10 @@
 	"added": "Kungezwe kusuka ebhodini lokunamathisela",
 	"addedCount": "Okulandiwe okungeziwe: {count}",
 	"notAdded": "U-Ottie akakwazanga ukwengeza isixhumanisi esikopishiwe",
+	"runTitle": "Qalisa lolu hlelo?",
+	"runText": "“{name}” wuhlelo: lungashintsha noma yini kule khompyutha. Lusebenzise kuphela uma uthemba lapho luvela khona.",
+	"run": "Qalisa",
+	"cancel": "Khansela",
 	"problems": {
 		"network": "Iphutha lenethiwekhi ({detail})",
 		"redirect": "Ukuqondisa kabusha okubi ({detail})",

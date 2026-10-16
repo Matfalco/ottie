@@ -130,6 +130,13 @@ pub struct Texts {
     added_count: String,
     /// …or couldn't be.
     pub not_added: String,
+    /// The question before running a downloaded program
+    /// (docs/decisions/0045): its title, its text (`{name}`: the file's)…
+    pub run_title: String,
+    run_text: String,
+    /// …and its buttons.
+    pub run: String,
+    pub cancel: String,
     problems: Problems,
     /// Written right to left: every text comes embedded as such.
     #[serde(skip)]
@@ -198,6 +205,9 @@ impl Texts {
                 &mut texts.watch_clipboard,
                 &mut texts.added,
                 &mut texts.not_added,
+                &mut texts.run_title,
+                &mut texts.run,
+                &mut texts.cancel,
             ] {
                 *text = embedded(true, std::mem::take(text));
             }
@@ -320,6 +330,13 @@ impl Texts {
         self.speed
             .replace("{number}", &number)
             .replace("{unit}", &self.units[unit])
+    }
+
+    /// "“setup.exe” is a program…": the file's name kept apart from the
+    /// text around it, whichever way each is written.
+    pub fn run_text(&self, name: &str) -> String {
+        let name = format!("\u{2068}{name}\u{2069}");
+        self.shown(self.run_text.replace("{name}", &name))
     }
 
     /// A choice in the "When everything has finished" submenu.

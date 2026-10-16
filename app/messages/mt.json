@@ -34,6 +34,10 @@
 	"added": "Miżjud mill-clipboard",
 	"addedCount": "Tniżżiliet miżjuda: {count}",
 	"notAdded": "Ottie ma setax iżid il-ħolqa kkupjata",
+	"runTitle": "Tħaddem dan il-programm?",
+	"runText": "“{name}” huwa programm: jista’ jibdel kollox f’dan il-kompjuter. Ħaddmu biss jekk tafda minn fejn ġie.",
+	"run": "Ħaddem",
+	"cancel": "Ikkanċella",
 	"problems": {
 		"network": "Żball fin-netwerk ({detail})",
 		"redirect": "Ridirezzjoni ħażina ({detail})",

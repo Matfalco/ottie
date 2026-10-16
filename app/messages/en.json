@@ -42,6 +42,10 @@
 	"added": "Added from the clipboard",
 	"addedCount": "{count} downloads added",
 	"notAdded": "Ottie couldn’t add the copied link",
+	"runTitle": "Run this program?",
+	"runText": "“{name}” is a program: it can change anything on this computer. Run it only if you trust where it came from.",
+	"run": "Run",
+	"cancel": "Cancel",
 	"problems": {
 		"network": "Network error ({detail})",
 		"redirect": "Bad redirect ({detail})",

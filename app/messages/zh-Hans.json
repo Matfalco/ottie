@@ -34,6 +34,10 @@
 	"added": "已从剪贴板添加",
 	"addedCount": "已添加 {count} 个下载",
 	"notAdded": "Ottie 无法添加复制的链接",
+	"runTitle": "运行此程序？",
+	"runText": "“{name}”是一个程序：它可以更改这台电脑上的任何内容。只有在你信任其来源时才运行它。",
+	"run": "运行",
+	"cancel": "取消",
 	"problems": {
 		"network": "网络错误（{detail}）",
 		"redirect": "重定向错误（{detail}）",

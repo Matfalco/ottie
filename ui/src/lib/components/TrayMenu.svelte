@@ -3,13 +3,14 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import { onMount } from 'svelte';
+	import { pauseSteps, resumeTargets } from '#lib/bulk.js';
 	import { canDo, FINISH_CHOICES, finishName, nextFinish, soonText } from '#lib/finish.js';
 	import { LiveFinishing } from '#lib/finish.svelte.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { Session } from '#lib/session.svelte.js';
 	import { loadToken } from '#lib/token.js';
-	import { pauseSteps, resumeTargets, trayRunning, trayStatus } from '#lib/tray.js';
+	import { trayRunning, trayStatus } from '#lib/tray.js';
 	import {
 		cancelFinish,
 		desktop as desktopSetting,
@@ -137,13 +138,13 @@
 			class="item"
 			role="menuitem"
 			disabled={connection !== 'live' || steps.waiting.length + steps.running.length === 0}
-			onclick={pick(pauseAll)}>{m.tray_pause_all()}</button
+			onclick={pick(pauseAll)}>{m.pause_all()}</button
 		>
 		<button
 			class="item"
 			role="menuitem"
 			disabled={connection !== 'live' || resumable.length === 0}
-			onclick={pick(resumeAll)}>{m.tray_resume_all()}</button
+			onclick={pick(resumeAll)}>{m.resume_all()}</button
 		>
 		{#if finishing}
 			{#if countdown}

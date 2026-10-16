@@ -34,6 +34,10 @@
 	"added": "Pridėta iš iškarpinės",
 	"addedCount": "Pridėti atsisiuntimai: {count}",
 	"notAdded": "Ottie nepavyko pridėti nukopijuotos nuorodos",
+	"runTitle": "Paleisti šią programą?",
+	"runText": "„{name}“ yra programa: ji gali pakeisti bet ką šiame kompiuteryje. Paleiskite ją, tik jei pasitikite jos šaltiniu.",
+	"run": "Paleisti",
+	"cancel": "Atšaukti",
 	"problems": {
 		"network": "Tinklo klaida ({detail})",
 		"redirect": "Netinkamas peradresavimas ({detail})",

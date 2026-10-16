@@ -6,6 +6,7 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import Copy from '@lucide/svelte/icons/copy';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Folder from '@lucide/svelte/icons/folder';
 	import ListVideo from '@lucide/svelte/icons/list-video';
 	import Play from '@lucide/svelte/icons/play';
@@ -26,6 +27,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { savePlaylist } from '#lib/playlist.js';
 	import { canSchedule, fromField, timeChange, toField, type TimeKey } from '#lib/schedule.js';
+	import { canOpen } from '#lib/opening.js';
 	import { amount, fraction, isFinished } from '#lib/status.js';
 	import { canChoosePlayer } from '#lib/window.js';
 	import FileBar from './FileBar.svelte';
@@ -53,6 +55,9 @@
 		onChange: (change: JobChange) => Promise<boolean>;
 		/** The job's play link; null if the daemon can't give one. */
 		getLink: () => Promise<string | null>;
+		/** Opens its file, and its folder: null where they can't open (a browser). */
+		onOpen: (() => void) | null;
+		onShowFolder: (() => void) | null;
 	}
 
 	let {
@@ -66,7 +71,9 @@
 		onRun,
 		onMove,
 		onChange,
-		getLink
+		getLink,
+		onOpen,
+		onShowFolder
 	}: Props = $props();
 	const { session } = useApp();
 
@@ -172,6 +179,11 @@
 		<div class="buttons">
 			{#if primary}
 				<button class="primary" onclick={() => onRun(primary.action)}>{primary.label}</button>
+			{:else if onOpen && canOpen(job)}
+				<button class="primary" onclick={onOpen}>
+					<ExternalLink size={13} aria-hidden="true" />
+					{m.det_open()}
+				</button>
 			{/if}
 			{#if link}
 				<!-- A real link: the browser plays it in a new tab (the desktop
@@ -199,10 +211,12 @@
 					{copied ? m.det_link_copied() : m.det_copy_link()}
 				</button>
 			{/if}
-			<button disabled title={m.coming_later()}>
-				<Folder size={13} aria-hidden="true" />
-				{m.det_show_folder()}
-			</button>
+			{#if onShowFolder}
+				<button onclick={onShowFolder}>
+					<Folder size={13} aria-hidden="true" />
+					{m.det_show_folder()}
+				</button>
+			{/if}
 			<button class="danger" onclick={() => onRun('remove')}>{m.remove()}</button>
 		</div>
 	</div>

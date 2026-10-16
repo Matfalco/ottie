@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { job, plain } from './testing';
-import { pauseSteps, resumeTargets, trayRunning, trayStatus } from './tray';
+import { trayRunning, trayStatus } from './tray';
 
 const downloading = job({ id: 'a', state: 'downloading' });
 const retrying = job({ id: 'b', state: 'retrying' });
 const queued = job({ id: 'c', state: 'queued' });
 const paused = job({ id: 'd', state: 'paused' });
 const failed = job({ id: 'e', state: 'failed' });
-const moving = job({ id: 'f', state: 'paused', moving: true });
 
 describe('the tray menu', () => {
 	it('says what runs, in both languages', () => {
@@ -31,16 +30,5 @@ describe('the tray menu', () => {
 		const five = trayRunning(running(5));
 		expect(five.shown.map((job) => job.id)).toEqual(['r0', 'r1', 'r2']);
 		expect(five.more).toBe(2);
-	});
-
-	it('pauses waiting downloads before running ones', () => {
-		expect(pauseSteps([downloading, queued, retrying, paused])).toEqual({
-			waiting: ['c'],
-			running: ['a', 'b']
-		});
-	});
-
-	it('resumes paused downloads only', () => {
-		expect(resumeTargets([paused, failed, moving, queued])).toEqual(['d']);
 	});
 });

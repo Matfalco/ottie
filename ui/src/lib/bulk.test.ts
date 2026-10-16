@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { confirmation, targets } from './bulk';
+import { confirmation, pauseSteps, resumeTargets, targets } from './bulk';
 import { job } from './testing';
 
 const paused = job({ id: '2026.10.12-14.03.07-1', state: 'paused', downloaded: 100 });
@@ -24,5 +24,25 @@ describe('bulk actions', () => {
 		expect(confirmation('remove', [paused, done], 'en')).toBe(
 			'Remove 2 downloads and delete what’s downloaded of the unfinished ones?'
 		);
+	});
+});
+
+describe('pause all and resume all', () => {
+	const downloading = job({ id: 'a', state: 'downloading' });
+	const retrying = job({ id: 'b', state: 'retrying' });
+	const waiting = job({ id: 'c', state: 'queued' });
+	const stopped = job({ id: 'd', state: 'paused' });
+	const failed = job({ id: 'e', state: 'failed' });
+	const moving = job({ id: 'f', state: 'paused', moving: true });
+
+	it('pauses waiting downloads before running ones', () => {
+		expect(pauseSteps([downloading, waiting, retrying, stopped])).toEqual({
+			waiting: ['c'],
+			running: ['a', 'b']
+		});
+	});
+
+	it('resumes paused downloads only', () => {
+		expect(resumeTargets([stopped, failed, moving, waiting])).toEqual(['d']);
 	});
 });

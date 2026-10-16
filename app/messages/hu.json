@@ -34,6 +34,10 @@
 	"added": "Hozzáadva a vágólapról",
 	"addedCount": "Hozzáadott letöltések: {count}",
 	"notAdded": "Az Ottie nem tudta hozzáadni a másolt linket",
+	"runTitle": "Futtatod ezt a programot?",
+	"runText": "„{name}” egy program: bármit megváltoztathat ezen a számítógépen. Csak akkor futtasd, ha megbízol a forrásában.",
+	"run": "Futtatás",
+	"cancel": "Mégse",
 	"problems": {
 		"network": "Hálózati hiba ({detail})",
 		"redirect": "Hibás átirányítás ({detail})",

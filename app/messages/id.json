@@ -34,6 +34,10 @@
 	"added": "Ditambahkan dari papan klip",
 	"addedCount": "Unduhan ditambahkan: {count}",
 	"notAdded": "Ottie tidak dapat menambahkan tautan yang disalin",
+	"runTitle": "Jalankan program ini?",
+	"runText": "“{name}” adalah program: program ini dapat mengubah apa saja di komputer ini. Jalankan hanya jika Anda memercayai sumbernya.",
+	"run": "Jalankan",
+	"cancel": "Batal",
 	"problems": {
 		"network": "Kesalahan jaringan ({detail})",
 		"redirect": "Pengalihan tidak valid ({detail})",

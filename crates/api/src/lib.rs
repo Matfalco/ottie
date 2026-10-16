@@ -75,7 +75,7 @@ fn private_routes() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
         .merge(batches)
         .routes(routes!(jobs::list, jobs::add))
-        .routes(routes!(jobs::remove, jobs::change))
+        .routes(routes!(jobs::get, jobs::remove, jobs::change))
         .routes(routes!(jobs::pause))
         .routes(routes!(jobs::resume))
         .routes(routes!(jobs::cancel))

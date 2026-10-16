@@ -34,6 +34,10 @@
 	"added": "Lisätty leikepöydältä",
 	"addedCount": "Lisätyt lataukset: {count}",
 	"notAdded": "Ottie ei voinut lisätä kopioitua linkkiä",
+	"runTitle": "Suoritetaanko tämä ohjelma?",
+	"runText": "”{name}” on ohjelma: se voi muuttaa mitä tahansa tällä tietokoneella. Suorita se vain, jos luotat sen lähteeseen.",
+	"run": "Suorita",
+	"cancel": "Peruuta",
 	"problems": {
 		"network": "Verkkovirhe ({detail})",
 		"redirect": "Virheellinen uudelleenohjaus ({detail})",

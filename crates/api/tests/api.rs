@@ -118,15 +118,9 @@ impl Daemon {
     }
 
     async fn job(&self, id: &str) -> Job {
-        let jobs: Vec<Job> = self
-            .get("/jobs")
-            .send()
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap();
-        jobs.into_iter().find(|job| job.id == id).unwrap()
+        let response = self.get(&format!("/jobs/{id}")).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        response.json().await.unwrap()
     }
 
     async fn wait_until(&self, id: &str, state: JobState) {
@@ -644,6 +638,10 @@ async fn remove_takes_a_job_off_the_list() {
         .delete(d.url(&format!("/jobs/{id}")))
         .bearer_auth(TOKEN);
     let (status, refused) = error_of(again.send().await.unwrap()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(refused.reason, Reason::JobNotFound { id: id.clone() });
+    let gone = d.get(&format!("/jobs/{id}")).send().await.unwrap();
+    let (status, refused) = error_of(gone).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(refused.reason, Reason::JobNotFound { id });
 }

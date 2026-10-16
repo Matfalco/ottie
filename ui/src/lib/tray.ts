@@ -1,6 +1,5 @@
 // Ottie's own tray menu in the desktop app (docs/decisions/0034): its status
-// line, the downloads it shows with their bars, and the ones "Pause all" and
-// "Resume all" act on.
+// line and the downloads it shows with their bars.
 
 import type { Job } from '@ottie/api-types/Job';
 import { formatCount, formatSpeed } from './format';
@@ -42,17 +41,4 @@ export function trayRunning(jobs: Job[]): { shown: Job[]; more: number } {
 	const running = jobs.filter((job) => RUNNING.includes(job.state));
 	const shown = running.length > SHOWN + 1 ? running.slice(0, SHOWN) : running;
 	return { shown, more: running.length - shown.length };
-}
-
-/** "Pause all", in two steps: the waiting downloads first, so pausing a
- * running one doesn't start one of them, then the running ones. */
-export function pauseSteps(jobs: Job[]): { waiting: string[]; running: string[] } {
-	const ids = (states: Job['state'][]) =>
-		jobs.filter((job) => !job.moving && states.includes(job.state)).map((job) => job.id);
-	return { waiting: ids(['queued']), running: ids(RUNNING) };
-}
-
-/** "Resume all": the paused downloads. Failed ones need a look first. */
-export function resumeTargets(jobs: Job[]): string[] {
-	return jobs.filter((job) => !job.moving && job.state === 'paused').map((job) => job.id);
 }

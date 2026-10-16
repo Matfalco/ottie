@@ -54,8 +54,9 @@ curl -H "$AUTH" -H "Content-Type: application/json" \
      -d '{"url": "https://example.com/file.iso"}' $API/jobs
 # → 201 {"id": "2026.10.13-14.28.59-1"}
 
-# Every download, oldest first
+# Every download, oldest first; or just this one
 curl -H "$AUTH" $API/jobs
+curl -H "$AUTH" $API/jobs/2026.10.13-14.28.59-1
 
 # Pause it (answers once it has really stopped), then resume it
 curl -H "$AUTH" -X POST $API/jobs/2026.10.13-14.28.59-1/pause

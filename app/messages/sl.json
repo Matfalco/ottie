@@ -34,6 +34,10 @@
 	"added": "Dodano iz odložišča",
 	"addedCount": "Dodani prenosi: {count}",
 	"notAdded": "Ottie ni mogel dodati kopirane povezave",
+	"runTitle": "Želite zagnati ta program?",
+	"runText": "»{name}« je program: na tem računalniku lahko spremeni karkoli. Zaženite ga le, če zaupate njegovemu izvoru.",
+	"run": "Zaženi",
+	"cancel": "Prekliči",
 	"problems": {
 		"network": "Napaka omrežja ({detail})",
 		"redirect": "Napačna preusmeritev ({detail})",

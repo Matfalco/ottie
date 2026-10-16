@@ -34,6 +34,10 @@
 	"added": "已從剪貼簿加入",
 	"addedCount": "已加入 {count} 個下載",
 	"notAdded": "Ottie 無法加入複製的連結",
+	"runTitle": "執行此程式？",
+	"runText": "「{name}」是一個程式：它可以變更這部電腦上的任何內容。只有在你信任其來源時才執行它。",
+	"run": "執行",
+	"cancel": "取消",
 	"problems": {
 		"network": "網路錯誤（{detail}）",
 		"redirect": "重新導向錯誤（{detail}）",

@@ -34,6 +34,10 @@
 	"added": "Toegevoegd vanaf het klembord",
 	"addedCount": "Downloads toegevoegd: {count}",
 	"notAdded": "Ottie kon de gekopieerde link niet toevoegen",
+	"runTitle": "Dit programma uitvoeren?",
+	"runText": "“{name}” is een programma: het kan alles op deze computer wijzigen. Voer het alleen uit als je de bron vertrouwt.",
+	"run": "Uitvoeren",
+	"cancel": "Annuleren",
 	"problems": {
 		"network": "Netwerkfout ({detail})",
 		"redirect": "Ongeldige omleiding ({detail})",

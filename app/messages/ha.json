@@ -34,6 +34,10 @@
 	"added": "An ƙara daga allon kwafi",
 	"addedCount": "Saukewar da aka ƙara: {count}",
 	"notAdded": "Ottie bai iya ƙara mahaɗin da aka kwafa ba",
+	"runTitle": "A gudanar da wannan shirin?",
+	"runText": "“{name}” shiri ne: zai iya canza komai a wannan kwamfutar. Ka gudanar da shi kawai idan ka amince da inda ya fito.",
+	"run": "Gudanar",
+	"cancel": "Soke",
 	"problems": {
 		"network": "Kuskuren hanyar sadarwa ({detail})",
 		"redirect": "Mummunan turawa ({detail})",

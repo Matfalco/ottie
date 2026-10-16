@@ -68,6 +68,7 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/store.rs       SQLite on its own thread: schema migrations, save/load jobs and settings
   src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media, max_batch; SettingsChange (applied all at once)
   src/view.rs        saved views: ViewSettings (filters + sort/grouping), ViewId, normalizing
+  src/webmark.rs     the Mark of the Web on finished files (Windows' Zone.Identifier stream, 0045)
   src/slot.rs        time slots: SlotSettings (target, days or date, hours, effects), whether one covers
                      a moment and its next change (jiff, the system's time zone), Effects (what the
                      active ones change, highest first)
@@ -93,7 +94,7 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
                      GET /openapi.json; its test writes docs/api/openapi.json
   src/auth.rs        Token, Bearer / WebSocket-protocol check (constant-time)
   src/types.rs       wire types (camelCase JSON) + ts-rs export, From<engine types>
-  src/jobs.rs        GET/POST /jobs, POST /jobs/{id}/pause|resume|cancel|category,
+  src/jobs.rs        GET/POST /jobs, GET /jobs/{id}, POST /jobs/{id}/pause|resume|cancel|category,
                      PATCH /jobs/{id} (own speed limit, priority, streaming mode, start/stop time),
                      DELETE /jobs/{id},
                      POST /jobs/reorder (move waiting jobs in the queue), POST /jobs/batch (several at
@@ -126,7 +127,8 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
   src/daemon.rs      find or start `ottie serve --managed` (the sidecar next to the app), ready / stop; at
                      sign-in, `ottie serve` on its own
   src/client.rs      the app as an API client: events WebSocket, jobs, settings, pause/resume, limit,
-                     categories' file types, links in a text (preview), adding several
+                     categories' file types, links in a text (preview), adding several, where a
+                     job's file is
   src/status.rs      follows the events (reconnects), sums them up once a second for the tray (counts, speed, progress of those of known size),
                      and passes downloads that finished or failed to notify.rs
   src/notify.rs      notifications (0035): what to tell (each, all at once, failed), with which sound, a click
@@ -162,6 +164,8 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
                      set_watch_clipboard / set_copied / set_notify / set_notify_failed / set_sounds /
                      set_sound / play_sound / set_language; the pages hear changes as the `desktop` event
   src/config.rs      load/save the app's JSON settings files in its config folder
+  src/files.rs       a download's file and folder (0045): commands open_file / show_in_folder take a job
+                     ID, ask the daemon where it is; a program asks first in a native dialog
   src/player.rs      "Play with" (0031): system's player via a .m3u, browser, or a picked program;
                      saved in the app's config folder; commands player / set_play_with / choose_player
   messages/          the tray's and notifications' texts, one JSON file per language
@@ -185,7 +189,9 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
   src/lib/api.ts     fetch + WebSocket client for /api/v1 (Unauthorized, ApiFailure)
   src/lib/session.svelte.ts  live job list: events WebSocket, reconnect, buffered resync
   src/lib/context.ts what every page shares (session, run): Svelte createContext
-  src/lib/jobs.ts, categories.ts, status.ts, selection.ts, bulk.ts, filetypes.ts,
+  src/lib/jobs.ts, categories.ts, status.ts, selection.ts, filetypes.ts,
+                     bulk.ts (actions on the selection; what Pause all / Resume all act on),
+                     opening.ts (which download a double-click or Enter opens, why one didn't, 0045),
                      speed.ts (the speed history: the graph's spans, 5 min to 1 h, saved per device, 0044),
                      filters.ts (Downloads filters ↔ address, quick filters, the four status groups),
                      arrange.ts (sort + group by status, saved per device),
@@ -200,7 +206,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      settings.ts (settings fields: kB/MB/GB per second, seconds, ranges; last limit
                      per device), sync.ts (following the shared look + language),
                      playlist.ts (a play link as a .m3u, saved through the browser, 0031),
-                     tray.ts (the tray menu's status line, what Pause all / Resume all act on),
+                     tray.ts (the tray menu's status line and its running downloads),
                      queue.ts (queue order, the waiting ones in it, whether up/down would move anything, what a drag
                      carries and where it may drop, 0032),
                      startup.ts (the sign-in choices, for Settings and Setup, 0039),
@@ -218,7 +224,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
   src/lib/appearance.svelte.ts  the appearance chosen on this device (state shared by layout, shell
                      (follows the shared one, docs/decisions/0022) and Settings)
   src/lib/window.ts  the desktop app: its window (minimize/maximize/close), the folder picker,
-                     and how Play opens a player (the app's commands, 0031), and what happens when
+                     a download's file and folder (0045), and how Play opens a player (the app's commands, 0031), and what happens when
                      everything has finished (0040), and the clipboard's links (0043)
   src/lib/finish.svelte.ts  that, live in a page: asked once, then the app's `finish` events, the countdown's clock
   src/lib/explain.ts   daemon codes (Problem, Reason) → the page's language; English fallback
@@ -228,10 +234,12 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        start, with the sign-in and clipboard choices in the desktop app),
                        Dashboard (AddCard, SpeedChart across the top with its span, then the four groups two
                        by two: running rows filling up, waiting ones in queue order, JobSummary rows),
-                       Downloads (AddCard, then one pane: Toolbar + MoveMenu + FinishMenu (desktop app), QuickFilters (with the
+                       Downloads (AddCard, then one pane: Toolbar (Pause all / Resume all) + MoveMenu + FinishMenu (desktop app), QuickFilters (with the
                        saved views' pills + their menu) or FilterPanel, ViewDialog (name a view),
-                       JobTable (group rows, sortable headers, drag in the Waiting group) + JobRow,
-                       JobDetails under it for the one selected download (header bar; its facts, priority and
+                       JobTable (group rows, sortable headers, drag in the Waiting group) + JobRow
+                       (a double-click opens a finished file, desktop app),
+                       JobDetails under it for the one selected download (header bar with Open and Show
+                       in folder in the desktop app; its facts, priority and
                        limit beside the bar that maps the file (FileBar, as in each row); a strip for category,
                        folder, streaming, start and stop; at most half the pane, giving way to the list's
                        few rows), or DetailsEmpty in its place for none or several, one line),
@@ -321,7 +329,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - **Saved views** (`docs/decisions/0026`): name + filters + sort/grouping, kept by the actor like categories (`Manager::add_view` …, `ViewChanged`/`ViewRemoved`). The engine checks and normalizes them but never filters jobs by them; front ends do. Removing a category replaces it with General in every view (saved before the category row goes).
 - **Persistence** (`docs/decisions/0008`): SQLite holds jobs, and later categories, settings and per-segment progress. `STRICT` tables, numbered migrations in `store.rs` (never edit a released one). Saves happen on add, on every state change (inside `transition`), on `Event::Started` (file name + validator known) and progress at most every 2 s. **From 2c: flush file data before saving the progress that covers it.** On load, running jobs become Queued and `downloaded` is reset from the `.part.ottie` length.
 - **Shutdown keeps running jobs running** in the database (it doesn't mark them Paused), so the next start continues them; user-paused jobs stay paused.
-- **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Names come from `Content-Disposition` (`filename*`, then `filename`), else the final URL; chosen once at the first response. Sanitize them; never write outside the target folder; resolve collisions with ` (1)`, ` (2)`. Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files).
+- **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Names come from `Content-Disposition` (`filename*`, then `filename`), else the final URL; chosen once at the first response. Sanitize them; never write outside the target folder; resolve collisions with ` (1)`, ` (2)`. Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files). On Windows the finished file gets the Mark of the Web (`webmark.rs`, `docs/decisions/0045`), unless policy says not to.
 - **Cancellation:** `tokio_util::sync::CancellationToken`, raced against network reads with `tokio::select! { biased; … }`. Pausing must stop all segments promptly and leave state consistent.
 - **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; native FTP/SFTP (7j) and yt-dlp (step 9) plug in beside it, so keep HTTP assumptions inside the HTTP backend.
 
@@ -339,6 +347,7 @@ Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build
 - Every API request carries the token (`docs/decisions/0014`): `Authorization: Bearer`, or for the events WebSocket the offered protocol `ottie.token.<token>` (never in a URL or a cookie). The token (32 random bytes, hex) lives in `<config>/token`, created on first use; `ottie serve` mentions where only when stdout is a terminal, never in logs. Unknown API paths also need it.
 - Play links (`/stream/{ticket}/…`, `docs/decisions/0029`) are the one exception: the random ticket reads one job's file and expires after 12 h unused. They're served with `Content-Security-Policy: sandbox`, so a downloaded page or SVG can't run scripts as the daemon's pages.
 - Cookies and auth headers forwarded by the extension belong to that one job: never log them, never reuse them for another job.
+- The desktop app opens files only through commands that take a job ID (`docs/decisions/0045`): it asks the daemon for the path and refuses a name that's more than a name. Running a program always asks first, in the app's own dialog.
 - Logs and errors never contain query strings or credentials: log URLs through `redact()`, and wrap `reqwest::Error` with `without_url()` (done in `Error::from`).
 - Only `http`/`https` (plus schemes a backend explicitly supports). The redirect policy in `build_client()` rejects anything else, and caps redirects at 10.
 
@@ -462,9 +471,7 @@ Done: ✅ and struck through.
 7. More features:
    - ✅ ~~7a clipboard monitoring (desktop app, `docs/decisions/0043`)~~
    - ✅ ~~the rounded style, the look from before as legacy palettes, the new Dashboard and an hour of speed (`docs/decisions/0044`)~~
-   - 7b open the file and its folder (desktop app: app commands that take a job ID, never a path; a
-     confirmation before running a program; double-click and Enter open too), Pause all / Resume all
-     in the main window
+   - ✅ ~~7b open the file and its folder, Pause all / Resume all in the main window (`docs/decisions/0045`)~~
    - 7c keyboard shortcuts (tabs, add/paste a link, Space, arrows, Enter, Delete; a "?" list of them;
      never while typing)
    - 7d animations (dialogs, menus, rows coming and going, the queue's reorder), none under

@@ -34,6 +34,10 @@
 	"added": "Tilføjet fra udklipsholderen",
 	"addedCount": "Tilføjede downloads: {count}",
 	"notAdded": "Ottie kunne ikke tilføje det kopierede link",
+	"runTitle": "Køre dette program?",
+	"runText": "“{name}” er et program: det kan ændre alt på denne computer. Kør det kun, hvis du stoler på, hvor det kommer fra.",
+	"run": "Kør",
+	"cancel": "Annuller",
 	"problems": {
 		"network": "Netværksfejl ({detail})",
 		"redirect": "Forkert omdirigering ({detail})",

@@ -34,6 +34,10 @@
 	"added": "Lisatud lõikelaualt",
 	"addedCount": "Lisatud allalaadimised: {count}",
 	"notAdded": "Ottie ei saanud kopeeritud linki lisada",
+	"runTitle": "Kas käivitada see programm?",
+	"runText": "„{name}“ on programm: see võib selles arvutis kõike muuta. Käivita see ainult siis, kui usaldad selle päritolu.",
+	"run": "Käivita",
+	"cancel": "Loobu",
 	"problems": {
 		"network": "Võrguviga ({detail})",
 		"redirect": "Vigane ümbersuunamine ({detail})",

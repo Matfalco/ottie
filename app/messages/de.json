@@ -34,6 +34,10 @@
 	"added": "Aus der Zwischenablage hinzugefügt",
 	"addedCount": "{count} Downloads hinzugefügt",
 	"notAdded": "Ottie konnte den kopierten Link nicht hinzufügen",
+	"runTitle": "Dieses Programm ausführen?",
+	"runText": "„{name}“ ist ein Programm: Es kann alles auf diesem Computer verändern. Führen Sie es nur aus, wenn Sie seiner Herkunft vertrauen.",
+	"run": "Ausführen",
+	"cancel": "Abbrechen",
 	"problems": {
 		"network": "Netzwerkfehler ({detail})",
 		"redirect": "Ungültige Weiterleitung ({detail})",

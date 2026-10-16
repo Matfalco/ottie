@@ -34,6 +34,10 @@
 	"added": "Pievienots no starpliktuves",
 	"addedCount": "Pievienotās lejupielādes: {count}",
 	"notAdded": "Ottie nevarēja pievienot nokopēto saiti",
+	"runTitle": "Palaist šo programmu?",
+	"runText": "“{name}” ir programma: tā var mainīt jebko šajā datorā. Palaidiet to tikai tad, ja uzticaties tās avotam.",
+	"run": "Palaist",
+	"cancel": "Atcelt",
 	"problems": {
 		"network": "Tīkla kļūda ({detail})",
 		"redirect": "Nepareiza novirzīšana ({detail})",

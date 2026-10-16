@@ -8,6 +8,7 @@
 	import { groupName, type Group } from '#lib/filters.js';
 	import { formatCount } from '#lib/format.js';
 	import { currentSpeed, type Rate } from '#lib/jobs.js';
+	import { canOpen } from '#lib/opening.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { canDrop, carried, type Reorder } from '#lib/queue.js';
 	import { NOTHING, click, selectAll, type Selection } from '#lib/selection.js';
@@ -25,6 +26,9 @@
 		note: (group: Group) => string;
 		onSelect: (selection: Selection) => void;
 		onRun: (action: Action, jobs: Job[]) => void;
+		/** Opens a finished download's file (a double-click); null where files
+		 * can't open (a browser). */
+		onOpen: ((job: Job) => void) | null;
 		/** A click on a sortable column's header. */
 		onSort: (sort: SortKey) => void;
 		/** Moves downloads in the queue (dragged, or the arrow keys on a grip). */
@@ -41,6 +45,7 @@
 		note,
 		onSelect,
 		onRun,
+		onOpen,
 		onSort,
 		onReorder
 	}: Props = $props();
@@ -183,6 +188,7 @@
 						{now}
 						onClick={(keys) => onSelect(click(selection, job.id, keys, order))}
 						onRun={(action) => onRun(action, [job])}
+						onOpen={onOpen && canOpen(job) ? () => onOpen(job) : null}
 						grip={arrangement.grouped}
 						movable={section.group === 'waiting'}
 						carried={drag?.jobs.some((each) => each.id === job.id) ?? false}
