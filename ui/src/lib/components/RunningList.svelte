@@ -4,25 +4,26 @@
 	import { currentSpeed, type Rate } from '#lib/jobs.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { describe, fraction, motion } from '#lib/status.js';
-	import { useApp } from '#lib/context.js';
 
 	interface Props {
 		/** Downloading now. */
 		running: Job[];
 		rates: Record<string, Rate>;
 		now: number;
+		/** The time slots' names by ID. */
+		slots: Record<number, string>;
 	}
 
-	let { running, rates, now }: Props = $props();
-	const { session } = useApp();
+	let { running, rates, now, slots }: Props = $props();
 </script>
 
-<!-- The tray menu's running downloads, each with its bar. -->
+<!-- The tray menu's running downloads, each with its bar. It's outside the
+     shell, so it takes everything as props: useApp() would throw there. -->
 {#if running.length > 0}
 	<ul class="running">
 		{#each running as job (job.id)}
 			{@const speed = currentSpeed(rates[job.id], now)}
-			{@const moving = motion(job, speed, now, undefined, session.slotNames)}
+			{@const moving = motion(job, speed, now, undefined, slots)}
 			{@const done = fraction(job)}
 			<li>
 				<span class="top">
@@ -32,7 +33,7 @@
 				<span class="bar" class:unknown={done === null}>
 					<span class="fill" style:width={`${(done ?? 0) * 100}%`}></span>
 				</span>
-				<span class="line">{describe(job, speed, now, undefined, session.slotNames)}</span>
+				<span class="line">{describe(job, speed, now, undefined, slots)}</span>
 			</li>
 		{/each}
 	</ul>

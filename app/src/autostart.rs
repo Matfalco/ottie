@@ -84,15 +84,44 @@ pub fn set(app: &AppHandle, on: bool) -> Result<()> {
     }
 }
 
-/// Writes the entry again if it's there, so it follows the app when it's
-/// moved (an AppImage, a reinstall elsewhere). Best effort: at worst Ottie
-/// doesn't start at sign-in, and Settings say so.
+/// Writes the entry again if it's there but starts another path, so it
+/// follows the app when it's moved (an AppImage, a reinstall elsewhere).
+/// Only then: a program that rewrites its startup entry each time it starts
+/// looks like malware settling in, and a security suite's behaviour
+/// monitoring (G DATA's) paused the whole app for ~45 s at every start for
+/// it. Best effort: at worst Ottie doesn't start at sign-in, and Settings
+/// say so.
 pub fn refresh(app: &AppHandle) {
     if let Ok(launcher) = launcher(app)
         && let Ok(true) = launcher.is_enabled()
+        && written(&launcher).as_deref() != Some(command(&launcher).as_str())
     {
         let _ = launcher.enable();
     }
+}
+
+/// The entry's command line, as auto-launch writes it.
+fn command(launcher: &AutoLaunch) -> String {
+    format!(
+        "{} {}",
+        launcher.get_app_path(),
+        launcher.get_args().join(" ")
+    )
+}
+
+/// What the entry holds now: the Run value on Windows. Elsewhere it isn't
+/// read, so the entry is written again at each start.
+#[cfg(windows)]
+fn written(launcher: &AutoLaunch) -> Option<String> {
+    windows_registry::CURRENT_USER
+        .open(r"Software\Microsoft\Windows\CurrentVersion\Run")
+        .and_then(|key| key.get_string(launcher.get_app_name()))
+        .ok()
+}
+
+#[cfg(not(windows))]
+fn written(_: &AutoLaunch) -> Option<String> {
+    None
 }
 
 fn launcher(app: &AppHandle) -> Result<AutoLaunch> {
@@ -160,6 +189,22 @@ mod tests {
         assert_eq!(
             desktop_quoted(r#"/a"b$c`d\e%f"#),
             r#""/a\\"b\\$c\\`d\\\\e%%f""#
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn the_entry_is_compared_as_auto_launch_writes_it() {
+        let launcher = AutoLaunchBuilder::new()
+            .set_app_name("Ottie (test)")
+            .set_app_path(&command_path(Path::new(r"C:\Ann Lee\Ottie\ottie-app.exe")))
+            .set_args(&[ARG])
+            .set_windows_enable_mode(auto_launch::WindowsEnableMode::CurrentUser)
+            .build()
+            .unwrap();
+        assert_eq!(
+            command(&launcher),
+            r#""C:\Ann Lee\Ottie\ottie-app.exe" --autostart"#
         );
     }
 

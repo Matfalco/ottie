@@ -197,9 +197,10 @@
 </div>
 
 <style>
+	/* Room for a few rows whatever's under it: the details give way. */
 	.scroller {
 		flex: 1;
-		min-height: 0;
+		min-height: 11rem;
 		overflow: auto;
 	}
 

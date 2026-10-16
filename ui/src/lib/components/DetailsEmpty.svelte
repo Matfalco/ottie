@@ -19,9 +19,15 @@
      place under the list, as JobDetails draws it. -->
 <section class="details" aria-label={m.det_label()}>
 	<div class="top">
-		<h2>
-			{count === 0 ? m.det_none() : m.det_several({ count: formatCount(count) })}
-		</h2>
+		<!-- One line: what's selected, then what to do. -->
+		<div class="text">
+			<h2>
+				{count === 0 ? m.det_none() : m.det_several({ count: formatCount(count) })}
+			</h2>
+			{#if open}
+				<p class="hint">{count === 0 ? m.det_none_hint() : m.det_several_hint()}</p>
+			{/if}
+		</div>
 		<button
 			class="toggle"
 			aria-expanded={open}
@@ -36,9 +42,6 @@
 			{/if}
 		</button>
 	</div>
-	{#if open}
-		<p class="hint">{count === 0 ? m.det_none_hint() : m.det_several_hint()}</p>
-	{/if}
 </section>
 
 <style>
@@ -54,14 +57,22 @@
 		align-items: center;
 		gap: 0.75rem;
 		min-height: 2rem;
-		padding: 0.6rem 0.9rem;
+		padding: 0.45rem 0.75rem 0.45rem 0.9rem;
+	}
+
+	.text {
+		display: flex;
+		flex: 1;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.2rem 0.75rem;
+		min-width: 0;
 	}
 
 	h2 {
-		flex: 1;
 		margin: 0;
 		color: var(--muted);
-		font-size: 1.05rem;
+		font-size: 1rem;
 		font-weight: 600;
 	}
 
@@ -78,9 +89,8 @@
 
 	.hint {
 		margin: 0;
-		padding: 0 0.9rem 1rem;
 		color: var(--faint);
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 	}
 
 	/* Rounded (docs/decisions/0044): a raised card of its own under the

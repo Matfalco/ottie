@@ -6,6 +6,7 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import Copy from '@lucide/svelte/icons/copy';
+	import Folder from '@lucide/svelte/icons/folder';
 	import ListVideo from '@lucide/svelte/icons/list-video';
 	import Play from '@lucide/svelte/icons/play';
 	import type { Action } from '#lib/bulk.js';
@@ -21,13 +22,15 @@
 	import { explainProblem } from '#lib/explain.js';
 	import { connections, strip } from '#lib/filemap.js';
 	import { statusName, statusOf } from '#lib/filters.js';
-	import { displayName, formatPercent } from '#lib/format.js';
+	import { displayName, formatBytes, formatPercent, formatSpeed } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { savePlaylist } from '#lib/playlist.js';
 	import { canSchedule, fromField, timeChange, toField, type TimeKey } from '#lib/schedule.js';
-	import { amount, fraction } from '#lib/status.js';
+	import { amount, fraction, isFinished } from '#lib/status.js';
 	import { canChoosePlayer } from '#lib/window.js';
 	import FileBar from './FileBar.svelte';
+	import FileIcon from './FileIcon.svelte';
+	import Hint from './Hint.svelte';
 	import LimitControl from './LimitControl.svelte';
 	import Switch from './Switch.svelte';
 	import { useApp } from '#lib/context.js';
@@ -71,6 +74,14 @@
 	let status = $derived(statusOf(job));
 	let primary = $derived(primaryAction(job));
 	let done = $derived(fraction(job));
+	/** Finished or cancelled: its own settings no longer matter, so only
+	 * where it is stays (its few facts go with it, under the bar). */
+	let over = $derived(isFinished(job));
+	let known = $derived(facts(job, speed, now, maxRetries, undefined, session.slotNames));
+	/** Beside the name: how much, the whole size once it's done. */
+	let size = $derived(
+		job.state === 'completed' ? formatBytes(job.total ?? job.downloaded) : amount(job)
+	);
 	// The bar maps the file: each range at its place, once the size is known.
 	let parts = $derived(strip(job, job.state === 'downloading'));
 	let problem = $derived(
@@ -144,11 +155,19 @@
 	}
 </script>
 
+<!-- The selected download (docs/decisions/0044): a header bar, then two
+     halves (its facts and own settings | the bar that maps the file), then a
+     strip for where it goes and when. Explanations sit behind an (i). -->
 <section class="details {job.state}" aria-label={m.det_label()}>
 	<div class="top">
+		<span class="kind"><FileIcon {name} size={18} /></span>
 		<div class="title">
 			<h2 title={name} dir="auto">{name}</h2>
 			<span class="pill {status}">{statusName(status)}</span>
+			<span class="size">{size}</span>
+			{#if !open && job.state === 'downloading' && speed > 0}
+				<span class="size">{formatSpeed(speed)}</span>
+			{/if}
 		</div>
 		<div class="buttons">
 			{#if primary}
@@ -180,7 +199,10 @@
 					{copied ? m.det_link_copied() : m.det_copy_link()}
 				</button>
 			{/if}
-			<button disabled title={m.coming_later()}>{m.det_show_folder()}</button>
+			<button disabled title={m.coming_later()}>
+				<Folder size={13} aria-hidden="true" />
+				{m.det_show_folder()}
+			</button>
 			<button class="danger" onclick={() => onRun('remove')}>{m.remove()}</button>
 		</div>
 	</div>
@@ -203,13 +225,68 @@
 		<input class="link" readonly value={link} dir="auto" aria-label={m.det_link_label()} />
 	{/if}
 
-	{#if open}
+	{#if !open}
+		<!-- Folded: the header and a thin bar, so the list gets the room. -->
+		<div class="thin">
+			<FileBar
+				{job}
+				size="row"
+				role="img"
+				aria-label={m.det_map_label({ percent: formatPercent(done ?? 0) })}
+			/>
+		</div>
+	{:else}
+		{#if problem}
+			<p class="problem">{problem}</p>
+		{/if}
 		<div class="body">
 			<div class="column">
 				<div class="url" title={job.url} dir="auto">{job.url}</div>
+				{#if !over}
+					<dl class="facts" style:--count={known.length}>
+						{#each known as fact (fact.label)}
+							<div>
+								<dt>{fact.label}</dt>
+								<dd>{fact.value}</dd>
+							</div>
+						{/each}
+					</dl>
+					<div class="tune">
+						<div class="inline" role="radiogroup" aria-label={m.det_priority()}>
+							<span class="label" aria-hidden="true">{m.det_priority()}</span>
+							<Hint text={m.det_priority_hint()} />
+							<div class="segments">
+								{#each PRIORITIES as priority (priority)}
+									<label class:chosen={job.priority === priority}>
+										<input
+											type="radio"
+											name="priority"
+											checked={job.priority === priority}
+											onchange={() => onChange({ priority })}
+										/>
+										{priorityName(priority)}
+									</label>
+								{/each}
+							</div>
+						</div>
+						<div class="inline">
+							<span class="label">{m.det_speed_limit()}</span>
+							<Hint text={m.det_limit_hint()} />
+							<LimitControl
+								limit={job.speedLimit}
+								label={m.det_limit_switch()}
+								memory="download"
+								onChange={(speedLimit) => onChange({ speedLimit })}
+							/>
+						</div>
+					</div>
+				{/if}
+			</div>
+
+			<div class="column map">
 				<div class="amount">
-					<span>{amount(job)}</span>
-					<span class="muted">{done === null ? '' : formatPercent(done)}</span>
+					<span class="label">{m.col_progress()}</span>
+					<span class="percent">{done === null ? '' : formatPercent(done)}</span>
 				</div>
 				<FileBar
 					{job}
@@ -229,93 +306,68 @@
 						</div>
 					{/if}
 				</div>
-				{#if problem}
-					<p class="problem">{problem}</p>
-				{/if}
-				<dl>
-					{#each facts(job, speed, now, maxRetries, undefined, session.slotNames) as fact (fact.label)}
-						<div>
-							<dt>{fact.label}</dt>
-							<dd>{fact.value}</dd>
-						</div>
-					{/each}
-				</dl>
 			</div>
+		</div>
 
-			<div class="settings">
-				<label class="field">
-					<span class="label">{m.det_category()}</span>
-					<select value={job.category} onchange={moved}>
-						{#each choices as category (category.id)}
-							<option value={category.id}>{categoryName(category)}</option>
-						{/each}
-					</select>
-				</label>
-				<div class="field">
-					<span class="label">{m.det_folder()}</span>
-					<span class="folder" title={job.destDir} dir="auto">{job.destDir}</span>
-				</div>
-				<div class="field wide">
-					<span class="label">{m.det_speed_limit()}</span>
-					<LimitControl
-						limit={job.speedLimit}
-						label={m.det_limit_switch()}
-						memory="download"
-						onChange={(speedLimit) => onChange({ speedLimit })}
-					/>
-					<span class="hint">{m.det_limit_hint()}</span>
-				</div>
-				<fieldset class="field wide">
-					<legend class="label">{m.det_priority()}</legend>
-					<div class="segments">
-						{#each PRIORITIES as priority (priority)}
-							<label class:chosen={job.priority === priority}>
-								<input
-									type="radio"
-									name="priority"
-									checked={job.priority === priority}
-									onchange={() => onChange({ priority })}
-								/>
-								{priorityName(priority)}
-							</label>
-						{/each}
+		<div class="strip">
+			{#if over}
+				{#each known as fact (fact.label)}
+					<div class="field">
+						<span class="label">{fact.label}</span>
+						<span class="value">{fact.value}</span>
 					</div>
-					<span class="hint">{m.det_priority_hint()}</span>
-				</fieldset>
-				{#if canStream(job)}
-					<div class="field wide">
-						<span class="label">{m.det_streaming()}</span>
-						<span class="switch-row">
-							<Switch
-								on={job.streaming}
-								label={m.det_streaming()}
-								onChange={(streaming) => onChange({ streaming })}
-							/>
-							<span class="hint">{m.det_streaming_hint()}</span>
-						</span>
-					</div>
-				{/if}
-				{#if canSchedule(job)}
-					<div class="field wide">
-						<span class="label">{m.det_schedule()}</span>
-						<div class="times">
-							{@render timeField(m.det_start_at(), 'startAt', job.startAt)}
-							{@render timeField(m.det_stop_at(), 'stopAt', job.stopAt)}
-						</div>
-						<span class="hint">{m.det_schedule_hint()}</span>
-					</div>
-				{/if}
+				{/each}
+			{/if}
+			<label class="field">
+				<span class="label">{m.det_category()}</span>
+				<select value={job.category} onchange={moved}>
+					{#each choices as category (category.id)}
+						<option value={category.id}>{categoryName(category)}</option>
+					{/each}
+				</select>
+			</label>
+			<div class="field grow">
+				<span class="label">{m.det_folder()}</span>
+				<span class="folder" title={job.destDir} dir="auto">{job.destDir}</span>
 			</div>
+			{#if canStream(job)}
+				<div class="field">
+					<span class="name">
+						<span class="label">{m.det_streaming()}</span>
+						<Hint text={m.det_streaming_hint()} />
+					</span>
+					<span class="control">
+						<Switch
+							on={job.streaming}
+							label={m.det_streaming()}
+							onChange={(streaming) => onChange({ streaming })}
+						/>
+					</span>
+				</div>
+			{/if}
+			{#if canSchedule(job)}
+				<!-- One group, so Stop at wraps right under Start at. -->
+				<div class="times" role="group" aria-label={m.det_schedule()}>
+					{@render timeField(m.det_start_at(), 'startAt', job.startAt, m.det_schedule_hint())}
+					{@render timeField(m.det_stop_at(), 'stopAt', job.stopAt, null)}
+				</div>
+			{/if}
 		</div>
 	{/if}
 </section>
 
-{#snippet timeField(label: string, key: TimeKey, value: number | null)}
-	<label class="time">
-		<span class="sub">{label}</span>
+{#snippet timeField(label: string, key: TimeKey, value: number | null, hint: string | null)}
+	<div class="field">
+		<span class="name">
+			<span class="label">{label}</span>
+			{#if hint}
+				<Hint text={hint} />
+			{/if}
+		</span>
 		<span class="time-row">
 			<input
 				type="datetime-local"
+				aria-label={label}
 				value={toField(value)}
 				onblur={(event) => commit(event.currentTarget, key, value)}
 				onkeydown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
@@ -326,15 +378,18 @@
 				</button>
 			{/if}
 		</span>
-	</label>
+	</div>
 {/snippet}
 
 <style>
-	/* Under the list, on the same card; scrolls by itself on small screens. */
+	/* Under the list, on the same card; at most half of it, and less when
+	   the list needs its room (see JobTable), down to its header. It
+	   scrolls by itself beyond that. */
 	.details {
 		position: relative;
-		flex: none;
-		max-height: 60%;
+		flex: 0 1 auto;
+		min-height: 3.6rem;
+		max-height: 50%;
 		overflow: auto;
 		border-top: 1px solid var(--border);
 		background: var(--well);
@@ -346,14 +401,48 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem 0.75rem;
-		padding: 0.6rem 3.4rem 0.6rem 0.9rem;
+		padding-block: 0.55rem;
+		padding-inline: 0.75rem 3.4rem;
+	}
+
+	/* The file's kind, as in the Dashboard's rows. */
+	.kind {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 2.4rem;
+		height: 2.4rem;
+		border-radius: var(--radius-s);
+		background: var(--hover);
+		color: var(--muted);
+	}
+
+	.downloading .kind {
+		background: var(--selected);
+		color: var(--text);
+	}
+
+	.failed .kind {
+		background: var(--danger-bg);
+		color: var(--danger);
+	}
+
+	.retrying .kind {
+		background: var(--warn-bg);
+		color: var(--warn);
+	}
+
+	.completed .kind {
+		background: var(--ok-bg);
+		color: var(--ok);
 	}
 
 	.title {
 		display: flex;
-		flex: 1 1 20rem;
-		align-items: baseline;
-		gap: 0.75rem;
+		flex: 1 1 18rem;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.2rem 0.6rem;
 		min-width: 0;
 	}
 
@@ -394,6 +483,14 @@
 	.pill.completed {
 		background: var(--ok-bg);
 		color: var(--ok);
+	}
+
+	.size {
+		flex: none;
+		color: var(--muted);
+		font-family: var(--mono);
+		font-size: 0.8rem;
+		white-space: nowrap;
 	}
 
 	.buttons {
@@ -441,7 +538,7 @@
 
 	.toggle {
 		position: absolute;
-		top: 0.6rem;
+		top: 0.75rem;
 		inset-inline-end: 0.9rem;
 		display: grid;
 		place-items: center;
@@ -453,18 +550,41 @@
 		color: var(--muted);
 	}
 
+	.thin {
+		padding: 0 0.9rem 0.7rem;
+	}
+
+	.problem {
+		margin: 0 0.9rem 0.6rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-s);
+		background: var(--danger-bg);
+		color: var(--danger);
+		font-size: 0.85rem;
+	}
+
+	/* Side by side when both fit, the facts' half wider (its priority and
+	   limit share a line); one under the other on narrow windows. */
 	.body {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-		gap: 1.25rem 1.5rem;
-		padding: 0.25rem 0.9rem 1rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem 1.5rem;
+		padding: 0.1rem 0.9rem 0.75rem;
 	}
 
 	.column {
 		display: grid;
+		flex: 3 1 17rem;
+		grid-template-columns: minmax(0, 1fr);
 		align-content: start;
 		gap: 0.6rem;
 		min-width: 0;
+	}
+
+	/* The bar halfway down its side, level with the facts. */
+	.column.map {
+		flex-grow: 2;
+		align-content: center;
 	}
 
 	.url,
@@ -477,44 +597,18 @@
 		white-space: nowrap;
 	}
 
-	.amount {
-		display: flex;
-		justify-content: space-between;
-		font-family: var(--mono);
-		font-size: 0.85rem;
-	}
-
-	.muted {
-		color: var(--muted);
-	}
-
-	.map-foot {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-between;
-		gap: 0.3rem 0.9rem;
-		color: var(--faint);
-	}
-
-	.problem {
-		margin: 0;
-		padding: 0.5rem 0.65rem;
-		border-radius: var(--radius-s);
-		background: var(--danger-bg);
-		color: var(--danger);
-		font-size: 0.85rem;
-	}
-
-	dl {
+	.facts {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(var(--count), minmax(0, 1fr));
 		gap: 0.5rem;
 		margin: 0;
 	}
 
-	dt {
+	dt,
+	.label {
 		color: var(--faint);
 		font-size: 0.8rem;
+		white-space: nowrap;
 	}
 
 	dd {
@@ -524,6 +618,42 @@
 		font-size: 0.9rem;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	/* Priority and the speed limit side by side, each with its name. */
+	.tune {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 1.25rem;
+	}
+
+	.inline {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+		min-width: 0;
+	}
+
+	.amount {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+	}
+
+	.percent {
+		color: var(--muted);
+		font-family: var(--mono);
+		font-size: 0.85rem;
+	}
+
+	.map-foot {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 0.3rem 0.9rem;
+		color: var(--faint);
 	}
 
 	.mono {
@@ -577,34 +707,49 @@
 		background: var(--arriving);
 	}
 
-	.settings {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		align-content: start;
-		gap: 0.75rem 1rem;
+	/* Where it goes and when: each control with its name above it. */
+	.strip {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 0.6rem 1rem;
+		padding: 0.65rem 0.9rem 0.8rem;
+		border-top: 1px solid var(--border-soft);
 	}
 
 	.field {
 		display: grid;
-		align-content: start;
+		align-content: end;
 		gap: 0.3rem;
 		min-width: 0;
-		margin: 0;
-		padding: 0;
-		border: none;
 	}
 
-	.wide {
-		grid-column: 1 / -1;
+	.field.grow {
+		flex: 1 1 12rem;
 	}
 
-	.label {
-		padding: 0;
-		color: var(--faint);
-		font-size: 0.8rem;
+	.name {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		min-height: 1.25rem;
+	}
+
+	.control,
+	.value {
+		display: flex;
+		align-items: center;
+		height: 2rem;
+	}
+
+	.value {
+		font-family: var(--mono);
+		font-size: 0.9rem;
+		white-space: nowrap;
 	}
 
 	select {
+		min-width: 9rem;
 		height: 2rem;
 		padding-block: 0;
 	}
@@ -619,31 +764,14 @@
 		background: var(--input);
 	}
 
-	.hint {
-		color: var(--faint);
-		font-size: 0.8rem;
-	}
-
-	.switch-row {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-	}
-
+	/* Start and stop: side by side, or one under the other when they don't
+	   fit, never split across the strip. */
 	.times {
 		display: flex;
+		flex: 0 1 auto;
 		flex-wrap: wrap;
-		gap: 0.5rem 1rem;
-	}
-
-	.time {
-		display: grid;
-		gap: 0.2rem;
-	}
-
-	.sub {
-		color: var(--muted);
-		font-size: 0.8rem;
+		gap: 0.6rem 1rem;
+		min-width: 0;
 	}
 
 	.time-row {
@@ -673,7 +801,7 @@
 		flex: 1;
 		place-items: center;
 		min-height: 1.95rem;
-		padding: 0 0.4rem;
+		padding: 0 0.6rem;
 		color: var(--muted);
 		cursor: pointer;
 	}
@@ -704,7 +832,7 @@
 	}
 
 	@media (max-width: 40rem) {
-		dl {
+		.facts {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
@@ -713,6 +841,7 @@
 	   scrolls (see Downloads). */
 	@media (max-height: 40rem), (max-width: 40rem) {
 		.details {
+			flex: none;
 			max-height: none;
 			overflow: visible;
 		}
@@ -725,6 +854,10 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius-l);
 		box-shadow: 0 -8px 24px rgb(0 0 0 / 16%);
+	}
+
+	:global([data-style='rounded']) .kind {
+		border-radius: var(--radius-m);
 	}
 
 	:global([data-style='rounded']) .toggle {
@@ -746,6 +879,23 @@
 		padding-block: 0;
 	}
 
+	/* The facts as tiles, sunk like the link above them. */
+	:global([data-style='rounded']) .facts > div {
+		padding: 0.45rem 0.75rem;
+		border-radius: var(--radius-m);
+		background: var(--input);
+		box-shadow: var(--sunken-shadow);
+	}
+
+	/* The strip sunk into the card. */
+	:global([data-style='rounded']) .strip {
+		margin: 0 0.5rem 0.5rem;
+		padding: 0.6rem 0.75rem 0.7rem;
+		border-top: none;
+		border-radius: var(--radius-l);
+		background: var(--bg);
+	}
+
 	/* Priority: a sunken track, the chosen one raised. */
 	:global([data-style='rounded']) .segments {
 		gap: 0.15rem;
@@ -757,7 +907,7 @@
 	}
 
 	:global([data-style='rounded']) .segments label {
-		min-height: 1.8rem;
+		min-height: 1.75rem;
 		border-radius: 999px;
 	}
 
@@ -771,7 +921,8 @@
 	}
 
 	:global([data-style='rounded']) .problem {
-		border-radius: var(--radius-m);
+		border-radius: var(--radius-pill);
+		padding-inline: 1rem;
 	}
 
 	:global([data-style='rounded']) .key {

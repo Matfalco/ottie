@@ -135,7 +135,9 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
                      rodio) or one for each kind
   src/tray.rs        tray icon (white/black by taskbar, size by scale), clicks, the system's menu and its
                      actions (Linux, or while the daemon is unreachable) (0034)
-  src/autostart.rs   starting at sign-in (0039): the system's entry (auto-launch, path quoted), what it starts
+  src/autostart.rs   starting at sign-in (0039): the system's entry (auto-launch, path quoted;
+                     rewritten at start only if it starts another path: security tools pause an app that
+                     rewrites it each time), what it starts
                      (tray or daemon only), `--autostart`
   src/popup.rs       Ottie's own tray menu: the /tray page in a borderless window beside the click, hidden
                      on blur; commands menu_ready / show_main / quit_app
@@ -189,6 +191,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      arrange.ts (sort + group by status, saved per device),
                      details.ts (the selected download's panel: main action, facts, priorities),
                      filemap.ts (ranges → the bar that maps the file, in the details and each row, 0027),
+                     hint.ts (where an (i)'s explanation goes: above its button, inside the window),
                      views.ts (saved views ↔ filters + arrangement, which pill is lit),
                      languages.ts (each language's name, which are reviewed, the system's closest, the
                      device's choice, 0041; which way it's written, 0042), format.ts, token.ts, adding.ts (the add step), setup.ts (starter categories),
@@ -228,9 +231,11 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        Downloads (AddCard, then one pane: Toolbar + MoveMenu + FinishMenu (desktop app), QuickFilters (with the
                        saved views' pills + their menu) or FilterPanel, ViewDialog (name a view),
                        JobTable (group rows, sortable headers, drag in the Waiting group) + JobRow,
-                       JobDetails under it for the one selected download (FileBar maps the file, as in each
-                       row), or
-                       DetailsEmpty in its place for none or several),
+                       JobDetails under it for the one selected download (header bar; its facts, priority and
+                       limit beside the bar that maps the file (FileBar, as in each row); a strip for category,
+                       folder, streaming, start and stop; at most half the pane, giving way to the list's
+                       few rows), or DetailsEmpty in its place for none or several, one line),
+                       Hint (an (i) beside a setting: its explanation on hover, click or tap),
                        CategoriesPage (LinkTester, rows, CategoryEditor inline in place of a row),
                        SchedulePage (WeekView: drag a slot or its edges, click to edit; then the
                        slots' rows with SlotEditor inline),

@@ -309,7 +309,10 @@
 		border-bottom: 1px solid var(--border);
 	}
 
+	/* Fills the room the list would take, so the details stay at the
+	   bottom whatever's shown above them. */
 	.empty {
+		flex: 1;
 		margin: 4rem 0;
 		padding: 0 1rem;
 		text-align: center;
@@ -318,6 +321,7 @@
 
 	div.empty {
 		display: grid;
+		align-content: start;
 		justify-items: center;
 		gap: 0.75rem;
 	}

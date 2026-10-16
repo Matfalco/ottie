@@ -122,7 +122,12 @@
 		<p class="status" role="status">{status}</p>
 		{#if connection === 'live' && running.shown.length > 0}
 			<div class="running">
-				<RunningList running={running.shown} rates={session.rates} now={session.now} />
+				<RunningList
+					running={running.shown}
+					rates={session.rates}
+					now={session.now}
+					slots={session.slotNames}
+				/>
 				{#if running.more > 0}
 					<p class="more">{m.tray_more({ count: formatCount(running.more) })}</p>
 				{/if}
