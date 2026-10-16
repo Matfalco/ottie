@@ -276,6 +276,7 @@ docs/api/          README.md (how to talk to the daemon) + openapi.json (generat
 docs/decisions/    one short file per accepted decision (NNNN-title.md), and README.md,
                    one line per decision                                      [exists]
 res/icons/         the drawn Ottie icons (app, tray), PNG + SVG               [exists]
+.claude/           settings.json (SessionStart hook) + cloud-setup.sh: cloud sessions' setup [exists]
 ```
 
 ## Commands
@@ -312,6 +313,8 @@ pnpm --filter app tauri android dev  # Android device/emulator
 Before calling a task done: fmt, clippy, tests for the crates you touched; for TS packages you touched, `check`, `test` and `lint`. A release builds the UI before the Rust binary. Update this section when a part comes to exist.
 
 Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed. The workspace includes the Tauri app, so `cargo build/test/clippy --workspace` compile Tauri too (WebView2 comes with Windows 11; Linux needs the webkit2gtk 4.1 dev packages, libayatana-appindicator3 for the tray, and libasound2 (ALSA) dev for notification sounds). In a dev run, set `OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` to keep away from your real downloads: the app passes them on to the daemon. The dev app still reads and writes the real `app.json` (`%APPDATA%\io.github.matfalco.ottie` on Windows): back it up first. `OTTIE_POWER_DRY_RUN=1` keeps the computer on when trying "when everything has finished".
+
+Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 30 GB of disk, Node 22, only the repo (nothing from the maintainer's machine). The SessionStart hook in `.claude/settings.json` runs `.claude/cloud-setup.sh`, which does nothing elsewhere: the Linux packages Tauri needs, current stable Rust with clippy and rustfmt, pnpm at the `packageManager` version, `pnpm install` when a lockfile or `package.json` changed, and `CARGO_PROFILE_DEV_DEBUG=line-tables-only` so `target/` fits on the disk. Its last line (`cloud-setup: ready …`) says what it found. There, `cargo build/test/clippy --workspace` and the UI's `check`/`test`/`lint`/`build` all run; the desktop app can't be seen on screen, and Windows-only code (`#[cfg(windows)]`: the Mark of the Web, power calls, the Run key) only compiles on Windows: say which of those a change touches, so the maintainer checks them on Windows. Pages can be checked in a headless browser on a test daemon (`OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` in a temporary folder) over the DevTools protocol; synthetic events there must bubble (`new Event('change', { bubbles: true })`), since Svelte 5 listens once at the root. Tests never hit the real internet anyway, and the network only reaches registries (crates.io, npm) and GitHub.
 
 ## Engine rules (crates/core)
 
