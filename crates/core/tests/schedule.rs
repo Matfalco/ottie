@@ -101,6 +101,26 @@ impl Setup {
         .unwrap_or_else(|_| panic!("{id} never became {state:?}"))
     }
 
+    /// Waits until every job in `ids` has reached `state`, in any order.
+    async fn wait_for_all(&mut self, ids: &[JobId], state: JobState) -> Vec<JobSnapshot> {
+        let events = &mut self.events;
+        let mut reached: Vec<JobSnapshot> = Vec::new();
+        tokio::time::timeout(TIMEOUT, async {
+            while reached.len() < ids.len() {
+                if let JobEvent::Changed(job) = events.recv().await.unwrap()
+                    && ids.contains(&job.id)
+                    && job.state == state
+                    && !reached.iter().any(|seen| seen.id == job.id)
+                {
+                    reached.push(job);
+                }
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("not all of {ids:?} became {state:?}"));
+        reached
+    }
+
     fn assert_file(&self, job: &JobSnapshot) {
         let path = self.dir.path().join(job.file_name.as_ref().unwrap());
         assert!(std::fs::read(path).unwrap() == self.data, "content differs");
@@ -455,8 +475,8 @@ async fn a_slot_that_stops_downloads_holds_them_until_it_goes() {
     assert_eq!((job.state, job.held_by), (JobState::Scheduled, Some(night)));
 
     s.manager.remove_slot(night).await.unwrap();
-    for id in [running, added] {
-        let done = s.wait_for(id, JobState::Completed).await;
+    // Both start again at once: either may finish first.
+    for done in s.wait_for_all(&[running, added], JobState::Completed).await {
         s.assert_file(&done);
     }
 }
@@ -476,8 +496,7 @@ async fn a_slot_can_keep_what_it_held_paused_once_it_ends() {
         .update_slot(night, elsewhere(STOP_THEN_PAUSE))
         .await
         .unwrap();
-    for id in [running, waiting] {
-        let paused = s.wait_for(id, JobState::Paused).await;
+    for paused in s.wait_for_all(&[running, waiting], JobState::Paused).await {
         assert_eq!(paused.held_by, None);
     }
     // Resumed by hand, they finish.
