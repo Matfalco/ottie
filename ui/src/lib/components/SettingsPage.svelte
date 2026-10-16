@@ -18,7 +18,7 @@
 	import { canDo, COUNTDOWN, FINISH_CHOICES, finishHint, finishName } from '#lib/finish.js';
 	import { LiveFinishing } from '#lib/finish.svelte.js';
 	import { MOTIONS, type Motion } from '#lib/motion.js';
-	import { shuffle, unfold } from '#lib/moving.svelte.js';
+	import { resizes, shuffle, unfold } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { HELP_TRANSLATE, REVIEWED, switchLanguage } from '#lib/languages.js';
 	import { getLocale, type Locale } from '#lib/paraglide/runtime.js';
@@ -192,6 +192,12 @@
 	/** When everything has finished, as the desktop app has it. */
 	const live = new LiveFinishing();
 	const finishing = $derived(live.current);
+	// A section whose settings arrive after it's shown grows to hold them as
+	// they fade in, rather than jumping (docs/decisions/0048).
+	resizes(
+		() => (page ? [...page.querySelectorAll<HTMLElement>('section.card')] : undefined),
+		() => [settings !== null, desktop !== null, finishing !== null, live.failed, playing !== null]
+	);
 	/** The choices shown, put back if a change doesn't happen. */
 	let finishAlways: Finish = $derived(finishing?.always ?? 'nothing');
 	let countdownIn: CountdownIn = $derived(finishing?.countdownIn ?? 'window');
@@ -1006,6 +1012,9 @@
 	}
 
 	nav {
+		/* Its own layer: the chosen one's highlight slides under every
+		   item's text (each item isolated, it would cover the earlier ones). */
+		isolation: isolate;
 		position: sticky;
 		top: 0;
 		display: grid;
@@ -1016,15 +1025,13 @@
 
 	nav a {
 		position: relative;
-		/* The highlight goes under the name but over the hover. */
-		isolation: isolate;
 		padding: 0.45rem 0.75rem;
 		color: var(--muted);
 		text-decoration: none;
 		border-radius: 999px;
 	}
 
-	nav a:hover {
+	nav a:not(.current):hover {
 		background: var(--hover);
 		color: var(--text);
 	}

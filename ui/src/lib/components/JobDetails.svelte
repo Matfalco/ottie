@@ -118,6 +118,10 @@
 	let id = $derived(job.id);
 	let playable = $derived(isPlayable(job));
 	let link: string | null = $state(null);
+	/** The daemon gave no play link: its buttons go. Until it answers they
+	 * stay in place (inert), so the buttons beside them don't jump back and
+	 * forth while the link for another download arrives. */
+	let refused = $state(false);
 	/** In the desktop app, Play opens the player chosen in Settings. */
 	const inApp = canChoosePlayer();
 	let copied = $state(false);
@@ -127,6 +131,7 @@
 	$effect(() => {
 		const wanted = playable ? id : null;
 		link = null;
+		refused = false;
 		copied = false;
 		showLink = false;
 		if (wanted === null) {
@@ -136,6 +141,7 @@
 		void untrack(getLink).then((url) => {
 			if (current) {
 				link = url;
+				refused = url === null;
 			}
 		});
 		return () => {
@@ -197,12 +203,12 @@
 					{m.det_open()}
 				</button>
 			{/if}
-			{#if link}
+			{#if playable && !refused}
 				<!-- A real link: the browser plays it in a new tab (the desktop
 				     app hands it to the player chosen in Settings). -->
 				<a
 					class="button"
-					href={link}
+					href={link ?? undefined}
 					target="_blank"
 					rel="noopener"
 					title={inApp ? m.det_play_hint_app() : m.det_play_hint()}
@@ -778,11 +784,13 @@
 		height: 2rem;
 	}
 
-	.segments label:hover {
+	.segments label:not(.chosen):hover {
 		background: var(--hover);
 	}
 
-	.segments label:focus-within {
+	/* Only when reached from the keyboard: a click shows the choice by the
+	   highlight alone. */
+	.segments label:has(input:focus-visible) {
 		outline: 2px solid var(--focus);
 		outline-offset: -2px;
 	}
@@ -867,6 +875,9 @@
 
 	/* Radio buttons drawn as one row of segments (as in the filters). */
 	.segments {
+		/* Its own layer: the chosen one's highlight slides under every
+		   item's text (each item isolated, it would cover the earlier ones). */
+		isolation: isolate;
 		display: flex;
 		overflow: hidden;
 		gap: 0.15rem;
@@ -881,7 +892,6 @@
 	   the window and stretch it. */
 	.segments label {
 		position: relative;
-		isolation: isolate;
 		display: grid;
 		flex: 1;
 		place-items: center;

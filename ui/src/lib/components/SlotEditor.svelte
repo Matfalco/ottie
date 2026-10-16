@@ -392,7 +392,9 @@
 		background: var(--hover);
 	}
 
-	.segments label:focus-within {
+	/* Only when reached from the keyboard: a click shows the choice by the
+	   highlight alone. */
+	.segments label:has(input:focus-visible) {
 		outline: 2px solid var(--focus);
 		outline-offset: -2px;
 	}

@@ -353,6 +353,14 @@ tbody tr {
 	animation: none !important;
 }
 
+/* For the frame the theme changes in (+layout.svelte): every colour switches
+   at once. */
+[data-theming] *,
+[data-theming] *::before,
+[data-theming] *::after {
+	transition: none !important;
+}
+
 /* Scroll bars in the theme's colours rather than the system's grey (inherited,
    so this covers every scrolling element). */
 html {

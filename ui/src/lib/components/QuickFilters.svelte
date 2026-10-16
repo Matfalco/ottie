@@ -9,7 +9,7 @@
 	import { count, filtersQuery, quickFilters, sameFilters, type Filters } from '#lib/filters.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { drop, resizes, shuffle, unfold } from '#lib/moving.svelte.js';
+	import { drop, reshapes, shuffle, unfold } from '#lib/moving.svelte.js';
 	import { showsView, viewFilters } from '#lib/views.js';
 
 	interface Props {
@@ -38,6 +38,7 @@
 	let held = $derived(pills.more.some((pill) => sameFilters(pill.filters, filters)));
 	let more = $derived(opened || held);
 	let shown = $derived(more ? [...pills.main, ...pills.more] : pills.main);
+	let extra = $derived(shown.slice(pills.main.length));
 	/** The view whose menu is open. */
 	let menu: number | null = $state(null);
 
@@ -53,13 +54,13 @@
 			return shown.find((pill) => sameFilters(pill.filters, filters))?.key ?? null;
 		})()
 	);
-	// The highlight slides from pill to pill, and the pills behind "…" unfold
-	// (docs/decisions/0048).
+	// The highlight slides from pill to pill, and the track grows to show the
+	// pills behind "…" and shrinks back (docs/decisions/0048).
 	shuffle(
 		() => track,
 		() => lit
 	);
-	resizes(
+	reshapes(
 		() => track,
 		() => more
 	);
@@ -118,7 +119,7 @@
 			{/if}
 		</div>
 	{/each}
-	{#each shown.slice(pills.main.length) as pill (pill.key)}
+	{#each extra as pill (pill.key)}
 		{@render link(pill.filters, pill.name, sameFilters(pill.filters, filters), pill.key)}
 	{/each}
 	{#if !held}
@@ -160,6 +161,9 @@
 	/* The pills sit in a sunken track, the current one raised; saved views
 	   and "…" stay apart, after it. */
 	.pills {
+		/* Its own layer: the chosen one's highlight slides under every
+		   item's text (each item isolated, it would cover the earlier ones). */
+		isolation: isolate;
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.15rem;
@@ -174,8 +178,6 @@
 	a,
 	.more {
 		position: relative;
-		/* The highlight goes under the pill's content but over its hover. */
-		isolation: isolate;
 		display: flex;
 		flex: none;
 		align-items: center;
@@ -190,7 +192,7 @@
 		text-decoration: none;
 	}
 
-	a:hover {
+	a:not(.lit):hover {
 		background: var(--hover);
 		color: var(--text);
 	}

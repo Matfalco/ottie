@@ -44,7 +44,16 @@
 	let systemDark = $state(darkSystem.matches);
 	document.documentElement.dataset.theme = themeFor(appearance, darkSystem.matches);
 	$effect(() => {
-		document.documentElement.dataset.theme = themeFor(appearance, systemDark);
+		const root = document.documentElement;
+		const theme = themeFor(appearance, systemDark);
+		if (root.dataset.theme === theme) {
+			return;
+		}
+		// The whole page changes colour at once: the colours that fade on
+		// hover (app.css) would otherwise lag behind the rest.
+		root.dataset.theming = '';
+		root.dataset.theme = theme;
+		requestAnimationFrame(() => requestAnimationFrame(() => delete root.dataset.theming));
 	});
 	// Whether it moves: what the system asks for, unless this device says
 	// otherwise (docs/decisions/0048). The styles' own transitions stop

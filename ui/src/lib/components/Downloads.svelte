@@ -27,7 +27,7 @@
 	} from '#lib/filters.js';
 	import { currentSpeed } from '#lib/jobs.js';
 	import { openProblem, toOpen } from '#lib/opening.js';
-	import { resizes } from '#lib/moving.svelte.js';
+	import { resizes, swaps } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { canReorder, type Reorder } from '#lib/queue.js';
 	import { NOTHING, keepShown, selectAll, step, type Selection } from '#lib/selection.js';
@@ -84,6 +84,13 @@
 	let canDown = $derived(canReorder(session.list, selected, 'down'));
 	// The panel under the list shows the one selected download.
 	let picked = $derived(selected.length === 1 ? selected[0] : null);
+	let pane: HTMLElement | undefined = $state();
+	// The details and their empty state take each other's place smoothly, as
+	// do two downloads' details of different heights (docs/decisions/0048).
+	swaps(
+		() => pane?.querySelector<HTMLElement>(':scope > .details'),
+		() => picked?.id ?? null
+	);
 	let detailsOpen = $state(true);
 	// Categories with downloads get a quick filter.
 	let used = $derived(
@@ -256,7 +263,7 @@
 <div class="page">
 	<div class="add"><AddCard /></div>
 
-	<section class="pane" aria-label={m.nav_downloads()}>
+	<section class="pane" aria-label={m.nav_downloads()} bind:this={pane}>
 		<div class="head" bind:this={head}>
 			<Toolbar
 				{selected}

@@ -315,11 +315,13 @@
 		min-width: 0;
 	}
 
-	.segments label:hover {
+	.segments label:not(.chosen):hover {
 		background: var(--hover);
 	}
 
-	.segments label:focus-within {
+	/* Only when reached from the keyboard: a click shows the choice by the
+	   highlight alone. */
+	.segments label:has(input:focus-visible) {
 		outline: 2px solid var(--focus);
 		outline-offset: -2px;
 	}
@@ -353,6 +355,9 @@
 
 	/* Radio buttons drawn as one row of segments. */
 	.segments {
+		/* Its own layer: the chosen one's highlight slides under every
+		   item's text (each item isolated, it would cover the earlier ones). */
+		isolation: isolate;
 		display: flex;
 		overflow: hidden;
 		gap: 0.15rem;
@@ -367,7 +372,6 @@
 	   the window and stretch it. */
 	.segments label {
 		position: relative;
-		isolation: isolate;
 		display: grid;
 		flex: 1;
 		place-items: center;

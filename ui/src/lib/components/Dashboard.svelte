@@ -321,7 +321,6 @@
 
 	.spans label {
 		position: relative;
-		isolation: isolate;
 		border-radius: var(--radius-pill);
 		color: var(--muted);
 		font-size: 0.85rem;
@@ -334,7 +333,9 @@
 		color: var(--text);
 	}
 
-	.spans label:focus-within {
+	/* Only when reached from the keyboard: a click shows the choice by the
+	   highlight alone. */
+	.spans label:has(input:focus-visible) {
 		outline: 2px solid var(--focus);
 		outline-offset: -2px;
 	}
@@ -504,6 +505,9 @@
 	/* How far back the graph looks: a segmented choice. Each holds its radio
 	   button, which needs a positioned parent. */
 	.spans {
+		/* Its own layer: the chosen one's highlight slides under every
+		   item's text (each item isolated, it would cover the earlier ones). */
+		isolation: isolate;
 		display: flex;
 		border-radius: var(--radius-pill);
 		padding: 0.2rem;

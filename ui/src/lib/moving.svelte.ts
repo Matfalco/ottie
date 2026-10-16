@@ -7,7 +7,7 @@ import { cubicIn, cubicOut } from 'svelte/easing';
 import { prefersReducedMotion } from 'svelte/motion';
 import { slide, type TransitionConfig } from 'svelte/transition';
 import { appearance } from './appearance.svelte';
-import { CROWD, QUICK, SETTLE, STEADY, moves, plan, type Spot } from './motion';
+import { CROWD, MANY, QUICK, SETTLE, STEADY, moves, plan, type Spot } from './motion';
 
 /** Whether the page moves now (live: the system's setting can change). */
 export function moving(): boolean {
@@ -231,6 +231,11 @@ export function shuffle(root: () => HTMLElement | undefined, watch: () => unknow
 					grow(element, spot.height * sy, spot.height, options);
 				}
 			}
+			// A list filled at once (the downloads arriving as the page
+			// starts): too many to fade one by one, so it fades as a whole.
+			if (list && before.size === 0 && after.size > MANY) {
+				list.animate([{ opacity: 0 }, { opacity: 1 }], options);
+			}
 			for (const key of steps.entered) {
 				const row = after.get(key);
 				row?.element.animate([{ opacity: 0 }, { opacity: 1 }], options);
@@ -280,38 +285,104 @@ function holdInPlace(element: HTMLElement, spot: Spot, hidden: boolean) {
 	style.transform = `translate(${spot.left - now.left}px, ${spot.top - now.top}px)`;
 }
 
-/** An element whose height changes with `watch()` (a panel folding, or
- * swapping what it holds) grows or shrinks to it rather than jumping, and
- * what it holds that's new fades in. */
-export function resizes(element: () => HTMLElement | undefined, watch: () => unknown): void {
-	const id = 'ottie-resize';
+/** Elements whose height changes with `watch()` (a panel folding, a
+ * section whose settings arrive) grow or shrink to it rather than jumping,
+ * and what they hold that's new fades in. */
+export function resizes(
+	elements: () => HTMLElement | HTMLElement[] | undefined,
+	watch: () => unknown
+): void {
+	aroundChanges(
+		watch,
+		() => {
+			const found = elements();
+			const nodes = found === undefined ? [] : Array.isArray(found) ? found : [found];
+			return nodes.map((node) => ({
+				node,
+				from: node.getBoundingClientRect().height,
+				held: new Set(node.children)
+			}));
+		},
+		(measured) => {
+			for (const { node, from, held } of measured) {
+				if (node.isConnected) {
+					settle(node, from, (child) => !held.has(child));
+				}
+			}
+		}
+	);
+}
+
+/** One element replaced by another in the same place (the details panel and
+ * its empty state, `find()` giving whichever is there): the new one grows or
+ * shrinks from the old one's height and fades in. The same one changing
+ * height (another download's details) only grows or shrinks. */
+export function swaps(find: () => HTMLElement | null | undefined, watch: () => unknown): void {
+	aroundChanges(
+		watch,
+		() => {
+			const node = find();
+			return node ? { node, from: node.getBoundingClientRect().height } : null;
+		},
+		({ node: old, from }) => {
+			const node = find();
+			if (node) {
+				const fresh = node !== old;
+				settle(node, from, () => fresh);
+			}
+		}
+	);
+}
+
+/** A box whose content wraps (the filter pills' track) and whose width and
+ * height change with `watch()`. Growing, it's laid out at its new size at
+ * once and uncovered from its old one, so nothing in it wraps differently
+ * on the way, and what's new in it fades in; shrinking (what it held is
+ * gone, the rest fits), it narrows to its new size. */
+export function reshapes(element: () => HTMLElement | undefined, watch: () => unknown): void {
 	aroundChanges(
 		watch,
 		() => {
 			const node = element();
 			return node
-				? { node, from: node.getBoundingClientRect().height, held: new Set(node.children) }
+				? { node, from: node.getBoundingClientRect(), held: new Set(node.children) }
 				: null;
 		},
 		({ node, from, held }) => {
+			if (!node.isConnected) {
+				return;
+			}
 			for (const animation of node.getAnimations()) {
-				if (animation.id === id) {
+				if (animation.id === RESIZE) {
 					animation.cancel();
 				}
 			}
-			const options = { duration: STEADY, easing: SETTLE, id };
-			for (const child of node.children) {
-				if (!held.has(child)) {
-					child.animate([{ opacity: 0 }, { opacity: 1 }], options);
+			const options = { duration: STEADY, easing: SETTLE, id: RESIZE };
+			const to = node.getBoundingClientRect();
+			if (to.width >= from.width && to.height >= from.height) {
+				for (const child of node.children) {
+					if (!held.has(child)) {
+						child.animate([{ opacity: 0 }, { opacity: 1 }], options);
+					}
 				}
-			}
-			const to = node.getBoundingClientRect().height;
-			if (Math.abs(to - from) >= 1) {
+				const style = getComputedStyle(node);
+				const radius = style.borderStartStartRadius;
+				const dx = to.width - from.width;
+				const dy = to.height - from.height;
+				// From the end of the line: the right, or the left right to left.
+				const [right, left] = style.direction === 'rtl' ? [0, dx] : [dx, 0];
 				node.animate(
-					// `clip`, not `hidden`: a field taking the focus can't scroll it.
 					[
-						{ height: `${from}px`, overflow: 'clip' },
-						{ height: `${to}px`, overflow: 'clip' }
+						{ clipPath: `inset(0 ${right}px ${dy}px ${left}px round ${radius})` },
+						{ clipPath: `inset(0 0 0 0 round ${radius})` }
+					],
+					options
+				);
+			} else {
+				node.animate(
+					[
+						{ width: `${from.width}px`, height: `${from.height}px`, overflow: 'clip' },
+						{ width: `${to.width}px`, height: `${to.height}px`, overflow: 'clip' }
 					],
 					options
 				);
@@ -320,9 +391,40 @@ export function resizes(element: () => HTMLElement | undefined, watch: () => unk
 	);
 }
 
-/** A page that takes the place of another (a tab): fades in. */
+const RESIZE = 'ottie-resize';
+
+/** Takes `node` from `from` pixels high to its height now, and fades in
+ * those of its children `fades` picks. */
+function settle(node: HTMLElement, from: number, fades: (child: Element) => boolean) {
+	for (const animation of node.getAnimations()) {
+		if (animation.id === RESIZE) {
+			animation.cancel();
+		}
+	}
+	const options = { duration: STEADY, easing: SETTLE, id: RESIZE };
+	for (const child of node.children) {
+		if (fades(child)) {
+			child.animate([{ opacity: 0 }, { opacity: 1 }], options);
+		}
+	}
+	const to = node.getBoundingClientRect().height;
+	if (Math.abs(to - from) >= 1) {
+		node.animate(
+			// `clip`, not `hidden`: a field taking the focus can't scroll it.
+			[
+				{ height: `${from}px`, overflow: 'clip' },
+				{ height: `${to}px`, overflow: 'clip' }
+			],
+			options
+		);
+	}
+}
+
+/** A page that takes the place of another (a tab): fades in, from half
+ * seen rather than from nothing, which showed as a blank frame between the
+ * two pages. */
 export function fadeIn(element: Element): void {
 	if (moving()) {
-		element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: STEADY, easing: SETTLE });
+		element.animate([{ opacity: 0.5 }, { opacity: 1 }], { duration: STEADY, easing: SETTLE });
 	}
 }

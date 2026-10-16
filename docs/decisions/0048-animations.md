@@ -32,6 +32,23 @@ Motion shows where things come from and go.
   reveals, the tray's finish choices, a link field, the toolbar's count and
   "Clear finished") unfolds to its size (`unfold`, vertically or, in a row,
   sideways).
+- **Third pass**, after a try in the desktop app: the pills' track grows to
+  show the pills behind "…" and shrinks back (`reshapes`: growing, it's laid
+  out at its new size and uncovered by a clip, so no pill changes line on the
+  way); the details panel and its empty state take each other's place,
+  growing or shrinking from the old height as the new one fades in (`swaps`);
+  a settings section whose values arrive after it's shown grows to them; a
+  list filled at once (the downloads arriving as the page starts) fades in as
+  a whole. A segmented control's focus ring shows only from the keyboard (on
+  a click it appeared at once, ahead of the sliding highlight). Changing the
+  theme turns transitions off for that frame, so the whole page changes
+  colour together.
+- **Fixes** after another try: a sliding highlight sits in its control's own
+  layer, under every item's text (each item was its own layer, so the
+  highlight covered the labels it passed); a tab's page fades in from half
+  seen, not from nothing (a blank frame between the pages); the details'
+  Play and Copy link stay in place while the next download's link arrives,
+  rather than going and coming back (the buttons beside them jumped).
 - **None when the system asks for less motion** (`prefers-reduced-motion`),
   unless this device says otherwise: Settings → Appearance → Animations
   (Follow the system, On, Off), kept on the device, not shared. `data-motion`

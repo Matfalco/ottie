@@ -71,6 +71,9 @@
 	/* The tabs sit in a sunken track, the current one raised (its highlight,
 	   which slides from tab to tab: docs/decisions/0048). */
 	ul {
+		/* Its own layer: the chosen one's highlight slides under every
+		   item's text (each item isolated, it would cover the earlier ones). */
+		isolation: isolate;
 		display: flex;
 		gap: 0.15rem;
 		margin: 0;
@@ -83,8 +86,6 @@
 
 	a {
 		position: relative;
-		/* The highlight goes under the tab's content but over its hover. */
-		isolation: isolate;
 		display: flex;
 		align-items: center;
 		gap: 0.45rem;
@@ -96,7 +97,7 @@
 		white-space: nowrap;
 	}
 
-	a:hover {
+	a:not(.current):hover {
 		background: var(--hover);
 		color: var(--text);
 	}
