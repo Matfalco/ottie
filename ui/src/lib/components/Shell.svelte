@@ -7,6 +7,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Settings } from '@ottie/api-types/Settings';
+	import { AddRequest } from '#lib/addrequest.svelte.js';
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
 	import { confirmation, targets, type Action } from '#lib/bulk.js';
 	import { provideApp } from '#lib/context.js';
@@ -15,12 +16,14 @@
 	import { chosenLanguage, switchLanguage } from '#lib/languages.js';
 	import { isLocale, locales } from '#lib/paraglide/runtime.js';
 	import { Session, type Answer } from '#lib/session.svelte.js';
+	import { anywhere, pageKey, pageText, pasted } from '#lib/shortcuts.js';
 	import { syncSteps } from '#lib/sync.js';
 	import { followAddLinks } from '#lib/window.js';
 	import BatchDialog from './BatchDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import NavMenu from './NavMenu.svelte';
 	import Setup from './Setup.svelte';
+	import ShortcutsDialog from './ShortcutsDialog.svelte';
 	import { queueNow } from '#lib/slots.js';
 	import SpeedChip from './SpeedChip.svelte';
 	import TitleBar from './TitleBar.svelte';
@@ -45,14 +48,26 @@
 	// svelte-ignore state_referenced_locally
 	const session = new Session(token, onUnauthorized);
 	let question: Question | null = $state(null);
-	/** Links copied elsewhere, sent by the desktop app's window (More…), in
-	 * the list for adding several, while it's open (docs/decisions/0043). */
+	/** Links in the list for adding several, while it's open: copied
+	 * elsewhere, sent by the desktop app's window (More…, docs/decisions/0043),
+	 * or pasted on a page (0046). */
 	let copied: string | null = $state(null);
+	/** The list of keyboard shortcuts is open ("?"). */
+	let helping = $state(false);
+	const adding = new AddRequest();
+	/** The tabs 1 to 5 go to, in NavMenu's order. */
+	const TABS = [
+		resolve('/'),
+		resolve('/downloads'),
+		resolve('/categories'),
+		resolve('/schedule'),
+		resolve('/settings')
+	];
 	/** The first start: the setup page replaces the app until it's done. */
 	let settingUp = $derived(session.settings?.setupDone === false);
 
 	// svelte-ignore state_referenced_locally
-	provideApp({ session, token, run, ask, add, addMany });
+	provideApp({ session, token, run, ask, add, addMany, adding });
 
 	// A device that follows the shared look and language takes them on
 	// whenever they change, and shares its look while none is shared. (Only
@@ -113,6 +128,54 @@
 		}
 	}
 
+	/** Keys for every tab (docs/decisions/0046); Downloads has its own too. */
+	function keydown(event: KeyboardEvent) {
+		const press = settingUp ? null : pageKey(event);
+		const command = press && anywhere(press);
+		if (!command) {
+			return;
+		}
+		event.preventDefault();
+		if (command.kind === 'tab') {
+			const href = TABS[command.index];
+			if (href !== undefined && page.url.pathname !== href) {
+				void goto(href);
+			}
+		} else if (command.kind === 'help') {
+			helping = true;
+		} else if (command.kind === 'focusAdd') {
+			void askAdd(null);
+		}
+	}
+
+	/** A link pasted anywhere but in a field: one goes in the add bar, with
+	 * its step open; several (or a sequence) open the list. */
+	function paste(event: ClipboardEvent) {
+		const text = settingUp ? null : pageText(event);
+		if (text === null) {
+			return;
+		}
+		const found = pasted(text);
+		if (found.kind === 'none') {
+			return;
+		}
+		event.preventDefault();
+		if (found.kind === 'several') {
+			copied = text;
+		} else {
+			void askAdd(found.link);
+		}
+	}
+
+	/** The add bar takes the link (or only the cursor); from a page without
+	 * one, on Downloads. */
+	async function askAdd(link: string | null) {
+		if (page.url.pathname !== resolve('/') && page.url.pathname !== resolve('/downloads')) {
+			await goto(resolve('/downloads'));
+		}
+		adding.ask(link);
+	}
+
 	async function run(action: Action, jobs: Job[]): Promise<void> {
 		const chosen = targets(jobs, action);
 		const message = confirmation(action, chosen);
@@ -149,6 +212,8 @@
 		});
 	}
 </script>
+
+<svelte:window onkeydown={keydown} onpaste={paste} />
 
 <div class="app">
 	<TitleBar>
@@ -190,6 +255,10 @@
 	{#key copied}
 		<BatchDialog text={copied} onClose={() => (copied = null)} />
 	{/key}
+{/if}
+
+{#if helping}
+	<ShortcutsDialog onClose={() => (helping = false)} />
 {/if}
 
 {#if question}

@@ -189,7 +189,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
   src/lib/api.ts     fetch + WebSocket client for /api/v1 (Unauthorized, ApiFailure)
   src/lib/session.svelte.ts  live job list: events WebSocket, reconnect, buffered resync
   src/lib/context.ts what every page shares (session, run): Svelte createContext
-  src/lib/jobs.ts, categories.ts, status.ts, selection.ts, filetypes.ts,
+  src/lib/jobs.ts, categories.ts, status.ts, selection.ts (clicks, Shift ranges, the arrows' cursor), filetypes.ts,
                      bulk.ts (actions on the selection; what Pause all / Resume all act on),
                      opening.ts (which download a double-click or Enter opens, why one didn't, 0045),
                      speed.ts (the speed history: the graph's spans, 5 min to 1 h, saved per device, 0044),
@@ -219,7 +219,10 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      finish.ts (when everything has finished: the choices in words, what this computer
                      can't do, the countdown's text, 0040),
                      caught.ts (links copied elsewhere: the window's rows and title, how long it stays,
-                     what was added or refused, 0043)
+                     what was added or refused, 0043),
+                     shortcuts.ts (keyboard shortcuts: what a key press means on every page and in
+                     Downloads, whether the focused control needs that key, what a paste holds, the
+                     list of them with key names per language, 0046)
                      plain logic, unit-tested (*.test.ts, Vitest)
   src/lib/appearance.svelte.ts  the appearance chosen on this device (state shared by layout, shell
                      (follows the shared one, docs/decisions/0022) and Settings)
@@ -227,14 +230,16 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      a download's file and folder (0045), and how Play opens a player (the app's commands, 0031), and what happens when
                      everything has finished (0040), and the clipboard's links (0043)
   src/lib/finish.svelte.ts  that, live in a page: asked once, then the app's `finish` events, the countdown's clock
+  src/lib/addrequest.svelte.ts  what a shortcut asks of the add bar (a pasted link, or the cursor in its field)
   src/lib/explain.ts   daemon codes (Problem, Reason) → the page's language; English fallback
   src/lib/testing.ts   test helpers (sample job)
   src/lib/components/  Shell (TitleBar with NavMenu tabs + SpeedChip (limit popup: LimitControl + RatePresets), page,
-                       dialog, BatchDialog for links sent by More… in the clipboard's window; Setup on first
+                       dialog, BatchDialog for links sent by More… in the clipboard's window or pasted on a
+                       page; the keys of every page and ShortcutsDialog on "?" (ShortcutList); Setup on first
                        start, with the sign-in and clipboard choices in the desktop app),
                        Dashboard (AddCard, SpeedChart across the top with its span, then the four groups two
                        by two: running rows filling up, waiting ones in queue order, JobSummary rows),
-                       Downloads (AddCard, then one pane: Toolbar (Pause all / Resume all) + MoveMenu + FinishMenu (desktop app), QuickFilters (with the
+                       Downloads (its keys, 0046; AddCard, then one pane: Toolbar (Pause all / Resume all) + MoveMenu + FinishMenu (desktop app), QuickFilters (with the
                        saved views' pills + their menu) or FilterPanel, ViewDialog (name a view),
                        JobTable (group rows, sortable headers, drag in the Waiting group) + JobRow
                        (a double-click opens a finished file, desktop app),
@@ -248,7 +253,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        SchedulePage (WeekView: drag a slot or its edges, click to edit; then the
                        slots' rows with SlotEditor inline),
                        SettingsPage (section list; appearance + sync, language: LanguagePicker; downloads;
-                       desktop app (sign-in, closing), clipboard, notifications + playing (desktop app only); retries; connection + sign-in link), Switch, NumberField, LimitControl,
+                       desktop app (sign-in, closing), clipboard, notifications + playing (desktop app only); retries;
+                       keyboard shortcuts (ShortcutList); connection + sign-in link), Switch, NumberField, LimitControl,
                        TitleBar (+ WindowControls; folds to fit: tab icons, slot chip, logo name), AddCard (AddBar: link, then category + folder step;
                        BatchDialog: several links, from a paste, the list button or a file),
                        FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu, its RunningList), Countdown (its
@@ -472,8 +478,7 @@ Done: ✅ and struck through.
    - ✅ ~~7a clipboard monitoring (desktop app, `docs/decisions/0043`)~~
    - ✅ ~~the rounded style, the look from before as legacy palettes, the new Dashboard and an hour of speed (`docs/decisions/0044`)~~
    - ✅ ~~7b open the file and its folder, Pause all / Resume all in the main window (`docs/decisions/0045`)~~
-   - 7c keyboard shortcuts (tabs, add/paste a link, Space, arrows, Enter, Delete; a "?" list of them;
-     never while typing)
+   - ✅ ~~7c keyboard shortcuts (`docs/decisions/0046`)~~
    - 7d animations (dialogs, menus, rows coming and going, the queue's reorder), none under
      `prefers-reduced-motion`
    - 7e a file already on disk: the add step says so (preview and at the first response) and offers

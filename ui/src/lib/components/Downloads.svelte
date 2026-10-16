@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import type { Job } from '@ottie/api-types/Job';
 	import type { JobChange } from '@ottie/api-types/JobChange';
 	import type { View } from '@ottie/api-types/View';
@@ -13,7 +14,7 @@
 		sortBy,
 		type Arrangement
 	} from '#lib/arrange.js';
-	import { pauseSteps, resumeTargets } from '#lib/bulk.js';
+	import { pauseSteps, resumeTargets, targets } from '#lib/bulk.js';
 	import { useApp } from '#lib/context.js';
 	import {
 		NO_FILTERS,
@@ -28,7 +29,8 @@
 	import { openProblem, toOpen } from '#lib/opening.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { canReorder, type Reorder } from '#lib/queue.js';
-	import { NOTHING, keepShown, selectAll, type Selection } from '#lib/selection.js';
+	import { NOTHING, keepShown, selectAll, step, type Selection } from '#lib/selection.js';
+	import { inDownloads, pageKey, type Command } from '#lib/shortcuts.js';
 	import { isFinished } from '#lib/status.js';
 	import { viewBody } from '#lib/views.js';
 	import { canOpenFiles, openFile, showInFolder } from '#lib/window.js';
@@ -58,6 +60,9 @@
 	/** The view being named: a new one (null) or one to rename. */
 	let naming: { view: View | null } | null = $state(null);
 	let deleting: View | null = $state(null);
+	/** A download moved in the queue from the keyboard: kept in sight once
+	 * the list shows it in its new place (its index there before the move). */
+	let following: { id: string; index: number } | null = null;
 
 	let today = $derived(new Date(session.now));
 	let shown = $derived(session.list.filter((job) => matches(job, filters, today)));
@@ -152,36 +157,91 @@
 		await session.run('pause', steps.running);
 	}
 
-	/** File-manager keys: Ctrl+A, Escape, Delete, Enter (opens the one
-	 * finished download selected). Not while typing or while a dialog is open. */
+	/** The list's keys (docs/decisions/0046), as in a file manager: the
+	 * arrows, Home and End, Ctrl+A, Escape, Space (pause or resume), Enter
+	 * (opens the one finished download selected), Delete; Alt+arrows move
+	 * in the queue; F shows the filters. */
 	function keydown(event: KeyboardEvent) {
-		const target = event.target;
-		const typing =
-			(target instanceof HTMLInputElement && !['checkbox', 'radio'].includes(target.type)) ||
-			target instanceof HTMLTextAreaElement ||
-			target instanceof HTMLSelectElement;
-		if (typing || document.querySelector('dialog[open]')) {
-			return;
-		}
-		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+		const press = pageKey(event);
+		const command = press && inDownloads(press);
+		if (command && act(command)) {
 			event.preventDefault();
-			selection = selectAll(order);
-		} else if (event.key === 'Escape') {
-			selection = NOTHING;
-		} else if (event.key === 'Delete' && selected.length > 0) {
-			void run('remove', selected);
-		} else if (
-			event.key === 'Enter' &&
-			opens &&
-			!(target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement)
-		) {
-			const job = toOpen(selected);
-			if (job) {
-				event.preventDefault();
-				void openJob(job);
-			}
 		}
 	}
+
+	/** Does it; false if there was nothing to do (the key keeps its usual job). */
+	function act(command: Command): boolean {
+		switch (command.kind) {
+			case 'step':
+				selection = step(current, order, command.to, command.extend);
+				void bringIntoView(selection.cursor);
+				return true;
+			case 'selectAll':
+				selection = selectAll(order);
+				return true;
+			case 'clear':
+				selection = NOTHING;
+				return current.ids.size > 0;
+			case 'toggle': {
+				// Pauses those that can; when none can, resumes.
+				if (selected.length === 0) {
+					return false;
+				}
+				void run(targets(selected, 'pause').length > 0 ? 'pause' : 'resume', selected);
+				return true;
+			}
+			case 'open': {
+				const job = opens ? toOpen(selected) : null;
+				if (job) {
+					void openJob(job);
+				}
+				return job !== null;
+			}
+			case 'remove':
+				if (selected.length > 0) {
+					void run('remove', selected);
+				}
+				return selected.length > 0;
+			case 'queue': {
+				if (!canReorder(session.list, selected, command.to)) {
+					return false;
+				}
+				const id = current.cursor ?? selected[0]?.id;
+				following = id === undefined ? null : { id, index: order.indexOf(id) };
+				reorder(command.to);
+				return true;
+			}
+			case 'filters':
+				open = !open;
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	/** Scrolls the list to the row the keys reached. A row's checkbox or
+	 * button keeps no focus: Space then pauses rather than ticks it. */
+	async function bringIntoView(id: string | null) {
+		const focused = document.activeElement;
+		if (focused instanceof HTMLElement && focused.closest('tr[data-id]')) {
+			focused.blur();
+		}
+		await tick();
+		if (id !== null) {
+			document
+				.querySelector(`tr[data-id="${CSS.escape(id)}"]`)
+				?.scrollIntoView({ block: 'nearest' });
+		}
+	}
+
+	// Once a download moved from the keyboard shows in its new place.
+	$effect(() => {
+		const moved = following;
+		if (moved && order.indexOf(moved.id) !== moved.index) {
+			following = null;
+			void bringIntoView(moved.id);
+		}
+	});
 </script>
 
 <svelte:window onkeydown={keydown} />
@@ -263,7 +323,10 @@
 				rates={session.rates}
 				now={session.now}
 				note={(group) => groupNote(group, facts)}
-				onSelect={(chosen) => (selection = chosen)}
+				onSelect={(chosen) => {
+					selection = chosen;
+					following = null;
+				}}
 				onRun={run}
 				onOpen={opens ? openJob : null}
 				onSort={(sort) => setArrangement(sortBy(arrangement, sort))}

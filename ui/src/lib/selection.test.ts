@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NOTHING, click, keepShown, selectAll, type Selection } from './selection';
+import { NOTHING, click, keepShown, selectAll, step, type Selection } from './selection';
 
 const ORDER = ['a', 'b', 'c', 'd', 'e'];
 const PLAIN = { toggle: false, range: false };
@@ -40,5 +40,49 @@ describe('selection', () => {
 		expect(ids(kept)).toEqual(['b']);
 		expect(kept.anchor).toBe(null);
 		expect(keepShown(selection, ORDER)).toBe(selection);
+	});
+
+	it('moves with the arrow keys from the last click', () => {
+		const start = click(NOTHING, 'b', PLAIN, ORDER);
+		expect(ids(step(start, ORDER, 'down', false))).toEqual(['c']);
+		expect(ids(step(start, ORDER, 'up', false))).toEqual(['a']);
+		expect(ids(step(start, ORDER, 'first', false))).toEqual(['a']);
+		expect(ids(step(start, ORDER, 'last', false))).toEqual(['e']);
+		// Stops at either end.
+		expect(ids(step(step(start, ORDER, 'first', false), ORDER, 'up', false))).toEqual(['a']);
+		expect(ids(step(step(start, ORDER, 'last', false), ORDER, 'down', false))).toEqual(['e']);
+	});
+
+	it('starts at the top with Down and the bottom with Up', () => {
+		expect(ids(step(NOTHING, ORDER, 'down', false))).toEqual(['a']);
+		expect(ids(step(NOTHING, ORDER, 'up', false))).toEqual(['e']);
+		expect(step(NOTHING, [], 'down', false)).toBe(NOTHING);
+	});
+
+	it('extends from the anchor with Shift, either way', () => {
+		const start = click(NOTHING, 'c', PLAIN, ORDER);
+		const two = step(step(start, ORDER, 'down', true), ORDER, 'down', true);
+		expect(ids(two)).toEqual(['c', 'd', 'e']);
+		// Back past the anchor: the range turns around it.
+		let back = two;
+		for (let i = 0; i < 4; i++) {
+			back = step(back, ORDER, 'up', true);
+		}
+		expect(ids(back)).toEqual(['a', 'b', 'c']);
+		expect(ids(step(start, ORDER, 'first', true))).toEqual(['a', 'b', 'c']);
+		// Then a plain arrow moves on from where the range ended.
+		expect(ids(step(back, ORDER, 'down', false))).toEqual(['b']);
+	});
+
+	it('moves on after a Shift+click from where it ended', () => {
+		const range = click(click(NOTHING, 'b', PLAIN, ORDER), 'd', SHIFT, ORDER);
+		expect(ids(step(range, ORDER, 'down', true))).toEqual(['b', 'c', 'd', 'e']);
+	});
+
+	it('forgets a cursor no longer shown', () => {
+		const selection = click(NOTHING, 'd', PLAIN, ORDER);
+		const kept = keepShown(selection, ['a', 'b', 'c']);
+		expect(kept.cursor).toBe(null);
+		expect(ids(step(kept, ['a', 'b', 'c'], 'down', false))).toEqual(['a']);
 	});
 });

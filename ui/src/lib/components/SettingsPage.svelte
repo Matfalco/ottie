@@ -5,6 +5,7 @@
 	import ClipboardCopy from '@lucide/svelte/icons/clipboard-copy';
 	import Copy from '@lucide/svelte/icons/copy';
 	import Download from '@lucide/svelte/icons/download';
+	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import Paintbrush from '@lucide/svelte/icons/palette';
 	import Play from '@lucide/svelte/icons/play';
 	import Plug from '@lucide/svelte/icons/plug';
@@ -73,6 +74,7 @@
 	import LanguagePicker from './LanguagePicker.svelte';
 	import LimitControl from './LimitControl.svelte';
 	import NumberField from './NumberField.svelte';
+	import ShortcutList from './ShortcutList.svelte';
 	import Switch from './Switch.svelte';
 
 	const { session, token } = useApp();
@@ -148,6 +150,7 @@
 				]
 			: []),
 		{ id: 'set-retries', label: m.set_retries },
+		{ id: 'set-keyboard', label: m.shortcuts_title },
 		{ id: 'set-connection', label: m.set_connection }
 	];
 
@@ -904,6 +907,15 @@
 			{/if}
 		</section>
 
+		<section id="set-keyboard" class="card" aria-labelledby="keyboard-title">
+			<header>
+				<span class="icon" aria-hidden="true"><Keyboard size={16} /></span>
+				<h2 id="keyboard-title">{m.shortcuts_title()}</h2>
+				<p class="hint">{m.set_keyboard_hint()}</p>
+			</header>
+			<div class="shortcuts"><ShortcutList /></div>
+		</section>
+
 		<section id="set-connection" class="card" aria-labelledby="connection-title">
 			<header>
 				<span class="icon" aria-hidden="true"><Plug size={16} /></span>
@@ -1212,6 +1224,10 @@
 	}
 
 	/* One setting per row: its name and hint, then the control. */
+	.shortcuts {
+		padding: 0.9rem 1.25rem 1.1rem;
+	}
+
 	.setting {
 		display: flex;
 		flex-wrap: wrap;

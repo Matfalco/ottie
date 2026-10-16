@@ -6,6 +6,7 @@ import { createContext } from 'svelte';
 import type { AddJob } from '@ottie/api-types/AddJob';
 import type { AddedJobs } from '@ottie/api-types/AddedJobs';
 import type { Job } from '@ottie/api-types/Job';
+import type { AddRequest } from './addrequest.svelte';
 import type { Action } from './bulk';
 import type { Answer, Session } from './session.svelte';
 
@@ -22,6 +23,8 @@ export interface App {
 	add: (job: AddJob) => Promise<boolean>;
 	/** Adds several downloads at once: those that can be. */
 	addMany: (jobs: AddJob[]) => Promise<Answer<AddedJobs>>;
+	/** What the keyboard asks of the add bar (docs/decisions/0046). */
+	adding: AddRequest;
 }
 
 /** `useApp()` in any page or component inside the shell. */

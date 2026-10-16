@@ -220,6 +220,8 @@
 		height: 2.6rem;
 		cursor: default;
 		user-select: none;
+		/* Reached with the arrow keys: shown below the sticky header. */
+		scroll-margin-block-start: 2.2rem;
 	}
 
 	tr:hover {

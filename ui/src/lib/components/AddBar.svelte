@@ -164,6 +164,18 @@
 		onSeveral(text);
 	}
 
+	/** A shortcut's request (docs/decisions/0046): `text` in the field with
+	 * the step open, or (null) only the cursor in the field. */
+	export function take(text: string | null) {
+		if (text === null) {
+			step = null;
+			link.focus();
+		} else {
+			url = text;
+			void open();
+		}
+	}
+
 	async function browse() {
 		const chosen = await pickFolder(folder || fallback || undefined);
 		if (chosen) {
