@@ -76,8 +76,9 @@
 		}
 		shownPath = page.url.pathname;
 	});
-	/** The first start: the setup page replaces the app until it's done. */
-	let settingUp = $derived(session.settings?.setupDone === false);
+	/** The first start (or the setup run again from Settings): the setup page
+	 * replaces the app until it's done. */
+	let settingUp = $derived(session.settings?.setupDone === false || session.settingUpAgain);
 
 	// svelte-ignore state_referenced_locally
 	provideApp({ session, token, run, ask, add, addMany, adding });

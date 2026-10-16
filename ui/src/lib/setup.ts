@@ -1,12 +1,44 @@
-// The first-start setup: starter categories the user can keep, edit or add
-// to. The daemon only creates what the user confirms here.
+// The first-start setup (docs/decisions/0020, 0050): its steps, where it
+// carries on, and the starter categories the user can keep, edit or add to.
+// The daemon only creates what the user confirms here.
 
 import type { Category } from '@ottie/api-types/Category';
 import type { CategoryBody } from '@ottie/api-types/CategoryBody';
+import type { SetupStep } from '@ottie/api-types/SetupStep';
 import { suggestFolder } from './categories';
 import { EXTENSIONS, type KnownKind } from './filetypes';
 import { m } from './paraglide/messages.js';
 import { getLocale, type Locale } from './paraglide/runtime.js';
+
+/** Every step, in order: the desktop app's own come last. */
+export const STEPS: readonly SetupStep[] = [
+	'look',
+	'downloads',
+	'categories',
+	'startup',
+	'clipboard',
+	'notifications'
+];
+
+/** Steps only the desktop app has. */
+const DESKTOP_STEPS: readonly SetupStep[] = ['startup', 'clipboard', 'notifications'];
+
+/** The steps shown here: the desktop app's only in the desktop app. */
+export function stepsHere(inApp: boolean): SetupStep[] {
+	return STEPS.filter((step) => inApp || !DESKTOP_STEPS.includes(step));
+}
+
+/** Which of `steps` the setup opens on: the one after `passed`, the last
+ * step someone went past (in this front end or another), else the first.
+ * If every step here is behind it, the last one, so it can still be ended. */
+export function startAt(steps: SetupStep[], passed: SetupStep | null): number {
+	if (passed === null) {
+		return 0;
+	}
+	const after = STEPS.indexOf(passed);
+	const next = steps.findIndex((step) => STEPS.indexOf(step) > after);
+	return next === -1 ? steps.length - 1 : next;
+}
 
 export interface Starter {
 	/** Tells the rows apart, even after a rename. */
@@ -66,6 +98,17 @@ export function edited(starter: Starter, body: CategoryBody, downloads: string):
 	};
 }
 
+/** The starters whose name no category has yet: those an earlier attempt
+ * made, or a setup run before, aren't offered again. */
+export function notMade(
+	list: Starter[],
+	existing: Category[],
+	locale: Locale = getLocale()
+): Starter[] {
+	const taken = new Set(existing.map((category) => category.name.toLocaleLowerCase(locale)));
+	return list.filter((starter) => !taken.has(starter.body.name.trim().toLocaleLowerCase(locale)));
+}
+
 /** What to create: the ticked starters, except those whose name is already
  * taken (made by an earlier attempt that stopped halfway). */
 export function toCreate(
@@ -74,9 +117,7 @@ export function toCreate(
 	existing: Category[],
 	locale: Locale = getLocale()
 ): CategoryBody[] {
-	const taken = new Set(existing.map((category) => category.name.toLocaleLowerCase(locale)));
-	return list
+	return notMade(list, existing, locale)
 		.filter((starter) => starter.chosen)
-		.filter((starter) => !taken.has(starter.body.name.trim().toLocaleLowerCase(locale)))
 		.map((starter) => ({ ...starter.body, folder: folderOf(starter, downloads) }));
 }

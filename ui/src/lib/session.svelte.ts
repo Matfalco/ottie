@@ -10,6 +10,7 @@ import type { Preview } from '@ottie/api-types/Preview';
 import type { Reorder } from '@ottie/api-types/Reorder';
 import type { Settings } from '@ottie/api-types/Settings';
 import type { SettingsChange } from '@ottie/api-types/SettingsChange';
+import type { SetupStep } from '@ottie/api-types/SetupStep';
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
 import type { SlotBody } from '@ottie/api-types/SlotBody';
 import type { ViewBody } from '@ottie/api-types/ViewBody';
@@ -60,6 +61,9 @@ export class Session {
 	slotNames = $derived(slotNames(this.slotList));
 	/** The time zone the slots follow (the daemon's), if it has a name. */
 	timeZone: string | null = $state(null);
+	/** The setup, run again from Settings: in this window only, and nothing
+	 * about it is saved but the settings it changes (docs/decisions/0050). */
+	settingUpAgain = $state(false);
 
 	private readonly api: Api;
 	private socket: WebSocket | null = null;
@@ -245,34 +249,51 @@ export class Session {
 		}
 	}
 
-	/** Ends the first-start setup: General's folder (if it changed), then the
-	 * categories, in order. Resolves to null once done, else to why not; what
-	 * was created stays, and trying again skips it. */
-	async finishSetup(downloads: string | null, bodies: CategoryBody[]): Promise<string | null> {
+	/** Puts General in `folder`, the downloads folder, unless it's there
+	 * already. Resolves to null once done, else to why not. */
+	async setDownloadsFolder(folder: string): Promise<string | null> {
 		const general = this.categories[GENERAL];
-		if (general && downloads !== null && downloads !== general.folder) {
-			const { name, extensions, speedLimit, maxConcurrent } = general;
-			const body = { name, folder: downloads, extensions, speedLimit, maxConcurrent };
-			const why = await this.saveCategory(GENERAL, body);
-			if (why !== null) {
-				return why;
-			}
+		if (!general || folder === general.folder) {
+			return null;
 		}
+		const { name, extensions, speedLimit, maxConcurrent } = general;
+		return this.saveCategory(GENERAL, { name, folder, extensions, speedLimit, maxConcurrent });
+	}
+
+	/** Creates the categories, in order. Resolves to null once done, else to
+	 * why not; what was created stays. */
+	async addCategories(bodies: CategoryBody[]): Promise<string | null> {
 		for (const body of bodies) {
 			const why = await this.saveCategory(null, body);
 			if (why !== null) {
 				return why;
 			}
 		}
-		try {
-			await this.api.changeSettings({ setupDone: true });
-			if (this.settings) {
-				this.settings.setupDone = true;
-			}
-			return null;
-		} catch (error) {
-			return this.why(error);
+		return null;
+	}
+
+	/** Goes past a step of the setup, with the settings it changes: saved
+	 * for every front end, so a setup stopped halfway carries on after it;
+	 * the setup run again from Settings only changes the settings. */
+	passStep(step: SetupStep, change: SettingsChange = {}): Promise<string | null> {
+		if (this.settingUpAgain) {
+			return Object.keys(change).length ? this.changeSettings(change) : Promise.resolve(null);
 		}
+		return this.changeSettings({ ...change, setupStep: step });
+	}
+
+	/** Ends the setup: done for every front end (it isn't offered again),
+	 * or the one run again in this window. */
+	async endSetup(): Promise<string | null> {
+		if (this.settingUpAgain) {
+			this.settingUpAgain = false;
+			return null;
+		}
+		const why = await this.changeSettings({ setupDone: true, setupStep: null });
+		if (why === null && this.settings) {
+			this.settings.setupDone = true;
+		}
+		return why;
 	}
 
 	/** Runs a request; on failure shows why and returns false. */

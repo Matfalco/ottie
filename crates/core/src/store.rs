@@ -404,6 +404,11 @@ const MIGRATIONS: &[&str] = &[
      ALTER TABLE jobs_new RENAME TO jobs;
      ALTER TABLE settings ADD COLUMN existing TEXT NOT NULL DEFAULT 'rename'
         CHECK (existing IN ('rename', 'replace', 'ask'));",
+    // 19: the last step of the first-start setup someone went past, so it
+    // carries on after it (docs/decisions/0050). The steps are the front
+    // ends' names.
+    "ALTER TABLE settings ADD COLUMN setup_step TEXT
+        CHECK (length(setup_step) BETWEEN 1 AND 40);",
 ];
 
 /// Everything saved about one job.
@@ -1007,7 +1012,7 @@ fn load_settings(conn: &Connection) -> Result<Settings, Error> {
     Ok(conn.query_row(
         "SELECT global_limit, max_concurrent, max_retries, retries_before_yield, retry_wait_ms,
                 setup_done, appearance_mode, appearance_palette, language, stream_media,
-                max_batch, existing
+                max_batch, existing, setup_step
          FROM settings WHERE id = 1",
         [],
         |row| {
@@ -1031,6 +1036,7 @@ fn load_settings(conn: &Connection) -> Result<Settings, Error> {
                 max_batch: row.get(10)?,
                 stream_media: row.get(9)?,
                 setup_done: row.get(5)?,
+                setup_step: row.get(12)?,
                 appearance,
                 language: row.get(8)?,
                 // The CHECK allows only known names.
@@ -1047,7 +1053,7 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
         "UPDATE settings SET global_limit = ?1, max_concurrent = ?2, max_retries = ?3,
                 retries_before_yield = ?4, retry_wait_ms = ?5, setup_done = ?6,
                 appearance_mode = ?7, appearance_palette = ?8, language = ?9,
-                stream_media = ?10, max_batch = ?11, existing = ?12
+                stream_media = ?10, max_batch = ?11, existing = ?12, setup_step = ?13
          WHERE id = 1",
         params![
             settings.global_limit,
@@ -1062,6 +1068,7 @@ fn save_settings(conn: &Connection, settings: &Settings) -> Result<(), Error> {
             settings.stream_media,
             settings.max_batch,
             settings.existing.as_str(),
+            settings.setup_step,
         ],
     )?;
     Ok(())
@@ -1782,6 +1789,7 @@ mod tests {
             max_batch: 500,
             stream_media: false,
             setup_done: true,
+            setup_step: Some("categories".into()),
             appearance: Some(Appearance {
                 mode: AppearanceMode::Light,
                 palette: Palette::Neutral,

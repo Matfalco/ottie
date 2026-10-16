@@ -66,7 +66,8 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/category.rs    CategoryId (General = 1), CategorySettings, extension matching
   src/backend.rs     Backend trait, HttpBackend
   src/store.rs       SQLite on its own thread: schema migrations, save/load jobs and settings
-  src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media, max_batch, existing; SettingsChange (applied all at once)
+  src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media, max_batch, existing, setup_step;
+                     SettingsChange (applied all at once)
   src/view.rs        saved views: ViewSettings (filters + sort/grouping), ViewId, normalizing
   src/webmark.rs     the Mark of the Web on finished files (Windows' Zone.Identifier stream, 0045)
   src/slot.rs        time slots: SlotSettings (target, days or date, hours, effects), whether one covers
@@ -102,7 +103,7 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
                      once), POST /jobs/preview (the links in some text; both take bodies up to 64 MB)
   src/categories.rs  GET/POST /categories, PUT/DELETE /categories/{id}, POST /categories/match
   src/settings.rs    GET/PATCH /settings: max concurrent, global limit, retry policy, shared
-                     appearance + language, setupDone, streamMedia, maxBatch, existing; the ranges people may choose (its tests
+                     appearance + language, setupDone + setupStep (0050), streamMedia, maxBatch, existing; the ranges people may choose (its tests
                      write them to shared/api-types/Ranges.ts)
   src/views.rs       GET/POST /views, PUT/DELETE /views/{id} (saved views)
   src/slots.rs       GET/POST /slots (with the time zone), PUT/DELETE /slots/{id}, POST /slots/reorder
@@ -201,7 +202,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      hint.ts (where an (i)'s explanation goes: above its button, inside the window),
                      views.ts (saved views ↔ filters + arrangement, which pill is lit),
                      languages.ts (each language's name, which are reviewed, the system's closest, the
-                     device's choice, 0041; which way it's written, 0042), format.ts, token.ts, adding.ts (the add step), setup.ts (starter categories),
+                     device's choice, 0041; which way it's written, 0042), format.ts, token.ts, adding.ts (the add step), setup.ts (the setup's steps, where
+                     it carries on, starter categories; 0050), choices.ts (choices Settings and the setup share),
                      theme.ts (light/dark/system + palette → theme (0044, 0047),
                      saved per device),
                      settings.ts (settings fields: kB/MB/GB per second, seconds, ranges; last limit
@@ -241,7 +243,9 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
   src/lib/components/  Shell (TitleBar with NavMenu tabs + SpeedChip (limit popup: LimitControl + RatePresets), page,
                        dialog, BatchDialog for links sent by More… in the clipboard's window or pasted on a
                        page; the keys of every page and ShortcutsDialog on "?" (ShortcutList); Setup on first
-                       start, with the sign-in and clipboard choices in the desktop app),
+                       start or run again from Settings: one step at a time under a bar of dots (language and look:
+                       LookChoices; downloads; categories; in the desktop app starting and closing, clipboard,
+                       notifications), each skippable, 0050),
                        Dashboard (AddCard, SpeedChart across the top with its span, then the four groups two
                        by two: running rows filling up, waiting ones in queue order, JobSummary rows),
                        Downloads (its keys, 0046; AddCard, then one pane: Toolbar (Pause all / Resume all) + MoveMenu + FinishMenu (desktop app), QuickFilters (with the
@@ -257,7 +261,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        CategoriesPage (LinkTester, rows, CategoryEditor inline in place of a row),
                        SchedulePage (WeekView: drag a slot or its edges, click to edit; then the
                        slots' rows with SlotEditor inline),
-                       SettingsPage (section list; appearance + sync, language: LanguagePicker; downloads;
+                       SettingsPage (section list, Run the setup again; appearance + sync, LookChoices, language:
+                       LanguagePicker; downloads (Stepper for how many at once);
                        desktop app (sign-in, closing), clipboard, notifications + playing (desktop app only); retries;
                        keyboard shortcuts (ShortcutList); connection + sign-in link), Switch, NumberField, LimitControl,
                        TitleBar (+ WindowControls; folds to fit: tab icons, slot chip, logo name), AddCard (AddBar: link, then category + folder step;
@@ -493,9 +498,10 @@ Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review.
    - 🟡 7e a file already on disk: the add step asks (rename, replace, or skip), at the first response a
      download does what was chosen, else the setting (rename, replace or ask; `docs/decisions/0049`).
      Built, not reviewed yet
-   - 7f onboarding in several steps, each skippable (and the whole of it): e.g. language + look,
-     starter categories, downloads folder, sign-in and closing (desktop app), notifications, later the
-     extension and other devices
+   - 🟡 7f onboarding in several steps, each skippable (and the whole of it): language + look, downloads
+     (folder, how many at once, a file already there), starter categories, sign-in and closing, clipboard,
+     notifications (desktop app), saved step by step, run again from Settings (`docs/decisions/0050`);
+     later the extension and other devices. Built, not reviewed yet
    - 7g Ottie as a service only (no app): `ottie service install|uninstall|status`. Per user by default
      (systemd user unit, LaunchAgent, Task Scheduler at sign-in: the user's own folders), system-wide
      for headless machines (system unit, Windows service, Docker image: another account, so other

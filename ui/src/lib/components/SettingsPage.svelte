@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { Existing } from '@ottie/api-types/Existing';
 	import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 	import AppWindow from '@lucide/svelte/icons/app-window';
 	import Bell from '@lucide/svelte/icons/bell';
@@ -12,9 +11,18 @@
 	import Plug from '@lucide/svelte/icons/plug';
 	import Power from '@lucide/svelte/icons/power';
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
 	import { onMount } from 'svelte';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
+	import {
+		COPIED_CHOICES,
+		COPIED_NAMES,
+		EXISTING_CHOICES,
+		EXISTING_NAMES,
+		NOTIFY_CHOICES,
+		NOTIFY_NAMES
+	} from '#lib/choices.js';
 	import { useApp } from '#lib/context.js';
 	import { canDo, COUNTDOWN, FINISH_CHOICES, finishHint, finishName } from '#lib/finish.js';
 	import { LiveFinishing } from '#lib/finish.svelte.js';
@@ -24,16 +32,7 @@
 	import { HELP_TRANSLATE, REVIEWED, switchLanguage } from '#lib/languages.js';
 	import { getLocale, type Locale } from '#lib/paraglide/runtime.js';
 	import { RANGES, parseSeconds, parseWhole, toField } from '#lib/settings.js';
-	import {
-		MODES,
-		PALETTES,
-		THEMES,
-		lookOf,
-		previewFor,
-		type DeviceAppearance,
-		type Mode,
-		type Palette
-	} from '#lib/theme.js';
+	import { lookOf, type DeviceAppearance } from '#lib/theme.js';
 	import {
 		canPreview,
 		soundChoices,
@@ -76,8 +75,10 @@
 	} from '#lib/window.js';
 	import LanguagePicker from './LanguagePicker.svelte';
 	import LimitControl from './LimitControl.svelte';
+	import LookChoices from './LookChoices.svelte';
 	import NumberField from './NumberField.svelte';
 	import ShortcutList from './ShortcutList.svelte';
+	import Stepper from './Stepper.svelte';
 	import Switch from './Switch.svelte';
 
 	const { session, token } = useApp();
@@ -85,29 +86,10 @@
 	const settings = $derived(session.settings);
 	const link = signInLink(location.origin, token);
 
-	const MODE_NAMES: Record<Mode, () => string> = {
-		system: m.set_mode_system,
-		light: m.set_mode_light,
-		dark: m.set_mode_dark
-	};
-
 	const MOTION_NAMES: Record<Motion, () => string> = {
 		system: m.set_motion_system,
 		on: m.set_motion_on,
 		off: m.set_motion_off
-	};
-
-	/** What a download does with a file already there (docs/decisions/0049). */
-	const EXISTING: Existing[] = ['rename', 'replace', 'ask'];
-	const EXISTING_NAMES: Record<Existing, () => string> = {
-		rename: m.set_existing_rename,
-		replace: m.set_existing_replace,
-		ask: m.set_existing_ask
-	};
-
-	const PALETTE_NAMES: Record<Palette, { name: () => string; hint: () => string }> = {
-		sea: { name: m.set_palette_sea, hint: m.set_palette_sea_hint },
-		neutral: { name: m.set_palette_neutral, hint: m.set_palette_neutral_hint }
 	};
 
 	/** The choices besides a program of one's own. */
@@ -115,14 +97,6 @@
 		system: { name: m.set_play_system, hint: m.set_play_system_hint },
 		browser: { name: m.set_play_browser, hint: m.set_play_browser_hint }
 	};
-
-	/** When finished downloads are notified, in the order shown. */
-	const NOTIFY_NAMES: Record<Notify, { name: () => string; hint: () => string }> = {
-		all: { name: m.set_notify_all, hint: m.set_notify_all_hint },
-		each: { name: m.set_notify_each, hint: m.set_notify_each_hint },
-		never: { name: m.set_notify_never, hint: m.set_notify_never_hint }
-	};
-	const NOTIFY_CHOICES = Object.keys(NOTIFY_NAMES) as Notify[];
 
 	/** With custom sounds, one per kind of notification (docs/decisions/0038). */
 	const SOUND_NAMES: Record<SoundKind, () => string> = {
@@ -137,13 +111,6 @@
 		notification: { name: m.set_countdown_notification, hint: m.set_countdown_notification_hint }
 	};
 	const COUNTDOWN_CHOICES = Object.keys(COUNTDOWN_NAMES) as CountdownIn[];
-
-	/** What a link copied elsewhere does (docs/decisions/0043). */
-	const COPIED_NAMES: Record<Copied, { name: () => string; hint: () => string }> = {
-		ask: { name: m.set_copied_ask, hint: m.set_copied_ask_hint },
-		add: { name: m.set_copied_add, hint: m.set_copied_add_hint }
-	};
-	const COPIED_CHOICES = Object.keys(COPIED_NAMES) as Copied[];
 
 	/** Only the desktop app can start a player (docs/decisions/0031), stay
 	 * in the tray (0034), notify (0035), start at sign-in (0039) or watch
@@ -343,14 +310,6 @@
 		switchLanguage(locale);
 	}
 
-	function step(by: number) {
-		if (settings) {
-			const { min, max } = RANGES.maxConcurrent;
-			const next = Math.min(max, Math.max(min, settings.maxConcurrent + by));
-			void save({ maxConcurrent: next });
-		}
-	}
-
 	async function copy() {
 		try {
 			await navigator.clipboard.writeText(link);
@@ -408,7 +367,14 @@
 	</nav>
 
 	<div class="sections">
-		<h1>{m.set_title()}</h1>
+		<div class="title">
+			<h1>{m.set_title()}</h1>
+			<!-- In this window only (docs/decisions/0050). -->
+			<button onclick={() => (session.settingUpAgain = true)}>
+				<Sparkles size={15} aria-hidden="true" />
+				{m.set_setup_again()}
+			</button>
+		</div>
 
 		{#if problem}
 			<div class="problem" role="alert" in:unfold out:unfold>
@@ -437,60 +403,7 @@
 				</label>
 			</header>
 
-			<fieldset>
-				<legend>{m.set_mode()}</legend>
-				<div class="options modes">
-					{#each MODES as mode (mode)}
-						{@const [left, right] = previewFor(mode, appearance.palette)}
-						<label class="option" class:chosen={appearance.mode === mode}>
-							<!-- Each half carries its theme, so it shows that theme's colours. -->
-							<span class="preview" aria-hidden="true">
-								<span class="half" data-theme={left}>
-									<span class="bar"></span><span class="line"></span><span class="line short"
-									></span>
-								</span>
-								<span class="half" data-theme={right}>
-									<span class="bar"></span><span class="line"></span><span class="line short"
-									></span>
-								</span>
-							</span>
-							<span class="choice">
-								<input
-									type="radio"
-									name="mode"
-									checked={appearance.mode === mode}
-									onchange={() => choose({ mode })}
-								/>
-								{MODE_NAMES[mode]()}
-							</span>
-						</label>
-					{/each}
-				</div>
-			</fieldset>
-
-			<fieldset>
-				<legend>{m.set_palette()}</legend>
-				<div class="options palettes">
-					{#each PALETTES as palette (palette)}
-						<label class="option row" class:chosen={appearance.palette === palette}>
-							<input
-								type="radio"
-								name="palette"
-								checked={appearance.palette === palette}
-								onchange={() => choose({ palette })}
-							/>
-							<span class="names">
-								<span>{PALETTE_NAMES[palette].name()}</span>
-								<span class="hint">{PALETTE_NAMES[palette].hint()}</span>
-							</span>
-							<span class="swatches" aria-hidden="true">
-								<span data-theme={THEMES[palette].light}></span>
-								<span data-theme={THEMES[palette].dark}></span>
-							</span>
-						</label>
-					{/each}
-				</div>
-			</fieldset>
+			<LookChoices onChoose={choose} />
 
 			<div class="setting">
 				<label for="language" class="names">
@@ -545,24 +458,12 @@
 						<span>{m.set_max_concurrent()}</span>
 						<span class="hint">{m.set_max_concurrent_hint()}</span>
 					</span>
-					<span class="stepper" role="group" aria-label={m.set_max_concurrent()}>
-						<button
-							aria-label={m.set_fewer()}
-							disabled={settings.maxConcurrent <= RANGES.maxConcurrent.min}
-							onclick={() => step(-1)}>−</button
-						>
-						<NumberField
-							value={settings.maxConcurrent}
-							label={m.set_max_concurrent()}
-							parse={(text) => parseWhole(text, RANGES.maxConcurrent)}
-							onChange={(maxConcurrent) => save({ maxConcurrent })}
-						/>
-						<button
-							aria-label={m.set_more()}
-							disabled={settings.maxConcurrent >= RANGES.maxConcurrent.max}
-							onclick={() => step(1)}>+</button
-						>
-					</span>
+					<Stepper
+						value={settings.maxConcurrent}
+						range={RANGES.maxConcurrent}
+						label={m.set_max_concurrent()}
+						onChange={(maxConcurrent) => save({ maxConcurrent })}
+					/>
 				</div>
 				<div class="setting">
 					<span class="names">
@@ -596,13 +497,13 @@
 						value={settings.existing}
 						onchange={(event) => {
 							const value = event.currentTarget.value;
-							const chosen = EXISTING.find((existing) => existing === value);
+							const chosen = EXISTING_CHOICES.find((existing) => existing === value);
 							if (chosen) {
 								void save({ existing: chosen });
 							}
 						}}
 					>
-						{#each EXISTING as existing (existing)}
+						{#each EXISTING_CHOICES as existing (existing)}
 							<option value={existing}>{EXISTING_NAMES[existing]()}</option>
 						{/each}
 					</select>
@@ -1085,6 +986,21 @@
 		font-weight: 600;
 	}
 
+	/* The page's title, and the setup run again at the end of its row. */
+	.title {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.title button {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
 	.problem {
 		display: flex;
 		justify-content: space-between;
@@ -1170,14 +1086,6 @@
 		gap: 0.65rem;
 	}
 
-	.modes {
-		grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-	}
-
-	.palettes {
-		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-	}
-
 	.option {
 		display: grid;
 		gap: 0.5rem;
@@ -1202,52 +1110,9 @@
 		padding: 0.6rem 0.75rem;
 	}
 
-	.option input,
-	.choice input {
+	.option input {
 		margin: 0;
 		accent-color: var(--accent);
-	}
-
-	.preview {
-		display: flex;
-		height: 4rem;
-		overflow: hidden;
-		border: 1px solid var(--border-soft);
-		border-radius: var(--radius-m);
-	}
-
-	.half {
-		display: flex;
-		flex: 1;
-		flex-direction: column;
-		gap: 0.3rem;
-		padding: 0.5rem;
-		background: var(--bg);
-	}
-
-	.bar,
-	.line {
-		height: 0.35rem;
-		border-radius: 3px;
-		background: var(--border);
-	}
-
-	.bar {
-		width: 60%;
-		height: 0.4rem;
-		background: var(--accent);
-	}
-
-	.line.short {
-		width: 80%;
-	}
-
-	.choice {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0 0.15rem;
-		font-weight: 500;
 	}
 
 	.names {
@@ -1258,12 +1123,6 @@
 
 	.names .hint {
 		font-weight: 400;
-	}
-
-	/* Each palette's light and dark theme: its background with its accent. */
-	.swatches {
-		display: flex;
-		gap: 0;
 	}
 
 	/* One setting per row: its name and hint, then the control. */
@@ -1329,24 +1188,6 @@
 		margin: 0;
 		padding: 0.5rem 1.25rem 1.1rem;
 		color: var(--faint);
-	}
-
-	.stepper button {
-		width: 2.1rem;
-		height: 2.1rem;
-		padding: 0;
-		border: none;
-		font-size: 1rem;
-	}
-
-	.stepper button:hover:not(:disabled) {
-		background: var(--hover);
-	}
-
-	.stepper :global(.field input) {
-		width: 3rem;
-		border-width: 0 1px;
-		text-align: center;
 	}
 
 	.status {
@@ -1456,40 +1297,6 @@
 		border-radius: calc(var(--radius-l) - 1px) calc(var(--radius-l) - 1px) 0 0;
 		border-bottom-color: var(--border-soft);
 		background: none;
-	}
-
-	.swatches span {
-		width: 1.9rem;
-		height: 1.9rem;
-		border: 2px solid var(--surface);
-		border-radius: 50%;
-		background: linear-gradient(135deg, var(--bg) 50%, var(--accent) 50%);
-	}
-
-	.swatches span + span {
-		margin-inline-start: -0.6rem;
-	}
-
-	/* Fewer, the number, more: one control. */
-	.stepper {
-		display: flex;
-		align-items: center;
-		border-radius: var(--radius-s);
-		gap: 0.35rem;
-		overflow: visible;
-		border: none;
-	}
-
-	.stepper button {
-		border-radius: 50%;
-		background: var(--hover);
-	}
-
-	.stepper :global(.field input) {
-		border: none;
-		border-radius: 999px;
-		background: var(--input);
-		box-shadow: var(--sunken-shadow);
 	}
 
 	.problem {

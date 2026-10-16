@@ -163,6 +163,19 @@ curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH \
 curl -H "$AUTH" -X POST $API/jobs/2026.10.13-14.28.59-1/resume
 ```
 
+## The first-start setup
+
+Until `setupDone` is true in `GET /settings`, front ends offer the setup. It comes in steps (`setupStep`, in this order: `look`, `downloads`, `categories`, then the desktop app's `startup`, `clipboard`, `notifications`); a front end shows those it has. Going past one, done or skipped, saves it with the settings it changes, so a setup stopped halfway carries on after it in whichever front end opens next. Ending it sets `setupDone` and clears the step.
+
+```bash
+# Past the downloads step, with what it changed
+curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH \
+     -d '{"maxConcurrent": 4, "existing": "replace", "setupStep": "downloads"}' $API/settings
+# Done
+curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH \
+     -d '{"setupDone": true, "setupStep": null}' $API/settings
+```
+
 ## Live events
 
 `GET /api/v1/events` is a WebSocket that pushes every change as a JSON message. Browsers can't set headers on a WebSocket, so the token travels as an offered **protocol**: offer both `ottie.v1` and `ottie.token.<token>`, and the server picks `ottie.v1`.

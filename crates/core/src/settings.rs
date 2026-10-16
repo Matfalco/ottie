@@ -21,6 +21,11 @@ pub struct Settings {
     /// The user has been through the first-start setup (or skipped it), so
     /// front ends shouldn't offer it again.
     pub setup_done: bool,
+    /// The last step of that setup someone went past (done or skipped),
+    /// while it isn't done, so it carries on after it; `None`: from the
+    /// start. The steps are the front ends' own; the engine only keeps it
+    /// (docs/decisions/0050).
+    pub setup_step: Option<String>,
     /// The look shared by the devices that follow it; `None` until one
     /// shares its own. The engine only keeps it (docs/decisions/0022).
     pub appearance: Option<Appearance>,
@@ -41,6 +46,7 @@ impl Default for Settings {
             max_batch: 10_000,
             stream_media: true,
             setup_done: false,
+            setup_step: None,
             appearance: None,
             language: None,
             existing: Existing::Rename,
@@ -62,6 +68,7 @@ impl Settings {
             max_batch,
             stream_media,
             setup_done,
+            setup_step,
             appearance,
             language,
             existing,
@@ -90,6 +97,9 @@ impl Settings {
         if let Some(done) = setup_done {
             self.setup_done = done;
         }
+        if let Some(step) = setup_step {
+            self.setup_step = step;
+        }
         if let Some(appearance) = appearance {
             self.appearance = Some(appearance);
         }
@@ -113,6 +123,8 @@ pub struct SettingsChange {
     pub max_batch: Option<usize>,
     pub stream_media: Option<bool>,
     pub setup_done: Option<bool>,
+    /// `Some(None)`: the setup starts from its first step.
+    pub setup_step: Option<Option<String>>,
     pub appearance: Option<Appearance>,
     /// `Some(None)`: back to each device's system language.
     pub language: Option<Option<String>>,

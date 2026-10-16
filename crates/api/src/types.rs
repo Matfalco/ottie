@@ -878,6 +878,9 @@ pub struct Settings {
     /// The first-start setup (starter categories) was done or skipped;
     /// until then, front ends offer it.
     pub setup_done: bool,
+    /// The last step of that setup someone went past (done or skipped), so
+    /// it carries on after it, in whichever front end; null: from the start.
+    pub setup_step: Option<SetupStep>,
     /// How many downloads run at once; the others wait. At least 1.
     pub max_concurrent: u32,
     /// Bytes per second for all downloads together; 0 = no limit.
@@ -920,6 +923,11 @@ pub struct SettingsChange {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub setup_done: Option<bool>,
+    /// `null`: the setup starts from its first step.
+    #[serde(default, with = "present", skip_serializing_if = "Option::is_none")]
+    #[ts(optional, as = "Option<Option<SetupStep>>")]
+    #[schema(value_type = Option<SetupStep>)]
+    pub setup_step: Option<Option<SetupStep>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub max_concurrent: Option<u32>,
@@ -952,6 +960,55 @@ pub struct SettingsChange {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub existing: Option<Existing>,
+}
+
+/// A step of the first-start setup (docs/decisions/0050), in the order they
+/// come. A front end shows those it has: the desktop app's own come last.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum SetupStep {
+    /// The language, light or dark, the colours.
+    Look,
+    /// The downloads folder, how many at once, a file already there.
+    Downloads,
+    /// The starter categories.
+    Categories,
+    /// The desktop app: what starts at sign-in, closing the window.
+    Startup,
+    /// The desktop app: watching the clipboard.
+    Clipboard,
+    /// The desktop app: notifications and their sounds.
+    Notifications,
+}
+
+impl SetupStep {
+    const ALL: [SetupStep; 6] = [
+        SetupStep::Look,
+        SetupStep::Downloads,
+        SetupStep::Categories,
+        SetupStep::Startup,
+        SetupStep::Clipboard,
+        SetupStep::Notifications,
+    ];
+
+    /// As the engine keeps it (the same as in JSON).
+    fn as_str(self) -> &'static str {
+        match self {
+            SetupStep::Look => "look",
+            SetupStep::Downloads => "downloads",
+            SetupStep::Categories => "categories",
+            SetupStep::Startup => "startup",
+            SetupStep::Clipboard => "clipboard",
+            SetupStep::Notifications => "notifications",
+        }
+    }
+
+    /// A step the engine kept; one this daemon doesn't know (saved by a
+    /// newer one) counts as none, so the setup starts over.
+    fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|step| step.as_str() == text)
+    }
 }
 
 /// How the front ends look: light, dark or as the system says, and which
@@ -1295,6 +1352,7 @@ impl From<ottie_core::Settings> for Settings {
         let retry = settings.retry;
         Settings {
             setup_done: settings.setup_done,
+            setup_step: settings.setup_step.as_deref().and_then(SetupStep::parse),
             max_concurrent: u32::try_from(settings.max_concurrent).unwrap_or(u32::MAX),
             global_limit: settings.global_limit,
             max_retries: retry.max_retries,
@@ -1324,6 +1382,9 @@ impl From<SettingsChange> for ottie_core::SettingsChange {
                 .map(|max| usize::try_from(max).unwrap_or(usize::MAX)),
             stream_media: change.stream_media,
             setup_done: change.setup_done,
+            setup_step: change
+                .setup_step
+                .map(|step| step.map(|step| step.as_str().to_owned())),
             appearance: change.appearance.map(ottie_core::Appearance::from),
             language: change.language,
             existing: change.existing.map(Into::into),
@@ -1542,7 +1603,17 @@ impl From<ottie_core::Priority> for Priority {
 
 #[cfg(test)]
 mod tests {
-    use super::{ByteRange, Event, JobChange};
+    use super::{ByteRange, Event, JobChange, SetupStep};
+
+    #[test]
+    fn setup_steps_are_kept_by_their_json_names() {
+        for step in SetupStep::ALL {
+            let json = serde_json::to_value(step).unwrap();
+            assert_eq!(json, serde_json::json!(step.as_str()));
+            assert_eq!(SetupStep::parse(step.as_str()), Some(step));
+        }
+        assert_eq!(SetupStep::parse("later"), None);
+    }
 
     #[test]
     fn a_time_left_out_is_not_a_time_taken_away() {

@@ -44,7 +44,8 @@ pub use types::{
     AppearanceMode, Arrangement, BuiltIn, ByteRange, Category, CategoryBody, Event, Existing,
     FoundLink, Job, JobChange, JobState, MatchLink, Matched, MoveJob, Palette, Preview,
     PreviewLinks, Priority, Problem, Reason, RefusedJob, Reorder, ReorderJobs, Settings,
-    SettingsChange, SortDirection, SortKey, SpeedHistory, StreamLink, View, ViewBody, ViewFilters,
+    SettingsChange, SetupStep, SortDirection, SortKey, SpeedHistory, StreamLink, View, ViewBody,
+    ViewFilters,
 };
 pub use types::{AddedSlot, Day, ReorderSlots, Slot, SlotBody, SlotDownloads, SlotList};
 pub use ui::UiSource;

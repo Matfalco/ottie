@@ -4404,6 +4404,17 @@
             "type": "boolean",
             "description": "The first-start setup (starter categories) was done or skipped;\nuntil then, front ends offer it."
           },
+          "setupStep": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SetupStep",
+                "description": "The last step of that setup someone went past (done or skipped), so\nit carries on after it, in whichever front end; null: from the start."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "streamMedia": {
             "type": "boolean",
             "description": "New video and music downloads start in streaming mode, unless the\none adding them says otherwise."
@@ -4495,6 +4506,17 @@
               "null"
             ]
           },
+          "setupStep": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SetupStep",
+                "description": "`null`: the setup starts from its first step."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "streamMedia": {
             "type": [
               "boolean",
@@ -4502,6 +4524,18 @@
             ]
           }
         }
+      },
+      "SetupStep": {
+        "type": "string",
+        "description": "A step of the first-start setup (docs/decisions/0050), in the order they\ncome. A front end shows those it has: the desktop app's own come last.",
+        "enum": [
+          "look",
+          "downloads",
+          "categories",
+          "startup",
+          "clipboard",
+          "notifications"
+        ]
       },
       "Slot": {
         "type": "object",

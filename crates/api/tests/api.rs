@@ -13,8 +13,9 @@ use ottie_api::{
     AddJob, AddJobs, Added, AddedCategory, AddedJobs, AddedView, AddedWithin, ApiError, Appearance,
     AppearanceMode, Arrangement, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL, Event, Existing,
     FoundLink, Job, JobChange, JobState, Matched, Palette, Preview, PreviewLinks, Priority,
-    Problem, Reason, Reorder, ReorderJobs, Settings, SettingsChange, SortDirection, SortKey,
-    SpeedHistory, StreamLink, TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody, ViewFilters,
+    Problem, Reason, Reorder, ReorderJobs, Settings, SettingsChange, SetupStep, SortDirection,
+    SortKey, SpeedHistory, StreamLink, TOKEN_PROTOCOL_PREFIX, Token, UiSource, View, ViewBody,
+    ViewFilters,
 };
 use ottie_api::{AddedSlot, Day, ReorderSlots, Slot, SlotDownloads, SlotList};
 use ottie_core::{HttpBackend, Manager, Store};
@@ -1019,6 +1020,7 @@ async fn settings_are_read_and_changed() {
     };
     let defaults = Settings {
         setup_done: false,
+        setup_step: None,
         max_concurrent: 3,
         global_limit: 0,
         max_retries: 10,
@@ -1038,6 +1040,7 @@ async fn settings_are_read_and_changed() {
     };
     let change = serde_json::json!({
         "setupDone": true,
+        "setupStep": "categories",
         "maxConcurrent": 5,
         "globalLimit": 4_000_000,
         "firstRetryWaitMs": 500,
@@ -1051,6 +1054,7 @@ async fn settings_are_read_and_changed() {
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
     let changed = Settings {
         setup_done: true,
+        setup_step: Some(SetupStep::Categories),
         max_concurrent: 5,
         global_limit: 4_000_000,
         first_retry_wait_ms: 500,
@@ -1125,6 +1129,22 @@ async fn settings_are_read_and_changed() {
         settings().await,
         Settings {
             language,
+            ..changed.clone()
+        }
+    );
+
+    // The setup starts over with null; a step it doesn't have is refused.
+    let unknown = serde_json::json!({ "setupStep": "later" });
+    let response = patch(unknown).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let over = serde_json::json!({ "setupDone": false, "setupStep": null });
+    assert_eq!(patch(over).await.unwrap().status(), StatusCode::NO_CONTENT);
+    assert_eq!(
+        settings().await,
+        Settings {
+            setup_done: false,
+            setup_step: None,
+            language: None,
             ..changed
         }
     );

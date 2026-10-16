@@ -1,6 +1,6 @@
 # 0020: First-start setup, the Other category, and the category step when adding
 
-Accepted 2026-10-13.
+Accepted 2026-10-13. The setup now comes in steps: `docs/decisions/0050`.
 
 **First start:** the daemon starts with only General. The UI offers starter categories (Videos, Music, Images, Archives, Documents, Programs), named in the page's language, with the extensions of `filetypes.ts`, each in a subfolder of the downloads folder (General's folder). The user can untick, edit or add categories and change the downloads folder, then the UI creates them through the usual category endpoints. The daemon never creates them by itself: one daemon can serve front ends in several languages, and a NAS install may not want them.
 
