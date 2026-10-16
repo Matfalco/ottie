@@ -8,14 +8,19 @@
 mod config;
 mod open;
 mod serve;
+mod service;
 mod token;
 
+use std::future::Future;
 use std::process::ExitCode;
 
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use tokio_util::sync::CancellationToken;
 
 use crate::config::{DaemonArgs, DirArgs};
 use crate::serve::ServeArgs;
+use crate::service::ServiceArgs;
 
 #[derive(Parser)]
 #[command(
@@ -40,15 +45,17 @@ enum Command {
     Token(DirArgs),
     /// Print the web UI's address, signed in (for another browser, or the desktop app).
     Link(DaemonArgs),
+    /// Run Ottie as a service, without the app: for you, or for the whole computer.
+    Service(ServiceArgs),
 }
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
     let result = match Cli::parse().command {
-        Command::Serve(args) => serve::run(args).await,
-        Command::Open(args) => open::run(&args).await,
+        Command::Serve(args) => serve_now(args),
+        Command::Open(args) => block_on(open::run(&args)),
         Command::Token(dirs) => token::print(&dirs),
         Command::Link(args) => open::print_link(&args),
+        Command::Service(args) => service::run(args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -58,6 +65,29 @@ async fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn serve_now(args: ServeArgs) -> Result<()> {
+    #[cfg(windows)]
+    {
+        if args.detach_console {
+            service::windows::detach_console();
+        }
+        if args.windows_service {
+            return service::windows::serve(args);
+        }
+    }
+    block_on(serve::run(args, CancellationToken::new()))
+}
+
+/// What `#[tokio::main]` would do, by hand: a Windows service must first hand
+/// this thread to the system, which then calls back on one of its own.
+fn block_on<T>(work: impl Future<Output = Result<T>>) -> Result<T> {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("can't start the async runtime")?
+        .block_on(work)
 }
 
 #[cfg(test)]

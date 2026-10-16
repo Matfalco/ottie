@@ -18,7 +18,7 @@ Accepted 2026-10-14.
 
 **Alternatives:**
 - Only starting the app: simpler, but Mathieu wanted the choice of the daemon alone, with nothing on screen.
-- The daemon as a real service (Task Scheduler, a systemd user service, a LaunchAgent for `ottie serve`): it could restart on a crash and run before sign-in, but needs different code on each system, and the console `ottie.exe` would need a window of its own hidden on Windows. Starting it through the app gives the same result at sign-in with one entry. A service can come later for headless use (`ottie service install`).
+- The daemon as a real service (Task Scheduler, a systemd user service, a LaunchAgent for `ottie serve`): it could restart on a crash and run before sign-in, but needs different code on each system, and the console `ottie.exe` would need a window of its own hidden on Windows. Starting it through the app gives the same result at sign-in with one entry. A service can come later for headless use (`ottie service install`). (Done in 0051, beside this one: the app's sign-in entry stays as it is.)
 - Two entries (one for the app, one for the daemon): no `app.json` setting, but two things to keep in step, and Task Manager would show two Otties.
 - On by default after installing: the setup offering it, already chosen, was preferred to registering without asking.
 - `tauri-plugin-autostart`: Tauri's own, but with the unquoted path above.

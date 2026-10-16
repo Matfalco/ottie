@@ -1,11 +1,12 @@
 //! `ottie serve`: the daemon.
 
+use std::fs::{self, File, OpenOptions};
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use anyhow::{Context, Result};
 use clap::Args;
-use directories::UserDirs;
 use ottie_api::{Token, UiSource};
 use ottie_core::{CategoryId, HttpBackend, Manager, Store};
 use tokio::net::TcpListener;
@@ -22,22 +23,60 @@ pub struct ServeArgs {
     /// Serve the web UI from this folder instead of the one built into Ottie
     #[arg(long, env = "OTTIE_UI_DIR", value_name = "FOLDER")]
     pub ui_dir: Option<PathBuf>,
+    /// Where downloads go until you choose a folder for General [default: your Downloads folder]
+    #[arg(long, env = "OTTIE_DOWNLOADS_DIR", value_name = "FOLDER")]
+    pub downloads_dir: Option<PathBuf>,
+    /// Write the log to this file, not to the terminal (past 10 MB, the old
+    /// one moves to FILE.old)
+    #[arg(long, value_name = "FILE")]
+    pub log_file: Option<PathBuf>,
+    /// Windows: let go of the console window at once (`ottie service install`).
+    #[arg(long, hide = true)]
+    pub detach_console: bool,
+    /// Windows: run under the Service Control Manager (`--system`).
+    #[arg(long, hide = true)]
+    pub windows_service: bool,
     /// For a program that starts Ottie (the desktop app): print `ready` once
     /// listening, and stop when standard input closes.
     #[arg(long, hide = true)]
     pub managed: bool,
 }
 
-pub async fn run(args: ServeArgs) -> Result<()> {
+/// A log file past this moves to `<name>.old` at the next start.
+const LOG_LIMIT: u64 = 10 * 1024 * 1024;
+
+/// Runs until Ctrl+C, SIGTERM, `stop` (the Windows service's Stop) or, with
+/// `--managed`, standard input closing.
+pub async fn run(args: ServeArgs, stop: CancellationToken) -> Result<()> {
     // Watched from the start: if the app quits while we start, we stop too.
     let parent_gone = args.managed.then(stdin_closed);
-    // Log to stderr; `OTTIE_LOG=debug` (or `ottie_core=debug`…) shows more.
+    // `OTTIE_LOG=debug` (or `ottie_core=debug`…) shows more.
     let filter = EnvFilter::try_from_env("OTTIE_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_writer(std::io::stderr)
-        .init();
+    let logs = tracing_subscriber::fmt().with_env_filter(filter);
+    match &args.log_file {
+        Some(path) => logs
+            .with_ansi(false)
+            .with_writer(Mutex::new(log_file(path)?))
+            .init(),
+        // Colours only for a person: not in the journal or `docker logs`.
+        None => logs
+            .with_ansi(std::io::stderr().is_terminal())
+            .with_writer(std::io::stderr)
+            .init(),
+    }
+    let result = serve(args, stop, parent_gone).await;
+    if let Err(err) = &result {
+        // A service's standard error goes nowhere (or only to the journal).
+        tracing::error!("{err:#}");
+    }
+    result
+}
 
+async fn serve(
+    args: ServeArgs,
+    stop: CancellationToken,
+    parent_gone: Option<CancellationToken>,
+) -> Result<()> {
     let daemon = &args.daemon;
     let dirs = Dirs::resolve(&daemon.dirs)?;
     let file = FileConfig::load(&dirs.config.join(CONFIG_FILE))?;
@@ -50,14 +89,18 @@ pub async fn run(args: ServeArgs) -> Result<()> {
         .await
         .with_context(|| format!("can't listen on {addr} (is Ottie already running?)"))?;
 
-    std::fs::create_dir_all(&dirs.data)
+    fs::create_dir_all(&dirs.data)
         .with_context(|| format!("can't create {}", dirs.data.display()))?;
     let database = dirs.data.join(DATABASE_FILE);
     let store = Store::open(&database)
         .await
         .with_context(|| format!("can't open the database {}", database.display()))?;
     let manager = Manager::start(HttpBackend::new()?, store).await?;
-    default_general_folder(&manager, downloads_folder()).await?;
+    let downloads = args
+        .downloads_dir
+        .clone()
+        .or_else(|| dirs.default_downloads());
+    default_general_folder(&manager, downloads).await?;
 
     if !addr.ip().is_loopback() {
         tracing::warn!(%addr, "the API is open to other computers: keep it behind a VPN or reverse proxy");
@@ -86,7 +129,7 @@ pub async fn run(args: ServeArgs) -> Result<()> {
     let app = ottie_api::router(manager.clone(), Token::new(token), shutdown.clone(), ui);
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
-            stop_requested(parent_gone).await;
+            stop_requested(parent_gone, stop).await;
             // Close event streams, or the server would wait for them.
             shutdown.cancel();
         })
@@ -121,12 +164,22 @@ async fn default_general_folder(manager: &Manager, downloads: Option<PathBuf>) -
     Ok(())
 }
 
-/// The user's Downloads folder, or `~/Downloads` where the OS names none
-/// (e.g. a Linux server without desktop folders).
-fn downloads_folder() -> Option<PathBuf> {
-    let user = UserDirs::new()?;
-    let named = user.download_dir().map(Path::to_owned);
-    Some(named.unwrap_or_else(|| user.home_dir().join("Downloads")))
+/// Appended to, so a service restarted after a crash keeps what led to it.
+fn log_file(path: &Path) -> Result<File> {
+    if let Some(folder) = path.parent() {
+        fs::create_dir_all(folder).with_context(|| format!("can't create {}", folder.display()))?;
+    }
+    if fs::metadata(path).is_ok_and(|file| file.len() > LOG_LIMIT) {
+        let mut old = path.as_os_str().to_owned();
+        old.push(".old");
+        // If it can't move, it grows: better than no log.
+        let _ = fs::rename(path, old);
+    }
+    OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .with_context(|| format!("can't write the log {}", path.display()))
 }
 
 /// `--managed`: cancelled once standard input closes, i.e. the program that
@@ -143,9 +196,9 @@ fn stdin_closed() -> CancellationToken {
     closed
 }
 
-/// Ctrl+C, (Unix) the SIGTERM that systemd and Docker send, or (`--managed`)
-/// standard input closing.
-async fn stop_requested(parent_gone: Option<CancellationToken>) {
+/// Ctrl+C, (Unix) the SIGTERM that systemd, launchd and Docker send, `stop`,
+/// or (`--managed`) standard input closing.
+async fn stop_requested(parent_gone: Option<CancellationToken>, stop: CancellationToken) {
     let ctrl_c = async {
         if let Err(err) = tokio::signal::ctrl_c().await {
             // Without a handler we can't stop gracefully; keep running.
@@ -175,6 +228,7 @@ async fn stop_requested(parent_gone: Option<CancellationToken>) {
         () = ctrl_c => {}
         () = terminate => {}
         () = parent_gone => tracing::info!("the program that started Ottie has quit"),
+        () = stop.cancelled() => {}
     }
 }
 

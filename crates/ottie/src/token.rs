@@ -18,9 +18,30 @@ pub fn path(config_dir: &Path) -> PathBuf {
 
 /// `ottie token`: prints it (creating it if this is the first run).
 pub fn print(args: &DirArgs) -> Result<()> {
-    let dirs = Dirs::resolve(args)?;
-    println!("{}", load_or_create(&dirs.config)?);
+    println!("{}", for_client(&Dirs::resolve(args)?)?);
     Ok(())
+}
+
+/// The token for `token`, `link` and `open`. The system-wide service's is
+/// only read: one created by root or an administrator here would be theirs,
+/// and the service's account couldn't read it.
+pub fn for_client(dirs: &Dirs) -> Result<String> {
+    if !dirs.system {
+        return load_or_create(&dirs.config);
+    }
+    let path = path(&dirs.config);
+    match read(&path) {
+        Ok(Some(token)) => Ok(token),
+        Ok(None) => bail!(
+            "{} doesn't exist yet: the system-wide service creates it when it first starts",
+            path.display()
+        ),
+        Err(err) => Err(err.context(if cfg!(windows) {
+            "only administrators can read it"
+        } else {
+            "only root and the ottie account can read it (sudo?)"
+        })),
+    }
 }
 
 pub fn load_or_create(config_dir: &Path) -> Result<String> {

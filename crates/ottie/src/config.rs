@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Args;
-use directories::BaseDirs;
+use directories::{BaseDirs, UserDirs};
 use serde::Deserialize;
 
 pub const DEFAULT_PORT: u16 = 24068;
@@ -23,6 +23,11 @@ pub struct DirArgs {
     /// Folder for the database [default: %LOCALAPPDATA%\Ottie, ~/.local/share/ottie]
     #[arg(long, env = "OTTIE_DATA_DIR", value_name = "FOLDER")]
     pub data_dir: Option<PathBuf>,
+    /// The system-wide service: for the whole computer, at boot, under an
+    /// account of its own (administrators only). Its folder: %ProgramData%\Ottie,
+    /// /var/lib/ottie
+    #[arg(long)]
+    pub system: bool,
 }
 
 /// Where the daemon is (or will be) listening: for `serve` and `open`.
@@ -41,10 +46,22 @@ pub struct DaemonArgs {
 pub struct Dirs {
     pub config: PathBuf,
     pub data: PathBuf,
+    /// The system-wide service's: its own account owns them (0051).
+    pub system: bool,
 }
 
 impl Dirs {
     pub fn resolve(args: &DirArgs) -> Result<Dirs> {
+        // Wins over the folders: those may come from `OTTIE_*` variables set
+        // for your own Ottie.
+        if args.system {
+            let folder = system_folder()?;
+            return Ok(Dirs {
+                config: folder.clone(),
+                data: folder,
+                system: true,
+            });
+        }
         // "Ottie" where folder names are usually capitalized, "ottie" on Linux.
         let name = if cfg!(any(windows, target_os = "macos")) {
             "Ottie"
@@ -62,7 +79,41 @@ impl Dirs {
             Some(dir) => dir.clone(),
             None => base()?.data_local_dir().join(name),
         };
-        Ok(Dirs { config, data })
+        Ok(Dirs {
+            config,
+            data,
+            system: false,
+        })
+    }
+
+    /// Where downloads go until someone chooses a folder for General: the
+    /// OS's Downloads folder, or for the system-wide service one in its own.
+    pub fn default_downloads(&self) -> Option<PathBuf> {
+        if self.system {
+            return Some(self.data.join(if cfg!(windows) {
+                "Downloads"
+            } else {
+                "downloads"
+            }));
+        }
+        let user = UserDirs::new()?;
+        let named = user.download_dir().map(Path::to_owned);
+        // `~/Downloads` where the OS names none (a Linux server without
+        // desktop folders).
+        Some(named.unwrap_or_else(|| user.home_dir().join("Downloads")))
+    }
+}
+
+/// The system-wide service's one folder, for its config, token, database and
+/// log: only its account and administrators can read it.
+pub fn system_folder() -> Result<PathBuf> {
+    if cfg!(windows) {
+        let base = std::env::var_os("ProgramData").unwrap_or_else(|| r"C:\ProgramData".into());
+        Ok(PathBuf::from(base).join("Ottie"))
+    } else if cfg!(target_os = "macos") {
+        anyhow::bail!("Ottie has no system-wide service on macOS yet")
+    } else {
+        Ok(PathBuf::from("/var/lib/ottie"))
     }
 }
 
@@ -155,8 +206,26 @@ mod tests {
         let args = DirArgs {
             config_dir: Some("/c".into()),
             data_dir: Some("/d".into()),
+            ..DirArgs::default()
         };
         let dirs = Dirs::resolve(&args).unwrap();
         assert_eq!((dirs.config, dirs.data), ("/c".into(), "/d".into()));
+        assert!(!dirs.system);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_system_service_has_one_folder() {
+        let args = DirArgs {
+            system: true,
+            ..DirArgs::default()
+        };
+        let dirs = Dirs::resolve(&args).unwrap();
+        assert_eq!(dirs.config, PathBuf::from("/var/lib/ottie"));
+        assert_eq!(dirs.data, dirs.config);
+        assert_eq!(
+            dirs.default_downloads(),
+            Some("/var/lib/ottie/downloads".into())
+        );
     }
 }

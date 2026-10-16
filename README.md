@@ -15,6 +15,8 @@ ottie token      # the API token, for clients
 ottie open       # the web UI in your browser, signed in
 ```
 
+To keep it running without the app, at sign-in or at boot (systemd, Task Scheduler, a Windows service, launchd, Docker), see [Running Ottie as a service](docs/service.md).
+
 To write your own client or script, see [Talking to the Ottie daemon](docs/api/README.md).
 
 ## Planned

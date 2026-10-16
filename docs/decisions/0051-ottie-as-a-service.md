@@ -1,0 +1,45 @@
+# 0051: Ottie as a service
+
+Accepted 2026-10-16. Builds on `docs/decisions/0004` (one binary), `0014` (the token and folders) and `0039` (starting at sign-in, which left a real service for later).
+
+**Why:** some people want Ottie's downloads without the app: on a desktop, started at sign-in with nothing on screen; on a headless machine (a NAS, a home server), started at boot and kept running. Each system has its own way to keep a program running, and `ottie serve` alone left setting it up to them.
+
+**Decision** (Mathieu's choices):
+- **`ottie service install | uninstall | status`.** Install writes the system's entry for `ottie serve` and starts it; run again (after an update, or with other options), it stops the one it set up, rewrites it and starts it again. Uninstall stops it and takes the entry off; downloads, settings and the database stay. Status says, for you and system-wide, whether it's installed and running, then whether Ottie answers on this computer. A service never gets the `OTTIE_*` variables of the terminal it was installed from, so the address and port come from `config.toml` only; folders given to install (`--config-dir`, `--data-dir`, `--downloads-dir`) are written into the entry.
+- **For you, by default:**
+  - Linux: a systemd user unit (`~/.config/systemd/user/ottie.service`), started at login, restarted after a crash. `--at-boot` also turns on lingering (`loginctl enable-linger`), so it starts at boot and keeps running after you log out; if that's refused, it says the `sudo` command. Uninstall leaves lingering on (other services may need it) and says how to turn it off. Its log is in the journal.
+  - Windows: a task in Task Scheduler named "Ottie", at your sign-in, in your session, no time limit, normal priority. `ottie.exe` is a console program, so Windows opens a console window for it: `--detach-console` lets go of it at once (a window may flash at sign-in). The log goes to `ottie.log` in the data folder. Task Scheduler restarts a task that fails to start, but not one that stops later: unlike systemd and launchd, a crash isn't restarted until the next sign-in. Ending the task (uninstall, install again) stops `ottie` at once rather than gracefully; downloads carry on from their files.
+  - macOS: a LaunchAgent (`~/Library/LaunchAgents/io.github.matfalco.ottie.service.plist`), at login, restarted after a crash, its log in `ottie.log` in the data folder.
+- **For the computer, `--system`** (root or an administrator), at boot, under an account of its own so it can't read people's files and they can't read its token:
+  - Linux: a system unit (`/etc/systemd/system/ottie.service`) run by a system account `ottie` (made by install, no login), in `/var/lib/ottie` (systemd's `StateDirectory`, 0750): config, token and database together; downloads in `/var/lib/ottie/downloads` until a folder is chosen. Light hardening (`NoNewPrivileges`, `ProtectSystem=full`, `PrivateTmp`…), nothing that would stop it writing to a folder chosen in the UI: its account's rights decide.
+  - Windows: a real Windows service "Ottie" (`windows-service` crate) under its virtual account `NT SERVICE\Ottie`, delayed automatic start, restarted 5 s after a failure (crash or error). `ottie serve --windows-service` answers the Service Control Manager; Stop and the system's shutdown stop it gracefully. Its folder `%ProgramData%\Ottie` is for SYSTEM, administrators and the service only (it holds the token); its `Downloads` there can be read by everyone on the computer.
+  - It runs its own copy of `ottie`, which its account can read (`/usr/local/bin/ottie`; `%ProgramFiles%\Ottie Service\ottie.exe`, apart from the desktop app's folder so uninstalling the app leaves it), replaced by each install.
+  - Uninstall keeps that folder, the account and the copy, and says how to remove them.
+  - macOS: not yet (it would need an account of its own); install for yourself, or use Docker.
+- **`--system` for the other commands:** `ottie token --system` and `ottie link --system` read the system service's token (only root or an administrator can), never create it (one made by root would be unreadable for the service). `ottie open --system` refuses: a browser shouldn't run as an administrator.
+- **`ottie serve` grew** `--log-file` (appended, so a crash's lead-up stays; past 10 MB the old one moves to `ottie.log.old`; every error that stops it is written there too), `--downloads-dir` / `OTTIE_DOWNLOADS_DIR` (General's folder until one is chosen) and `--system`.
+- **Already running:** if another Ottie answers on the port once ours is stopped (one from a terminal, or the desktop app's), install sets the service up without starting it and says when it will start and how to start it sooner; it never starts one that would fail on the port and restart in a loop. The desktop app finds a running service as it finds any running daemon (`0017`), and quitting the app leaves it running.
+- **A Docker image** (`Dockerfile`): the UI built, then `ottie` (release), in `debian:bookworm-slim` with the certificate authorities. `/config` (config, token, database) and `/downloads` are volumes; it listens on 0.0.0.0 inside the container, to be published on 127.0.0.1 (or a VPN, or a reverse proxy); it runs as user 1000. `docker exec ottie ottie token` prints the token. How to use each is in `docs/service.md`.
+
+**Alternatives:**
+- Windows, for you: "run whether the user is logged on or not" (S4U), with no window ever and from boot: no network shares, may need administrator rights to register, closer to the system-wide service.
+- Linux, for you: always turning lingering on (surprising on a desktop: Ottie keeps running after logout), or never (one more command for headless use).
+- One install for both scopes, chosen by whether it's run as root: too easy to set up the wrong one with `sudo`.
+- The system-wide service under the administrator's own account, or LocalSystem: simpler folders, but a service with every right reading tokens and writing anywhere.
+- `DynamicUser=` on Linux: no account to make, but its files belong to a number that changes, awkward for downloads people read.
+- A Windows service through `sc.exe` wrapping a normal program: Windows ends a program that doesn't answer the Service Control Manager within 30 s, hence the `windows-service` crate (Mullvad's, maintained, already on `windows-sys` 0.61 like the app).
+
+**Tried so far** (in a Linux cloud session, 2026-10-16):
+- Linux, for you: `install --at-boot --downloads-dir`, `status` and `uninstall`, end to end against a stand-in `systemctl` and `loginctl` that log their calls (no systemd there); `systemd-analyze verify` accepts the user unit and the system one.
+- `ottie serve --log-file` (appended, the error that stops it written there, no colours) and `--downloads-dir`; `token --system` and `open --system` refuse as meant; `--system` wins over `OTTIE_CONFIG_DIR`.
+- Docker: the image builds (146 MB) and runs: `docker exec … ottie link` and `token`, the API with the token, the web UI, General on `/downloads`, files owned by 1000, `docker stop` saves and stops.
+- Windows and macOS code: compiled with clippy (`-D warnings`) for `x86_64-pc-windows-msvc` and `aarch64-apple-darwin` in a scratch crate; never run.
+- The texts (units, plist, task XML, command-line quoting) have unit tests on every system.
+
+**Still to check:**
+- Linux with real systemd: `install` for you (starts, restarts after `kill -9`, `--at-boot` turns lingering on), `install --system` (the `ottie` account, `/var/lib/ottie` at 0750, `/usr/local/bin/ottie`, `sudo ottie link --system`, a chosen folder the account can't write to), `uninstall` both ways. A system install wasn't run here: it creates an account and a boot entry.
+- Windows, for you: `schtasks` accepts the UTF-16 XML; at sign-in the console window only flashes (also with Windows Terminal as the default terminal); the log in `%LOCALAPPDATA%\Ottie\ottie.log`; install again while it runs (End, then Run); whether the security suite reacts to a task at sign-in (persistence).
+- Windows, `--system` from an administrator terminal: the service starts as `NT SERVICE\Ottie`; `icacls` on `%ProgramData%\Ottie` (only SYSTEM, administrators, the service) and `Downloads` (everyone reads); `ottie link --system` as administrator, refused otherwise; Stop in Services saves the downloads; a failure restarts it; install again (stop, copy over, start); uninstall.
+- The desktop app's build on Windows: `windows-sys` 0.61 now serves about 20 crates in Cargo.lock that had 0.60 (their ranges allow it).
+- macOS: nothing has run there (LaunchAgent, `launchctl bootstrap`/`bootout`, the log).
+- Docker: an HTTPS download from inside the container (the certificate authorities copied from the Rust image); only a stand-in proxy was there.

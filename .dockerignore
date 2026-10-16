@@ -1,0 +1,11 @@
+# Only what the Dockerfile builds from.
+target
+**/node_modules
+crates/api/ui-dist
+app/binaries
+app/gen
+.git
+.claude
+.env
+.env.*
+.cargo/credentials*

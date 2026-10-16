@@ -14,7 +14,8 @@ fn ottie(dir: &Path) -> Command {
         .env("OTTIE_CONFIG_DIR", dir.join("config"))
         .env("OTTIE_DATA_DIR", dir.join("data"))
         .env_remove("OTTIE_ADDRESS")
-        .env_remove("OTTIE_PORT");
+        .env_remove("OTTIE_PORT")
+        .env_remove("OTTIE_DOWNLOADS_DIR");
     command
 }
 
@@ -124,6 +125,30 @@ fn a_taken_port_stops_serve_before_it_opens_the_database() {
     assert!(message.contains("already running"), "{message}");
     // Otherwise it would have resumed the other daemon's downloads.
     assert!(!dir.path().join("data").join("ottie.db").exists());
+}
+
+#[test]
+fn a_service_finds_why_it_stopped_in_its_log() {
+    let dir = tempfile::tempdir().unwrap();
+    let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = taken.local_addr().unwrap().port().to_string();
+    let log = dir.path().join("logs").join("ottie.log");
+    std::fs::create_dir_all(log.parent().unwrap()).unwrap();
+    std::fs::write(&log, "an earlier start\n").unwrap();
+    let output = ottie(dir.path())
+        .args(["serve", "--port", &port, "--log-file"])
+        .arg(&log)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let written = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        written.starts_with("an earlier start\n"),
+        "appended: {written}"
+    );
+    assert!(written.contains("already running"), "{written}");
+    // No colours in a file.
+    assert!(!written.contains('\u{1b}'), "{written}");
 }
 
 #[test]

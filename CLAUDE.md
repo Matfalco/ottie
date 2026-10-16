@@ -52,7 +52,7 @@ Android app (Tauri) ──────┘    (on Android, core + api run inside 
 - **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
 - **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). At sign-in (`0039`) the system starts the app with `--autostart`: hidden in the tray, or, per `app.json`, it only starts `ottie serve` on its own (log in the app's log folder) and quits. A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable), the tooltip and notifications (finished: all at once by default, or each, or never; failed: a switch; `docs/decisions/0035`; with their sounds: the system's, silent, a set of Ottie's or one for each kind, `0038`), with its own texts in `app/messages/`. When everything has finished (`0040`) it can quit, or put the computer to sleep, hibernate it or shut it down after a countdown (a small window on the daemon's `/finish` page, or a notification), chosen every time in Settings or for once from the tray menu or the Downloads page. It can watch the clipboard (`0043`, opt-in): a link copied elsewhere to a file type a category lists is offered in a small window that never takes the focus (the daemon's `/caught` page; Download, More… opens the main window's list, Ignore), or added at once with a notification. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
-- **Headless:** the daemon runs standalone (systemd user service, Docker) and serves the built web UI itself.
+- **Headless:** the daemon runs standalone and serves the built web UI itself: `ottie service install` sets it up for you (systemd user unit, a task at sign-in, LaunchAgent) or, with `--system`, for the computer under an account of its own (systemd unit, Windows service); or the Docker image (`docs/decisions/0051`, `docs/service.md`).
 
 ## Repo layout
 
@@ -116,11 +116,18 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
   ui-dist/           built UI (git-ignored, but packaged for crates.io)
   tests/api.rs       end to end: real server + small file server, reqwest + tungstenite
 crates/ottie/      ottie: the binary  [exists]
-  src/serve.rs       `ottie serve`: logging, folders, token, database, General → Downloads folder,
-                     axum::serve, graceful stop
+  src/main.rs        the subcommands; its own tokio runtime (a Windows service hands its thread to the system first)
+  src/serve.rs       `ottie serve`: logging (or a log file), folders, token, database, General → Downloads folder
+                     (or --downloads-dir), axum::serve, graceful stop (also the Windows service's Stop)
   src/open.rs        `ottie open`: browser on the UI, signed in (via a private redirect page); `ottie link`
-  src/config.rs      folders (OS defaults / flags / OTTIE_* env), config.toml, listen address
-  src/token.rs       token file: created on first use, `ottie token` prints it
+  src/config.rs      folders (OS defaults / flags / OTTIE_* env / --system: the system service's), config.toml,
+                     listen address
+  src/token.rs       token file: created on first use (never for --system), `ottie token` prints it
+  src/service.rs     `ottie service install|uninstall|status` (0051): what to run, whether Ottie answers, the
+                     system service's copy of ottie; per system in service/: systemd.rs (user or system unit,
+                     the `ottie` account, lingering), launchd.rs (LaunchAgent), windows.rs (task at sign-in,
+                     Windows service + running as one, the console let go of). Their texts are built and
+                     tested on every system; installing them only on their own
   tests/cli.rs       runs the real binary
 app/               ottie-app: Tauri 2 shell (desktop; Android later, then with core + api)  [exists]
   src/main.rs        frameless window on the daemon's page (it draws its own title bar, 0019),
@@ -283,6 +290,8 @@ docs/api/          README.md (how to talk to the daemon) + openapi.json (generat
 docs/decisions/    one short file per accepted decision (NNNN-title.md), and README.md,
                    one line per decision                                      [exists]
 res/icons/         the drawn Ottie icons (app, tray), PNG + SVG               [exists]
+Dockerfile         the headless image: UI build → release ottie → debian-slim, /config + /downloads (0051)
+docs/service.md    running Ottie as a service: for you, for the computer, Docker
 .claude/           settings.json (SessionStart hook) + cloud-setup.sh: cloud sessions' setup [exists]
 ```
 
@@ -300,6 +309,8 @@ cargo run -p ottie -- token          # print the API token
 cargo test -p ottie-api              # also regenerates shared/api-types/*.ts and docs/api/openapi.json: commit them
 cargo run -p ottie -- open           # the web UI in a browser, signed in
 cargo run -p ottie -- link           # print that signed-in address
+cargo run -p ottie -- service status # Ottie as a service (install / uninstall; --system for the computer)
+docker build -t ottie .              # the headless image (docs/service.md)
 
 pnpm install                         # JS dependencies (workspace: ui, shared/api-types)
 pnpm --filter ui dev                 # UI with live reload on :5173, /api forwarded to the daemon
@@ -321,7 +332,7 @@ Before calling a task done: fmt, clippy, tests for the crates you touched; for T
 
 Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed. The workspace includes the Tauri app, so `cargo build/test/clippy --workspace` compile Tauri too (WebView2 comes with Windows 11; Linux needs the webkit2gtk 4.1 dev packages, libayatana-appindicator3 for the tray, and libasound2 (ALSA) dev for notification sounds). In a dev run, set `OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` to keep away from your real downloads: the app passes them on to the daemon. The dev app still reads and writes the real `app.json` (`%APPDATA%\io.github.matfalco.ottie` on Windows): back it up first. `OTTIE_POWER_DRY_RUN=1` keeps the computer on when trying "when everything has finished".
 
-Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 30 GB of disk, Node 22, only the repo (nothing from the maintainer's machine). The SessionStart hook in `.claude/settings.json` runs `.claude/cloud-setup.sh`, which does nothing elsewhere: the Linux packages Tauri needs, current stable Rust with clippy and rustfmt, pnpm at the `packageManager` version, `pnpm install` when a lockfile or `package.json` changed, and `CARGO_PROFILE_DEV_DEBUG=line-tables-only` so `target/` fits on the disk. Its last line (`cloud-setup: ready …`) says what it found. There, `cargo build/test/clippy --workspace` and the UI's `check`/`test`/`lint`/`build` all run; the desktop app can't be seen on screen, and Windows-only code (`#[cfg(windows)]`: the Mark of the Web, power calls, the Run key) only compiles on Windows: say which of those a change touches, so the maintainer checks them on Windows. Pages can be checked in a headless browser on a test daemon (`OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` in a temporary folder) over the DevTools protocol; synthetic events there must bubble (`new Event('change', { bubbles: true })`), since Svelte 5 listens once at the root. Tests never hit the real internet anyway, and the network only reaches registries (crates.io, npm) and GitHub.
+Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 30 GB of disk, Node 22, only the repo (nothing from the maintainer's machine). The SessionStart hook in `.claude/settings.json` runs `.claude/cloud-setup.sh`, which does nothing elsewhere: the Linux packages Tauri needs, current stable Rust with clippy and rustfmt, pnpm at the `packageManager` version, `pnpm install` when a lockfile or `package.json` changed, and `CARGO_PROFILE_DEV_DEBUG=line-tables-only` so `target/` fits on the disk. Its last line (`cloud-setup: ready …`) says what it found. There, `cargo build/test/clippy --workspace` and the UI's `check`/`test`/`lint`/`build` all run; the desktop app can't be seen on screen, and Windows-only code (`#[cfg(windows)]`: the Mark of the Web, power calls, the Run key) only compiles on Windows: say which of those a change touches, so the maintainer checks them on Windows. Code that only needs pure-Rust crates (like `crates/ottie/src/service/`) can still be checked for Windows and macOS: `rustup target add x86_64-pc-windows-msvc aarch64-apple-darwin`, then `cargo clippy --target …` on a scratch crate that links those files in (the whole workspace can't: aws-lc and SQLite need the target's C compiler). Pages can be checked in a headless browser on a test daemon (`OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` in a temporary folder) over the DevTools protocol; synthetic events there must bubble (`new Event('change', { bubbles: true })`), since Svelte 5 listens once at the root. Tests never hit the real internet anyway, and the network only reaches registries (crates.io, npm) and GitHub.
 
 ## Engine rules (crates/core)
 
@@ -502,11 +513,13 @@ Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review.
      (folder, how many at once, a file already there), starter categories, sign-in and closing, clipboard,
      notifications (desktop app), saved step by step, run again from Settings (`docs/decisions/0050`);
      later the extension and other devices. Built, not reviewed yet
-   - 7g Ottie as a service only (no app): `ottie service install|uninstall|status`. Per user by default
-     (systemd user unit, LaunchAgent, Task Scheduler at sign-in: the user's own folders), system-wide
-     for headless machines (system unit, Windows service, Docker image: another account, so other
-     folders and file owners). People connect as today: the daemon's page in a browser (`ottie
-     open`/`ottie link`), the desktop app (uses a daemon that answers), the extension
+   - 🟡 7g Ottie as a service only (no app): `ottie service install|uninstall|status`. Per user by default
+     (systemd user unit with `--at-boot` for lingering, LaunchAgent, Task Scheduler at sign-in: the user's
+     own folders), system-wide with `--system` (systemd unit as `ottie`, Windows service as
+     `NT SERVICE\Ottie`; not macOS yet) and a Docker image (`docs/decisions/0051`). People connect as
+     today: the daemon's page in a browser (`ottie open`/`ottie link`, `--system` for the system's),
+     the desktop app (uses a daemon that answers), the extension. Built, not reviewed yet: what was tried
+     and what's left to check (real systemd, Windows, macOS) is at the end of 0051
    - 7h remote access, documented: `tailscale serve` (stays on 127.0.0.1, HTTPS within the tailnet), a
      VPN, or a reverse proxy with HTTPS; never the port open to the internet. Hardening: folders a
      client may write to limited to a list in config.toml (the token can name any folder today, so it
