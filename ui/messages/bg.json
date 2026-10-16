@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Морска пяна денем, Лагуна нощем",
 	"set_palette_neutral": "Неутрална",
 	"set_palette_neutral_hint": "Перла денем, Шисти нощем",
-	"set_palette_legacy": "Стар",
-	"set_palette_legacy_hint": "Предишният вид: по-ъгловат и по-плосък",
 	"set_language_hint": "Също и за съобщенията на демона, например защо изтегляне е неуспешно.",
 	"queue_up": "Нагоре в опашката",
 	"queue_down": "Надолу в опашката",

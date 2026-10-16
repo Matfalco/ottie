@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Tajték nappal, Lagúna éjjel",
 	"set_palette_neutral": "Semleges",
 	"set_palette_neutral_hint": "Gyöngy nappal, Pala éjjel",
-	"set_palette_legacy": "Régi",
-	"set_palette_legacy_hint": "A korábbi megjelenés: szögletesebb és laposabb",
 	"set_language_hint": "A szolgáltatás üzeneteire is, például hogy miért sikertelen egy letöltés.",
 	"queue_up": "Feljebb a sorban",
 	"queue_down": "Lejjebb a sorban",

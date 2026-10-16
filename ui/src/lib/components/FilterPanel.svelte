@@ -297,40 +297,8 @@
 		min-width: 0;
 	}
 
-	/* Radio buttons drawn as one row of segments. */
-	.segments {
-		display: flex;
-		overflow: hidden;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-s);
-	}
-
-	/* Holds its hidden radio button: without it, the button would hang from
-	   the window and stretch it. */
-	.segments label {
-		position: relative;
-		display: grid;
-		flex: 1;
-		place-items: center;
-		min-height: 1.85rem;
-		padding: 0 0.4rem;
-		color: var(--muted);
-		font-weight: 500;
-		text-align: center;
-		cursor: pointer;
-	}
-
-	.segments label + label {
-		border-inline-start: 1px solid var(--border);
-	}
-
 	.segments label:hover {
 		background: var(--hover);
-	}
-
-	.segments label.chosen {
-		background: var(--selected);
-		color: var(--text);
 	}
 
 	.segments label:focus-within {
@@ -365,8 +333,10 @@
 		font-size: 0.85em;
 	}
 
-	/* Rounded (docs/decisions/0044): a sunken track, the chosen one raised. */
-	:global([data-style='rounded']) .segments {
+	/* Radio buttons drawn as one row of segments. */
+	.segments {
+		display: flex;
+		overflow: hidden;
 		gap: 0.15rem;
 		padding: 0.2rem;
 		border: none;
@@ -375,15 +345,28 @@
 		box-shadow: var(--sunken-shadow);
 	}
 
-	:global([data-style='rounded']) .segments label {
+	/* Holds its hidden radio button: without it, the button would hang from
+	   the window and stretch it. */
+	.segments label {
+		position: relative;
+		display: grid;
+		flex: 1;
+		place-items: center;
+		min-height: 1.85rem;
+		padding: 0 0.4rem;
+		color: var(--muted);
+		font-weight: 500;
+		text-align: center;
+		cursor: pointer;
 		border-radius: 999px;
 	}
 
-	:global([data-style='rounded']) .segments label + label {
+	.segments label + label {
 		border-inline-start: none;
 	}
 
-	:global([data-style='rounded']) .segments label.chosen {
+	.segments label.chosen {
+		color: var(--text);
 		background: var(--raised);
 		box-shadow: var(--raised-shadow);
 	}

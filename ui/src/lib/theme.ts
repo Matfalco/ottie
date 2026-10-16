@@ -1,7 +1,7 @@
 // How the page looks on this device: light, dark or whatever the system
-// uses, and which pair of themes, in the rounded style or the legacy one.
-// Remembered by this browser; a device can also follow the look the daemon
-// shares with every device that wants it (docs/decisions/0021, 0022, 0044).
+// uses, and which pair of themes. Remembered by this browser; a device can
+// also follow the look the daemon shares with every device that wants it
+// (docs/decisions/0021, 0022, 0044, 0047).
 
 import type { Appearance } from '@ottie/api-types/Appearance';
 import type { AppearanceMode } from '@ottie/api-types/AppearanceMode';
@@ -10,8 +10,6 @@ import type { Palette } from '@ottie/api-types/Palette';
 export type { Appearance, Palette };
 export type Mode = AppearanceMode;
 export type Theme = 'seafoam' | 'lagoon' | 'pearl' | 'slate';
-/** The shapes: rounder ones, or the look from before (docs/decisions/0044). */
-export type Style = 'rounded' | 'legacy';
 
 /** The look on this device, and whether it follows the shared look and
  * language (yes unless switched off). */
@@ -20,7 +18,7 @@ export interface DeviceAppearance extends Appearance {
 }
 
 export const MODES: Mode[] = ['system', 'light', 'dark'];
-export const PALETTES: Palette[] = ['sea', 'neutral', 'seaLegacy', 'neutralLegacy'];
+export const PALETTES: Palette[] = ['sea', 'neutral'];
 export const DEFAULT_APPEARANCE: DeviceAppearance = {
 	mode: 'system',
 	palette: 'sea',
@@ -30,15 +28,12 @@ export const DEFAULT_APPEARANCE: DeviceAppearance = {
 /** Each palette's light and dark theme. */
 export const THEMES: Record<Palette, { light: Theme; dark: Theme }> = {
 	sea: { light: 'seafoam', dark: 'lagoon' },
-	neutral: { light: 'pearl', dark: 'slate' },
-	seaLegacy: { light: 'seafoam', dark: 'lagoon' },
-	neutralLegacy: { light: 'pearl', dark: 'slate' }
+	neutral: { light: 'pearl', dark: 'slate' }
 };
 
-/** The shapes a palette is drawn with. */
-export function styleFor(palette: Palette): Style {
-	return palette === 'seaLegacy' || palette === 'neutralLegacy' ? 'legacy' : 'rounded';
-}
+/** The legacy palettes there were (docs/decisions/0047): a device that
+ * saved one gets its pair. */
+const LEGACY: Record<string, Palette> = { seaLegacy: 'sea', neutralLegacy: 'neutral' };
 
 const KEY = 'ottie.appearance';
 
@@ -78,7 +73,10 @@ export function parseAppearance(text: string | null): DeviceAppearance {
 	const synced = 'synced' in fields ? fields.synced : undefined;
 	return {
 		mode: MODES.find((known) => known === mode) ?? DEFAULT_APPEARANCE.mode,
-		palette: PALETTES.find((known) => known === palette) ?? DEFAULT_APPEARANCE.palette,
+		palette:
+			PALETTES.find((known) => known === palette) ??
+			(typeof palette === 'string' ? LEGACY[palette] : undefined) ??
+			DEFAULT_APPEARANCE.palette,
 		synced: synced !== false
 	};
 }

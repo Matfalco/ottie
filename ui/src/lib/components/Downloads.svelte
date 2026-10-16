@@ -417,7 +417,7 @@
 		display: grid;
 		gap: 0.5rem;
 		padding: 0.6rem 0.75rem 0.75rem;
-		border-bottom: 1px solid var(--border);
+		border-bottom: none;
 	}
 
 	/* Fills the room the list would take, so the details stay at the
@@ -461,11 +461,5 @@
 		.pane {
 			margin: 0 0.5rem 0.5rem;
 		}
-	}
-
-	/* Rounded (docs/decisions/0044): no line under the filters, the rows
-	   carry their own shapes. */
-	:global([data-style='rounded']) .head {
-		border-bottom: none;
 	}
 </style>

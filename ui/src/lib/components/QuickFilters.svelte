@@ -127,10 +127,18 @@
 {/snippet}
 
 <style>
+	/* The pills sit in a sunken track, the current one raised; saved views
+	   and "…" stay apart, after it. */
 	.pills {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.35rem;
+		gap: 0.15rem;
+		width: fit-content;
+		max-width: 100%;
+		padding: 0.25rem;
+		border-radius: 1.2rem;
+		background: var(--sunken);
+		box-shadow: var(--sunken-shadow);
 	}
 
 	a,
@@ -139,11 +147,11 @@
 		flex: none;
 		align-items: center;
 		gap: 0.45rem;
-		height: 1.85rem;
+		height: 2rem;
 		padding: 0 0.8rem;
-		border: 1px solid var(--border);
+		border: 1px solid transparent;
 		border-radius: 999px;
-		color: var(--text);
+		color: var(--muted);
 		font-size: 0.9em;
 		font-weight: 500;
 		text-decoration: none;
@@ -151,12 +159,13 @@
 
 	a:hover {
 		background: var(--hover);
+		color: var(--text);
 	}
 
 	a.current {
-		border-color: transparent;
-		background: var(--accent);
-		color: var(--on-accent);
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
+		color: var(--text);
 		font-weight: 600;
 	}
 
@@ -196,17 +205,17 @@
 	.options {
 		display: flex;
 		align-items: center;
-		height: 1.85rem;
+		height: 2rem;
 		padding: 0 0.5rem 0 0.4rem;
 		border: none;
-		border-inline-start: 1px solid var(--on-accent);
+		border-inline-start: 1px solid var(--border);
 		border-radius: 0 999px 999px 0;
-		background: var(--accent);
-		color: var(--on-accent);
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
+		color: var(--text);
 	}
 
 	.options:hover {
-		background: var(--accent);
 		filter: brightness(1.1);
 	}
 
@@ -219,7 +228,7 @@
 		margin: 0;
 		padding: 0.3rem;
 		list-style: none;
-		border: 1px solid var(--border);
+		border: 1px solid var(--edge);
 		border-radius: var(--radius-m);
 		background: var(--surface);
 		box-shadow: var(--shadow);
@@ -245,61 +254,15 @@
 	}
 
 	.more {
-		min-width: 2.5rem;
 		justify-content: center;
+		min-width: 2.5rem;
+		border-color: var(--border);
 		border-style: dashed;
 		background: none;
-		color: var(--muted);
 		font-weight: 600;
 	}
 
 	.more:hover {
-		border-color: var(--muted);
 		background: var(--hover);
-	}
-
-	/* Rounded (docs/decisions/0044): the pills sit in a sunken track, the
-	   current one raised; saved views and "…" stay apart, after it. */
-	:global([data-style='rounded']) .pills {
-		width: fit-content;
-		max-width: 100%;
-		gap: 0.15rem;
-		padding: 0.25rem;
-		border-radius: 1.2rem;
-		background: var(--sunken);
-		box-shadow: var(--sunken-shadow);
-	}
-
-	:global([data-style='rounded']) a,
-	:global([data-style='rounded']) .more {
-		height: 2rem;
-		border-color: transparent;
-		color: var(--muted);
-	}
-
-	:global([data-style='rounded']) a:hover {
-		color: var(--text);
-	}
-
-	:global([data-style='rounded']) a.current {
-		background: var(--raised);
-		box-shadow: var(--raised-shadow);
-		color: var(--text);
-	}
-
-	:global([data-style='rounded']) .options {
-		height: 2rem;
-		border-inline-start-color: var(--border);
-		background: var(--raised);
-		box-shadow: var(--raised-shadow);
-		color: var(--text);
-	}
-
-	:global([data-style='rounded']) .more {
-		border-color: var(--border);
-	}
-
-	:global([data-style='rounded']) ul {
-		border-color: var(--edge);
 	}
 </style>

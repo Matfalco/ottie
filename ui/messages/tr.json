@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Gündüz Deniz köpüğü, gece Lagün",
 	"set_palette_neutral": "Nötr",
 	"set_palette_neutral_hint": "Gündüz İnci, gece Arduvaz",
-	"set_palette_legacy": "Eski",
-	"set_palette_legacy_hint": "Önceki görünüm: daha köşeli ve düz",
 	"set_language_hint": "Arka plan hizmetinin bildirdikleri için de geçerlidir; örneğin bir indirmenin neden başarısız olduğu.",
 	"queue_up": "Sırada yukarı taşı",
 	"queue_down": "Sırada aşağı taşı",

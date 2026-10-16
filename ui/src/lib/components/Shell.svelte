@@ -299,11 +299,6 @@
 		/* Pages adapt to the room they get, not to the window:
 		   `@container page (…)` in their styles. */
 		container: page / inline-size;
-	}
-
-	/* Rounded (docs/decisions/0044): the page sits on a sheet, inset from
-	   the window's edges. */
-	:global([data-style='rounded']) main {
 		margin: 0 0.5rem 0.5rem;
 		padding-top: 0.75rem;
 		overflow: hidden;
@@ -334,9 +329,6 @@
 	@media (max-width: 40rem) {
 		main {
 			padding-bottom: 3.7rem;
-		}
-
-		:global([data-style='rounded']) main {
 			margin: 0 0.25rem;
 			border-radius: 1.2rem 1.2rem 0 0;
 		}

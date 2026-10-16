@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Écume le jour, Lagon la nuit",
 	"set_palette_neutral": "Neutre",
 	"set_palette_neutral_hint": "Perle le jour, Ardoise la nuit",
-	"set_palette_legacy": "Ancien",
-	"set_palette_legacy_hint": "L’apparence d’avant : plus carrée, plus plate",
 	"set_language_hint": "Aussi pour ce que signale le service, comme la raison d’un échec.",
 	"queue_up": "Monter dans la file",
 	"queue_down": "Descendre dans la file",

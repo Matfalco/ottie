@@ -100,7 +100,6 @@
 		padding: 0;
 		border: none;
 		border-radius: 50%;
-		background: none;
 		color: var(--faint);
 	}
 
@@ -130,7 +129,7 @@
 		pointer-events: none;
 	}
 
-	:global([data-style='rounded']) .info {
+	.info {
 		background: var(--hover);
 	}
 </style>

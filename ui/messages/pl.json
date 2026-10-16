@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Piana w dzień, Laguna w nocy",
 	"set_palette_neutral": "Neutralne",
 	"set_palette_neutral_hint": "Perła w dzień, Łupek w nocy",
-	"set_palette_legacy": "Dawny",
-	"set_palette_legacy_hint": "Wcześniejszy wygląd: bardziej kanciasty i płaski",
 	"set_language_hint": "Także dla komunikatów usługi, na przykład dlaczego pobieranie się nie powiodło.",
 	"queue_up": "Przesuń w górę kolejki",
 	"queue_down": "Przesuń w dół kolejki",

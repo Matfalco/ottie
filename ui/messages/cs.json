@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Pěna ve dne, Laguna v noci",
 	"set_palette_neutral": "Neutrální",
 	"set_palette_neutral_hint": "Perla ve dne, Břidlice v noci",
-	"set_palette_legacy": "Původní",
-	"set_palette_legacy_hint": "Dřívější vzhled: hranatější a plošší",
 	"set_language_hint": "Také pro hlášení služby, například proč stahování selhalo.",
 	"queue_up": "Posunout ve frontě nahoru",
 	"queue_down": "Posunout ve frontě dolů",

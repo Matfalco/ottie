@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "کف دریا در روز، مرداب در شب",
 	"set_palette_neutral": "خنثی",
 	"set_palette_neutral_hint": "مروارید در روز، سنگ لوح در شب",
-	"set_palette_legacy": "قدیمی",
-	"set_palette_legacy_hint": "ظاهر پیشین: گوشه‌دارتر و تخت‌تر",
 	"set_language_hint": "همچنین برای گزارش‌های سرویس پس‌زمینه، مثل علت ناموفق بودن یک بارگیری.",
 	"queue_up": "بالا بردن در صف",
 	"queue_down": "پایین بردن در صف",

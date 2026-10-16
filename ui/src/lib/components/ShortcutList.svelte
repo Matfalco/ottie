@@ -77,13 +77,15 @@
 		padding: 0.1rem 0.4rem;
 		border: 1px solid var(--border);
 		border-bottom-width: 2px;
-		border-radius: var(--radius-s);
-		background: var(--input);
 		color: var(--text);
 		font-family: var(--mono);
 		font-size: 0.78rem;
 		text-align: center;
 		white-space: nowrap;
+		border-color: transparent;
+		border-radius: 0.5rem;
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
 	}
 
 	dd {
@@ -95,13 +97,5 @@
 		margin: 0.5rem 0 0;
 		color: var(--muted);
 		font-size: 0.85rem;
-	}
-
-	/* Rounded (docs/decisions/0044): raised caps. */
-	:global([data-style='rounded']) kbd {
-		border-color: transparent;
-		border-radius: 0.5rem;
-		background: var(--raised);
-		box-shadow: var(--raised-shadow);
 	}
 </style>

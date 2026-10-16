@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Морська піна вдень, Лагуна вночі",
 	"set_palette_neutral": "Нейтральна",
 	"set_palette_neutral_hint": "Перлина вдень, Сланець уночі",
-	"set_palette_legacy": "Старий",
-	"set_palette_legacy_hint": "Попередній вигляд: кутастіший і пласкіший",
 	"set_language_hint": "Також для того, що повідомляє служба, наприклад чому завантаження не вдалося.",
 	"queue_up": "Вище в черзі",
 	"queue_down": "Нижче в черзі",

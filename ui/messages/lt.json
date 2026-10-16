@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Puta dieną, Lagūna naktį",
 	"set_palette_neutral": "Neutrali",
 	"set_palette_neutral_hint": "Perlas dieną, Skalūnas naktį",
-	"set_palette_legacy": "Senasis",
-	"set_palette_legacy_hint": "Ankstesnė išvaizda: kampuotesnė ir plokštesnė",
 	"set_language_hint": "Taip pat tarnybos pranešimams, pavyzdžiui, kodėl atsisiuntimas nepavyko.",
 	"queue_up": "Kelti aukštyn eilėje",
 	"queue_down": "Leisti žemyn eilėje",

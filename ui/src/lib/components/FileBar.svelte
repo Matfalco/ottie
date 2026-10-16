@@ -52,21 +52,22 @@
 </div>
 
 <style>
+	/* One bar rounded at both ends, straight inside, with no hairlines
+	   (docs/decisions/0044); where a connection writes glows. */
 	.bar {
 		position: relative;
 		overflow: hidden;
+		border-radius: 999px;
 		background: var(--track);
 	}
 
 	.row {
 		flex: 1;
-		height: 5px;
-		border-radius: 3px;
+		height: 0.5rem;
 	}
 
 	.detail {
 		height: 0.85rem;
-		border-radius: 4px;
 	}
 
 	.range {
@@ -74,15 +75,6 @@
 		top: 0;
 		bottom: 0;
 		overflow: hidden;
-	}
-
-	/* Ranges split from the next by a hairline in the panel's colour. */
-	.range + .range {
-		border-inline-start: 1px solid var(--well);
-	}
-
-	.row .range + .range {
-		border-inline-start-color: var(--surface);
 	}
 
 	.fill {
@@ -102,6 +94,7 @@
 		width: 2px;
 		background: var(--arriving);
 		content: '';
+		box-shadow: 0 0 8px var(--glow);
 	}
 
 	.completed .fill {
@@ -139,25 +132,7 @@
 		}
 	}
 
-	/* Rounded (docs/decisions/0044): one bar rounded at both ends, straight
-	   inside, with no hairlines; where a connection writes glows. */
-	:global([data-style='rounded']) .bar {
-		border-radius: 999px;
-	}
-
-	:global([data-style='rounded']) .row {
-		height: 0.5rem;
-	}
-
-	:global([data-style='rounded']) .range + .range {
-		border-inline-start: none;
-	}
-
-	:global([data-style='rounded']) .writing .fill::after {
-		box-shadow: 0 0 8px var(--glow);
-	}
-
-	:global([data-style='rounded']) .detail .writing .fill::after {
+	.detail .writing .fill::after {
 		width: 3px;
 	}
 </style>

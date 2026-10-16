@@ -58,7 +58,7 @@
 	>
 		<svg viewBox="0 0 {WIDTH} {HEIGHT}" preserveAspectRatio="none" aria-hidden="true">
 			<defs>
-				<!-- The rounded style's fill fades toward the bottom. -->
+				<!-- The fill fades toward the bottom. -->
 				<linearGradient id="speed-fill" x1="0" y1="0" x2="0" y2="1">
 					<stop offset="0" class="fade-top" />
 					<stop offset="1" class="fade-bottom" />
@@ -122,27 +122,9 @@
 		vector-effect: non-scaling-stroke;
 	}
 
-	.grid {
-		stroke: var(--border-soft);
-		stroke-width: 1;
-	}
-
 	.base {
 		stroke: var(--border);
 		stroke-width: 1;
-	}
-
-	.area {
-		fill: var(--progress);
-		opacity: 0.1;
-	}
-
-	.line {
-		fill: none;
-		stroke: var(--progress);
-		stroke-width: 2;
-		stroke-linejoin: round;
-		stroke-linecap: round;
 	}
 
 	.fade-top {
@@ -174,16 +156,19 @@
 	.tooltip {
 		position: absolute;
 		top: 0.25rem;
-		display: grid;
 		margin-inline-start: 0.5rem;
-		padding: 0.35rem 0.55rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-s);
-		background: var(--surface);
 		box-shadow: var(--shadow);
 		font-size: 0.85rem;
 		white-space: nowrap;
 		pointer-events: none;
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		padding: 0.3rem 0.75rem;
+		border: none;
+		border-radius: 999px;
+		background: var(--text);
+		color: var(--bg);
 	}
 
 	.tooltip.before {
@@ -195,10 +180,6 @@
 		transform: translateX(calc(100% + 0.5rem));
 	}
 
-	.tooltip span {
-		color: var(--muted);
-	}
-
 	figcaption {
 		display: flex;
 		justify-content: space-between;
@@ -208,39 +189,34 @@
 		font-size: 0.75rem;
 	}
 
-	/* Rounded (docs/decisions/0044): a thicker line over a fading fill, the
+	/* A thicker line over a fading fill, the
 	   grid dotted, the tooltip and "now" as pills. */
-	:global([data-style='rounded']) .area {
+	.area {
 		fill: url(#speed-fill);
 		opacity: 1;
 	}
 
-	:global([data-style='rounded']) .line {
+	.line {
+		fill: none;
+		stroke: var(--progress);
+		stroke-linejoin: round;
+		stroke-linecap: round;
 		stroke-width: 2.6;
 	}
 
-	:global([data-style='rounded']) .grid {
+	.grid {
+		stroke: var(--border-soft);
+		stroke-width: 1;
 		stroke-dasharray: 2 6;
 		stroke-linecap: round;
 	}
 
-	:global([data-style='rounded']) .tooltip {
-		display: flex;
-		align-items: baseline;
-		gap: 0.5rem;
-		padding: 0.3rem 0.75rem;
-		border: none;
-		border-radius: 999px;
-		background: var(--text);
-		color: var(--bg);
-	}
-
-	:global([data-style='rounded']) .tooltip span {
+	.tooltip span {
 		color: var(--bg);
 		opacity: 0.7;
 	}
 
-	:global([data-style='rounded']) .now {
+	.now {
 		padding: 0.1rem 0.6rem;
 		border-radius: 999px;
 		background: var(--selected);

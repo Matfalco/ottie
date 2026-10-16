@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Buih laut di siang hari, Laguna di malam hari",
 	"set_palette_neutral": "Netral",
 	"set_palette_neutral_hint": "Mutiara di siang hari, Batu tulis di malam hari",
-	"set_palette_legacy": "Lama",
-	"set_palette_legacy_hint": "Tampilan sebelumnya: lebih bersudut dan datar",
 	"set_language_hint": "Juga untuk laporan dari daemon, misalnya alasan unduhan gagal.",
 	"queue_up": "Naikkan dalam antrean",
 	"queue_down": "Turunkan dalam antrean",

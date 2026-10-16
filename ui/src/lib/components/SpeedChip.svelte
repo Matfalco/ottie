@@ -100,7 +100,7 @@
 					{/if}
 				</span>
 				{#if shown}
-					<!-- How much of the limit is used (rounded style only). -->
+					<!-- How much of the limit is used. -->
 					<span class="meter" aria-hidden="true">
 						<span style:width={`${Math.min(1, speed / shown) * 100}%`}></span>
 					</span>
@@ -167,25 +167,19 @@
 		display: flex;
 		align-items: center;
 		gap: 0.3rem;
-		height: 1.5rem;
-		padding: 0 0.5rem;
 		border-radius: 999px;
 		background: var(--warn-bg);
 		color: var(--warn);
 		font-size: 0.75rem;
 		text-decoration: none;
 		white-space: nowrap;
+		height: 1.9rem;
+		padding: 0 0.7rem;
 	}
 
 	.chip {
 		display: flex;
 		align-items: center;
-		gap: 0.45rem;
-		height: 1.75rem;
-		padding: 0 0.65rem;
-		border: none;
-		border-radius: var(--radius-s);
-		background: none;
 		color: var(--muted);
 		font-size: 0.85rem;
 		white-space: nowrap;
@@ -211,13 +205,9 @@
 		display: contents;
 	}
 
-	.meter {
-		display: none;
-	}
-
-	/* Rounded (docs/decisions/0044): a pill with the gauge in a circle, and
+	/* A pill with the gauge in a circle, and
 	   under the numbers how much of the limit is used. */
-	:global([data-style='rounded']) .chip {
+	.chip {
 		gap: 0.6rem;
 		height: 2.4rem;
 		padding: 0 0.85rem 0 0.3rem;
@@ -226,12 +216,12 @@
 		background: var(--well);
 	}
 
-	:global([data-style='rounded']) .chip.connecting,
-	:global([data-style='rounded']) .chip.offline {
+	.chip.connecting,
+	.chip.offline {
 		padding-inline-start: 0.85rem;
 	}
 
-	:global([data-style='rounded']) .gauge {
+	.gauge {
 		display: grid;
 		flex: none;
 		place-items: center;
@@ -241,18 +231,18 @@
 		background: color-mix(in srgb, var(--accent) 16%, transparent);
 	}
 
-	:global([data-style='rounded']) .numbers {
+	.numbers {
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
 		min-width: 0;
 	}
 
-	:global([data-style='rounded']) .numbers > span:first-child {
+	.numbers > span:first-child {
 		line-height: 1;
 	}
 
-	:global([data-style='rounded']) .meter {
+	.meter {
 		display: block;
 		height: 4px;
 		overflow: hidden;
@@ -260,17 +250,12 @@
 		background: var(--track);
 	}
 
-	:global([data-style='rounded']) .meter span {
+	.meter span {
 		display: block;
 		height: 100%;
 		border-radius: 999px;
 		background: var(--accent);
 		transition: width 0.25s linear;
-	}
-
-	:global([data-style='rounded']) .slot {
-		height: 1.9rem;
-		padding: 0 0.7rem;
 	}
 
 	.speed {

@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "낮에는 물거품, 밤에는 석호",
 	"set_palette_neutral": "중립",
 	"set_palette_neutral_hint": "낮에는 진주, 밤에는 슬레이트",
-	"set_palette_legacy": "이전",
-	"set_palette_legacy_hint": "이전 모양: 더 각지고 평평함",
 	"set_language_hint": "다운로드가 실패한 이유처럼 데몬이 알려 주는 내용에도 쓰입니다.",
 	"queue_up": "대기열에서 위로",
 	"queue_down": "대기열에서 아래로",

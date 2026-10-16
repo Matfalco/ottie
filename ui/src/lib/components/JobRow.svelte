@@ -224,10 +224,6 @@
 		scroll-margin-block-start: 2.2rem;
 	}
 
-	tr:hover {
-		background: var(--hover);
-	}
-
 	tr.selected {
 		background: var(--selected);
 	}
@@ -267,15 +263,6 @@
 	.handle:hover,
 	.handle:focus-visible {
 		color: var(--text);
-	}
-
-	td {
-		padding: 0 0.5rem;
-		border-bottom: 1px solid var(--border-soft);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-variant-numeric: tabular-nums;
 	}
 
 	.check {
@@ -379,6 +366,7 @@
 		color: var(--muted);
 		/* Shown on hover, focus or selection, so the list stays calm. */
 		opacity: 0;
+		border-radius: 50%;
 	}
 
 	tr:hover .actions button,
@@ -488,35 +476,36 @@
 		}
 	}
 
-	/* Rounded (docs/decisions/0044): each row a rounded strip (on its cells:
+	/* Each row a rounded strip (on its cells:
 	   a row can't round its own corners), the selected one raised. */
-	:global([data-style='rounded']) tr:hover {
+	tr:hover {
 		background: none;
 	}
 
-	:global([data-style='rounded']) td {
+	td {
+		padding: 0 0.5rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
 		border-bottom: none;
 	}
 
-	:global([data-style='rounded']) tr:hover td {
+	tr:hover td {
 		background: var(--hover);
 	}
 
-	:global([data-style='rounded']) tr.selected td {
+	tr.selected td {
 		background: var(--selected);
 	}
 
-	:global([data-style='rounded']) td:first-child {
+	td:first-child {
 		border-start-start-radius: var(--radius-m);
 		border-end-start-radius: var(--radius-m);
 	}
 
-	:global([data-style='rounded']) td:last-child {
+	td:last-child {
 		border-start-end-radius: var(--radius-m);
 		border-end-end-radius: var(--radius-m);
-	}
-
-	:global([data-style='rounded']) .actions button {
-		border-radius: 50%;
 	}
 </style>

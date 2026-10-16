@@ -58,38 +58,22 @@
 </nav>
 
 <style>
-	ul {
-		display: flex;
-		gap: 2px;
-		margin: 0;
-		padding: 3px;
-		border-radius: var(--radius-s);
-		background: var(--input);
-		list-style: none;
-	}
-
 	a {
 		position: relative;
 		display: flex;
 		align-items: center;
 		gap: 0.45rem;
-		height: 1.9rem;
-		padding: 0 0.85rem;
-		border-radius: var(--radius-s);
 		color: var(--muted);
 		text-decoration: none;
 		white-space: nowrap;
+		height: 2.1rem;
+		padding: 0 0.95rem;
+		border-radius: 999px;
 	}
 
 	a:hover {
 		background: var(--hover);
 		color: var(--text);
-	}
-
-	a.current {
-		background: var(--selected);
-		color: var(--text);
-		font-weight: 600;
 	}
 
 	.icon {
@@ -108,9 +92,12 @@
 		text-align: center;
 	}
 
-	/* Rounded (docs/decisions/0044): the tabs sit in a sunken track, the
+	/* The tabs sit in a sunken track, the
 	   current one raised. */
-	:global([data-style='rounded']) ul {
+	ul {
+		display: flex;
+		margin: 0;
+		list-style: none;
 		gap: 0.15rem;
 		padding: 0.25rem;
 		border-radius: 999px;
@@ -118,13 +105,9 @@
 		box-shadow: var(--sunken-shadow);
 	}
 
-	:global([data-style='rounded']) a {
-		height: 2.1rem;
-		padding: 0 0.95rem;
-		border-radius: 999px;
-	}
-
-	:global([data-style='rounded']) a.current {
+	a.current {
+		color: var(--text);
+		font-weight: 600;
 		background: var(--raised);
 		box-shadow: var(--raised-shadow);
 	}
@@ -152,6 +135,10 @@
 
 	/* Phones: a bar along the bottom, like an Android app. */
 	@media (max-width: 40rem) {
+		li {
+			flex: 1;
+		}
+
 		nav {
 			position: fixed;
 			inset-inline-end: 0;
@@ -159,50 +146,27 @@
 			inset-inline-start: 0;
 			z-index: 5;
 			padding: 0.3rem 0.5rem;
-			border-top: 1px solid var(--border);
-			background: var(--surface);
+			border-top: none;
+			background: var(--frame);
 		}
 
 		ul {
 			justify-content: space-around;
 			padding: 0;
 			background: none;
-		}
-
-		li {
-			flex: 1;
+			box-shadow: none;
 		}
 
 		a {
 			flex-direction: column;
 			justify-content: center;
 			gap: 0.1rem;
-			height: 3rem;
-			padding: 0;
 			font-size: 0.75rem;
-		}
-
-		a.current {
-			background: none;
-			color: var(--accent);
-		}
-
-		:global([data-style='rounded']) nav {
-			border-top: none;
-			background: var(--frame);
-		}
-
-		:global([data-style='rounded']) ul {
-			padding: 0;
-			background: none;
-			box-shadow: none;
-		}
-
-		:global([data-style='rounded']) a {
 			border-radius: var(--radius-m);
 		}
 
-		:global([data-style='rounded']) a.current {
+		a.current {
+			color: var(--accent);
 			background: var(--raised);
 			box-shadow: var(--raised-shadow);
 		}

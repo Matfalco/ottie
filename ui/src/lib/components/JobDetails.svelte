@@ -407,6 +407,10 @@
 		overflow: auto;
 		border-top: 1px solid var(--border);
 		background: var(--well);
+		margin: 0.25rem 0.5rem 0.5rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		box-shadow: 0 -8px 24px rgb(0 0 0 / 16%);
 	}
 
 	/* Room at the end for the arrow. */
@@ -426,9 +430,9 @@
 		place-items: center;
 		width: 2.4rem;
 		height: 2.4rem;
-		border-radius: var(--radius-s);
 		background: var(--hover);
 		color: var(--muted);
+		border-radius: var(--radius-m);
 	}
 
 	.downloading .kind {
@@ -550,31 +554,8 @@
 		color: var(--danger);
 	}
 
-	.toggle {
-		position: absolute;
-		top: 0.75rem;
-		inset-inline-end: 0.9rem;
-		display: grid;
-		place-items: center;
-		width: 2rem;
-		height: 2rem;
-		padding: 0;
-		border-color: transparent;
-		background: none;
-		color: var(--muted);
-	}
-
 	.thin {
 		padding: 0 0.9rem 0.7rem;
-	}
-
-	.problem {
-		margin: 0 0.9rem 0.6rem;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-s);
-		background: var(--danger-bg);
-		color: var(--danger);
-		font-size: 0.85rem;
 	}
 
 	/* Side by side when both fit, the facts' half wider (its priority and
@@ -599,16 +580,6 @@
 	.column.map {
 		flex-grow: 2;
 		align-content: center;
-	}
-
-	.url,
-	.folder {
-		overflow: hidden;
-		color: var(--muted);
-		font-family: var(--mono);
-		font-size: 0.8rem;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.facts {
@@ -693,8 +664,8 @@
 		display: inline-block;
 		width: 0.55rem;
 		height: 0.55rem;
-		border-radius: 1px;
 		background: var(--track);
+		border-radius: 999px;
 	}
 
 	/* Received takes the bar's colour for the state. */
@@ -719,16 +690,6 @@
 
 	.key.arriving {
 		background: var(--arriving);
-	}
-
-	/* Where it goes and when: each control with its name above it. */
-	.strip {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: flex-end;
-		gap: 0.6rem 1rem;
-		padding: 0.65rem 0.9rem 0.8rem;
-		border-top: 1px solid var(--border-soft);
 	}
 
 	.field {
@@ -798,40 +759,8 @@
 		height: 2rem;
 	}
 
-	/* Radio buttons drawn as one row of segments (as in the filters). */
-	.segments {
-		display: flex;
-		overflow: hidden;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-s);
-		background: var(--surface);
-	}
-
-	/* Holds its hidden radio button: without it, the button would hang from
-	   the window and stretch it. */
-	.segments label {
-		position: relative;
-		display: grid;
-		flex: 1;
-		place-items: center;
-		min-height: 1.95rem;
-		padding: 0 0.6rem;
-		color: var(--muted);
-		cursor: pointer;
-	}
-
-	.segments label + label {
-		border-inline-start: 1px solid var(--border);
-	}
-
 	.segments label:hover {
 		background: var(--hover);
-	}
-
-	.segments label.chosen {
-		background: var(--selected);
-		color: var(--text);
-		font-weight: 500;
 	}
 
 	.segments label:focus-within {
@@ -861,27 +790,30 @@
 		}
 	}
 
-	/* Rounded (docs/decisions/0044): a raised card of its own under the
-	   list, rather than the pane's bottom. */
-	:global([data-style='rounded']) .details {
-		margin: 0.25rem 0.5rem 0.5rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-l);
-		box-shadow: 0 -8px 24px rgb(0 0 0 / 16%);
-	}
-
-	:global([data-style='rounded']) .kind {
-		border-radius: var(--radius-m);
-	}
-
-	:global([data-style='rounded']) .toggle {
+	.toggle {
+		position: absolute;
+		top: 0.75rem;
+		inset-inline-end: 0.9rem;
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		padding: 0;
+		border-color: transparent;
+		color: var(--muted);
 		border-radius: 50%;
 		background: var(--hover);
 	}
 
 	/* The link in a sunken pill; the folder too. */
-	:global([data-style='rounded']) .url,
-	:global([data-style='rounded']) .folder {
+	.url,
+	.folder {
+		overflow: hidden;
+		color: var(--muted);
+		font-family: var(--mono);
+		font-size: 0.8rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		padding: 0.45rem 0.9rem;
 		border: none;
 		border-radius: 999px;
@@ -889,20 +821,24 @@
 		box-shadow: var(--sunken-shadow);
 	}
 
-	:global([data-style='rounded']) .folder {
+	.folder {
 		padding-block: 0;
 	}
 
 	/* The facts as tiles, sunk like the link above them. */
-	:global([data-style='rounded']) .facts > div {
+	.facts > div {
 		padding: 0.45rem 0.75rem;
 		border-radius: var(--radius-m);
 		background: var(--input);
 		box-shadow: var(--sunken-shadow);
 	}
 
-	/* The strip sunk into the card. */
-	:global([data-style='rounded']) .strip {
+	/* Where it goes and when: each control with its name above it. */
+	.strip {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 0.6rem 1rem;
 		margin: 0 0.5rem 0.5rem;
 		padding: 0.6rem 0.75rem 0.7rem;
 		border-top: none;
@@ -910,8 +846,10 @@
 		background: var(--bg);
 	}
 
-	/* Priority: a sunken track, the chosen one raised. */
-	:global([data-style='rounded']) .segments {
+	/* Radio buttons drawn as one row of segments (as in the filters). */
+	.segments {
+		display: flex;
+		overflow: hidden;
 		gap: 0.15rem;
 		padding: 0.2rem;
 		border: none;
@@ -920,26 +858,38 @@
 		box-shadow: var(--sunken-shadow);
 	}
 
-	:global([data-style='rounded']) .segments label {
+	/* Holds its hidden radio button: without it, the button would hang from
+	   the window and stretch it. */
+	.segments label {
+		position: relative;
+		display: grid;
+		flex: 1;
+		place-items: center;
+		padding: 0 0.6rem;
+		color: var(--muted);
+		cursor: pointer;
 		min-height: 1.75rem;
 		border-radius: 999px;
 	}
 
-	:global([data-style='rounded']) .segments label + label {
+	.segments label + label {
 		border-inline-start: none;
 	}
 
-	:global([data-style='rounded']) .segments label.chosen {
+	.segments label.chosen {
+		color: var(--text);
+		font-weight: 500;
 		background: var(--raised);
 		box-shadow: var(--raised-shadow);
 	}
 
-	:global([data-style='rounded']) .problem {
+	.problem {
+		margin: 0 0.9rem 0.6rem;
+		padding: 0.5rem 0.75rem;
+		background: var(--danger-bg);
+		color: var(--danger);
+		font-size: 0.85rem;
 		border-radius: var(--radius-pill);
 		padding-inline: 1rem;
-	}
-
-	:global([data-style='rounded']) .key {
-		border-radius: 999px;
 	}
 </style>

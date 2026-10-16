@@ -45,13 +45,6 @@
 </section>
 
 <style>
-	/* As JobDetails, so switching between them doesn't jump. */
-	.details {
-		flex: none;
-		border-top: 1px solid var(--border);
-		background: var(--well);
-	}
-
 	.top {
 		display: flex;
 		align-items: center;
@@ -76,6 +69,22 @@
 		font-weight: 600;
 	}
 
+	.hint {
+		margin: 0;
+		color: var(--faint);
+		font-size: 0.85rem;
+	}
+	/* As JobDetails, so switching between them doesn't jump. */
+	.details {
+		flex: none;
+		border-top: 1px solid var(--border);
+		background: var(--well);
+		margin: 0.25rem 0.5rem 0.5rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-l);
+		box-shadow: 0 -8px 24px rgb(0 0 0 / 16%);
+	}
+
 	.toggle {
 		display: grid;
 		place-items: center;
@@ -83,26 +92,7 @@
 		height: 2rem;
 		padding: 0;
 		border-color: transparent;
-		background: none;
 		color: var(--muted);
-	}
-
-	.hint {
-		margin: 0;
-		color: var(--faint);
-		font-size: 0.85rem;
-	}
-
-	/* Rounded (docs/decisions/0044): a raised card of its own under the
-	   list, rather than the pane's bottom. */
-	:global([data-style='rounded']) .details {
-		margin: 0.25rem 0.5rem 0.5rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-l);
-		box-shadow: 0 -8px 24px rgb(0 0 0 / 16%);
-	}
-
-	:global([data-style='rounded']) .toggle {
 		border-radius: 50%;
 		background: var(--hover);
 	}

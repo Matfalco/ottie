@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Morska pena podnevi, Laguna ponoči",
 	"set_palette_neutral": "Nevtralno",
 	"set_palette_neutral_hint": "Biser podnevi, Skrilavec ponoči",
-	"set_palette_legacy": "Stari",
-	"set_palette_legacy_hint": "Prejšnji videz: bolj oglat in ploščat",
 	"set_language_hint": "Tudi za sporočila storitve, na primer zakaj prenos ni uspel.",
 	"queue_up": "Premakni višje v vrsti",
 	"queue_down": "Premakni nižje v vrsti",

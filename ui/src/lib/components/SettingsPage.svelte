@@ -26,7 +26,6 @@
 		THEMES,
 		lookOf,
 		previewFor,
-		styleFor,
 		type DeviceAppearance,
 		type Mode,
 		type Palette
@@ -88,12 +87,9 @@
 		dark: m.set_mode_dark
 	};
 
-	/** A legacy palette has its pair's name, a tag and a hint of its own. */
 	const PALETTE_NAMES: Record<Palette, { name: () => string; hint: () => string }> = {
 		sea: { name: m.set_palette_sea, hint: m.set_palette_sea_hint },
-		neutral: { name: m.set_palette_neutral, hint: m.set_palette_neutral_hint },
-		seaLegacy: { name: m.set_palette_sea, hint: m.set_palette_legacy_hint },
-		neutralLegacy: { name: m.set_palette_neutral, hint: m.set_palette_legacy_hint }
+		neutral: { name: m.set_palette_neutral, hint: m.set_palette_neutral_hint }
 	};
 
 	/** The choices besides a program of one's own. */
@@ -450,12 +446,7 @@
 								onchange={() => choose({ palette })}
 							/>
 							<span class="names">
-								<span>
-									{PALETTE_NAMES[palette].name()}
-									{#if styleFor(palette) === 'legacy'}
-										<span class="tag">{m.set_palette_legacy()}</span>
-									{/if}
-								</span>
+								<span>{PALETTE_NAMES[palette].name()}</span>
 								<span class="hint">{PALETTE_NAMES[palette].hint()}</span>
 							</span>
 							<span class="swatches" aria-hidden="true">
@@ -979,9 +970,9 @@
 
 	nav a {
 		padding: 0.45rem 0.75rem;
-		border-radius: var(--radius-s);
 		color: var(--muted);
 		text-decoration: none;
+		border-radius: 999px;
 	}
 
 	nav a:hover {
@@ -990,9 +981,10 @@
 	}
 
 	nav a.current {
-		background: var(--surface);
 		color: var(--text);
 		font-weight: 600;
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
 	}
 
 	.sections {
@@ -1013,7 +1005,6 @@
 		justify-content: space-between;
 		gap: 1rem;
 		padding: 0.6rem 0.9rem;
-		border-radius: var(--radius-s);
 		background: var(--danger-bg);
 		color: var(--danger);
 	}
@@ -1031,28 +1022,15 @@
 		background: var(--surface);
 	}
 
-	/* A band across the top of each card, so its title stands apart from
-	   the settings under it. */
-	header {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem 0.75rem;
-		padding: 0.8rem 1.25rem;
-		border-bottom: 1px solid var(--border);
-		border-radius: calc(var(--radius-l) - 1px) calc(var(--radius-l) - 1px) 0 0;
-		background: var(--well);
-	}
-
 	.icon {
 		display: grid;
 		flex: none;
 		place-items: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: var(--radius-s);
 		background: var(--selected);
 		color: var(--accent);
+		border-radius: var(--radius-m);
 	}
 
 	/* The card's title and hint, and a switch for all of it at the end. */
@@ -1139,18 +1117,6 @@
 		padding: 0.6rem 0.75rem;
 	}
 
-	/* "Legacy", after a palette's name. */
-	.tag {
-		margin-inline-start: 0.35rem;
-		padding: 0 0.45rem;
-		border-radius: 999px;
-		background: var(--input);
-		color: var(--muted);
-		font-size: 0.75rem;
-		font-weight: 500;
-		vertical-align: 0.1em;
-	}
-
 	.option input,
 	.choice input {
 		margin: 0;
@@ -1162,7 +1128,7 @@
 		height: 4rem;
 		overflow: hidden;
 		border: 1px solid var(--border-soft);
-		border-radius: var(--radius-s);
+		border-radius: var(--radius-m);
 	}
 
 	.half {
@@ -1212,15 +1178,7 @@
 	/* Each palette's light and dark theme: its background with its accent. */
 	.swatches {
 		display: flex;
-		gap: 0.25rem;
-	}
-
-	.swatches span {
-		width: 2.2rem;
-		height: 1.8rem;
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		background: linear-gradient(to bottom, var(--bg) 60%, var(--accent) 60%);
+		gap: 0;
 	}
 
 	/* One setting per row: its name and hint, then the control. */
@@ -1282,22 +1240,11 @@
 		color: var(--faint);
 	}
 
-	/* Fewer, the number, more: one control. */
-	.stepper {
-		display: flex;
-		align-items: center;
-		overflow: hidden;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-s);
-	}
-
 	.stepper button {
 		width: 2.1rem;
 		height: 2.1rem;
 		padding: 0;
 		border: none;
-		border-radius: 0;
-		background: var(--input);
 		font-size: 1rem;
 	}
 
@@ -1308,8 +1255,6 @@
 	.stepper :global(.field input) {
 		width: 3rem;
 		border-width: 0 1px;
-		border-radius: 0;
-		background: var(--surface);
 		text-align: center;
 	}
 
@@ -1408,32 +1353,21 @@
 		}
 	}
 
-	/* Rounded (docs/decisions/0044): the sections as pills, the current one
-	   raised; cards without a band; round swatches; a stepper of round
-	   buttons around a sunken number. */
-	:global([data-style='rounded']) nav a {
-		border-radius: 999px;
-	}
-
-	:global([data-style='rounded']) nav a.current {
-		background: var(--raised);
-		box-shadow: var(--raised-shadow);
-	}
-
-	:global([data-style='rounded']) header {
+	/* A band across the top of each card, so its title stands apart from
+	   the settings under it. */
+	header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.75rem;
+		padding: 0.8rem 1.25rem;
+		border-bottom: 1px solid var(--border);
+		border-radius: calc(var(--radius-l) - 1px) calc(var(--radius-l) - 1px) 0 0;
 		border-bottom-color: var(--border-soft);
 		background: none;
 	}
 
-	:global([data-style='rounded']) .icon {
-		border-radius: var(--radius-m);
-	}
-
-	:global([data-style='rounded']) .swatches {
-		gap: 0;
-	}
-
-	:global([data-style='rounded']) .swatches span {
+	.swatches span {
 		width: 1.9rem;
 		height: 1.9rem;
 		border: 2px solid var(--surface);
@@ -1441,33 +1375,33 @@
 		background: linear-gradient(135deg, var(--bg) 50%, var(--accent) 50%);
 	}
 
-	:global([data-style='rounded']) .swatches span + span {
+	.swatches span + span {
 		margin-inline-start: -0.6rem;
 	}
 
-	:global([data-style='rounded']) .preview {
-		border-radius: var(--radius-m);
-	}
-
-	:global([data-style='rounded']) .stepper {
+	/* Fewer, the number, more: one control. */
+	.stepper {
+		display: flex;
+		align-items: center;
+		border-radius: var(--radius-s);
 		gap: 0.35rem;
 		overflow: visible;
 		border: none;
 	}
 
-	:global([data-style='rounded']) .stepper button {
+	.stepper button {
 		border-radius: 50%;
 		background: var(--hover);
 	}
 
-	:global([data-style='rounded']) .stepper :global(.field input) {
+	.stepper :global(.field input) {
 		border: none;
 		border-radius: 999px;
 		background: var(--input);
 		box-shadow: var(--sunken-shadow);
 	}
 
-	:global([data-style='rounded']) .problem {
+	.problem {
 		border-radius: var(--radius-m);
 	}
 </style>

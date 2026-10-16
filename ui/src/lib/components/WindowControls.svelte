@@ -48,19 +48,21 @@
 <style>
 	.window-controls {
 		display: flex;
-		height: 3rem;
+		align-items: center;
+		gap: 0.1rem;
+		height: auto;
 	}
 
 	button {
 		display: grid;
 		place-items: center;
-		width: 2.9rem;
-		height: 100%;
 		padding: 0;
 		border: none;
-		border-radius: 0;
 		background: none;
 		color: var(--text);
+		width: 2.2rem;
+		height: 2rem;
+		border-radius: var(--radius-s);
 	}
 
 	button:hover {
@@ -74,18 +76,5 @@
 
 	button:focus-visible {
 		outline-offset: -2px;
-	}
-
-	/* Rounded (docs/decisions/0044): small rounded buttons. */
-	:global([data-style='rounded']) .window-controls {
-		align-items: center;
-		gap: 0.1rem;
-		height: auto;
-	}
-
-	:global([data-style='rounded']) button {
-		width: 2.2rem;
-		height: 2rem;
-		border-radius: var(--radius-s);
 	}
 </style>

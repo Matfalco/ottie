@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Morska pjena danju, Laguna noću",
 	"set_palette_neutral": "Neutralno",
 	"set_palette_neutral_hint": "Biser danju, Škriljevac noću",
-	"set_palette_legacy": "Stari",
-	"set_palette_legacy_hint": "Dosadašnji izgled: uglatiji i plosnatiji",
 	"set_language_hint": "I za ono što javlja servis, na primjer zašto preuzimanje nije uspjelo.",
 	"queue_up": "Pomakni gore u redu čekanja",
 	"queue_down": "Pomakni dolje u redu čekanja",

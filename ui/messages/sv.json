@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Havsskum på dagen, Lagun på natten",
 	"set_palette_neutral": "Neutral",
 	"set_palette_neutral_hint": "Pärla på dagen, Skiffer på natten",
-	"set_palette_legacy": "Klassisk",
-	"set_palette_legacy_hint": "Det tidigare utseendet: kantigare och plattare",
 	"set_language_hint": "Även för det som tjänsten rapporterar, till exempel varför en nedladdning misslyckades.",
 	"queue_up": "Flytta upp i kön",
 	"queue_down": "Flytta ner i kön",

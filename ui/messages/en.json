@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Seafoam by day, Lagoon by night",
 	"set_palette_neutral": "Neutral",
 	"set_palette_neutral_hint": "Pearl by day, Slate by night",
-	"set_palette_legacy": "Legacy",
-	"set_palette_legacy_hint": "The look from before: squarer and flatter",
 	"set_language_hint": "Also for what the daemon reports, such as why a download failed.",
 	"queue_up": "Move up in the queue",
 	"queue_down": "Move down in the queue",

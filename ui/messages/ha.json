@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Kumfar teku da rana, Lagon da dare",
 	"set_palette_neutral": "Tsaka-tsaki",
 	"set_palette_neutral_hint": "Lu’u-lu’u da rana, Dutse da dare",
-	"set_palette_legacy": "Tsohon salo",
-	"set_palette_legacy_hint": "Kamannin da: mai kusurwoyi kuma shimfiɗaɗɗe",
 	"set_language_hint": "Har ma ga abin da daemon ke bayarwa, kamar dalilin da ya sa saukewa ta kasa.",
 	"queue_up": "Matsar sama a layi",
 	"queue_down": "Matsar ƙasa a layi",

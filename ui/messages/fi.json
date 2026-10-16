@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Vaahto päivällä, Laguuni yöllä",
 	"set_palette_neutral": "Neutraali",
 	"set_palette_neutral_hint": "Helmi päivällä, Liuske yöllä",
-	"set_palette_legacy": "Vanha",
-	"set_palette_legacy_hint": "Aiempi ulkoasu: kulmikkaampi ja litteämpi",
 	"set_language_hint": "Myös palvelun ilmoituksille, kuten sille, miksi lataus epäonnistui.",
 	"queue_up": "Siirrä ylemmäs jonossa",
 	"queue_down": "Siirrä alemmas jonossa",

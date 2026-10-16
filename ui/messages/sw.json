@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Povu la bahari mchana, Ziwa la pwani usiku",
 	"set_palette_neutral": "Wastani",
 	"set_palette_neutral_hint": "Lulu mchana, Jiwe usiku",
-	"set_palette_legacy": "Ya zamani",
-	"set_palette_legacy_hint": "Mwonekano wa awali: wenye pembe zaidi na bapa zaidi",
 	"set_language_hint": "Pia kwa kile ambacho daemon inaripoti, kama vile kwa nini upakuaji umeshindikana.",
 	"queue_up": "Sogeza juu kwenye foleni",
 	"queue_down": "Sogeza chini kwenye foleni",

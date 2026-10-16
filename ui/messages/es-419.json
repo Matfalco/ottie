@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Espuma de día, Laguna de noche",
 	"set_palette_neutral": "Neutro",
 	"set_palette_neutral_hint": "Perla de día, Pizarra de noche",
-	"set_palette_legacy": "Clásico",
-	"set_palette_legacy_hint": "El aspecto de antes: más cuadrado y plano",
 	"set_language_hint": "También para lo que indica el servicio, como el motivo de un error en una descarga.",
 	"queue_up": "Subir en la cola",
 	"queue_down": "Bajar en la cola",

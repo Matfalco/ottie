@@ -148,18 +148,13 @@ pub enum AppearanceMode {
     Dark,
 }
 
-/// A light theme and a dark one that go together. The legacy ones keep the
-/// look from before the rounder shapes (docs/decisions/0044).
+/// A light theme and a dark one that go together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Palette {
     /// Seafoam and Lagoon.
     Sea,
     /// Pearl and Slate.
     Neutral,
-    /// Seafoam and Lagoon as they were.
-    SeaLegacy,
-    /// Pearl and Slate as they were.
-    NeutralLegacy,
 }
 
 impl AppearanceMode {
@@ -185,20 +180,13 @@ impl Palette {
         match self {
             Palette::Sea => "sea",
             Palette::Neutral => "neutral",
-            Palette::SeaLegacy => "sea-legacy",
-            Palette::NeutralLegacy => "neutral-legacy",
         }
     }
 
     pub(crate) fn parse(text: &str) -> Option<Self> {
-        [
-            Self::Sea,
-            Self::Neutral,
-            Self::SeaLegacy,
-            Self::NeutralLegacy,
-        ]
-        .into_iter()
-        .find(|palette| palette.as_str() == text)
+        [Self::Sea, Self::Neutral]
+            .into_iter()
+            .find(|palette| palette.as_str() == text)
     }
 }
 
@@ -253,12 +241,7 @@ mod tests {
         ] {
             assert_eq!(AppearanceMode::parse(mode.as_str()), Some(mode));
         }
-        for palette in [
-            Palette::Sea,
-            Palette::Neutral,
-            Palette::SeaLegacy,
-            Palette::NeutralLegacy,
-        ] {
+        for palette in [Palette::Sea, Palette::Neutral] {
             assert_eq!(Palette::parse(palette.as_str()), Some(palette));
         }
         assert_eq!(Palette::parse("teal"), None);

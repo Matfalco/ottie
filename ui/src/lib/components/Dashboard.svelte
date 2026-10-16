@@ -293,34 +293,18 @@
 		font-size: 0.85rem;
 	}
 
-	/* How far back the graph looks: a segmented choice. Each holds its radio
-	   button, which needs a positioned parent. */
-	.spans {
-		display: flex;
-		padding: 2px;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-pill);
-		background: var(--input);
-	}
-
 	.spans label {
 		position: relative;
-		padding: 0.15rem 0.7rem;
 		border-radius: var(--radius-pill);
 		color: var(--muted);
 		font-size: 0.85rem;
 		cursor: pointer;
 		white-space: nowrap;
+		padding: 0.2rem 0.8rem;
 	}
 
 	.spans label:hover {
 		color: var(--text);
-	}
-
-	.spans label.chosen {
-		background: var(--selected);
-		color: var(--text);
-		font-weight: 600;
 	}
 
 	.spans label:focus-within {
@@ -378,18 +362,6 @@
 	.note {
 		color: var(--faint);
 		font-size: 0.85rem;
-	}
-
-	header a {
-		margin-inline-start: auto;
-		color: var(--accent);
-		font-size: 0.85rem;
-		font-weight: 500;
-		text-decoration: none;
-	}
-
-	header a:hover {
-		text-decoration: underline;
 	}
 
 	ul {
@@ -502,32 +474,36 @@
 		color: var(--text);
 	}
 
-	/* Rounded (docs/decisions/0044): the span choice as a sunken track with
-	   the chosen one raised. */
-	:global([data-style='rounded']) .spans {
+	/* How far back the graph looks: a segmented choice. Each holds its radio
+	   button, which needs a positioned parent. */
+	.spans {
+		display: flex;
+		border-radius: var(--radius-pill);
 		padding: 0.2rem;
 		border: none;
 		background: var(--sunken);
 		box-shadow: var(--sunken-shadow);
 	}
 
-	:global([data-style='rounded']) .spans label {
-		padding: 0.2rem 0.8rem;
-	}
-
-	:global([data-style='rounded']) .spans label.chosen {
+	.spans label.chosen {
+		color: var(--text);
+		font-weight: 600;
 		background: var(--raised);
 		box-shadow: var(--raised-shadow);
 	}
 
-	:global([data-style='rounded']) header a {
+	header a {
+		margin-inline-start: auto;
+		font-size: 0.85rem;
+		font-weight: 500;
+		text-decoration: none;
 		padding: 0.2rem 0.75rem;
 		border-radius: 999px;
 		background: var(--hover);
 		color: var(--text);
 	}
 
-	:global([data-style='rounded']) header a:hover {
+	header a:hover {
 		background: var(--selected);
 		text-decoration: none;
 	}

@@ -83,16 +83,6 @@
 </header>
 
 <style>
-	header {
-		display: flex;
-		align-items: center;
-		gap: 1.1rem;
-		height: 3rem;
-		padding-inline-start: 0.9rem;
-		background: var(--bg);
-		user-select: none;
-	}
-
 	.brand {
 		display: flex;
 		align-items: center;
@@ -101,10 +91,6 @@
 		font-size: 1.05rem;
 		font-weight: 600;
 		cursor: default;
-	}
-
-	.brand img {
-		border-radius: 6px;
 	}
 
 	.brand.bare span {
@@ -129,21 +115,26 @@
 		padding-inline-end: 0.25rem;
 	}
 
-	/* Rounded (docs/decisions/0044): on the window's colour, a little taller,
+	/* On the window's colour, a little taller,
 	   the icon lifted by its shadow. */
-	:global([data-style='rounded']) header {
+	header {
+		display: flex;
+		align-items: center;
+		gap: 1.1rem;
+		padding-inline-start: 0.9rem;
+		user-select: none;
 		height: 3.5rem;
 		background: var(--frame);
 	}
 
-	:global([data-style='rounded']) .brand img {
+	.brand img {
 		width: 1.75rem;
 		height: 1.75rem;
 		border-radius: 0;
 		filter: drop-shadow(0 3px 8px rgb(1 107 145 / 35%));
 	}
 
-	:global([data-style='rounded']) .desktop {
+	.desktop {
 		padding-inline-end: 0.4rem;
 	}
 </style>

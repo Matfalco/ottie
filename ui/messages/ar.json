@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "زبد البحر نهارًا، والبحيرة ليلًا",
 	"set_palette_neutral": "محايد",
 	"set_palette_neutral_hint": "اللؤلؤ نهارًا، والأردواز ليلًا",
-	"set_palette_legacy": "القديم",
-	"set_palette_legacy_hint": "المظهر السابق: زوايا أكثر حدة وتصميم أكثر تسطحًا",
 	"set_language_hint": "وأيضًا لما تبلّغ عنه الخدمة الخلفية، مثل سبب فشل تنزيل.",
 	"queue_up": "نقل لأعلى في قائمة الانتظار",
 	"queue_down": "نقل لأسفل في قائمة الانتظار",

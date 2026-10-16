@@ -3275,12 +3275,10 @@
       },
       "Palette": {
         "type": "string",
-        "description": "A light theme and a dark one that go together. The legacy ones keep the\nlook from before the rounder shapes.",
+        "description": "A light theme and a dark one that go together.",
         "enum": [
           "sea",
-          "neutral",
-          "seaLegacy",
-          "neutralLegacy"
+          "neutral"
         ]
       },
       "Preview": {

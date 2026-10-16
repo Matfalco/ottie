@@ -79,11 +79,7 @@
 	.bar {
 		height: 6px;
 		overflow: hidden;
-		border-radius: 3px;
 		background: var(--track);
-	}
-
-	:global([data-style='rounded']) .bar {
 		border-radius: 999px;
 	}
 

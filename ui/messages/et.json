@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Merevaht päeval, Laguun öösel",
 	"set_palette_neutral": "Neutraalne",
 	"set_palette_neutral_hint": "Pärl päeval, Kiltkivi öösel",
-	"set_palette_legacy": "Vana",
-	"set_palette_legacy_hint": "Varasem välimus: nurgelisem ja lamedam",
 	"set_language_hint": "Ka teenuse teadete jaoks, näiteks miks allalaadimine nurjus.",
 	"queue_up": "Liiguta järjekorras üles",
 	"queue_down": "Liiguta järjekorras alla",

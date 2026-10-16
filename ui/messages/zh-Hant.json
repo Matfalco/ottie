@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "白天為海沫，夜晚為潟湖",
 	"set_palette_neutral": "中性",
 	"set_palette_neutral_hint": "白天為珍珠，夜晚為石板",
-	"set_palette_legacy": "舊版",
-	"set_palette_legacy_hint": "以前的外觀：更方正、更扁平",
 	"set_language_hint": "也用於常駐程式回報的內容，例如下載失敗的原因。",
 	"queue_up": "在佇列中上移",
 	"queue_down": "在佇列中下移",

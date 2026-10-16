@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Jūras putas dienā, Lagūna naktī",
 	"set_palette_neutral": "Neitrāls",
 	"set_palette_neutral_hint": "Pērle dienā, Slāneklis naktī",
-	"set_palette_legacy": "Vecais",
-	"set_palette_legacy_hint": "Iepriekšējais izskats: stūrīgāks un plakanāks",
 	"set_language_hint": "Arī pakalpojuma ziņojumiem, piemēram, kāpēc lejupielāde neizdevās.",
 	"queue_up": "Pārvietot augstāk rindā",
 	"queue_down": "Pārvietot zemāk rindā",

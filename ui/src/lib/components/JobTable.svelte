@@ -227,9 +227,10 @@
 
 	table {
 		width: 100%;
-		border-collapse: collapse;
 		/* Column widths come from the header, so they don't jump as numbers change. */
 		table-layout: fixed;
+		border-collapse: separate;
+		border-spacing: 0 2px;
 	}
 
 	th {
@@ -239,12 +240,12 @@
 		height: 2.2rem;
 		padding: 0 0.5rem;
 		background: var(--surface);
-		border-bottom: 1px solid var(--border);
 		color: var(--faint);
 		font-size: 0.8rem;
 		font-weight: 600;
 		text-align: start;
 		white-space: nowrap;
+		border-bottom: none;
 	}
 
 	.sort {
@@ -263,22 +264,6 @@
 		color: var(--text);
 	}
 
-	.group th {
-		position: static;
-		height: 2rem;
-		background: var(--well);
-		border-bottom: 1px solid var(--border-soft);
-		color: var(--muted);
-	}
-
-	/* The title, count and note on one baseline (the mono ones would sit
-	   higher if centred); the dot centred. */
-	.heading {
-		display: flex;
-		align-items: baseline;
-		gap: 0.5rem;
-	}
-
 	.heading .dot {
 		align-self: center;
 	}
@@ -286,8 +271,6 @@
 	.dot {
 		width: 0.5rem;
 		height: 0.5rem;
-		border-radius: 2px;
-		background: var(--quiet);
 	}
 
 	.running .dot {
@@ -435,44 +418,40 @@
 		}
 	}
 
-	/* Rounded (docs/decisions/0044): rows apart from each other (see
-	   JobRow), each group's title a tinted pill. */
-	:global([data-style='rounded']) table {
-		border-collapse: separate;
-		border-spacing: 0 2px;
-	}
-
-	:global([data-style='rounded']) th {
-		border-bottom: none;
-	}
-
-	:global([data-style='rounded']) .group th {
+	.group th {
+		position: static;
+		color: var(--muted);
 		height: auto;
 		padding: 0.5rem 0.25rem 0.15rem;
 		border-bottom: none;
 		background: none;
 	}
 
-	:global([data-style='rounded']) .heading {
+	/* The title, count and note on one baseline (the mono ones would sit
+	   higher if centred); the dot centred. */
+	.heading {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
 		--hue: var(--quiet);
 		padding: 0.3rem 0.8rem;
 		border-radius: 999px;
 		background: color-mix(in srgb, var(--hue) 12%, transparent);
 	}
 
-	:global([data-style='rounded']) .running .heading {
+	.running .heading {
 		--hue: var(--progress);
 	}
 
-	:global([data-style='rounded']) .attention .heading {
+	.attention .heading {
 		--hue: var(--danger);
 	}
 
-	:global([data-style='rounded']) .finished .heading {
+	.finished .heading {
 		--hue: var(--ok);
 	}
 
-	:global([data-style='rounded']) .dot {
+	.dot {
 		border-radius: 50%;
 		background: var(--hue);
 	}

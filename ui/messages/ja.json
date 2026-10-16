@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "昼は「波の花」、夜は「ラグーン」",
 	"set_palette_neutral": "ニュートラル",
 	"set_palette_neutral_hint": "昼は「パール」、夜は「スレート」",
-	"set_palette_legacy": "従来",
-	"set_palette_legacy_hint": "以前の外観：角ばっていて平坦",
 	"set_language_hint": "ダウンロードが失敗した理由など、デーモンからの報告にも使われます。",
 	"queue_up": "キュー内で上へ",
 	"queue_down": "キュー内で下へ",

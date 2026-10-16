@@ -919,8 +919,7 @@ pub enum AppearanceMode {
     Dark,
 }
 
-/// A light theme and a dark one that go together. The legacy ones keep the
-/// look from before the rounder shapes.
+/// A light theme and a dark one that go together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -929,10 +928,6 @@ pub enum Palette {
     Sea,
     /// Pearl and Slate.
     Neutral,
-    /// Seafoam and Lagoon as they were.
-    SeaLegacy,
-    /// Pearl and Slate as they were.
-    NeutralLegacy,
 }
 
 /// The total download speed over the last hour.
@@ -1284,8 +1279,6 @@ impl From<ottie_core::Appearance> for Appearance {
             palette: match appearance.palette {
                 P::Sea => Palette::Sea,
                 P::Neutral => Palette::Neutral,
-                P::SeaLegacy => Palette::SeaLegacy,
-                P::NeutralLegacy => Palette::NeutralLegacy,
             },
         }
     }
@@ -1303,8 +1296,6 @@ impl From<Appearance> for ottie_core::Appearance {
             palette: match appearance.palette {
                 Palette::Sea => P::Sea,
                 Palette::Neutral => P::Neutral,
-                Palette::SeaLegacy => P::SeaLegacy,
-                Palette::NeutralLegacy => P::NeutralLegacy,
             },
         }
     }

@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Ìfófó òkun ní ọ̀sán, Adágún ní òru",
 	"set_palette_neutral": "Àárín",
 	"set_palette_neutral_hint": "Péálì ní ọ̀sán, Òkúta ní òru",
-	"set_palette_legacy": "Ti àtijọ́",
-	"set_palette_legacy_hint": "Ìrísí ti tẹ́lẹ̀: onígun jù, ó sì tẹ́ jù",
 	"set_language_hint": "Bákan náà fún ohun tí daemon ń jábọ̀, bí ìdí tí ìgbàsílẹ̀ kan fi kùnà.",
 	"queue_up": "Gbé sókè nínú ìlà",
 	"queue_down": "Gbé sísàlẹ̀ nínú ìlà",

@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "दिन में समुद्री झाग, रात में लैगून",
 	"set_palette_neutral": "न्यूट्रल",
 	"set_palette_neutral_hint": "दिन में मोती, रात में स्लेट",
-	"set_palette_legacy": "पुराना",
-	"set_palette_legacy_hint": "पहले वाला रूप: ज़्यादा कोणीय और सपाट",
 	"set_language_hint": "डेमन जो बताता है उसके लिए भी, जैसे कोई डाउनलोड क्यों विफल हुआ।",
 	"queue_up": "कतार में ऊपर ले जाएँ",
 	"queue_down": "कतार में नीचे ले जाएँ",

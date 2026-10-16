@@ -314,6 +314,38 @@ const MIGRATIONS: &[&str] = &[
         FROM settings;
      DROP TABLE settings;
      ALTER TABLE settings_new RENAME TO settings;",
+    // 17: no legacy palettes anymore (docs/decisions/0047): each saved one
+    // becomes its rounded pair, and `settings` is rebuilt for the CHECK.
+    "UPDATE settings SET appearance_palette = CASE appearance_palette
+        WHEN 'sea-legacy' THEN 'sea'
+        WHEN 'neutral-legacy' THEN 'neutral'
+        ELSE appearance_palette END;
+     CREATE TABLE settings_new (
+        id                   INTEGER PRIMARY KEY CHECK (id = 1),
+        global_limit         INTEGER NOT NULL DEFAULT 0 CHECK (global_limit >= 0),
+        max_concurrent       INTEGER NOT NULL DEFAULT 3 CHECK (max_concurrent >= 1),
+        max_retries          INTEGER NOT NULL DEFAULT 10 CHECK (max_retries >= 0),
+        retries_before_yield INTEGER NOT NULL DEFAULT 3 CHECK (retries_before_yield >= 0),
+        retry_wait_ms        INTEGER NOT NULL DEFAULT 2000 CHECK (retry_wait_ms >= 0),
+        last_id_secs         INTEGER NOT NULL DEFAULT 0 CHECK (last_id_secs >= 0),
+        last_id_seq          INTEGER NOT NULL DEFAULT 0 CHECK (last_id_seq >= 0),
+        setup_done           INTEGER NOT NULL DEFAULT 0 CHECK (setup_done IN (0, 1)),
+        appearance_mode      TEXT CHECK (appearance_mode IN ('system', 'light', 'dark')),
+        appearance_palette   TEXT CHECK (appearance_palette IN ('sea', 'neutral')),
+        language             TEXT CHECK (length(language) BETWEEN 2 AND 35
+                                 AND language NOT GLOB '*[^A-Za-z0-9-]*'),
+        stream_media         INTEGER NOT NULL DEFAULT 1 CHECK (stream_media IN (0, 1)),
+        max_batch            INTEGER NOT NULL DEFAULT 10000 CHECK (max_batch >= 1)
+     ) STRICT;
+     INSERT INTO settings_new (id, global_limit, max_concurrent, max_retries,
+            retries_before_yield, retry_wait_ms, last_id_secs, last_id_seq, setup_done,
+            appearance_mode, appearance_palette, language, stream_media, max_batch)
+        SELECT id, global_limit, max_concurrent, max_retries,
+            retries_before_yield, retry_wait_ms, last_id_secs, last_id_seq, setup_done,
+            appearance_mode, appearance_palette, language, stream_media, max_batch
+        FROM settings;
+     DROP TABLE settings;
+     ALTER TABLE settings_new RENAME TO settings;",
 ];
 
 /// Everything saved about one job.
@@ -1638,9 +1670,9 @@ mod tests {
     }
 
     #[test]
-    fn rebuilding_settings_for_legacy_palettes_keeps_them() {
+    fn rebuilding_settings_keeps_them_and_legacy_palettes_become_their_pair() {
         let mut conn = Connection::open_in_memory().unwrap();
-        for (i, sql) in MIGRATIONS[..15].iter().enumerate() {
+        for (i, sql) in MIGRATIONS[..16].iter().enumerate() {
             conn.execute_batch(sql).unwrap();
             conn.pragma_update(None, "user_version", i + 1).unwrap();
         }
@@ -1648,7 +1680,7 @@ mod tests {
             "UPDATE settings SET global_limit = 7, max_concurrent = 2, max_retries = 4,
                 retries_before_yield = 1, retry_wait_ms = 500, last_id_secs = 9,
                 last_id_seq = 3, setup_done = 1, appearance_mode = 'dark',
-                appearance_palette = 'neutral', language = 'fr', stream_media = 0,
+                appearance_palette = 'neutral-legacy', language = 'fr', stream_media = 0,
                 max_batch = 50",
         )
         .unwrap();
@@ -1666,14 +1698,8 @@ mod tests {
             palette: Palette::Neutral,
         };
         assert_eq!(settings.appearance, Some(neutral_dark));
-        conn.execute("UPDATE settings SET appearance_palette = 'sea-legacy'", [])
-            .unwrap();
-        let palette = load_all(&conn)
-            .unwrap()
-            .settings
-            .appearance
-            .map(|a| a.palette);
-        assert_eq!(palette, Some(Palette::SeaLegacy));
+        let legacy = conn.execute("UPDATE settings SET appearance_palette = 'sea-legacy'", []);
+        assert!(legacy.is_err(), "the CHECK refuses legacy palettes");
     }
 
     fn videos() -> Category {

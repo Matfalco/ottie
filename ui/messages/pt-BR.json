@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Espuma de dia, Lagoa à noite",
 	"set_palette_neutral": "Neutro",
 	"set_palette_neutral_hint": "Pérola de dia, Ardósia à noite",
-	"set_palette_legacy": "Clássico",
-	"set_palette_legacy_hint": "O visual de antes: mais quadrado e plano",
 	"set_language_hint": "Também para o que o serviço informa, como o motivo de um download ter falhado.",
 	"queue_up": "Subir na fila",
 	"queue_down": "Descer na fila",

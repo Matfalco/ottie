@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Havskum om dagen, Lagune om natten",
 	"set_palette_neutral": "Neutral",
 	"set_palette_neutral_hint": "Perle om dagen, Skifer om natten",
-	"set_palette_legacy": "Klassisk",
-	"set_palette_legacy_hint": "Det tidligere udseende: mere kantet og fladere",
 	"set_language_hint": "Også for det, tjenesten melder, f.eks. hvorfor en download mislykkedes.",
 	"queue_up": "Flyt op i køen",
 	"queue_down": "Flyt ned i køen",

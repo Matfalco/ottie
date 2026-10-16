@@ -183,6 +183,7 @@
 		border-color: transparent;
 		background: none;
 		white-space: nowrap;
+		border-radius: 999px;
 	}
 
 	button:hover:not(:disabled) {
@@ -227,6 +228,7 @@
 	.filters {
 		border-color: var(--border);
 		font-weight: 500;
+		padding: 0 0.85rem;
 	}
 
 	.filters.open,
@@ -258,14 +260,5 @@
 		button:not(.clear) span:not(.badge) {
 			display: none;
 		}
-	}
-
-	/* Rounded (docs/decisions/0044): round buttons. */
-	:global([data-style='rounded']) button {
-		border-radius: 999px;
-	}
-
-	:global([data-style='rounded']) .filters {
-		padding: 0 0.85rem;
 	}
 </style>

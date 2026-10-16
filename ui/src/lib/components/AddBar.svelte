@@ -188,7 +188,7 @@
 <svelte:window onpointerdown={pointerdown} />
 
 <form bind:this={form} onsubmit={submit}>
-	<!-- The link and its buttons: one pill in the rounded style. -->
+	<!-- The link and its buttons: one pill. -->
 	<div class="bar">
 		<label class="field">
 			<Link size={15} aria-hidden="true" />
@@ -305,24 +305,6 @@
 		width: 100%;
 	}
 
-	.field {
-		display: flex;
-		flex: 1;
-		align-items: center;
-		gap: 0.5rem;
-		min-width: 0;
-		height: 2.1rem;
-		padding: 0 0.7rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-s);
-		background: var(--input);
-		color: var(--muted);
-	}
-
-	.field:focus-within {
-		border-color: var(--accent);
-	}
-
 	.field input {
 		flex: 1;
 		min-width: 0;
@@ -341,17 +323,7 @@
 		white-space: nowrap;
 	}
 
-	.several {
-		padding: 0 0.55rem;
-	}
-
 	.bar {
-		display: contents;
-	}
-
-	/* Rounded (docs/decisions/0044): the field is a sunken pill holding
-	   both buttons at its end. */
-	:global([data-style='rounded']) .bar {
 		display: flex;
 		flex: 1;
 		align-items: center;
@@ -364,24 +336,31 @@
 		box-shadow: var(--sunken-shadow);
 	}
 
-	:global([data-style='rounded']) .bar:focus-within {
+	.bar:focus-within {
 		outline: 2px solid var(--accent);
 		outline-offset: -2px;
 	}
 
-	:global([data-style='rounded']) .field {
+	.field {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+		border-radius: var(--radius-s);
+		color: var(--muted);
 		height: 100%;
 		padding: 0;
 		border: none;
 		background: none;
 	}
 
-	:global([data-style='rounded']) .bar button {
+	.bar button {
 		height: 2.4rem;
 		border-radius: 999px;
 	}
 
-	:global([data-style='rounded']) .several {
+	.several {
 		width: 2.4rem;
 		justify-content: center;
 		padding: 0;
@@ -390,18 +369,13 @@
 		color: var(--muted);
 	}
 
-	:global([data-style='rounded']) .several:hover {
+	.several:hover {
 		background: var(--hover);
 		color: var(--text);
 	}
 
-	:global([data-style='rounded']) .bar .primary {
+	.bar .primary {
 		padding: 0 1.1rem 0 0.9rem;
-	}
-
-	:global([data-style='rounded']) .step {
-		border-color: var(--edge);
-		border-radius: var(--radius-l);
 	}
 
 	.step {
@@ -413,8 +387,8 @@
 		display: grid;
 		gap: 0.9rem;
 		padding: 0.9rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-m);
+		border: 1px solid var(--edge);
+		border-radius: var(--radius-l);
 		background: var(--surface);
 		box-shadow: var(--shadow);
 		user-select: text;

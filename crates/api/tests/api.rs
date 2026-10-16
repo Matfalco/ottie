@@ -1001,7 +1001,7 @@ async fn settings_are_read_and_changed() {
         "firstRetryWaitMs": 500,
         "maxBatch": 500,
         "streamMedia": false,
-        "appearance": { "mode": "dark", "palette": "neutralLegacy" },
+        "appearance": { "mode": "dark", "palette": "neutral" },
         "language": "fr",
     });
     let response = patch(change).await.unwrap();
@@ -1015,7 +1015,7 @@ async fn settings_are_read_and_changed() {
         stream_media: false,
         appearance: Some(Appearance {
             mode: AppearanceMode::Dark,
-            palette: Palette::NeutralLegacy,
+            palette: Palette::Neutral,
         }),
         language: Some("fr".into()),
         ..defaults

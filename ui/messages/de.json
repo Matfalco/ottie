@@ -182,8 +182,6 @@
 	"set_palette_sea_hint": "Gischt am Tag, Lagune in der Nacht",
 	"set_palette_neutral": "Neutral",
 	"set_palette_neutral_hint": "Perle am Tag, Schiefer in der Nacht",
-	"set_palette_legacy": "Klassisch",
-	"set_palette_legacy_hint": "Das bisherige Aussehen: eckiger und flacher",
 	"set_language_hint": "Auch für Meldungen des Dienstes, etwa warum ein Download fehlschlug.",
 	"queue_up": "In der Warteschlange nach oben",
 	"queue_down": "In der Warteschlange nach unten",
