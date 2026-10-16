@@ -1,12 +1,12 @@
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import { onMount } from 'svelte';
 	import { pauseSteps, resumeTargets } from '#lib/bulk.js';
 	import { canDo, FINISH_CHOICES, finishName, nextFinish, soonText } from '#lib/finish.js';
 	import { LiveFinishing } from '#lib/finish.svelte.js';
 	import { formatCount } from '#lib/format.js';
+	import { unfold } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { Session } from '#lib/session.svelte.js';
 	import { loadToken } from '#lib/token.js';
@@ -161,14 +161,10 @@
 				onclick={() => (choosing = !choosing)}
 			>
 				<span>{m.tray_finish({ choice: finishName(nextFinish(finishing)) })}</span>
-				{#if choosing}
-					<ChevronUp size={14} aria-hidden="true" />
-				{:else}
-					<ChevronDown size={14} aria-hidden="true" />
-				{/if}
+				<ChevronDown class="chevron" size={14} aria-hidden="true" />
 			</button>
 			{#if choosing}
-				<div class="choices" role="menu" aria-label={m.finish_title()}>
+				<div class="choices" role="menu" aria-label={m.finish_title()} in:unfold out:unfold>
 					{#each FINISH_CHOICES as choice (choice)}
 						<button
 							class="item"

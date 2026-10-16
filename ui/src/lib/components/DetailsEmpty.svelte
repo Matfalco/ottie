@@ -1,6 +1,5 @@
 <script lang="ts">
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import { formatCount } from '#lib/format.js';
 	import { resizes } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -42,11 +41,7 @@
 			title={open ? m.det_hide() : m.det_show()}
 			onclick={onToggle}
 		>
-			{#if open}
-				<ChevronDown size={16} aria-hidden="true" />
-			{:else}
-				<ChevronUp size={16} aria-hidden="true" />
-			{/if}
+			<ChevronDown class="chevron rises" size={16} aria-hidden="true" />
 		</button>
 	</div>
 </section>

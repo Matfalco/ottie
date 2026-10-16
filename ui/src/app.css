@@ -305,6 +305,37 @@ dialog.leaving::backdrop {
 	box-shadow: var(--raised-shadow);
 }
 
+/* What toggles from one value to another (hover, chosen, disabled, a
+   pressed button) changes colour over a moment rather than jumping. These
+   selectors are the weakest there are, so a component's own `transition`
+   (a switch, a bar growing) wins. */
+a,
+button,
+label,
+input,
+select,
+textarea,
+tbody tr {
+	transition:
+		background-color 120ms ease-out,
+		color 120ms ease-out,
+		border-color 120ms ease-out,
+		box-shadow 120ms ease-out,
+		opacity 120ms ease-out;
+}
+
+/* A chevron that turns over instead of being swapped for its opposite: it
+   points down, and up while the button holding it is expanded; `.rises`
+   points up while it's folded (a panel opening upwards). */
+.chevron {
+	transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+[aria-expanded='true'] .chevron:not(.rises),
+[aria-expanded='false'] .chevron.rises {
+	transform: rotate(180deg);
+}
+
 @keyframes backdrop-in {
 	from {
 		opacity: 0;

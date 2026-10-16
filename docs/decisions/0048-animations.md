@@ -22,6 +22,16 @@ Motion shows where things come from and go.
 - **Also:** the details panel folds and the filters panel opens smoothly; the
   current tab's highlight and a segmented control's chosen one slide; a tab's
   page fades in; switches fade their colour.
+- **Toggles** (second pass): the highlight also slides between the filter
+  pills (saved views included) and the Settings section list; the pills behind
+  "…" fade in as their row opens; hover, chosen, disabled and focus colours of
+  links, buttons, labels, fields and table rows fade over 120 ms (one rule in
+  `app.css`, which a component's own `transition` overrides); an expand/collapse
+  chevron turns over instead of being swapped (`.chevron`, `.rises`); what
+  appears where there was nothing (an error under a form, the fields a switch
+  reveals, the tray's finish choices, a link field, the toolbar's count and
+  "Clear finished") unfolds to its size (`unfold`, vertically or, in a row,
+  sideways).
 - **None when the system asks for less motion** (`prefers-reduced-motion`),
   unless this device says otherwise: Settings → Appearance → Animations
   (Follow the system, On, Off), kept on the device, not shared. `data-motion`

@@ -20,7 +20,7 @@
 	import { useApp } from '#lib/context.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { pop } from '#lib/moving.svelte.js';
+	import { pop, unfold } from '#lib/moving.svelte.js';
 	import { canPickFolder, pickFolder } from '#lib/window.js';
 	import FileIcon from './FileIcon.svelte';
 
@@ -284,9 +284,9 @@
 		</div>
 
 		{#if problem}
-			<p class="problem" role="alert">{problem}</p>
+			<p class="problem" role="alert" in:unfold out:unfold>{problem}</p>
 		{:else if notice}
-			<p class="notice" role="status">{notice}</p>
+			<p class="notice" role="status" in:unfold out:unfold>{notice}</p>
 		{/if}
 
 		<div class="buttons">

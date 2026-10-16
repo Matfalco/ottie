@@ -7,6 +7,7 @@
 	import icon from '#lib/assets/ottie.svg';
 	import { GENERAL } from '#lib/categories.js';
 	import { useApp } from '#lib/context.js';
+	import { unfold } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { asCategory, edited, folderOf, starters, toCreate, type Starter } from '#lib/setup.js';
 	import { FIRST_STARTUP, STARTUP_CHOICES, STARTUP_NAMES } from '#lib/startup.js';
@@ -179,7 +180,7 @@
 		{/if}
 
 		{#if problem}
-			<p class="problem" role="alert">{problem}</p>
+			<p class="problem" role="alert" in:unfold out:unfold>{problem}</p>
 		{/if}
 
 		<div class="buttons">

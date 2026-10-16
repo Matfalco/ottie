@@ -14,6 +14,7 @@
 	import Trash from '@lucide/svelte/icons/trash';
 	import { targets, type Action } from '#lib/bulk.js';
 	import { formatCount } from '#lib/format.js';
+	import { unfold } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { Reorder } from '#lib/queue.js';
 	import { canFinish } from '#lib/window.js';
@@ -109,7 +110,9 @@
 		<ChevronDown size={15} aria-hidden="true" />
 	</button>
 	{#if selected.length > 0}
-		<span class="count">{m.selected_count({ count: formatCount(selected.length) })}</span>
+		<span class="count" in:unfold={{ axis: 'x' }} out:unfold={{ axis: 'x' }}
+			>{m.selected_count({ count: formatCount(selected.length) })}</span
+		>
 	{/if}
 	<span class="spacer"></span>
 	<button
@@ -136,13 +139,18 @@
 		<FinishMenu />
 	{/if}
 	{#if finished.length > 0}
-		<button class="clear" onclick={() => onRun('remove', finished)}>
+		<button
+			class="clear"
+			in:unfold={{ axis: 'x' }}
+			out:unfold={{ axis: 'x' }}
+			onclick={() => onRun('remove', finished)}
+		>
 			<Eraser size={15} aria-hidden="true" />
 			<span>{m.clear_finished()}</span>
 		</button>
 	{/if}
 	{#if shown < total}
-		<span class="shown">
+		<span class="shown" in:unfold={{ axis: 'x' }} out:unfold={{ axis: 'x' }}>
 			{m.filters_shown({ shown: formatCount(shown), total: formatCount(total) })}
 		</span>
 	{/if}
@@ -158,11 +166,7 @@
 		{#if active > 0}
 			<span class="badge" aria-hidden="true">{formatCount(active)}</span>
 		{/if}
-		{#if open}
-			<ChevronUp size={14} aria-hidden="true" />
-		{:else}
-			<ChevronDown size={14} aria-hidden="true" />
-		{/if}
+		<ChevronDown class="chevron" size={14} aria-hidden="true" />
 	</button>
 </div>
 

@@ -5,7 +5,7 @@
 import { untrack } from 'svelte';
 import { cubicIn, cubicOut } from 'svelte/easing';
 import { prefersReducedMotion } from 'svelte/motion';
-import type { TransitionConfig } from 'svelte/transition';
+import { slide, type TransitionConfig } from 'svelte/transition';
 import { appearance } from './appearance.svelte';
 import { CROWD, QUICK, SETTLE, STEADY, moves, plan, type Spot } from './motion';
 
@@ -64,6 +64,26 @@ export function drop(
 		easing: leaving ? cubicIn : cubicOut,
 		css: (t, u) => `opacity: ${t}; transform: ${base}translateY(${from * u}px)`
 	};
+}
+
+/** Something that appears where there was nothing (an error under a form,
+ * fields a switch reveals, a menu's choices): unfolds to its size, the rest
+ * making room as it goes, and folds up again. `axis: 'x'` for what joins a
+ * row (a toolbar's button). */
+export function unfold(
+	node: Element,
+	{ axis = 'y' }: { axis?: 'x' | 'y' } = {},
+	{ direction }: Options
+): TransitionConfig {
+	if (!moving()) {
+		return STILL;
+	}
+	const leaving = direction === 'out';
+	return slide(node, {
+		axis,
+		duration: leaving ? QUICK : STEADY,
+		easing: leaving ? cubicIn : cubicOut
+	});
 }
 
 /** Something that takes the place of another (the filters' pills and panel):

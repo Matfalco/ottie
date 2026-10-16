@@ -4,7 +4,6 @@
 	import type { Job } from '@ottie/api-types/Job';
 	import type { JobChange } from '@ottie/api-types/JobChange';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import Copy from '@lucide/svelte/icons/copy';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Folder from '@lucide/svelte/icons/folder';
@@ -24,7 +23,7 @@
 	import { connections, strip } from '#lib/filemap.js';
 	import { statusName, statusOf } from '#lib/filters.js';
 	import { displayName, formatBytes, formatPercent, formatSpeed } from '#lib/format.js';
-	import { resizes, shuffle } from '#lib/moving.svelte.js';
+	import { resizes, shuffle, unfold } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { savePlaylist } from '#lib/playlist.js';
 	import { canSchedule, fromField, timeChange, toField, type TimeKey } from '#lib/schedule.js';
@@ -241,15 +240,19 @@
 		title={open ? m.det_hide() : m.det_show()}
 		onclick={onToggle}
 	>
-		{#if open}
-			<ChevronDown size={16} aria-hidden="true" />
-		{:else}
-			<ChevronUp size={16} aria-hidden="true" />
-		{/if}
+		<ChevronDown class="chevron rises" size={16} aria-hidden="true" />
 	</button>
 
 	{#if showLink && link}
-		<input class="link" readonly value={link} dir="auto" aria-label={m.det_link_label()} />
+		<input
+			class="link"
+			readonly
+			value={link}
+			dir="auto"
+			aria-label={m.det_link_label()}
+			in:unfold
+			out:unfold
+		/>
 	{/if}
 
 	{#if !open}
@@ -264,7 +267,7 @@
 		</div>
 	{:else}
 		{#if problem}
-			<p class="problem">{problem}</p>
+			<p class="problem" in:unfold out:unfold>{problem}</p>
 		{/if}
 		<div class="body">
 			<div class="column">

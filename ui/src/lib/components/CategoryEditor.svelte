@@ -3,6 +3,7 @@
 	import type { CategoryBody } from '@ottie/api-types/CategoryBody';
 	import FolderOpen from '@lucide/svelte/icons/folder-open';
 	import { categoryName, parseExtensions, suggestFolder } from '#lib/categories.js';
+	import { unfold } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {
 		SPEED_UNITS,
@@ -138,7 +139,7 @@
 	</div>
 
 	{#if problem}
-		<p class="problem" role="alert">{problem}</p>
+		<p class="problem" role="alert" in:unfold out:unfold>{problem}</p>
 	{/if}
 
 	<div class="buttons">

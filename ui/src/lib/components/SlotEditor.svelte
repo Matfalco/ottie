@@ -5,6 +5,7 @@
 	import type { SlotBody } from '@ottie/api-types/SlotBody';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { categoryName } from '#lib/categories.js';
+	import { unfold } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { toField } from '#lib/schedule.js';
 	import { SPEED_UNITS, unitLabel } from '#lib/settings.js';
@@ -133,7 +134,7 @@
 			</div>
 			<small>{m.sched_hours_hint()}</small>
 			{#if crossed.length > 0}
-				<p class="overlap" role="status">
+				<p class="overlap" role="status" in:unfold out:unfold>
 					<TriangleAlert size={14} aria-hidden="true" />
 					{m.sched_editor_overlaps({
 						names: crossed.map((other) => slotLabel(other)).join(', ')
@@ -209,7 +210,7 @@
 					<span>{m.sched_set_limit()}</span>
 				</div>
 				{#if draft.limits}
-					<span class="row">
+					<span class="row" in:unfold out:unfold>
 						<input bind:value={draft.speed} inputmode="decimal" aria-label={m.sched_set_limit()} />
 						<select bind:value={draft.unit} aria-label={m.sched_set_limit()}>
 							{#each SPEED_UNITS as option (option)}
@@ -217,7 +218,7 @@
 							{/each}
 						</select>
 					</span>
-					<small>{m.sched_limit_hint()}</small>
+					<small in:unfold out:unfold>{m.sched_limit_hint()}</small>
 				{/if}
 			</div>
 
@@ -228,14 +229,20 @@
 				</div>
 				{#if draft.caps}
 					<!-- Text, not type="number": Svelte would bind a number. -->
-					<input bind:value={draft.max} inputmode="numeric" aria-label={m.sched_set_max()} />
+					<input
+						bind:value={draft.max}
+						inputmode="numeric"
+						aria-label={m.sched_set_max()}
+						in:unfold
+						out:unfold
+					/>
 				{/if}
 			</div>
 		{/if}
 	</div>
 
 	{#if problem}
-		<p class="problem" role="alert">{problem}</p>
+		<p class="problem" role="alert" in:unfold out:unfold>{problem}</p>
 	{/if}
 
 	<div class="buttons">

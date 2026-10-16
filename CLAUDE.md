@@ -226,7 +226,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      plain logic, unit-tested (*.test.ts, Vitest)
   src/lib/motion.ts  animations (0048): on or off (device's choice, else the system's), timings, what a
                      list's rows do after a change (plan); moving.svelte.ts: the transitions (pop, drop,
-                     leave), shuffle (rows slide, data-flip), resizes (panels)
+                     unfold, leave), shuffle (rows slide, data-flip), resizes (panels)
   src/lib/appearance.svelte.ts  the appearance chosen on this device (state shared by layout, shell
                      (follows the shared one, docs/decisions/0022) and Settings)
   src/lib/window.ts  the desktop app: its window (minimize/maximize/close), the folder picker,

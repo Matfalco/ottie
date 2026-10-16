@@ -18,6 +18,7 @@
 	import { canDo, COUNTDOWN, FINISH_CHOICES, finishHint, finishName } from '#lib/finish.js';
 	import { LiveFinishing } from '#lib/finish.svelte.js';
 	import { MOTIONS, type Motion } from '#lib/motion.js';
+	import { shuffle, unfold } from '#lib/moving.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { HELP_TRANSLATE, REVIEWED, switchLanguage } from '#lib/languages.js';
 	import { getLocale, type Locale } from '#lib/paraglide/runtime.js';
@@ -162,6 +163,13 @@
 	/** The section being read: the last one whose top has scrolled past
 	 * the top of the page, or the last one once at the bottom. */
 	let current = $state(SECTIONS[0].id);
+	let sections: HTMLElement | undefined = $state();
+	// The section list's highlight slides to the section being read
+	// (docs/decisions/0048).
+	shuffle(
+		() => sections,
+		() => current
+	);
 	/** Why the last change wasn't saved. */
 	let problem: string | null = $state(null);
 	let copied = $state(false);
@@ -368,7 +376,7 @@
 {/snippet}
 
 <div class="settings" bind:this={page} onscroll={scrolled}>
-	<nav aria-label={m.set_sections()}>
+	<nav aria-label={m.set_sections()} bind:this={sections}>
 		{#each SECTIONS as { id, label } (id)}
 			<a
 				href="#{id}"
@@ -376,6 +384,9 @@
 				aria-current={current === id ? 'true' : undefined}
 				onclick={(event) => go(event, id)}
 			>
+				{#if current === id}
+					<span class="highlight" data-flip="highlight" data-flip-size></span>
+				{/if}
 				{label()}
 			</a>
 		{/each}
@@ -385,7 +396,7 @@
 		<h1>{m.set_title()}</h1>
 
 		{#if problem}
-			<div class="problem" role="alert">
+			<div class="problem" role="alert" in:unfold out:unfold>
 				<span>{problem}</span>
 				<button onclick={() => (problem = null)} aria-label={m.dismiss()}>✕</button>
 			</div>
@@ -473,7 +484,7 @@
 				</label>
 				<LanguagePicker id="language" onChoose={(locale) => void chooseLanguage(locale)} />
 				{#if !REVIEWED.includes(getLocale())}
-					<p class="hint unreviewed">
+					<p class="hint unreviewed" in:unfold out:unfold>
 						{m.language_unreviewed()}
 						<a href={HELP_TRANSLATE} target="_blank" rel="noopener">{m.language_help()}</a>
 					</p>
@@ -804,7 +815,7 @@
 					{#if desktop.sounds === 'custom'}
 						{#each SOUND_KINDS as kind (kind)}
 							{@const sound = soundOf(desktop, kind)}
-							<div class="setting">
+							<div class="setting" in:unfold out:unfold>
 								<label for="sound-{kind}" class="names">
 									<span>{SOUND_NAMES[kind]()}</span>
 								</label>
@@ -967,7 +978,7 @@
 				</button>
 			</div>
 			{#if showLink}
-				<div class="link">
+				<div class="link" in:unfold out:unfold>
 					<input
 						readonly
 						value={link}
@@ -1004,6 +1015,9 @@
 	}
 
 	nav a {
+		position: relative;
+		/* The highlight goes under the name but over the hover. */
+		isolation: isolate;
 		padding: 0.45rem 0.75rem;
 		color: var(--muted);
 		text-decoration: none;
@@ -1018,8 +1032,6 @@
 	nav a.current {
 		color: var(--text);
 		font-weight: 600;
-		background: var(--raised);
-		box-shadow: var(--raised-shadow);
 	}
 
 	.sections {

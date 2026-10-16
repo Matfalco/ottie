@@ -9,7 +9,7 @@
 	import { count, filtersQuery, quickFilters, sameFilters, type Filters } from '#lib/filters.js';
 	import { formatCount } from '#lib/format.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { drop } from '#lib/moving.svelte.js';
+	import { drop, resizes, shuffle, unfold } from '#lib/moving.svelte.js';
 	import { showsView, viewFilters } from '#lib/views.js';
 
 	interface Props {
@@ -41,6 +41,29 @@
 	/** The view whose menu is open. */
 	let menu: number | null = $state(null);
 
+	let track: HTMLElement | undefined = $state();
+	/** The pill that carries the raised highlight (a view before a fixed pill,
+	 * if both fit the filters), so it can slide to the next one chosen. */
+	let lit = $derived(
+		(() => {
+			const view = views.find((view) => showsView(view, filters, arrangement));
+			if (view) {
+				return `view ${view.id}`;
+			}
+			return shown.find((pill) => sameFilters(pill.filters, filters))?.key ?? null;
+		})()
+	);
+	// The highlight slides from pill to pill, and the pills behind "…" unfold
+	// (docs/decisions/0048).
+	shuffle(
+		() => track,
+		() => lit
+	);
+	resizes(
+		() => track,
+		() => more
+	);
+
 	/** Closes the menu once focus leaves it. */
 	function focusOut(event: FocusEvent & { currentTarget: HTMLElement }) {
 		const next = event.relatedTarget;
@@ -57,17 +80,19 @@
 
 <!-- Each pill is a link, so it can be bookmarked; switching replaces the
      history entry. -->
-<nav class="pills" aria-label={m.filters_label()}>
+<nav class="pills" aria-label={m.filters_label()} bind:this={track}>
 	{#each pills.main as pill (pill.key)}
-		{@render link(pill.filters, pill.name, sameFilters(pill.filters, filters))}
+		{@render link(pill.filters, pill.name, sameFilters(pill.filters, filters), pill.key)}
 	{/each}
 	{#each views as view (view.id)}
 		{@const current = showsView(view, filters, arrangement)}
 		<div class="view" class:current onfocusout={focusOut}>
-			{@render link(viewFilters(view), view.name, current, view)}
+			{@render link(viewFilters(view), view.name, current, `view ${view.id}`, view)}
 			{#if current}
 				<button
 					class="options"
+					in:unfold={{ axis: 'x' }}
+					out:unfold={{ axis: 'x' }}
 					aria-haspopup="menu"
 					aria-expanded={menu === view.id}
 					aria-label={m.view_options({ name: view.name })}
@@ -94,7 +119,7 @@
 		</div>
 	{/each}
 	{#each shown.slice(pills.main.length) as pill (pill.key)}
-		{@render link(pill.filters, pill.name, sameFilters(pill.filters, filters))}
+		{@render link(pill.filters, pill.name, sameFilters(pill.filters, filters), pill.key)}
 	{/each}
 	{#if !held}
 		<button
@@ -109,16 +134,20 @@
 	{/if}
 </nav>
 
-{#snippet link(target: Filters, name: string, current: boolean, view?: View)}
+{#snippet link(target: Filters, name: string, current: boolean, id: string, view?: View)}
 	<a
 		href={downloads + filtersQuery(target)}
 		class:current
+		class:lit={id === lit}
 		aria-current={current ? 'true' : undefined}
 		onclick={() => view && onArrange(view.arrangement)}
 		data-sveltekit-replacestate
 		data-sveltekit-noscroll
 		data-sveltekit-keepfocus
 	>
+		{#if id === lit}
+			<span class="highlight" data-flip="highlight" data-flip-size></span>
+		{/if}
 		{#if view}<Bookmark size={13} aria-hidden="true" />{/if}
 		<span class="label">
 			<span dir="auto">{name}</span>
@@ -144,6 +173,9 @@
 
 	a,
 	.more {
+		position: relative;
+		/* The highlight goes under the pill's content but over its hover. */
+		isolation: isolate;
 		display: flex;
 		flex: none;
 		align-items: center;
@@ -164,10 +196,15 @@
 	}
 
 	a.current {
-		background: var(--raised);
-		box-shadow: var(--raised-shadow);
 		color: var(--text);
 		font-weight: 600;
+	}
+
+	/* The highlight is an element of its own (`.highlight`, app.css), unless
+	   two pills are current at once and it sits on the other. */
+	a.current:not(.lit) {
+		background: var(--raised);
+		box-shadow: var(--raised-shadow);
 	}
 
 	/* The name and its count on one baseline (each centred on its own, the
