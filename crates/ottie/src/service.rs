@@ -69,6 +69,8 @@ pub struct InstallArgs {
 /// What `install` hands each system's code.
 pub struct Install {
     pub system: bool,
+    /// Only systemd has lingering; elsewhere `prepare` refuses the flag.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     pub at_boot: bool,
     /// The log file, where the system keeps none (Linux: the journal does).
     #[cfg_attr(target_os = "linux", allow(dead_code))]
