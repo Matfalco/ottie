@@ -1,0 +1,130 @@
+# Alpha releases (docs/decisions/0056): pushing a tag like v0.1.0-experimental
+# builds the desktop app's installers on Windows, Linux and macOS and packages
+# the browser extensions, all into a draft pre-release. The maintainer checks
+# it and publishes it by hand on GitHub.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  release:
+    name: Draft release
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.names.outputs.label }}
+    steps:
+      - uses: actions/checkout@v4
+      # v0.1.0-experimental: version 0.1.0 (the only one the packages carry;
+      # Windows' .msi takes numbers only), "Experimental" in the release's
+      # name and the files' names.
+      - id: names
+        shell: bash
+        run: |
+          version="${TAG#v}"
+          number="${version%%-*}"
+          label=""
+          [ "$version" != "$number" ] && label="${version#*-}"
+          cargo_version=$(sed -n 's/^version = "\(.*\)"/\1/p' app/Cargo.toml | head -n1)
+          if [ "$number" != "$cargo_version" ]; then
+            echo "::error::The tag says $number, app/Cargo.toml says $cargo_version"
+            exit 1
+          fi
+          title="Ottie $number"
+          [ -n "$label" ] && title="$title ${label^}"
+          echo "label=$label" >> "$GITHUB_OUTPUT"
+          echo "title=$title" >> "$GITHUB_OUTPUT"
+      - name: Create the draft (once; a rerun keeps it)
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --draft --prerelease --verify-tag \
+              --title "${{ steps.names.outputs.title }}" \
+              --notes-file .github/release-notes.md
+
+  app:
+    name: App (${{ matrix.name }})
+    needs: release
+    strategy:
+      # One system failing (macOS has never been built before) leaves the
+      # others' installers in the draft.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            files: target/release/bundle/nsis/*.exe target/release/bundle/msi/*.msi
+          # The oldest supported Ubuntu: the AppImage then runs on older systems too.
+          - name: Linux
+            os: ubuntu-22.04
+            files: target/release/bundle/deb/*.deb target/release/bundle/rpm/*.rpm target/release/bundle/appimage/*.AppImage
+          - name: macOS
+            os: macos-latest
+            files: target/release/bundle/dmg/*.dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux packages (Tauri, the tray, notification sounds)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config file libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libasound2-dev patchelf
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+      # The UI, then the release `ottie` as the sidecar, then the app and its
+      # installers (app/scripts/sidecar.mjs, tauri.bundle.json).
+      - run: pnpm --filter app build
+      - name: Upload the installers
+        shell: bash
+        env:
+          LABEL: ${{ needs.release.outputs.label }}
+        run: |
+          mkdir out
+          for file in ${{ matrix.files }}; do
+            name=$(basename "$file")
+            # Ottie_0.1.0_x64-setup.exe → Ottie_0.1.0-experimental_x64-setup.exe
+            [ -n "$LABEL" ] && name=$(echo "$name" | sed -E "s/([0-9]+\.[0-9]+\.[0-9]+)/\1-$LABEL/")
+            cp "$file" "out/$name"
+          done
+          ls -l out
+          gh release upload "$TAG" out/* --clobber
+
+  extension:
+    name: Browser extensions
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter extension build
+      - name: Upload the extensions
+        env:
+          LABEL: ${{ needs.release.outputs.label }}
+        run: |
+          version=$(node -p "require('./extension/package.json').version")
+          [ -n "$LABEL" ] && version="$version-$LABEL"
+          mkdir out
+          for browser in chrome firefox; do
+            (cd "extension/dist/$browser" && zip -qr "$GITHUB_WORKSPACE/out/Ottie_${version}_extension-$browser.zip" .)
+          done
+          ls -l out
+          gh release upload "$TAG" out/* --clobber

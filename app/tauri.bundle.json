@@ -1,5 +1,8 @@
 {
   "bundle": {
-    "externalBin": ["binaries/ottie"]
+    "externalBin": ["binaries/ottie"],
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }

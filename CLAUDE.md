@@ -208,7 +208,8 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
   sounds/tools/      Python scripts that made them (synthesis, CC0 sources, loudness, a local page to choose
                      pairs by ear, Ogg export); tools for the maintainer, not part of the build
   build.rs           lists the app's commands, so Tauri generates their permissions (allow-…)
-  tauri.conf.json    product, identifier, icons; tauri.bundle.json adds the sidecar for installers only
+  tauri.conf.json    product, identifier, icons; tauri.bundle.json adds the sidecar and macOS' ad-hoc signature
+                     for installers only
   scripts/          sidecar.mjs (UI + release ottie → binaries/), ico.mjs (icons/icon.ico from res/icons)
   package.json       pnpm package `app`: the Tauri CLI
 ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [exists]
@@ -350,6 +351,8 @@ Dockerfile         the headless image: UI build → release ottie → debian-sli
 docs/service.md    running Ottie as a service: for you, for the computer, Docker
 docs/remote.md     reaching Ottie from other devices: Tailscale, a VPN, a reverse proxy; a token per device; folders
 .claude/           settings.json (SessionStart hook) + cloud-setup.sh: cloud sessions' setup [exists]
+.github/           workflows/release.yml (a tag v<version>[-<label>] → a draft pre-release: installers on Windows,
+                   Linux, macOS, the extensions' zips; 0056) + release-notes.md (its text, for testers) [exists]
 ```
 
 ## Commands
@@ -370,6 +373,7 @@ cargo run -p ottie -- service status # Ottie as a service (install / uninstall; 
 cargo run -p ottie -- device list    # other devices' tokens (add <name> [--read-only] / remove <id>); `token --new`
 cargo run -p ottie -- extension install  # the extension's native host for each browser found (status / uninstall)
 docker build -t ottie .              # the headless image (docs/service.md)
+git tag v0.1.0-experimental && git push origin v0.1.0-experimental  # a draft alpha release on GitHub (0056)
 
 pnpm install                         # JS dependencies (workspace: ui, shared/api-types)
 pnpm --filter ui dev                 # UI with live reload on :5173, /api forwarded to the daemon
