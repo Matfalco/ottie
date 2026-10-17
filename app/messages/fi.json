@@ -1,5 +1,6 @@
 {
 	"open": "Avaa Ottie",
+	"showLocal": "Näytä tämän tietokoneen Ottie",
 	"pauseAll": "Keskeytä kaikki",
 	"resumeAll": "Jatka kaikkia",
 	"limit": "Rajoita nopeus: {speed}",
@@ -34,6 +35,9 @@
 	"added": "Lisätty leikepöydältä",
 	"addedCount": "Lisätyt lataukset: {count}",
 	"notAdded": "Ottie ei voinut lisätä kopioitua linkkiä",
+	"unreachable": "Ottie ei saanut yhteyttä: {name}",
+	"showingLocal": "Sen sijaan näytetään tämän tietokoneen lataukset.",
+	"localFailed": "Ottie ei käynnistynyt tällä tietokoneella",
 	"runTitle": "Suoritetaanko tämä ohjelma?",
 	"runText": "”{name}” on ohjelma: se voi muuttaa mitä tahansa tällä tietokoneella. Suorita se vain, jos luotat sen lähteeseen.",
 	"run": "Suorita",

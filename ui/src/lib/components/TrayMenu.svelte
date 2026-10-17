@@ -17,6 +17,7 @@
 		followDesktop,
 		hideMenu,
 		menuReady,
+		onThisComputer,
 		quitApp,
 		setFinishOnce,
 		setWatchClipboard,
@@ -57,8 +58,18 @@
 
 	let menu: HTMLElement;
 
+	/** On another computer's Ottie (docs/decisions/0053), only its
+	 * downloads: what happens when everything has finished and the
+	 * clipboard are this computer's. */
+	const local = onThisComputer();
+	/** A read-only device's token only looks (docs/decisions/0052). */
+	const readOnly = $derived(session?.readOnly ?? false);
+
 	onMount(() => {
 		session?.start();
+		if (!local) {
+			return () => session?.stop();
+		}
 		live.start();
 		const unfollow = followDesktop((next) => (desktop = next));
 		desktopSetting().then(
@@ -137,13 +148,15 @@
 		<button
 			class="item"
 			role="menuitem"
-			disabled={connection !== 'live' || steps.waiting.length + steps.running.length === 0}
+			disabled={connection !== 'live' ||
+				readOnly ||
+				steps.waiting.length + steps.running.length === 0}
 			onclick={pick(pauseAll)}>{m.pause_all()}</button
 		>
 		<button
 			class="item"
 			role="menuitem"
-			disabled={connection !== 'live' || resumable.length === 0}
+			disabled={connection !== 'live' || readOnly || resumable.length === 0}
 			onclick={pick(resumeAll)}>{m.resume_all()}</button
 		>
 		{#if finishing}
@@ -192,7 +205,7 @@
 				{/if}
 			</button>
 		{/if}
-		{#if connection === 'live' && limit !== null}
+		{#if connection === 'live' && limit !== null && !readOnly}
 			<hr />
 			<div class="limit">
 				<p class="title">{m.limit_total()}</p>

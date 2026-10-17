@@ -1,5 +1,6 @@
 {
 	"open": "Otevřít Ottie",
+	"showLocal": "Zobrazit Ottie tohoto počítače",
 	"pauseAll": "Pozastavit vše",
 	"resumeAll": "Pokračovat ve všem",
 	"limit": "Omezit rychlost na {speed}",
@@ -34,6 +35,9 @@
 	"added": "Přidáno ze schránky",
 	"addedCount": "Přidaná stahování: {count}",
 	"notAdded": "Ottie nemohl přidat zkopírovaný odkaz",
+	"unreachable": "Ottie se nepodařilo spojit s: {name}",
+	"showingLocal": "Místo toho se zobrazují stahování z tohoto počítače.",
+	"localFailed": "Ottie se na tomto počítači nepodařilo spustit",
 	"runTitle": "Spustit tento program?",
 	"runText": "„{name}“ je program: může na tomto počítači změnit cokoli. Spusťte ho, jen pokud důvěřujete jeho původu.",
 	"run": "Spustit",

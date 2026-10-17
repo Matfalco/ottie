@@ -16,20 +16,23 @@ mod player;
 mod popup;
 mod power;
 mod prefs;
+mod remote;
 mod sound;
 mod status;
 mod texts;
 mod tray;
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Mutex, PoisonError};
 
+use anyhow::anyhow;
 use tauri::ipc::CapabilityBuilder;
 use tauri::webview::NewWindowResponse;
 use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
-use crate::client::Daemon;
 use crate::daemon::Started;
+use crate::remote::Switch;
+use crate::texts::Texts;
 
 const WINDOW: &str = "main";
 /// The daemon's play links (docs/decisions/0029).
@@ -46,9 +49,10 @@ const PROJECT: &str = "https://github.com/Matfalco/ottie/";
 /// language, in Ottie's tray menu, open the window, quit, and hide the
 /// menu (docs/decisions/0034), choose what happens when everything has
 /// finished, or cancel it (0040), and watch the clipboard, then offer what
-/// it caught (0043), and open a download's file or folder (0045), named by
-/// its ID. Only these, and only for the daemon's pages.
-const PAGE_PERMISSIONS: [&str; 42] = [
+/// it caught (0043), open a download's file or folder (0045), named by
+/// its ID, and show another computer's Ottie (0053). Only these, and only
+/// for this computer's daemon's pages.
+const PAGE_PERMISSIONS: [&str; 47] = [
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
@@ -102,9 +106,45 @@ const PAGE_PERMISSIONS: [&str; 42] = [
     // Open and Show in folder (`files.rs`).
     "allow-open-file",
     "allow-show-in-folder",
+    // Ottie on other computers (`remote.rs`), and Settings → Desktop app.
+    "allow-daemons",
+    "allow-switch-daemon",
+    "allow-add-daemon",
+    "allow-remove-daemon",
+    "allow-set-local-daemon",
 ];
 
-/// The daemon this app started, if it did: stopped when the app quits.
+/// What another computer's Ottie's pages may do in the app
+/// (docs/decisions/0053): its own window, frame and title bar, the tray
+/// menu and the window for copied links (they're its pages too), the
+/// tray's language, and switching. Nothing that reaches this computer's
+/// files, programs, settings or power: such a page is only as trustworthy
+/// as that computer.
+const REMOTE_PERMISSIONS: [&str; 21] = [
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-set-language",
+    "core:window:allow-hide",
+    "allow-menu-ready",
+    "allow-show-main",
+    "allow-quit-app",
+    "allow-caught",
+    "allow-caught-ready",
+    "allow-caught-done",
+    "allow-caught-more",
+    "allow-daemons",
+    "allow-switch-daemon",
+    "allow-add-daemon",
+    "allow-remove-daemon",
+];
+
+/// This computer's daemon, if the app started it: stopped when the app quits.
 #[derive(Default)]
 struct Owned(Mutex<Option<Started>>);
 
@@ -148,7 +188,12 @@ fn main() -> tauri::Result<()> {
             clipboard::caught_done,
             clipboard::caught_more,
             files::open_file,
-            files::show_in_folder
+            files::show_in_folder,
+            remote::daemons,
+            remote::switch_daemon,
+            remote::add_daemon,
+            remote::remove_daemon,
+            prefs::set_local_daemon
         ])
         .setup(|app| {
             app.manage(player::Chosen::load(app.handle()));
@@ -186,18 +231,66 @@ fn main() -> tauri::Result<()> {
     Ok(())
 }
 
-/// Finds or starts the daemon, then opens the window on it (shown or not)
-/// and puts Ottie in the tray.
+/// Finds or starts this computer's daemon, unless the window shows another
+/// computer's and Settings say it starts only when shown (docs/decisions/0053),
+/// then opens the window on the one shown last (shown or not) and puts
+/// Ottie in the tray.
 async fn start(app: &AppHandle, shown: bool) -> anyhow::Result<()> {
-    let connection = daemon::connect(&daemon::sidecar()?).await?;
-    *owned(app) = connection.started;
-    let daemon = Arc::new(Daemon::new(&connection.link)?);
-    app.manage(daemon.clone());
-    app.manage(popup::Popup::new(&connection.link));
-    app.manage(finish::Finisher::new(&connection.link));
-    app.manage(clipboard::Catcher::new(&connection.link, daemon.clone()));
-    open_window(app, connection.link, shown)?;
-    tray::start(app, daemon)?;
+    let ottie = daemon::sidecar()?;
+    let local = daemon::link(&ottie).await?;
+    grant_local(app, &local)?;
+    app.manage(status::Feed::new());
+    app.manage(popup::Popup::new());
+    app.manage(finish::Finisher::new(&local));
+    app.manage(clipboard::Catcher::new());
+    app.manage(Switch::new(app, ottie, local));
+    let switch = app.state::<Switch>();
+    let prefs = app.state::<prefs::Saved>().get();
+    let texts = Texts::for_language(prefs.language.as_deref());
+    let last = switch.last_shown();
+    let mut local_failed = None;
+    if last.is_none() || prefs.local_daemon == prefs::LocalDaemon::Always {
+        match remote::start_local(app).await {
+            Ok(_) => {}
+            Err(err) if last.is_none() => return Err(err),
+            Err(err) => local_failed = Some(err),
+        }
+    }
+    let mut target = None;
+    if let Some(id) = last {
+        match remote::target(app, Some(id)).await {
+            Ok(shown) => target = Some(shown),
+            // Asleep, offline, or its token was removed there: this
+            // computer's instead.
+            Err(_) => {
+                let name = switch.name_of(id).unwrap_or_default();
+                notify::warn(
+                    app,
+                    texts.unreachable(&name),
+                    Some(texts.showing_local.clone()),
+                );
+            }
+        }
+    }
+    let target = match target {
+        Some(target) => target,
+        None => {
+            if let Some(err) = local_failed.take() {
+                return Err(err);
+            }
+            remote::start_local(app).await?;
+            remote::target(app, None)
+                .await
+                .map_err(|_| anyhow!("Ottie didn't start on this computer"))?
+        }
+    };
+    if let Some(err) = local_failed {
+        notify::warn(app, texts.local_failed.clone(), Some(format!("{err:#}")));
+    }
+    let link = target.link.clone();
+    remote::show(app, target);
+    open_window(app, link, shown)?;
+    tray::start(app)?;
     clipboard::start(app);
     Ok(())
 }
@@ -218,19 +311,60 @@ fn cant_start(app: &AppHandle, err: &anyhow::Error) {
         .blocking_show();
 }
 
-fn open_window(app: &AppHandle, link: Url, shown: bool) -> tauri::Result<()> {
-    let daemon = link.origin();
-    let links = daemon.clone();
-    let handle = app.clone();
+/// This computer's daemon's pages get the app's commands
+/// (`PAGE_PERMISSIONS`). Its address is only known now, hence a runtime
+/// capability.
+fn grant_local(app: &AppHandle, link: &Url) -> tauri::Result<()> {
     let page = PAGE_PERMISSIONS.into_iter().fold(
         CapabilityBuilder::new("page")
-            // The daemon's address is only known now, hence a runtime capability.
-            .remote(daemon.ascii_serialization())
+            .remote(link.origin().ascii_serialization())
             .local(false)
             .windows([WINDOW, popup::LABEL, finish::LABEL, clipboard::LABEL]),
         CapabilityBuilder::permission,
     );
-    app.add_capability(page)?;
+    app.add_capability(page)
+}
+
+/// Another computer's Ottie at `origin` gets fewer (`REMOTE_PERMISSIONS`),
+/// once it's shown; never the countdown's window, which is this computer's.
+fn grant_remote(app: &AppHandle, origin: &str) -> tauri::Result<()> {
+    let name: String = origin
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let page = REMOTE_PERMISSIONS.into_iter().fold(
+        CapabilityBuilder::new(format!("remote-{name}"))
+            .remote(origin.to_owned())
+            .local(false)
+            .windows([WINDOW, popup::LABEL, clipboard::LABEL]),
+        CapabilityBuilder::permission,
+    );
+    app.add_capability(page)
+}
+
+/// Run in every page the app's windows open, before the page's own code:
+/// tells it this computer's daemon's address, so another computer's page
+/// knows to leave out what only this computer's can do (docs/decisions/0053).
+fn page_script(app: &AppHandle) -> String {
+    let local = app.state::<Switch>().local_origin();
+    let quoted = serde_json::to_string(&local).unwrap_or_else(|_| "null".to_owned());
+    format!("window.__OTTIE_LOCAL__ = {quoted};")
+}
+
+/// The pages the main window may go to: the daemon it shows (its address
+/// changes when another is shown), and this computer's.
+fn allowed(app: &AppHandle, url: &Url) -> bool {
+    let switch = app.state::<Switch>();
+    let origin = url.origin().ascii_serialization();
+    origin == switch.local_origin()
+        || switch
+            .shown()
+            .is_some_and(|target| target.link.origin().ascii_serialization() == origin)
+}
+
+fn open_window(app: &AppHandle, link: Url, shown: bool) -> tauri::Result<()> {
+    let handle = app.clone();
+    let navigating = app.clone();
     let window = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::External(link))
         .title("Ottie")
         // No system title bar: the page draws its own.
@@ -240,14 +374,18 @@ fn open_window(app: &AppHandle, link: Url, shown: bool) -> tauri::Result<()> {
         // beside the window's buttons, and for a page under it.
         .min_inner_size(720.0, 480.0)
         .visible(shown)
-        // Only the daemon's pages: a link to elsewhere must not turn this
+        .initialization_script(page_script(app))
+        // Only the daemons' pages: a link to elsewhere must not turn this
         // window into a browser.
-        .on_navigation(move |url| url.origin() == daemon)
+        .on_navigation(move |url| allowed(&navigating, url))
         // "Play" opens the daemon's play link in a new tab: here, in the
-        // player chosen in Settings. Ottie's own pages on the web open in
-        // the system's browser. No other page opens a window.
+        // player chosen in Settings (another computer's too: a play link
+        // needs no token). Ottie's own pages on the web open in the
+        // system's browser. No other page opens a window.
         .on_new_window(move |url, _| {
-            if url.origin() == links && url.path().starts_with(PLAY_PATH) {
+            let shown = handle.state::<Switch>().shown();
+            let ours = shown.is_some_and(|target| target.link.origin() == url.origin());
+            if ours && url.path().starts_with(PLAY_PATH) {
                 player::play(&handle, &url);
             } else if url.as_str().starts_with(PROJECT) {
                 // Best effort: without a browser, the link does nothing.

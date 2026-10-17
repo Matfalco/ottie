@@ -1,5 +1,6 @@
 {
 	"open": "Ottie’yi aç",
+	"showLocal": "Bu bilgisayarın Ottie’sini göster",
 	"pauseAll": "Tümünü duraklat",
 	"resumeAll": "Tümünü sürdür",
 	"limit": "Hız sınırı: {speed}",
@@ -34,6 +35,9 @@
 	"added": "Panodan eklendi",
 	"addedCount": "Eklenen indirmeler: {count}",
 	"notAdded": "Ottie kopyalanan bağlantıyı ekleyemedi",
+	"unreachable": "Ottie şuna ulaşamadı: {name}",
+	"showingLocal": "Bunun yerine bu bilgisayarın indirmeleri gösteriliyor.",
+	"localFailed": "Ottie bu bilgisayarda başlatılamadı",
 	"runTitle": "Bu program çalıştırılsın mı?",
 	"runText": "“{name}” bir programdır: bu bilgisayardaki her şeyi değiştirebilir. Yalnızca kaynağına güveniyorsanız çalıştırın.",
 	"run": "Çalıştır",

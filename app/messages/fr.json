@@ -1,5 +1,6 @@
 {
 	"open": "Ouvrir Ottie",
+	"showLocal": "Afficher l’Ottie de cet ordinateur",
 	"pauseAll": "Tout mettre en pause",
 	"resumeAll": "Tout reprendre",
 	"limit": "Limiter la vitesse à {speed}",
@@ -34,6 +35,9 @@
 	"added": "Ajouté depuis le presse-papiers",
 	"addedCount": "{count} téléchargements ajoutés",
 	"notAdded": "Ottie n’a pas pu ajouter le lien copié",
+	"unreachable": "Ottie n’a pas pu joindre {name}",
+	"showingLocal": "Les téléchargements de cet ordinateur s’affichent à la place.",
+	"localFailed": "Ottie n’a pas pu démarrer sur cet ordinateur",
 	"runTitle": "Lancer ce programme ?",
 	"runText": "« {name} » est un programme : il peut tout modifier sur cet ordinateur. Ne le lancez que si vous faites confiance à sa provenance.",
 	"run": "Lancer",

@@ -1,5 +1,6 @@
 {
 	"open": "Odpri Ottie",
+	"showLocal": "Prikaži Ottie tega računalnika",
 	"pauseAll": "Začasno ustavi vse",
 	"resumeAll": "Nadaljuj vse",
 	"limit": "Omeji hitrost na {speed}",
@@ -34,6 +35,9 @@
 	"added": "Dodano iz odložišča",
 	"addedCount": "Dodani prenosi: {count}",
 	"notAdded": "Ottie ni mogel dodati kopirane povezave",
+	"unreachable": "Ottie ne more doseči: {name}",
+	"showingLocal": "Namesto tega so prikazani prenosi s tega računalnika.",
+	"localFailed": "Ottie se na tem računalniku ni mogel zagnati",
 	"runTitle": "Želite zagnati ta program?",
 	"runText": "»{name}« je program: na tem računalniku lahko spremeni karkoli. Zaženite ga le, če zaupate njegovemu izvoru.",
 	"run": "Zaženi",

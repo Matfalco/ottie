@@ -1,5 +1,6 @@
 {
 	"open": "Fungua Ottie",
+	"showLocal": "Onyesha Ottie ya kompyuta hii",
 	"pauseAll": "Sitisha zote",
 	"resumeAll": "Endelea na zote",
 	"limit": "Kikomo cha kasi: {speed}",
@@ -34,6 +35,9 @@
 	"added": "Imeongezwa kutoka ubao wa kunakili",
 	"addedCount": "Vipakuliwa vilivyoongezwa: {count}",
 	"notAdded": "Ottie haikuweza kuongeza kiungo kilichonakiliwa",
+	"unreachable": "Ottie haikuweza kufikia {name}",
+	"showingLocal": "Badala yake vipakuliwa vya kompyuta hii vinaonyeshwa.",
+	"localFailed": "Ottie haikuweza kuanza kwenye kompyuta hii",
 	"runTitle": "Uendeshe programu hii?",
 	"runText": "“{name}” ni programu: inaweza kubadilisha chochote kwenye kompyuta hii. Iendeshe tu ikiwa unaamini ilikotoka.",
 	"run": "Endesha",

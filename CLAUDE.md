@@ -50,9 +50,9 @@ Android app (Tauri) ──────┘    (on Android, core + api run inside 
 
 - **The HTTP API is the only contract.** Every client talks to the engine through it. It's documented in `docs/api/` (`docs/decisions/0030`): a guide, and `openapi.json` generated from the handlers. Tauri commands are only for OS integration (tray, notifications, file pickers, open folder, autostart, the player), never for download operations. The app's own commands are listed in `app/build.rs` and granted to the daemon's pages in `PAGE_PERMISSIONS`; a page never passes a program or path to run.
 - **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
-- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). At sign-in (`0039`) the system starts the app with `--autostart`: hidden in the tray, or, per `app.json`, it only starts `ottie serve` on its own (log in the app's log folder) and quits. A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable), the tooltip and notifications (finished: all at once by default, or each, or never; failed: a switch; `docs/decisions/0035`; with their sounds: the system's, silent, a set of Ottie's or one for each kind, `0038`), with its own texts in `app/messages/`. When everything has finished (`0040`) it can quit, or put the computer to sleep, hibernate it or shut it down after a countdown (a small window on the daemon's `/finish` page, or a notification), chosen every time in Settings or for once from the tray menu or the Downloads page. It can watch the clipboard (`0043`, opt-in): a link copied elsewhere to a file type a category lists is offered in a small window that never takes the focus (the daemon's `/caught` page; Download, More… opens the main window's list, Ignore), or added at once with a notification. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
+- **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). At sign-in (`0039`) the system starts the app with `--autostart`: hidden in the tray, or, per `app.json`, it only starts `ottie serve` on its own (log in the app's log folder) and quits. A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable), the tooltip and notifications (finished: all at once by default, or each, or never; failed: a switch; `docs/decisions/0035`; with their sounds: the system's, silent, a set of Ottie's or one for each kind, `0038`), with its own texts in `app/messages/`. When everything has finished (`0040`) it can quit, or put the computer to sleep, hibernate it or shut it down after a countdown (a small window on the daemon's `/finish` page, or a notification), chosen every time in Settings or for once from the tray menu or the Downloads page. It can watch the clipboard (`0043`, opt-in): a link copied elsewhere to a file type a category lists is offered in a small window that never takes the focus (the daemon's `/caught` page; Download, More… opens the main window's list, Ignore), or added at once with a notification. The window can also show another computer's Ottie (`0053`, a NAS, a server): a list in `daemons.json`, each token in the system's keychain, switched from beside the logo or Settings → Connection; such a page gets fewer app commands (`REMOTE_PERMISSIONS`: nothing that reaches this computer's files, programs, settings or power), and the tray, notifications and copied links follow the one shown, while "when everything has finished" stays with this computer's, which still starts with the app unless a setting says only once shown.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
-- **Other devices** (`docs/decisions/0052`): each gets a token of its own (full or read-only), and may only have downloads written into categories' folders and those listed; the token file's is this computer's, which alone manages them.
+- **Other devices** (`docs/decisions/0052`): each gets a token of its own (full or read-only), and may only have downloads written into categories' folders and those listed; the token file's is this computer's, which alone manages them. In a browser, each address keeps its own list of other computers' Ottie and switching goes to that one's own page (`0053`), so a page always matches its daemon's version.
 - **Headless:** the daemon runs standalone and serves the built web UI itself: `ottie service install` sets it up for you (systemd user unit, a task at sign-in, LaunchAgent) or, with `--system`, for the computer under an account of its own (systemd unit, Windows service); or the Docker image (`docs/decisions/0051`, `docs/service.md`).
 
 ## Repo layout
@@ -142,9 +142,14 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
                      sign-in, `ottie serve` on its own
   src/client.rs      the app as an API client: events WebSocket, jobs, settings, pause/resume, limit,
                      categories' file types, links in a text (preview), adding several, where a
-                     job's file is
+                     job's file is, whether it answers and takes the token; HTTPS with the system's certificates
+  src/remote.rs      Ottie on other computers (0053): the list (daemons.json), tokens in the keychain (keyring),
+                     sign-in links, this computer's daemon started once, the one shown (a watch the tray,
+                     clipboard and status follow), switching; commands daemons / switch_daemon / add_daemon /
+                     remove_daemon, the pages hear changes as the `daemons` event
   src/status.rs      follows the events (reconnects), sums them up once a second for the tray (counts, speed, progress of those of known size),
-                     and passes downloads that finished or failed to notify.rs
+                     and passes downloads that finished or failed to notify.rs: this computer's daemon always (for
+                     when everything has finished), another's while shown (0053)
   src/notify.rs      notifications (0035): what to tell (each, all at once, failed), with which sound, a click
                      opens the window
   src/sound.rs       notification sounds (0038): the system's, silent, one of Ottie's sets (sounds/, played with
@@ -173,10 +178,11 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
                      the bare language), speeds, counts and failure reasons per language; right-to-left
                      ones embedded as such (0042)
   src/prefs.rs       app.json: close to tray, notifications and their sounds, what sign-in starts, what happens
-                     when everything has finished, watching the clipboard and what a copied link does, the
-                     page's language, last total limit; commands desktop / set_startup / set_close_to_tray /
-                     set_watch_clipboard / set_copied / set_notify / set_notify_failed / set_sounds /
-                     set_sound / play_sound / set_language; the pages hear changes as the `desktop` event
+                     when everything has finished, watching the clipboard and what a copied link does, whether
+                     this computer's daemon always starts (0053), the page's language, last total limit; commands
+                     desktop / set_startup / set_close_to_tray / set_watch_clipboard / set_copied /
+                     set_local_daemon / set_notify / set_notify_failed / set_sounds / set_sound / play_sound /
+                     set_language; the pages hear changes as the `desktop` event
   src/config.rs      load/save the app's JSON settings files in its config folder
   src/files.rs       a download's file and folder (0045): commands open_file / show_in_folder take a job
                      ID, ask the daemon where it is; a program asks first in a native dialog
@@ -236,6 +242,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      caught.ts (links copied elsewhere: the window's rows and title, how long it stays,
                      what was added or refused, 0043),
                      access.ts (devices and the folders they may use, as Settings shows them, 0052),
+                     others.ts (Ottie on other computers: sign-in links, the switcher's rows, a browser's list, 0053;
+                     others.svelte.ts: that list live, the app's or this browser's),
                      shortcuts.ts (keyboard shortcuts: what a key press means on every page and in
                      Downloads, whether the focused control needs that key, what a paste holds, the
                      list of them with key names per language, 0046)
@@ -278,8 +286,10 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        LanguagePicker; downloads (Stepper for how many at once);
                        desktop app (sign-in, closing), clipboard, notifications + playing (desktop app only); retries;
                        keyboard shortcuts (ShortcutList); connection: AccessSettings (other devices, their sign-in
-                       links, the folders they may use; a device sees which it is, 0052)), Switch, NumberField, LimitControl,
-                       TitleBar (+ WindowControls; folds to fit: tab icons, slot chip, logo name), AddCard (AddBar: link, then category + folder step;
+                       links, the folders they may use; a device sees which it is, 0052) and OthersSettings (Ottie on other
+                       computers, 0053)), Switch, NumberField, LimitControl,
+                       TitleBar (+ WindowControls; Switcher beside the logo once there's another computer's Ottie, 0053;
+                       folds to fit: tab icons, slot chip, logo and switcher names), AddCard (AddBar: link, then category + folder step;
                        BatchDialog: several links, from a paste, the list button or a file),
                        FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu, its RunningList), Countdown (its
                        countdown window before sleep, hibernate or shut down), Caught (its window for links
@@ -387,6 +397,7 @@ Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 3
 - Other devices get tokens of their own (`docs/decisions/0052`), full or read-only, kept as SHA-256 hashes in `<config>/access.json`; only this computer's token manages them and the folders list. A read-only token passes `auth::only_reads` (GET, and a few POSTs that change nothing): a new endpoint that changes nothing but isn't a GET must be listed there. Every handler that takes a folder from a client checks it with `Access::folders_for` (devices: categories' folders and those listed only).
 - Play links (`/stream/{ticket}/…`, `docs/decisions/0029`) are the one exception: the random ticket reads one job's file and expires after 12 h unused. They're served with `Content-Security-Policy: sandbox`, so a downloaded page or SVG can't run scripts as the daemon's pages.
 - Cookies and auth headers forwarded by the extension belong to that one job: never log them, never reuse them for another job.
+- Another computer's Ottie shown in the desktop app (`docs/decisions/0053`) is only as trustworthy as that computer: its pages get `REMOTE_PERMISSIONS` (window, tray menu, copied links, switching), never a command that reaches this computer's files, programs, settings or power; a new app command is left out of that list unless it can't. Its token lives in the system's keychain, and no page gets a token back.
 - The desktop app opens files only through commands that take a job ID (`docs/decisions/0045`): it asks the daemon for the path and refuses a name that's more than a name. Running a program always asks first, in the app's own dialog.
 - Logs and errors never contain query strings or credentials: log URLs through `redact()`, and wrap `reqwest::Error` with `without_url()` (done in `Error::from`).
 - Only `http`/`https` (plus schemes a backend explicitly supports). The redirect policy in `build_client()` rejects anything else, and caps redirects at 10.
@@ -535,10 +546,11 @@ Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review.
      (Settings → Connection, `ottie device`), this computer's replaced by `ottie token --new`; devices write
      only in categories' folders and those listed (Settings, `folders` in config.toml); the system service
      under its own account came with 7g. Built, not reviewed yet: what's left to check is at the end of 0052
-   - 7i several daemons from one place: in the desktop app, a list (name, URL, token in the OS
-     keychain) and a switcher, with fewer app commands for a remote daemon's page (no open folder, no
-     play with); in the web UI, a switcher first (needs CORS on the daemon, safe since the token isn't
-     a cookie), maybe later one list across daemons (IDs clash, one event stream each)
+   - 🟡 7i several daemons from one place (`docs/decisions/0053`): in the desktop app, a list (name,
+     address, token in the system's keychain) and a switcher beside the logo, another computer's page
+     with fewer app commands, the tray, notifications and copied links following the one shown, this
+     computer's still starting (a setting: only once shown); in a browser, a list per address, switching
+     to the other page. Built, not reviewed yet: what's left to check is at the end of 0053
    - 7j FTP/SFTP as a native backend
 8. Browser extension.
 9. yt-dlp backend (its own updates, apart from the app's).

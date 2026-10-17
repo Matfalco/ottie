@@ -1,5 +1,6 @@
 {
 	"open": "Ottie megnyitása",
+	"showLocal": "Az ezen a számítógépen futó Ottie megjelenítése",
 	"pauseAll": "Összes szüneteltetése",
 	"resumeAll": "Összes folytatása",
 	"limit": "Sebességkorlát: {speed}",
@@ -34,6 +35,9 @@
 	"added": "Hozzáadva a vágólapról",
 	"addedCount": "Hozzáadott letöltések: {count}",
 	"notAdded": "Az Ottie nem tudta hozzáadni a másolt linket",
+	"unreachable": "Az Ottie nem éri el: {name}",
+	"showingLocal": "Helyette ennek a számítógépnek a letöltései látszanak.",
+	"localFailed": "Az Ottie nem tudott elindulni ezen a számítógépen",
 	"runTitle": "Futtatod ezt a programot?",
 	"runText": "„{name}” egy program: bármit megváltoztathat ezen a számítógépen. Csak akkor futtasd, ha megbízol a forrásában.",
 	"run": "Futtatás",

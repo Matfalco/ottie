@@ -1,5 +1,6 @@
 {
 	"open": "Åbn Ottie",
+	"showLocal": "Vis denne computers Ottie",
 	"pauseAll": "Sæt alle på pause",
 	"resumeAll": "Genoptag alle",
 	"limit": "Begræns hastigheden til {speed}",
@@ -34,6 +35,9 @@
 	"added": "Tilføjet fra udklipsholderen",
 	"addedCount": "Tilføjede downloads: {count}",
 	"notAdded": "Ottie kunne ikke tilføje det kopierede link",
+	"unreachable": "Ottie kunne ikke nå {name}",
+	"showingLocal": "Denne computers overførsler vises i stedet.",
+	"localFailed": "Ottie kunne ikke starte på denne computer",
 	"runTitle": "Køre dette program?",
 	"runText": "“{name}” er et program: det kan ændre alt på denne computer. Kør det kun, hvis du stoler på, hvor det kommer fra.",
 	"run": "Kør",

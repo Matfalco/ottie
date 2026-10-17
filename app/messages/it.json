@@ -1,5 +1,6 @@
 {
 	"open": "Apri Ottie",
+	"showLocal": "Mostra l’Ottie di questo computer",
 	"pauseAll": "Metti tutto in pausa",
 	"resumeAll": "Riprendi tutto",
 	"limit": "Limita la velocità a {speed}",
@@ -34,6 +35,9 @@
 	"added": "Aggiunto dagli appunti",
 	"addedCount": "Download aggiunti: {count}",
 	"notAdded": "Ottie non è riuscito ad aggiungere il link copiato",
+	"unreachable": "Ottie non è riuscito a raggiungere {name}",
+	"showingLocal": "Vengono mostrati invece i download di questo computer.",
+	"localFailed": "Ottie non è riuscito ad avviarsi su questo computer",
 	"runTitle": "Eseguire questo programma?",
 	"runText": "«{name}» è un programma: può modificare qualsiasi cosa su questo computer. Eseguilo solo se ti fidi della sua provenienza.",
 	"run": "Esegui",

@@ -3,9 +3,10 @@
 //! when to notify (docs/decisions/0035) and with which sounds (0038), what
 //! starting at sign-in starts (0039), what happens when everything has
 //! finished (0040), whether it watches the clipboard and what a copied
-//! link does (0043), the language the page shows (for the tray's texts and
-//! notifications), and the last total speed limit (for the tray's "Limit
-//! speed").
+//! link does (0043), whether this computer's Ottie always starts when the
+//! window shows another one's (0053), the language the page shows (for the
+//! tray's texts and notifications), and the last total speed limit (for the
+//! tray's "Limit speed").
 
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -56,6 +57,9 @@ pub struct Prefs {
     /// Links copied elsewhere are offered or added (opt-in).
     pub watch_clipboard: bool,
     pub copied: Copied,
+    /// Whether this computer's Ottie starts with the app when the window
+    /// shows another computer's.
+    pub local_daemon: LocalDaemon,
     /// The page's language, as it said last.
     pub language: Option<String>,
     /// The total limit last set (bytes per second), by anyone.
@@ -79,6 +83,7 @@ impl Default for Prefs {
             finish_waits_for_scheduled: true,
             watch_clipboard: false,
             copied: Copied::Ask,
+            local_daemon: LocalDaemon::Always,
             language: None,
             last_limit: None,
         }
@@ -110,6 +115,19 @@ pub enum Notify {
     Never,
 }
 
+/// When this computer's Ottie runs, with the window on another computer's
+/// (docs/decisions/0053).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LocalDaemon {
+    /// It starts with the app whatever the window shows, so its downloads
+    /// carry on.
+    #[default]
+    Always,
+    /// Only once the window shows it (then until the app quits).
+    WhenShown,
+}
+
 /// The part the page sees and changes, in Settings → Desktop app,
 /// Clipboard and Notifications, and the tray menu.
 #[derive(Debug, Clone, Serialize)]
@@ -120,6 +138,7 @@ pub struct Desktop {
     pub close_to_tray: bool,
     pub watch_clipboard: bool,
     pub copied: Copied,
+    pub local_daemon: LocalDaemon,
     pub notify: Notify,
     pub notify_failed: bool,
     pub sounds: Sounds,
@@ -138,6 +157,7 @@ impl Desktop {
             close_to_tray: prefs.close_to_tray,
             watch_clipboard: prefs.watch_clipboard,
             copied: prefs.copied,
+            local_daemon: prefs.local_daemon,
             notify: prefs.notify,
             notify_failed: prefs.notify_failed,
             sounds: prefs.sounds,
@@ -229,6 +249,16 @@ pub fn set_copied(
     copied: Copied,
 ) -> Result<Desktop, String> {
     change_desktop(&app, &saved, |prefs| prefs.copied = copied)
+}
+
+/// From the next start: a running Ottie isn't stopped.
+#[tauri::command]
+pub fn set_local_daemon(
+    app: AppHandle,
+    saved: State<'_, Saved>,
+    local: LocalDaemon,
+) -> Result<Desktop, String> {
+    change_desktop(&app, &saved, |prefs| prefs.local_daemon = local)
 }
 
 #[tauri::command]

@@ -30,7 +30,7 @@
 	import { canSchedule, fromField, timeChange, toField, type TimeKey } from '#lib/schedule.js';
 	import { canOpen } from '#lib/opening.js';
 	import { amount, fraction, isFinished } from '#lib/status.js';
-	import { canChoosePlayer } from '#lib/window.js';
+	import { playsInApp } from '#lib/window.js';
 	import FileBar from './FileBar.svelte';
 	import FileIcon from './FileIcon.svelte';
 	import Hint from './Hint.svelte';
@@ -129,7 +129,7 @@
 	 * forth while the link for another download arrives. */
 	let refused = $state(false);
 	/** In the desktop app, Play opens the player chosen in Settings. */
-	const inApp = canChoosePlayer();
+	const inApp = playsInApp();
 	let copied = $state(false);
 	/** The clipboard refused: the link is shown to copy by hand. */
 	let showLink = $state(false);

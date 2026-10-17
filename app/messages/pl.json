@@ -1,5 +1,6 @@
 {
 	"open": "Otwórz Ottie",
+	"showLocal": "Pokaż Ottie tego komputera",
 	"pauseAll": "Wstrzymaj wszystkie",
 	"resumeAll": "Wznów wszystkie",
 	"limit": "Ogranicz prędkość do {speed}",
@@ -34,6 +35,9 @@
 	"added": "Dodano ze schowka",
 	"addedCount": "Dodane pobierania: {count}",
 	"notAdded": "Ottie nie udało się dodać skopiowanego linku",
+	"unreachable": "Ottie nie może połączyć się z: {name}",
+	"showingLocal": "Zamiast tego wyświetlane są pobierania z tego komputera.",
+	"localFailed": "Nie udało się uruchomić Ottie na tym komputerze",
 	"runTitle": "Uruchomić ten program?",
 	"runText": "„{name}” to program: może zmienić wszystko na tym komputerze. Uruchom go tylko wtedy, gdy ufasz jego źródłu.",
 	"run": "Uruchom",

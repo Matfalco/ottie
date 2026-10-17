@@ -1,5 +1,6 @@
 {
 	"open": "Buka Ottie",
+	"showLocal": "Tampilkan Ottie komputer ini",
 	"pauseAll": "Jeda semua",
 	"resumeAll": "Lanjutkan semua",
 	"limit": "Batasi kecepatan: {speed}",
@@ -34,6 +35,9 @@
 	"added": "Ditambahkan dari papan klip",
 	"addedCount": "Unduhan ditambahkan: {count}",
 	"notAdded": "Ottie tidak dapat menambahkan tautan yang disalin",
+	"unreachable": "Ottie tidak dapat menjangkau {name}",
+	"showingLocal": "Unduhan di komputer ini ditampilkan sebagai gantinya.",
+	"localFailed": "Ottie tidak dapat dimulai di komputer ini",
 	"runTitle": "Jalankan program ini?",
 	"runText": "“{name}” adalah program: program ini dapat mengubah apa saja di komputer ini. Jalankan hanya jika Anda memercayai sumbernya.",
 	"run": "Jalankan",

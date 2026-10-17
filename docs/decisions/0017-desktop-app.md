@@ -25,4 +25,4 @@ Accepted 2026-10-12.
 
 **Tools.** Tauri 2, the stable line (3.0 is in alpha). The Tauri CLI is a pinned dev dependency of the pnpm package `app` (`@tauri-apps/cli`, prebuilt), not `cargo install tauri-cli`, which compiles for minutes and isn't pinned per project.
 
-**Later:** connecting to a remote daemon (URL + token, with a settings screen), the tray, notifications, autostart (done in 0039), and window size and position remembered.
+**Later:** connecting to a remote daemon (done in 0053: a list, switched from the title bar), the tray, notifications, autostart (done in 0039), and window size and position remembered.

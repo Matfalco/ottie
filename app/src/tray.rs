@@ -1,13 +1,13 @@
 //! The tray icon (docs/decisions/0034). A right click opens Ottie's own menu
 //! (`popup.rs`), which has the limit's field. The system's menu below (open
-//! the window, see what runs and how far it has come, pause or resume everything, switch the total
+//! the window, back to this computer's Ottie while another's is shown (0053), see what runs and how far it has come, pause or resume everything, switch the total
 //! limit or pick one, choose what happens when everything has finished or cancel it
 //! (docs/decisions/0040), watch the clipboard or not (0043), quit) is there while the daemon can't be reached, since
 //! Ottie's menu is its page, and always on Linux, whose trays report no
 //! clicks. What it shows comes from the daemon's events (`status.rs`); what
-//! it does goes through the daemon's API, like any other front end.
+//! it does goes through the daemon's API, like any other front end. Both are
+//! the daemon the window shows, this computer's or another's (0053).
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use tauri::image::Image;
@@ -20,11 +20,13 @@ use tokio::sync::watch;
 
 use crate::client::Daemon;
 use crate::finish::{self, Finish, Finisher};
-use crate::status::{self, Summary};
+use crate::remote::{self, Switch};
+use crate::status::{Feed, Summary};
 use crate::texts::Texts;
 use crate::{popup, prefs};
 
 const OPEN: &str = "open";
+const SHOW_LOCAL: &str = "show-local";
 const STATUS: &str = "status";
 const PROGRESS: &str = "progress";
 const PAUSE_ALL: &str = "pause-all";
@@ -120,13 +122,14 @@ const BLACK: [(u32, &[u8]); 5] = [
 
 /// What the menu's actions need, as managed state.
 struct Actions {
-    daemon: Arc<Daemon>,
     summaries: watch::Receiver<Summary>,
 }
 
 /// The menu's items whose text or state changes.
 struct Items {
     open: MenuItem<Wry>,
+    /// In the menu only while another computer's Ottie is shown.
+    show_local: MenuItem<Wry>,
     status: MenuItem<Wry>,
     /// In the menu only while running downloads have a known size.
     progress: MenuItem<Wry>,
@@ -144,12 +147,13 @@ struct Items {
     quit: MenuItem<Wry>,
 }
 
-/// Puts Ottie in the tray, and keeps it up to date with the daemon.
-pub fn start(app: &AppHandle, daemon: Arc<Daemon>) -> tauri::Result<()> {
-    let (out, summaries) = watch::channel(Summary::default());
+/// Puts Ottie in the tray, and keeps it up to date with the daemon shown.
+pub fn start(app: &AppHandle) -> tauri::Result<()> {
+    let summaries = app.state::<Feed>().subscribe();
     let texts = Texts::for_language(app.state::<prefs::Saved>().get().language.as_deref());
     let items = Items {
         open: MenuItem::with_id(app, OPEN, &texts.open, true, None::<&str>)?,
+        show_local: MenuItem::with_id(app, SHOW_LOCAL, &texts.show_local, true, None::<&str>)?,
         status: MenuItem::with_id(
             app,
             STATUS,
@@ -241,10 +245,8 @@ pub fn start(app: &AppHandle, daemon: Arc<Daemon>) -> tauri::Result<()> {
         .on_menu_event(chosen)
         .build(app)?;
     app.manage(Actions {
-        daemon: daemon.clone(),
         summaries: summaries.clone(),
     });
-    tauri::async_runtime::spawn(status::follow(app.clone(), daemon, out));
     tauri::async_runtime::spawn(refresh(app.clone(), tray, menu, items, look, summaries));
     Ok(())
 }
@@ -272,11 +274,22 @@ fn clicked(tray: &TrayIcon, event: TrayIconEvent) {
 
 fn chosen(app: &AppHandle, event: MenuEvent) {
     let actions = app.state::<Actions>();
-    let daemon = actions.daemon.clone();
     let summary = *actions.summaries.borrow();
     let id = event.id().as_ref();
+    let shown = app.state::<Switch>().shown();
+    // The daemon's actions, while there's one to act on.
+    let daemon = || shown.as_ref().map(|target| target.daemon.clone());
     match id {
         OPEN => crate::show(app),
+        SHOW_LOCAL => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                // Failed (this computer's didn't start): the menu stays as it is.
+                if remote::show_local(&app).await.is_ok() {
+                    crate::show(&app);
+                }
+            });
+        }
         OTHER_LIMIT => {
             if let Ok(at) = app.cursor_position() {
                 popup::toggle(app, at);
@@ -291,16 +304,23 @@ fn chosen(app: &AppHandle, event: MenuEvent) {
             let _ = prefs::change_desktop(app, &saved, |prefs| prefs.watch_clipboard = on);
         }
         PAUSE_ALL => {
-            tauri::async_runtime::spawn(async move { pause_all(&daemon).await });
+            if let Some(daemon) = daemon() {
+                tauri::async_runtime::spawn(async move { pause_all(&daemon).await });
+            }
         }
         RESUME_ALL => {
-            tauri::async_runtime::spawn(async move { resume_all(&daemon).await });
+            if let Some(daemon) = daemon() {
+                tauri::async_runtime::spawn(async move { resume_all(&daemon).await });
+            }
         }
         LIMIT => {
             let limit = if summary.global_limit > 0 {
                 0
             } else {
                 last_limit(app)
+            };
+            let Some(daemon) = daemon() else {
+                return;
             };
             tauri::async_runtime::spawn(async move {
                 // Failed: the next refresh puts the check mark back.
@@ -318,7 +338,7 @@ fn chosen(app: &AppHandle, event: MenuEvent) {
                 return;
             }
             let preset = id.strip_prefix(PRESET).and_then(|limit| limit.parse().ok());
-            if let Some(limit) = preset {
+            if let (Some(limit), Some(daemon)) = (preset, daemon()) {
                 tauri::async_runtime::spawn(async move {
                     let _ = daemon.set_global_limit(limit).await;
                 });
@@ -382,6 +402,8 @@ async fn refresh(
     // Whether the progress item is in the menu, and Cancel.
     let mut progress_listed = false;
     let mut cancel_listed = false;
+    // Whether "Show this computer's Ottie" is in the menu (after "Open Ottie").
+    let mut local_listed = false;
     let mut tick = tokio::time::interval(REFRESH);
     loop {
         tick.tick().await;
@@ -392,6 +414,7 @@ async fn refresh(
             // Every text again, in the new language.
             shown = Shown::default();
             let _ = items.open.set_text(&texts.open);
+            let _ = items.show_local.set_text(&texts.show_local);
             let _ = items.pause_all.set_text(&texts.pause_all);
             let _ = items.resume_all.set_text(&texts.resume_all);
             let _ = items.quit.set_text(&texts.quit);
@@ -422,6 +445,10 @@ async fn refresh(
             can_resume: summary.paused > 0,
             limit: Some(texts.limit(limit)),
             connected: summary.connected,
+            name: app
+                .state::<Switch>()
+                .shown()
+                .and_then(|target| target.name.clone()),
         };
         // Best effort below: a tray that misses one update gets the next.
         if now.status != shown.status
@@ -429,13 +456,24 @@ async fn refresh(
         {
             let _ = items.status.set_text(status);
         }
+        // Another computer's Ottie is shown: a way back to this one's, even
+        // when that page can't load (docs/decisions/0053).
+        let remote = now.name.is_some();
+        if remote != local_listed {
+            local_listed = if remote {
+                menu.insert(&items.show_local, 1).is_ok()
+            } else {
+                menu.remove(&items.show_local).is_err()
+            };
+        }
         match &now.progress {
             Some(progress) => {
                 if now.progress != shown.progress {
                     let _ = items.progress.set_text(progress);
                 }
                 if !progress_listed {
-                    progress_listed = menu.insert(&items.progress, PROGRESS_AT).is_ok();
+                    let at = PROGRESS_AT + usize::from(local_listed);
+                    progress_listed = menu.insert(&items.progress, at).is_ok();
                 }
             }
             None => {
@@ -450,7 +488,7 @@ async fn refresh(
                     let _ = items.cancel_finish.set_text(cancel);
                 }
                 if !cancel_listed {
-                    let at = CANCEL_AT + usize::from(progress_listed);
+                    let at = CANCEL_AT + usize::from(progress_listed) + usize::from(local_listed);
                     cancel_listed = menu.insert(&items.cancel_finish, at).is_ok();
                 }
             }
@@ -460,10 +498,15 @@ async fn refresh(
                 }
             }
         }
-        if (&now.status, &now.progress) != (&shown.status, &shown.progress) {
-            // "Ottie", what runs, how far it has come: far below the 127
-            // characters Windows shows.
-            let lines = ["Ottie"]
+        if (&now.status, &now.progress, &now.name) != (&shown.status, &shown.progress, &shown.name)
+        {
+            // "Ottie" (and which computer's, if not this one's), what runs, how
+            // far it has come: below the 127 characters Windows shows.
+            let title = match &now.name {
+                Some(name) => format!("Ottie – {}", name.chars().take(40).collect::<String>()),
+                None => "Ottie".to_owned(),
+            };
+            let lines = [title.as_str()]
                 .into_iter()
                 .chain(now.status.as_deref())
                 .chain(now.progress.as_deref());
@@ -531,6 +574,8 @@ struct Shown {
     can_resume: bool,
     limit: Option<String>,
     connected: bool,
+    /// Another computer's Ottie shown in the window, by its name.
+    name: Option<String>,
 }
 
 /// Which icon suits the tray: its colour and size.

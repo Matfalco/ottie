@@ -36,6 +36,11 @@ fn main() {
         "caught_more",
         "open_file",
         "show_in_folder",
+        "daemons",
+        "switch_daemon",
+        "add_daemon",
+        "remove_daemon",
+        "set_local_daemon",
     ]);
     if let Err(err) = tauri_build::try_build(Attributes::new().app_manifest(manifest)) {
         panic!("{err:#}");

@@ -1,5 +1,6 @@
 {
 	"open": "Oscail Ottie",
+	"showLocal": "Taispeáin Ottie an ríomhaire seo",
 	"pauseAll": "Cuir gach ceann ar sos",
 	"resumeAll": "Atosaigh gach ceann",
 	"limit": "Teorannaigh an luas go {speed}",
@@ -34,6 +35,9 @@
 	"added": "Curtha leis ón ngearrthaisce",
 	"addedCount": "Íoslódálacha curtha leis: {count}",
 	"notAdded": "Níorbh fhéidir le Ottie an nasc cóipeáilte a chur leis",
+	"unreachable": "Níorbh fhéidir le Ottie teacht ar {name}",
+	"showingLocal": "Taispeántar íoslódálacha an ríomhaire seo ina ionad.",
+	"localFailed": "Níorbh fhéidir Ottie a thosú ar an ríomhaire seo",
 	"runTitle": "An clár seo a rith?",
 	"runText": "Is clár é “{name}”: is féidir leis aon rud a athrú ar an ríomhaire seo. Ná rith é ach amháin má tá muinín agat as a fhoinse.",
 	"run": "Rith",

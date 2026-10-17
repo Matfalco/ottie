@@ -53,6 +53,7 @@
 		setCountdown,
 		setCountdownIn,
 		setFinish,
+		setLocalDaemon,
 		setFinishWaits,
 		setNotify,
 		setNotifyFailed,
@@ -66,6 +67,7 @@
 		type Desktop,
 		type Finish,
 		type Finishing,
+		type LocalDaemon,
 		type Notify,
 		type PlayWith,
 		type Player,
@@ -76,6 +78,7 @@
 	import LimitControl from './LimitControl.svelte';
 	import LookChoices from './LookChoices.svelte';
 	import NumberField from './NumberField.svelte';
+	import OthersSettings from './OthersSettings.svelte';
 	import ShortcutList from './ShortcutList.svelte';
 	import Stepper from './Stepper.svelte';
 	import Switch from './Switch.svelte';
@@ -109,6 +112,14 @@
 		notification: { name: m.set_countdown_notification, hint: m.set_countdown_notification_hint }
 	};
 	const COUNTDOWN_CHOICES = Object.keys(COUNTDOWN_NAMES) as CountdownIn[];
+
+	/** When this computer's Ottie runs, with the window on another
+	 * computer's (docs/decisions/0053). */
+	const LOCAL_NAMES: Record<LocalDaemon, { name: () => string; hint: () => string }> = {
+		always: { name: m.set_local_always, hint: m.set_local_always_hint },
+		whenShown: { name: m.set_local_when_shown, hint: m.set_local_when_shown_hint }
+	};
+	const LOCAL_CHOICES = Object.keys(LOCAL_NAMES) as LocalDaemon[];
 
 	/** Only the desktop app can start a player (docs/decisions/0031), stay
 	 * in the tray (0034), notify (0035), start at sign-in (0039) or watch
@@ -157,6 +168,7 @@
 	let notify: Notify = $state('all');
 	/** The sign-in choice shown, put back the same way. */
 	let startup: Startup = $state('off');
+	let localDaemon: LocalDaemon = $state('always');
 	/** What a copied link does, the same way. */
 	let copyChoice: Copied = $state('ask');
 
@@ -201,6 +213,7 @@
 		desktop = answer;
 		notify = answer.notify;
 		startup = answer.startup;
+		localDaemon = answer.localDaemon;
 		copyChoice = answer.copied;
 	}
 
@@ -211,6 +224,7 @@
 			problem = m.set_app_failed();
 			notify = desktop?.notify ?? 'all';
 			startup = desktop?.startup ?? 'off';
+			localDaemon = desktop?.localDaemon ?? 'always';
 			copyChoice = desktop?.copied ?? 'ask';
 		}
 	}
@@ -276,6 +290,17 @@
 		}
 		current = found;
 	}
+
+	// A link to a section (the switcher's "Manage the list…") opens there.
+	onMount(() => {
+		const id = location.hash.slice(1);
+		if (SECTIONS.some((section) => section.id === id)) {
+			requestAnimationFrame(() => {
+				document.getElementById(id)?.scrollIntoView({ block: 'start' });
+				current = id;
+			});
+		}
+	});
 
 	function go(event: MouseEvent, id: string) {
 		event.preventDefault();
@@ -551,6 +576,26 @@
 							onChange={(on) => changeDesktop(() => setCloseToTray(on))}
 						/>
 					</div>
+					<fieldset>
+						<legend>{m.set_local_daemon()}</legend>
+						<div class="options locals">
+							{#each LOCAL_CHOICES as choice (choice)}
+								<label class="option row" class:chosen={localDaemon === choice}>
+									<input
+										type="radio"
+										name="local-daemon"
+										value={choice}
+										bind:group={localDaemon}
+										onchange={() => changeDesktop(() => setLocalDaemon(choice))}
+									/>
+									<span class="names">
+										<span>{LOCAL_NAMES[choice].name()}</span>
+										<span class="hint">{LOCAL_NAMES[choice].hint()}</span>
+									</span>
+								</label>
+							{/each}
+						</div>
+					</fieldset>
 				{:else}
 					<p class="waiting">{m.connection_connecting()}</p>
 				{/if}
@@ -900,6 +945,7 @@
 					</span>
 				</span>
 			</div>
+			<OthersSettings />
 			<AccessSettings />
 		</section>
 	</div>
@@ -1196,6 +1242,7 @@
 	.plays,
 	.notifies,
 	.startups,
+	.locals,
 	.finishes,
 	.countdowns,
 	.copies {

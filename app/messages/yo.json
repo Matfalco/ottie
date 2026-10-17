@@ -1,5 +1,6 @@
 {
 	"open": "Ṣí Ottie",
+	"showLocal": "Fi Ottie kọ̀ǹpútà yìí hàn",
 	"pauseAll": "Dá gbogbo dúró",
 	"resumeAll": "Tẹ̀síwájú pẹ̀lú gbogbo",
 	"limit": "Òdiwọ̀n ìyára: {speed}",
@@ -34,6 +35,9 @@
 	"added": "A fi kún un láti pátákó ìdàkọ",
 	"addedCount": "Àwọn ìgbàsílẹ̀ tí a fi kún: {count}",
 	"notAdded": "Ottie kò lè fi ìjápọ̀ tí a dà kọ kún un",
+	"unreachable": "Ottie kò lè dé ọ̀dọ̀ {name}",
+	"showingLocal": "Àwọn ìgbàsílẹ̀ kọ̀ǹpútà yìí ni a ń fi hàn dípò rẹ̀.",
+	"localFailed": "Ottie kò lè bẹ̀rẹ̀ lórí kọ̀ǹpútà yìí",
 	"runTitle": "Ṣé kí a ṣí ètò yìí?",
 	"runText": "“{name}” jẹ́ ètò kan: ó lè yí ohunkóhun padà lórí kọ̀ǹpútà yìí. Ṣí i kìkì tí o bá gbẹ́kẹ̀lé ibi tí ó ti wá.",
 	"run": "Ṣí i",

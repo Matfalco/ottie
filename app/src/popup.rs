@@ -2,7 +2,8 @@
 //! the daemon's `/tray` page, opened at the click. The system's menus only
 //! hold text items, and this one has the speed limit's field. It's created
 //! at the first click, then hidden and shown again, so it opens at once; it
-//! hides when it loses focus, like a menu.
+//! hides when it loses focus, like a menu. It's the page of the daemon the
+//! window shows (docs/decisions/0053): showing another closes it.
 
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
@@ -11,6 +12,8 @@ use tauri::{
     AppHandle, LogicalSize, Manager, PhysicalPosition, State, Url, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder, WindowEvent,
 };
+
+use crate::remote::Switch;
 
 pub const LABEL: &str = "tray";
 /// Its width in CSS pixels; the page says how tall it is.
@@ -24,8 +27,6 @@ const JUST_HIDDEN: Duration = Duration::from_millis(300);
 
 /// The menu's state, as managed state.
 pub struct Popup {
-    /// The `/tray` page, signed in.
-    page: Url,
     state: Mutex<Placing>,
 }
 
@@ -40,12 +41,8 @@ struct Placing {
 }
 
 impl Popup {
-    /// From the main window's signed-in link (`http://…/#token=…`).
-    pub fn new(link: &Url) -> Popup {
-        let mut page = link.clone();
-        page.set_path("/tray");
+    pub fn new() -> Popup {
         Popup {
-            page,
             state: Mutex::new(Placing {
                 anchor: PhysicalPosition::new(0.0, 0.0),
                 height: FIRST_HEIGHT,
@@ -89,7 +86,12 @@ pub fn toggle(app: &AppHandle, at: PhysicalPosition<f64>) {
         None => {
             placing.waiting = true;
             drop(placing);
-            if create(app, &popup.page).is_err() {
+            let page = app.state::<Switch>().shown().map(|target| {
+                let mut page = target.link.clone();
+                page.set_path("/tray");
+                page
+            });
+            if page.is_none_or(|page| create(app, &page).is_err()) {
                 popup.lock().waiting = false;
             }
         }
@@ -107,6 +109,7 @@ fn create(app: &AppHandle, page: &Url) -> tauri::Result<()> {
         // Shown once the page says how tall it is.
         .visible(false)
         .inner_size(WIDTH, FIRST_HEIGHT)
+        .initialization_script(crate::page_script(app))
         .on_navigation(move |url| url.origin() == daemon)
         .build()?;
     let handle = app.clone();
@@ -118,6 +121,15 @@ fn create(app: &AppHandle, page: &Url) -> tauri::Result<()> {
         }
     });
     Ok(())
+}
+
+/// The window shows another daemon: its menu goes, and the next click opens
+/// the new one's.
+pub fn forget(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(LABEL) {
+        // Best effort: if it stays, it's the old one's menu until the app quits.
+        let _ = window.destroy();
+    }
 }
 
 /// Sizes it and puts it beside the click, inside the screen's work area.

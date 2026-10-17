@@ -1,5 +1,6 @@
 {
 	"open": "Ava Ottie",
+	"showLocal": "Näita selle arvuti Ottiet",
 	"pauseAll": "Peata kõik",
 	"resumeAll": "Jätka kõiki",
 	"limit": "Piira kiirus: {speed}",
@@ -34,6 +35,9 @@
 	"added": "Lisatud lõikelaualt",
 	"addedCount": "Lisatud allalaadimised: {count}",
 	"notAdded": "Ottie ei saanud kopeeritud linki lisada",
+	"unreachable": "Ottie ei saanud ühendust: {name}",
+	"showingLocal": "Selle asemel on näha selle arvuti allalaadimised.",
+	"localFailed": "Ottie ei saanud selles arvutis käivituda",
 	"runTitle": "Kas käivitada see programm?",
 	"runText": "„{name}“ on programm: see võib selles arvutis kõike muuta. Käivita see ainult siis, kui usaldad selle päritolu.",
 	"run": "Käivita",

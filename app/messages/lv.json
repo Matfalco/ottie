@@ -1,5 +1,6 @@
 {
 	"open": "Atvērt Ottie",
+	"showLocal": "Rādīt šī datora Ottie",
 	"pauseAll": "Pauzēt visas",
 	"resumeAll": "Atsākt visas",
 	"limit": "Ierobežot ātrumu līdz {speed}",
@@ -34,6 +35,9 @@
 	"added": "Pievienots no starpliktuves",
 	"addedCount": "Pievienotās lejupielādes: {count}",
 	"notAdded": "Ottie nevarēja pievienot nokopēto saiti",
+	"unreachable": "Ottie nevarēja sasniegt: {name}",
+	"showingLocal": "Tā vietā tiek rādītas šī datora lejupielādes.",
+	"localFailed": "Ottie nevarēja palaist šajā datorā",
 	"runTitle": "Palaist šo programmu?",
 	"runText": "“{name}” ir programma: tā var mainīt jebko šajā datorā. Palaidiet to tikai tad, ja uzticaties tās avotam.",
 	"run": "Palaist",

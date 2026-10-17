@@ -4,10 +4,10 @@
 //! with a notification, as Settings say (`app.json`). The clipboard is this
 //! computer's, so the app watches it, not the daemon; which links the text
 //! holds, the daemon says (`POST /jobs/preview`), and they're added through
-//! its API like any other.
+//! its API like any other: the daemon the window shows (docs/decisions/0053).
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::Duration;
 
@@ -20,6 +20,7 @@ use tauri::{
 use crate::client::{Daemon, Found};
 use crate::notify;
 use crate::prefs::{self, Prefs};
+use crate::remote::{Switch, Target};
 use crate::texts::Texts;
 
 /// The window that offers the links.
@@ -53,24 +54,13 @@ pub enum Copied {
 
 /// The links caught and not dealt with yet, as managed state.
 pub struct Catcher {
-    daemon: Arc<Daemon>,
-    /// The daemon's origin: its own links (sign-in, play links) are never
-    /// caught.
-    origin: String,
-    page: Url,
     /// Offered in the window, oldest first.
     links: Mutex<Vec<String>>,
 }
 
 impl Catcher {
-    /// From the main window's signed-in link (`http://…/#token=…`).
-    pub fn new(link: &Url, daemon: Arc<Daemon>) -> Catcher {
-        let mut page = link.clone();
-        page.set_path("/caught");
+    pub fn new() -> Catcher {
         Catcher {
-            daemon,
-            origin: link.origin().ascii_serialization(),
-            page,
             links: Mutex::new(Vec::new()),
         }
     }
@@ -79,16 +69,29 @@ impl Catcher {
         // Nothing can panic while it's held, so a poisoned lock is still consistent.
         self.links.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
 
-    /// The links in `text` worth catching, as the daemon reads them.
-    async fn links_in(&self, text: &str) -> anyhow::Result<Vec<String>> {
-        let (found, categories) =
-            tokio::try_join!(self.daemon.preview(text), self.daemon.categories())?;
-        let listed = categories
-            .into_iter()
-            .flat_map(|category| category.extensions)
-            .collect();
-        Ok(wanted(found, &listed, &self.origin))
+/// The links in `text` worth catching, as the daemon shown reads them.
+async fn links_in(target: &Target, text: &str) -> anyhow::Result<Vec<String>> {
+    let daemon = &target.daemon;
+    let (found, categories) = tokio::try_join!(daemon.preview(text), daemon.categories())?;
+    let listed = categories
+        .into_iter()
+        .flat_map(|category| category.extensions)
+        .collect();
+    // Its own links (sign-in, play links) are never caught.
+    let origin = target.link.origin().ascii_serialization();
+    Ok(wanted(found, &listed, &origin))
+}
+
+/// The window shows another daemon: the window offering links was the old
+/// one's page, so it goes with the links it offered (still in the
+/// clipboard); the next link copied opens the new one's.
+pub fn moved(app: &AppHandle) {
+    app.state::<Catcher>().lock().clear();
+    if let Some(window) = app.get_webview_window(LABEL) {
+        // Best effort: if it stays, its page adds to the daemon it came from.
+        let _ = window.destroy();
     }
 }
 
@@ -238,9 +241,11 @@ mod windows {
 
 /// Text copied elsewhere: offered or added, if it holds links worth it.
 async fn copied(app: &AppHandle, text: String) {
-    let catcher = app.state::<Catcher>();
     // Without the daemon, nothing is caught.
-    let Ok(links) = catcher.links_in(&text).await else {
+    let Some(target) = app.state::<Switch>().shown() else {
+        return;
+    };
+    let Ok(links) = links_in(&target, &text).await else {
         return;
     };
     if links.is_empty() {
@@ -249,7 +254,7 @@ async fn copied(app: &AppHandle, text: String) {
     let prefs = app.state::<prefs::Saved>().get();
     match prefs.copied {
         Copied::Ask => offer(app, links),
-        Copied::Add => add(app, &catcher.daemon, &links, &prefs).await,
+        Copied::Add => add(app, &target.daemon, &links, &prefs).await,
     }
 }
 
@@ -276,7 +281,11 @@ fn offer(app: &AppHandle, links: Vec<String>) {
 }
 
 fn open_window(app: &AppHandle) -> tauri::Result<()> {
-    let page = app.state::<Catcher>().page.clone();
+    let Some(target) = app.state::<Switch>().shown() else {
+        return Err(tauri::Error::WebviewNotFound);
+    };
+    let mut page = target.link.clone();
+    page.set_path("/caught");
     let daemon = page.origin();
     WebviewWindowBuilder::new(app, LABEL, WebviewUrl::External(page))
         .title("Ottie")

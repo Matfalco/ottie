@@ -2,6 +2,7 @@
 	import { tick, type Snippet } from 'svelte';
 	import icon from '#lib/assets/ottie.svg';
 	import { appWindow } from '#lib/window.js';
+	import Switcher from './Switcher.svelte';
 	import WindowControls from './WindowControls.svelte';
 
 	interface Props {
@@ -14,9 +15,10 @@
 	const frame = appWindow();
 
 	/** How far the bar is folded to fit: 0 not at all, 1 the tabs show
-	 * only their icons, 2 the time slot's chip too, 3 the logo loses its
-	 * name, 4 the speed's chip shortens to fit (long units: "kilobaiti 300
-	 * kwa kila sekunde"). What's inside folds through classes only, never
+	 * only their icons, 2 the time slot's chip too, 3 the logo and the
+	 * switcher lose their names, 4 the speed's chip shortens to fit (long
+	 * units: "kilobaiti 300 kwa kila sekunde"). What's inside folds through
+	 * classes only, never
 	 * by adding or removing elements (that would set off `fit` again). */
 	let level = $state(0);
 	const MOST = 4;
@@ -74,6 +76,7 @@
 		<img src={icon} alt="" width="22" height="22" />
 		<span>Ottie</span>
 	</div>
+	<Switcher folded={level >= 3} />
 	<div class="middle" data-tauri-drag-region bind:this={middle}>
 		{@render children?.(level)}
 	</div>

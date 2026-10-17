@@ -3,16 +3,19 @@
 //! monitoring read and do.
 //! Only the fields they need are read; the rest of each answer is ignored.
 
+use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
+use rustls_platform_verifier::ConfigVerifierExt;
 use serde::Deserialize;
 use serde_json::json;
 use tauri::Url;
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{Connector, MaybeTlsStream, WebSocketStream};
 
 /// The events stream's protocol, and the prefix of the one carrying the
 /// token (docs/decisions/0014).
@@ -155,25 +158,66 @@ pub enum Event {
     Other,
 }
 
+/// What a daemon says to a token (`Daemon::check`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Check {
+    Accepted,
+    /// It's Ottie, but the token isn't (or no longer) one of its own.
+    Refused,
+    /// Something answers there, but not Ottie.
+    NotOttie,
+    Unreachable,
+}
+
 pub struct Daemon {
     origin: Url,
     token: String,
     http: Client,
+    /// The events stream over HTTPS (another computer's Ottie behind
+    /// Tailscale or a proxy), checked against the system's certificates.
+    tls: Option<Arc<rustls::ClientConfig>>,
 }
 
 impl Daemon {
-    /// From the signed-in link `ottie link` prints (`http://…/#token=…`).
+    /// From a signed-in link: `ottie link`'s (`http://127.0.0.1:24068/#token=…`),
+    /// or another computer's (docs/decisions/0053).
     pub fn new(link: &Url) -> Result<Daemon> {
-        let http = Client::builder()
-            .no_proxy()
+        let mut http = Client::builder()
             // Pausing a running download waits until it has stopped.
-            .timeout(Duration::from_secs(30))
-            .build()?;
+            .timeout(Duration::from_secs(30));
+        // This computer's is never behind a proxy; another one may be.
+        if is_loopback(link) {
+            http = http.no_proxy();
+        }
+        let tls = match link.scheme() {
+            "https" => Some(Arc::new(
+                rustls::ClientConfig::with_platform_verifier()
+                    .context("can't use the system's certificates")?,
+            )),
+            _ => None,
+        };
         Ok(Daemon {
             origin: link.join("/")?,
             token: token(link).to_owned(),
-            http,
+            http: http.build()?,
+            tls,
         })
+    }
+
+    /// Whether it answers and takes the token, within `wait`.
+    pub async fn check(&self, wait: Duration) -> Check {
+        let Ok(url) = self.url("jobs") else {
+            return Check::Unreachable;
+        };
+        let request = self.http.get(url).bearer_auth(&self.token).timeout(wait);
+        match request.send().await {
+            Ok(answer) => match answer.status() {
+                StatusCode::OK if answer.json::<Vec<Job>>().await.is_ok() => Check::Accepted,
+                StatusCode::UNAUTHORIZED => Check::Refused,
+                _ => Check::NotOttie,
+            },
+            Err(_) => Check::Unreachable,
+        }
     }
 
     fn url(&self, path: &str) -> Result<Url> {
@@ -191,9 +235,11 @@ impl Daemon {
         request
             .headers_mut()
             .insert("Sec-WebSocket-Protocol", offered.parse()?);
-        let (events, _) = tokio_tungstenite::connect_async(request)
-            .await
-            .context("can't follow Ottie's events")?;
+        let connector = self.tls.clone().map(Connector::Rustls);
+        let (events, _) =
+            tokio_tungstenite::connect_async_tls_with_config(request, None, false, connector)
+                .await
+                .context("can't follow Ottie's events")?;
         Ok(events)
     }
 
@@ -286,6 +332,17 @@ pub fn is_job_id(id: &str) -> bool {
             .all(|b| b.is_ascii_digit() || b == b'.' || b == b'-')
 }
 
+/// Whether the link leads to this computer (`127.0.0.1`, `::1`, `localhost`).
+pub fn is_loopback(link: &Url) -> bool {
+    let Some(host) = link.host_str() else {
+        return false;
+    };
+    // An IPv6 address comes in brackets.
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    host.eq_ignore_ascii_case("localhost")
+        || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
+}
+
 /// The token in a signed-in link's fragment (`#token=…`).
 pub fn token(link: &Url) -> &str {
     link.fragment()
@@ -367,6 +424,16 @@ mod tests {
         assert!(!is_job_id(""));
         assert!(!is_job_id("../settings"));
         assert!(!is_job_id("1/pause"));
+    }
+
+    #[test]
+    fn only_this_computers_addresses_are_loopback() {
+        let loopback = |link: &str| is_loopback(&Url::parse(link).unwrap());
+        assert!(loopback("http://127.0.0.1:24068/"));
+        assert!(loopback("http://[::1]:24068/"));
+        assert!(loopback("http://LOCALHOST:24068/"));
+        assert!(!loopback("https://nas.tail1234.ts.net/"));
+        assert!(!loopback("http://10.8.0.1:24068/"));
     }
 
     #[test]

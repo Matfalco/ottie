@@ -1,5 +1,6 @@
 {
 	"open": "Buɗe Ottie",
+	"showLocal": "Nuna Ottie na wannan kwamfutar",
 	"pauseAll": "Dakatar da duka",
 	"resumeAll": "Ci gaba da duka",
 	"limit": "Iyakar gudu: {speed}",
@@ -34,6 +35,9 @@
 	"added": "An ƙara daga allon kwafi",
 	"addedCount": "Saukewar da aka ƙara: {count}",
 	"notAdded": "Ottie bai iya ƙara mahaɗin da aka kwafa ba",
+	"unreachable": "Ottie bai iya kaiwa ga {name} ba",
+	"showingLocal": "Ana nuna saukewar wannan kwamfutar a madadin haka.",
+	"localFailed": "Ottie bai iya farawa a wannan kwamfutar ba",
 	"runTitle": "A gudanar da wannan shirin?",
 	"runText": "“{name}” shiri ne: zai iya canza komai a wannan kwamfutar. Ka gudanar da shi kawai idan ka amince da inda ya fito.",
 	"run": "Gudanar",

@@ -1,5 +1,6 @@
 {
 	"open": "開啟 Ottie",
+	"showLocal": "顯示這台電腦的 Ottie",
 	"pauseAll": "全部暫停",
 	"resumeAll": "全部繼續",
 	"limit": "限速 {speed}",
@@ -34,6 +35,9 @@
 	"added": "已從剪貼簿加入",
 	"addedCount": "已加入 {count} 個下載",
 	"notAdded": "Ottie 無法加入複製的連結",
+	"unreachable": "Ottie 無法連線到 {name}",
+	"showingLocal": "改為顯示這台電腦上的下載。",
+	"localFailed": "Ottie 無法在這台電腦上啟動",
 	"runTitle": "執行此程式？",
 	"runText": "「{name}」是一個程式：它可以變更這部電腦上的任何內容。只有在你信任其來源時才執行它。",
 	"run": "執行",

@@ -1,5 +1,6 @@
 {
 	"open": "Ottie öffnen",
+	"showLocal": "Ottie dieses Computers anzeigen",
 	"pauseAll": "Alle pausieren",
 	"resumeAll": "Alle fortsetzen",
 	"limit": "Geschwindigkeit auf {speed} begrenzen",
@@ -34,6 +35,9 @@
 	"added": "Aus der Zwischenablage hinzugefügt",
 	"addedCount": "{count} Downloads hinzugefügt",
 	"notAdded": "Ottie konnte den kopierten Link nicht hinzufügen",
+	"unreachable": "Ottie konnte {name} nicht erreichen",
+	"showingLocal": "Stattdessen werden die Downloads dieses Computers angezeigt.",
+	"localFailed": "Ottie konnte auf diesem Computer nicht starten",
 	"runTitle": "Dieses Programm ausführen?",
 	"runText": "„{name}“ ist ein Programm: Es kann alles auf diesem Computer verändern. Führen Sie es nur aus, wenn Sie seiner Herkunft vertrauen.",
 	"run": "Ausführen",

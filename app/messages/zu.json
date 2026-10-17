@@ -1,5 +1,6 @@
 {
 	"open": "Vula i-Ottie",
+	"showLocal": "Bonisa i-Ottie yale khompyutha",
 	"pauseAll": "Misa konke okwesikhashana",
 	"resumeAll": "Qhubeka nakho konke",
 	"limit": "Umkhawulo wesivinini: {speed}",
@@ -34,6 +35,9 @@
 	"added": "Kungezwe kusuka ebhodini lokunamathisela",
 	"addedCount": "Okulandiwe okungeziwe: {count}",
 	"notAdded": "U-Ottie akakwazanga ukwengeza isixhumanisi esikopishiwe",
+	"unreachable": "U-Ottie akakwazanga ukufinyelela ku-{name}",
+	"showingLocal": "Kunalokho kuboniswa okulandiwe kwale khompyutha.",
+	"localFailed": "U-Ottie akakwazanga ukuqala kule khompyutha",
 	"runTitle": "Qalisa lolu hlelo?",
 	"runText": "“{name}” wuhlelo: lungashintsha noma yini kule khompyutha. Lusebenzise kuphela uma uthemba lapho luvela khona.",
 	"run": "Qalisa",

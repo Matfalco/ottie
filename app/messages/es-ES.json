@@ -1,5 +1,6 @@
 {
 	"open": "Abrir Ottie",
+	"showLocal": "Mostrar el Ottie de este ordenador",
 	"pauseAll": "Pausar todo",
 	"resumeAll": "Reanudar todo",
 	"limit": "Limitar la velocidad a {speed}",
@@ -34,6 +35,9 @@
 	"added": "Añadido desde el portapapeles",
 	"addedCount": "Descargas añadidas: {count}",
 	"notAdded": "Ottie no ha podido añadir el enlace copiado",
+	"unreachable": "Ottie no ha podido conectar con {name}",
+	"showingLocal": "Se muestran en su lugar las descargas de este ordenador.",
+	"localFailed": "Ottie no ha podido iniciarse en este ordenador",
 	"runTitle": "¿Ejecutar este programa?",
 	"runText": "«{name}» es un programa: puede cambiar cualquier cosa en este ordenador. Ejecútalo solo si confías en su procedencia.",
 	"run": "Ejecutar",

@@ -67,6 +67,9 @@ const STEP: f64 = 1024.0;
 #[serde(rename_all = "camelCase")]
 pub struct Texts {
     pub open: String,
+    /// The system's menu, while another computer's Ottie is shown: back to
+    /// this computer's (docs/decisions/0053).
+    pub show_local: String,
     pub pause_all: String,
     pub resume_all: String,
     /// `{speed}`: the limit.
@@ -130,6 +133,13 @@ pub struct Texts {
     added_count: String,
     /// …or couldn't be.
     pub not_added: String,
+    /// At start, another computer's Ottie (`{name}`) didn't answer
+    /// (docs/decisions/0053)…
+    unreachable: String,
+    /// …so the window shows this computer's.
+    pub showing_local: String,
+    /// This computer's Ottie didn't start, with the window on another's.
+    pub local_failed: String,
     /// The question before running a downloaded program
     /// (docs/decisions/0045): its title, its text (`{name}`: the file's)…
     pub run_title: String,
@@ -189,6 +199,7 @@ impl Texts {
             texts.right_to_left = true;
             for text in [
                 &mut texts.open,
+                &mut texts.show_local,
                 &mut texts.pause_all,
                 &mut texts.resume_all,
                 &mut texts.change_limit,
@@ -206,6 +217,8 @@ impl Texts {
                 &mut texts.watch_clipboard,
                 &mut texts.added,
                 &mut texts.not_added,
+                &mut texts.showing_local,
+                &mut texts.local_failed,
                 &mut texts.run_title,
                 &mut texts.run,
                 &mut texts.cancel,
@@ -376,6 +389,11 @@ impl Texts {
     /// "3 downloads added".
     pub fn added_count(&self, count: usize) -> String {
         self.shown(self.added_count.replace("{count}", &self.count(count)))
+    }
+
+    /// "Ottie couldn't reach NAS".
+    pub fn unreachable(&self, name: &str) -> String {
+        self.shown(self.unreachable.replace("{name}", name))
     }
 
     /// Why a download failed; the daemon's English for codes this app

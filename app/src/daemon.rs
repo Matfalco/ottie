@@ -47,8 +47,8 @@ pub fn sidecar() -> Result<PathBuf> {
     Ok(ottie)
 }
 
-pub async fn connect(ottie: &Path) -> Result<Connection> {
-    let link = link(ottie).await?;
+/// Finds or starts the daemon `link` leads to (`link`'s).
+pub async fn connect(ottie: &Path, link: Url) -> Result<Connection> {
     // Starting first, not probing first: on Windows a connection to a port
     // nobody listens on takes 2 s to fail. `ottie serve` checks the port
     // before anything else, so a second one gives up at once.
@@ -111,7 +111,7 @@ pub async fn start_alone(ottie: &Path, log: &Path) -> Result<()> {
 }
 
 /// `ottie link`: the address and token, as `ottie serve` will use them.
-async fn link(ottie: &Path) -> Result<Url> {
+pub async fn link(ottie: &Path) -> Result<Url> {
     let output = command(ottie)
         .arg("link")
         .stdin(Stdio::null())

@@ -1,5 +1,6 @@
 {
 	"open": "Atverti Ottie",
+	"showLocal": "Rodyti šio kompiuterio Ottie",
 	"pauseAll": "Pristabdyti visus",
 	"resumeAll": "Tęsti visus",
 	"limit": "Riboti greitį iki {speed}",
@@ -34,6 +35,9 @@
 	"added": "Pridėta iš iškarpinės",
 	"addedCount": "Pridėti atsisiuntimai: {count}",
 	"notAdded": "Ottie nepavyko pridėti nukopijuotos nuorodos",
+	"unreachable": "Ottie nepavyko pasiekti: {name}",
+	"showingLocal": "Vietoj to rodomi šio kompiuterio atsisiuntimai.",
+	"localFailed": "Ottie nepavyko paleisti šiame kompiuteryje",
 	"runTitle": "Paleisti šią programą?",
 	"runText": "„{name}“ yra programa: ji gali pakeisti bet ką šiame kompiuteryje. Paleiskite ją, tik jei pasitikite jos šaltiniu.",
 	"run": "Paleisti",

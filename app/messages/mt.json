@@ -1,5 +1,6 @@
 {
 	"open": "Iftaħ Ottie",
+	"showLocal": "Uri l-Ottie ta’ dan il-kompjuter",
 	"pauseAll": "Waqqaf kollox",
 	"resumeAll": "Kompli kollox",
 	"limit": "Illimita l-veloċità għal {speed}",
@@ -34,6 +35,9 @@
 	"added": "Miżjud mill-clipboard",
 	"addedCount": "Tniżżiliet miżjuda: {count}",
 	"notAdded": "Ottie ma setax iżid il-ħolqa kkupjata",
+	"unreachable": "Ottie ma setax jilħaq lil {name}",
+	"showingLocal": "Minflok qed jintwerew it-tniżżil ta’ dan il-kompjuter.",
+	"localFailed": "Ottie ma setax jibda fuq dan il-kompjuter",
 	"runTitle": "Tħaddem dan il-programm?",
 	"runText": "“{name}” huwa programm: jista’ jibdel kollox f’dan il-kompjuter. Ħaddmu biss jekk tafda minn fejn ġie.",
 	"run": "Ħaddem",

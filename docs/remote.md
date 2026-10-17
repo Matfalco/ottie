@@ -82,6 +82,15 @@ A read-only device sees every page, but adds, pauses and changes nothing.
 
 If this computer's token got out (copied into a chat, a screenshot), replace it: `ottie token --new`. The old one stops working at once; sign in again with `ottie open`, and restart the desktop app. Devices keep theirs.
 
+## Switching between computers
+
+Once another computer's Ottie can be reached, add it to the list in **Settings → Connection → Ottie on other computers**, with a name and a sign-in link made there for this device (above). A switcher then shows beside the logo: which Ottie this is, and the others.
+
+- **In the desktop app,** the window shows the one you pick, and the tray, notifications and copied links follow it. "When everything has finished" stays with this computer's downloads. The app checks that it answers and takes the token before adding it, and keeps the token in the system's keychain (Credential Manager, Keychain, GNOME Keyring or KWallet). Another computer's page can't reach this one's files, programs or settings: no Open, Show in folder, folder picker or desktop settings there. This computer's Ottie keeps running meanwhile, unless **Settings → Desktop app** says to start it only once shown.
+- **In a browser,** each address keeps its own list, in that browser: switching goes to the other Ottie's own page, which remembers its token (a sign-in link signs it in the first time). A bare address works too, if that page is signed in already or you have its token.
+
+Each Ottie's page always comes from that Ottie, so two computers with different versions of Ottie work together.
+
 ## Which folders devices may use
 
 A token can say which folder a download goes to. So that a device can't write files just anywhere this computer's account can (a Startup folder, say), devices may only use:
@@ -100,6 +109,6 @@ This computer isn't limited, and only it can change categories' folders to new p
 
 - Ottie listens on `127.0.0.1` (or the VPN's address), never open to the internet.
 - HTTPS between devices and Ottie: Tailscale, a VPN, or the proxy.
-- One token per device; read-only where that's enough; remove the ones you no longer use.
+- One token per device; read-only where that's enough; remove the ones you no longer use (and from the lists of the computers that switch to it).
 - Only the folders devices need, in Settings or `config.toml`.
 - On a machine nobody sits at, the system-wide service (`ottie service install --system`, [service.md](service.md)) runs Ottie under an account of its own, which can't read people's files.

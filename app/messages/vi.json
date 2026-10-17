@@ -1,5 +1,6 @@
 {
 	"open": "Mở Ottie",
+	"showLocal": "Hiển thị Ottie của máy tính này",
 	"pauseAll": "Tạm dừng tất cả",
 	"resumeAll": "Tiếp tục tất cả",
 	"limit": "Giới hạn tốc độ: {speed}",
@@ -34,6 +35,9 @@
 	"added": "Đã thêm từ bảng nhớ tạm",
 	"addedCount": "Lượt tải đã thêm: {count}",
 	"notAdded": "Ottie không thể thêm liên kết đã sao chép",
+	"unreachable": "Ottie không kết nối được với {name}",
+	"showingLocal": "Thay vào đó, hiển thị các mục tải xuống của máy tính này.",
+	"localFailed": "Ottie không khởi động được trên máy tính này",
 	"runTitle": "Chạy chương trình này?",
 	"runText": "“{name}” là một chương trình: nó có thể thay đổi bất cứ thứ gì trên máy tính này. Chỉ chạy nếu bạn tin tưởng nguồn gốc của nó.",
 	"run": "Chạy",

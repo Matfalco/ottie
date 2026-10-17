@@ -1,5 +1,6 @@
 {
 	"open": "Open Ottie",
+	"showLocal": "Show this computer’s Ottie",
 	"pauseAll": "Pause all",
 	"resumeAll": "Resume all",
 	"limit": "Limit speed to {speed}",
@@ -42,6 +43,9 @@
 	"added": "Added from the clipboard",
 	"addedCount": "{count} downloads added",
 	"notAdded": "Ottie couldn’t add the copied link",
+	"unreachable": "Ottie couldn’t reach {name}",
+	"showingLocal": "Showing this computer’s downloads instead.",
+	"localFailed": "Ottie couldn’t start on this computer",
 	"runTitle": "Run this program?",
 	"runText": "“{name}” is a program: it can change anything on this computer. Run it only if you trust where it came from.",
 	"run": "Run",

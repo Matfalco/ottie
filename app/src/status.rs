@@ -17,6 +17,7 @@ use crate::client::{Daemon, Event, Job};
 use crate::finish::{self, Left};
 use crate::notify::{self, News, Notifier};
 use crate::prefs;
+use crate::remote::{Switch, Target};
 use crate::texts::Texts;
 
 /// How often the summary is refreshed.
@@ -61,39 +62,114 @@ pub struct Progress {
     pub speed: u64,
 }
 
-/// Follows the daemon for as long as the app runs, sending a summary every
-/// second; reconnects when the stream ends (the daemon restarted or stopped).
-pub async fn follow(app: AppHandle, daemon: Arc<Daemon>, out: watch::Sender<Summary>) {
+/// Where summaries go for the tray, from whichever daemon the window shows
+/// (docs/decisions/0053), as managed state.
+pub struct Feed(watch::Sender<Summary>);
+
+impl Feed {
+    pub fn new() -> Feed {
+        Feed(watch::Sender::new(Summary::default()))
+    }
+
+    pub fn subscribe(&self) -> watch::Receiver<Summary> {
+        self.0.subscribe()
+    }
+}
+
+/// The window shows another daemon: the tray says it's connecting until
+/// that one's follower has its list.
+pub fn moved(app: &AppHandle) {
+    app.state::<Feed>().0.send_replace(Summary::default());
+}
+
+/// The daemon a follower follows.
+pub enum Followed {
+    /// This computer's, for as long as the app runs.
+    Local,
+    /// Another computer's, while the window shows it: until it shows
+    /// another, even if it comes back to this one later (that's a follower
+    /// of its own).
+    Remote(Arc<Target>),
+}
+
+impl Followed {
+    /// Whether the window shows it.
+    fn shown(&self, app: &AppHandle) -> bool {
+        let switch = app.state::<Switch>();
+        match self {
+            Followed::Local => switch.is_shown(None),
+            Followed::Remote(target) => switch
+                .shown()
+                .is_some_and(|shown| Arc::ptr_eq(&shown, target)),
+        }
+    }
+
+    fn local(&self) -> bool {
+        matches!(self, Followed::Local)
+    }
+}
+
+/// Follows a daemon, reconnecting when the stream ends (the daemon
+/// restarted or stopped). While the window shows it, it sends the tray a
+/// summary every second and notifies; this computer's also says when
+/// everything has finished, shown or not.
+pub async fn follow(app: AppHandle, daemon: Arc<Daemon>, followed: Followed) {
     // Both outlive a connection: downloads that finish or fail while the
     // daemon can't be reached are told once it's back.
     let mut model = Model::default();
     let mut notifier = Notifier::default();
+    let mut moves = app.state::<Switch>().subscribe();
     loop {
+        if !followed.local() && !followed.shown(&app) {
+            return;
+        }
+        let ended = session(
+            &app,
+            &daemon,
+            &followed,
+            &mut model,
+            &mut notifier,
+            &mut moves,
+        )
+        .await;
+        if matches!(ended, Ok(Ended::Hidden)) {
+            return;
+        }
         // Either way it ended, the tray says it's connecting again.
-        let _ = session(&app, &daemon, &mut model, &mut notifier, &out).await;
-        out.send_replace(Summary::default());
+        if followed.shown(&app) {
+            moved(&app);
+        }
         tokio::time::sleep(RECONNECT).await;
     }
+}
+
+/// Why a connection ended without an error.
+enum Ended {
+    /// The stream closed.
+    Closed,
+    /// The window shows another daemon: no use following this one.
+    Hidden,
 }
 
 /// One connection to the events stream, until it ends.
 async fn session(
     app: &AppHandle,
     daemon: &Daemon,
+    followed: &Followed,
     model: &mut Model,
     notifier: &mut Notifier,
-    out: &watch::Sender<Summary>,
-) -> Result<()> {
+    moves: &mut watch::Receiver<Option<Arc<Target>>>,
+) -> Result<Ended> {
     let mut events = daemon.events().await?;
-    load(app, daemon, model).await?;
-    tell(app, model, notifier);
+    load(app, daemon, followed, model).await?;
+    tell(app, followed, model, notifier);
     let mut tick = tokio::time::interval(EVERY);
     loop {
         tokio::select! {
             message = events.next() => {
                 let text = match message {
                     Some(Ok(Message::Text(text))) => text,
-                    Some(Ok(Message::Close(_))) | None => return Ok(()),
+                    Some(Ok(Message::Close(_))) | None => return Ok(Ended::Closed),
                     // Pings are answered by the stream itself.
                     Some(Ok(_)) => continue,
                     Some(Err(err)) => return Err(err.into()),
@@ -102,20 +178,33 @@ async fn session(
                 let Ok(event) = serde_json::from_str::<Event>(&text) else {
                     continue;
                 };
-                if let Event::SettingsChanged { settings } = &event {
+                if let Event::SettingsChanged { settings } = &event
+                    && followed.shown(app)
+                {
                     remember_limit(app, settings.global_limit);
                 }
                 // Progress changes no state, and comes often.
                 let progress = matches!(event, Event::Progress { .. });
                 if model.apply(event, Instant::now()) {
-                    load(app, daemon, model).await?;
+                    load(app, daemon, followed, model).await?;
                 }
                 if !progress {
-                    tell(app, model, notifier);
+                    tell(app, followed, model, notifier);
                 }
             }
             _ = tick.tick() => {
-                out.send_replace(model.summary(Instant::now()));
+                if followed.shown(app) {
+                    app.state::<Feed>().0.send_replace(model.summary(Instant::now()));
+                }
+            }
+            moved = moves.changed() => {
+                // The app is quitting.
+                if moved.is_err() {
+                    return Ok(Ended::Closed);
+                }
+                if !followed.local() && !followed.shown(app) {
+                    return Ok(Ended::Hidden);
+                }
             }
         }
     }
@@ -123,28 +212,37 @@ async fn session(
 
 /// The whole list and the settings, at the start and when the stream says
 /// events were lost (`resync`).
-async fn load(app: &AppHandle, daemon: &Daemon, model: &mut Model) -> Result<()> {
+async fn load(
+    app: &AppHandle,
+    daemon: &Daemon,
+    followed: &Followed,
+    model: &mut Model,
+) -> Result<()> {
     let jobs = daemon.jobs().await?;
     let settings = daemon.settings().await?;
     model.reset(jobs, Instant::now());
     model.global_limit = settings.global_limit;
-    remember_limit(app, settings.global_limit);
+    if followed.shown(app) {
+        remember_limit(app, settings.global_limit);
+    }
     Ok(())
 }
 
-/// Notifies what the last changes call for, then whether everything has
-/// finished.
-fn tell(app: &AppHandle, model: &mut Model, notifier: &mut Notifier) {
+/// Notifies what the last changes call for, while the window shows this
+/// daemon, then for this computer's, whether everything has finished.
+fn tell(app: &AppHandle, followed: &Followed, model: &mut Model, notifier: &mut Notifier) {
     let news = std::mem::take(&mut model.news);
     let ended = !news.is_empty();
     let busy = model.busy();
     // Something new, or finished downloads waiting for the last ones.
-    if ended || (!busy && notifier.waiting()) {
+    if followed.shown(app) && (ended || (!busy && notifier.waiting())) {
         let prefs = app.state::<prefs::Saved>().get();
         let texts = Texts::for_language(prefs.language.as_deref());
         notify::show(app, notifier.notes(news, busy, &prefs, &texts), &prefs);
     }
-    finish::follow(app, model.left(), ended);
+    if followed.local() {
+        finish::follow(app, model.left(), ended);
+    }
 }
 
 /// The tray's "Limit speed" switches the last limit back on.

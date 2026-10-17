@@ -1,5 +1,6 @@
 {
 	"open": "Otvori Ottie",
+	"showLocal": "Prikaži Ottie ovog računala",
 	"pauseAll": "Pauziraj sve",
 	"resumeAll": "Nastavi sve",
 	"limit": "Ograniči brzinu na {speed}",
@@ -34,6 +35,9 @@
 	"added": "Dodano iz međuspremnika",
 	"addedCount": "Dodana preuzimanja: {count}",
 	"notAdded": "Ottie nije mogao dodati kopiranu poveznicu",
+	"unreachable": "Ottie ne može doći do: {name}",
+	"showingLocal": "Umjesto toga prikazuju se preuzimanja s ovog računala.",
+	"localFailed": "Ottie se nije mogao pokrenuti na ovom računalu",
 	"runTitle": "Pokrenuti ovaj program?",
 	"runText": "„{name}” je program: može promijeniti bilo što na ovom računalu. Pokrenite ga samo ako vjerujete njegovu izvoru.",
 	"run": "Pokreni",

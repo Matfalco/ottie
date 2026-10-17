@@ -6,14 +6,14 @@
 
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
-use std::sync::Arc;
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
-use crate::client::{Daemon, Placed, is_job_id};
+use crate::client::{Placed, is_job_id};
 use crate::prefs;
+use crate::remote::Switch;
 use crate::texts::Texts;
 
 /// Appended to a file's name while it downloads (`PART_SUFFIX` in the engine).
@@ -85,8 +85,10 @@ async fn placed(app: &AppHandle, id: &str) -> Result<Placed, Refusal> {
     if !is_job_id(id) {
         return Err(Refusal::Failed);
     }
-    // Only missing before the window opens, so before any page can ask.
-    let daemon = app.try_state::<Arc<Daemon>>().ok_or(Refusal::Failed)?;
+    // This computer's files only: another computer's Ottie names paths on
+    // that computer (and its pages don't get these commands, 0053).
+    let switch = app.try_state::<Switch>().ok_or(Refusal::Failed)?;
+    let daemon = switch.local().await.ok_or(Refusal::Failed)?;
     daemon.placed(id).await.map_err(|_| Refusal::Failed)
 }
 

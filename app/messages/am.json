@@ -1,5 +1,6 @@
 {
 	"open": "Ottieን ክፈት",
+	"showLocal": "የዚህን ኮምፒውተር Ottie አሳይ",
 	"pauseAll": "ሁሉንም ለአፍታ አቁም",
 	"resumeAll": "ሁሉንም ቀጥል",
 	"limit": "የፍጥነት ገደብ፦ {speed}",
@@ -34,6 +35,9 @@
 	"added": "ከቅንጥብ ሰሌዳ ታክሏል",
 	"addedCount": "የታከሉ ውርዶች፦ {count}",
 	"notAdded": "Ottie የተቀዳውን አገናኝ ማከል አልቻለም",
+	"unreachable": "Ottie ሊደርስበት አልቻለም፦ {name}",
+	"showingLocal": "በምትኩ የዚህ ኮምፒውተር ውርዶች ይታያሉ።",
+	"localFailed": "Ottie በዚህ ኮምፒውተር ላይ መጀመር አልቻለም",
 	"runTitle": "ይህን ፕሮግራም ላስኪድ?",
 	"runText": "“{name}” ፕሮግራም ነው፦ በዚህ ኮምፒውተር ላይ ማንኛውንም ነገር ሊቀይር ይችላል። የመጣበትን ምንጭ የሚያምኑት ከሆነ ብቻ ያስኪዱት።",
 	"run": "አስኪድ",

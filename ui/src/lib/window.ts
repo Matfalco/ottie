@@ -3,13 +3,41 @@
 // the window's buttons; it can also open the system folder picker. In a
 // browser there's neither. It also opens a download's file or folder,
 // chooses what plays a download, hears from the tray, and offers links
-// copied elsewhere.
+// copied elsewhere. The window can show another computer's Ottie
+// (docs/decisions/0053): its pages get only the window, the tray menu, the
+// clipboard's window and switching, never what reaches this computer.
 
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
+import { asRefusal, type Daemons, type OthersRefusal } from './others.js';
 import type { Sound, SoundKind, Sounds } from './sounds.js';
+
+declare global {
+	interface Window {
+		/** This computer's Ottie's address, set by the desktop app in every
+		 * page it opens. */
+		__OTTIE_LOCAL__?: string;
+	}
+}
+
+/** In the desktop app, on this computer's Ottie's page: its files, its
+ * programs and its power are within reach. Not on another computer's page,
+ * nor in a browser. */
+export function onThisComputer(): boolean {
+	return isTauri() && window.__OTTIE_LOCAL__ === location.origin;
+}
+
+/** In the desktop app, on any Ottie's page. */
+export function inApp(): boolean {
+	return isTauri();
+}
+
+/** This computer's Ottie's address, in the desktop app. */
+export function localAddress(): string | null {
+	return isTauri() ? (window.__OTTIE_LOCAL__ ?? null) : null;
+}
 
 export interface AppWindow {
 	minimize(): Promise<void>;
@@ -53,13 +81,13 @@ export function appWindow(): AppWindow | null {
 	};
 }
 
-/** Whether the system folder picker is there (only in the desktop app). */
+/** Whether the system folder picker is there (only in the desktop app, on
+ * this computer's Ottie: another one's folders are on that computer). */
 export function canPickFolder(): boolean {
-	return isTauri();
+	return onThisComputer();
 }
 
-/** Asks for a folder with the system picker; null if cancelled. Only valid
- * for a daemon on this computer, which the desktop app always uses so far. */
+/** Asks for a folder with the system picker; null if cancelled. */
 export async function pickFolder(start?: string): Promise<string | null> {
 	const chosen = await open({ directory: true, defaultPath: start || undefined });
 	return typeof chosen === 'string' ? chosen : null;
@@ -70,9 +98,9 @@ export async function pickFolder(start?: string): Promise<string | null> {
 export type OpenRefusal = 'gone' | 'failed';
 
 /** Whether downloads' files and folders can be opened here (only in the
- * desktop app). */
+ * desktop app, on this computer's Ottie). */
 export function canOpenFiles(): boolean {
-	return isTauri();
+	return onThisComputer();
 }
 
 /** Opens a finished download's file; the app asks first before running a
@@ -104,8 +132,15 @@ export interface Player {
 	program: string | null;
 }
 
-/** Whether "Play" can open a player here (only in the desktop app). */
+/** Whether the desktop app's own settings are within reach: the player,
+ * the tray, notifications, sign-in (only on this computer's Ottie). */
 export function canChoosePlayer(): boolean {
+	return onThisComputer();
+}
+
+/** Whether "Play" goes to the player chosen in the desktop app (any Ottie
+ * shown in it: a play link needs no token). */
+export function playsInApp(): boolean {
 	return isTauri();
 }
 
@@ -137,6 +172,10 @@ export type Startup = 'tray' | 'daemon' | 'off';
  * in a small window, or added at once. */
 export type Copied = 'ask' | 'add';
 
+/** Whether this computer's Ottie starts with the app while the window
+ * shows another computer's (docs/decisions/0053). */
+export type LocalDaemon = 'always' | 'whenShown';
+
 /** The desktop app's own settings (docs/decisions/0034, 0035, 0038, 0039,
  * 0043). */
 export interface Desktop {
@@ -146,6 +185,7 @@ export interface Desktop {
 	/** Links copied elsewhere are caught (to file types a category lists). */
 	watchClipboard: boolean;
 	copied: Copied;
+	localDaemon: LocalDaemon;
 	notify: Notify;
 	/** A failed download is notified (after its last retry). */
 	notifyFailed: boolean;
@@ -169,9 +209,10 @@ export function followDesktop(onChange: (desktop: Desktop) => void): () => void 
 	return follow<Desktop>('desktop', onChange);
 }
 
-/** Whether Ottie can start at sign-in (only the desktop app). */
+/** Whether Ottie can start at sign-in (only the desktop app, on this
+ * computer's Ottie). */
 export function canStartAtSignIn(): boolean {
-	return isTauri();
+	return onThisComputer();
 }
 
 export function setStartup(startup: Startup): Promise<Desktop> {
@@ -188,6 +229,10 @@ export function setWatchClipboard(on: boolean): Promise<Desktop> {
 
 export function setCopied(copied: Copied): Promise<Desktop> {
 	return invoke<Desktop>('set_copied', { copied });
+}
+
+export function setLocalDaemon(local: LocalDaemon): Promise<Desktop> {
+	return invoke<Desktop>('set_local_daemon', { local });
 }
 
 export function setNotify(notify: Notify): Promise<Desktop> {
@@ -265,9 +310,10 @@ export interface Finishing {
 	running: { action: Power; endsAt: number } | null;
 }
 
-/** Whether something can happen when everything has finished (only the desktop app). */
+/** Whether something can happen when everything has finished (only the
+ * desktop app, on this computer's Ottie: it's this computer that sleeps). */
 export function canFinish(): boolean {
-	return isTauri();
+	return onThisComputer();
 }
 
 export function finishing(): Promise<Finishing> {
@@ -365,4 +411,46 @@ export function caughtMore(links: string[]): Promise<void> {
  * function that stops listening. */
 export function followAddLinks(onLinks: (text: string) => void): () => void {
 	return isTauri() ? follow<string>('add-links', onLinks) : () => {};
+}
+
+/** The desktop app's list of other computers' Ottie, and which one its
+ * window shows (docs/decisions/0053). */
+export function daemons(): Promise<Daemons> {
+	return invoke<Daemons>('daemons');
+}
+
+/** Calls `onChange` whenever the list or the one shown changes. Returns a
+ * function that stops listening. */
+export function followDaemons(onChange: (daemons: Daemons) => void): () => void {
+	return follow<Daemons>('daemons', onChange);
+}
+
+/** Shows another computer's Ottie in the window, or this computer's (null):
+ * this page goes. Resolves to why it couldn't, or null. */
+export async function switchDaemon(id: number | null): Promise<OthersRefusal | null> {
+	try {
+		await invoke('switch_daemon', { id });
+		return null;
+	} catch (why) {
+		return asRefusal(why);
+	}
+}
+
+/** Adds one from a sign-in link, once it answers and takes the token. */
+export async function addDaemon(name: string, link: string): Promise<Daemons | OthersRefusal> {
+	try {
+		return await invoke<Daemons>('add_daemon', { name, link });
+	} catch (why) {
+		return asRefusal(why);
+	}
+}
+
+/** Takes one off the list (the window comes back to this computer's first
+ * if it showed it). */
+export async function removeDaemon(id: number): Promise<Daemons | OthersRefusal> {
+	try {
+		return await invoke<Daemons>('remove_daemon', { id });
+	} catch (why) {
+		return asRefusal(why);
+	}
 }

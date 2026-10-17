@@ -1,5 +1,6 @@
 {
 	"open": "Ottie 열기",
+	"showLocal": "이 컴퓨터의 Ottie 표시",
 	"pauseAll": "모두 일시 중지",
 	"resumeAll": "모두 재개",
 	"limit": "속도 제한: {speed}",
@@ -34,6 +35,9 @@
 	"added": "클립보드에서 추가됨",
 	"addedCount": "추가된 다운로드: {count}개",
 	"notAdded": "Ottie가 복사한 링크를 추가하지 못했습니다",
+	"unreachable": "Ottie가 다음에 연결하지 못했습니다: {name}",
+	"showingLocal": "대신 이 컴퓨터의 다운로드를 표시합니다.",
+	"localFailed": "이 컴퓨터에서 Ottie를 시작하지 못했습니다",
 	"runTitle": "이 프로그램을 실행할까요?",
 	"runText": "“{name}”은(는) 프로그램입니다. 이 컴퓨터의 모든 것을 바꿀 수 있습니다. 출처를 신뢰할 수 있을 때만 실행하세요.",
 	"run": "실행",

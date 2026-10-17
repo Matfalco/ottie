@@ -1,5 +1,6 @@
 {
 	"open": "Ottie openen",
+	"showLocal": "De Ottie van deze computer tonen",
 	"pauseAll": "Alles pauzeren",
 	"resumeAll": "Alles hervatten",
 	"limit": "Snelheid beperken tot {speed}",
@@ -34,6 +35,9 @@
 	"added": "Toegevoegd vanaf het klembord",
 	"addedCount": "Downloads toegevoegd: {count}",
 	"notAdded": "Ottie kon de gekopieerde link niet toevoegen",
+	"unreachable": "Ottie kon {name} niet bereiken",
+	"showingLocal": "In plaats daarvan worden de downloads van deze computer getoond.",
+	"localFailed": "Ottie kon niet starten op deze computer",
 	"runTitle": "Dit programma uitvoeren?",
 	"runText": "“{name}” is een programma: het kan alles op deze computer wijzigen. Voer het alleen uit als je de bron vertrouwt.",
 	"run": "Uitvoeren",
