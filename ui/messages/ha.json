@@ -751,5 +751,8 @@
 	"ext_excluded": "Shafukan da aka bar wa burauzar",
 	"ext_excluded_hint": "Saukewansu suna zama a cikin burauzar. Ɗaya a kowane layi; kowanne ya haɗa da ƙananan yankunansa.",
 	"popup_more": "Ƙarin {count} a cikin Ottie",
-	"popup_empty": "Babu saukewa tukuna."
+	"popup_empty": "Babu saukewa tukuna.",
+	"ext_pair_here": "Shiga Ottie a wannan kwamfutar",
+	"ext_pair_here_hint": "Inda aka saka Ottie, wannan burauzar tana shiga da kanta, kuma Ottie yana farawa idan saukewa ta zo.",
+	"ext_no_host": "Ba a saita Ottie don wannan burauzar a wannan kwamfutar ba: saka manhajar kwamfuta, ko gudanar da umarnin ottie extension install. Ko shiga da mahaɗi."
 }

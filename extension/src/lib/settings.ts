@@ -7,6 +7,9 @@
 export interface Pairing {
 	address: string;
 	token: string;
+	/** Given by Ottie on this computer through its host (`host.ts`), which
+	 * can then sign in again by itself; a sign-in link's otherwise. */
+	byHost?: boolean;
 }
 
 export interface ExtensionSettings {
@@ -36,7 +39,7 @@ export function parseSettings(stored: Record<string, unknown>): ExtensionSetting
 	return {
 		pairing:
 			typeof pairing?.address === 'string' && typeof pairing.token === 'string'
-				? { address: pairing.address, token: pairing.token }
+				? { address: pairing.address, token: pairing.token, byHost: pairing.byHost === true }
 				: null,
 		takeOver: typeof stored.takeOver === 'boolean' ? stored.takeOver : DEFAULTS.takeOver,
 		minSize:

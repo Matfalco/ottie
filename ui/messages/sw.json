@@ -751,5 +751,8 @@
 	"ext_excluded": "Tovuti zilizoachwa kwa kivinjari",
 	"ext_excluded_hint": "Vipakuliwa vyake hubaki kwenye kivinjari. Moja kwa kila mstari; kila moja inajumuisha vikoa vyake vidogo.",
 	"popup_more": "{count} zaidi katika Ottie",
-	"popup_empty": "Bado hakuna vipakuliwa."
+	"popup_empty": "Bado hakuna vipakuliwa.",
+	"ext_pair_here": "Ingia kwenye Ottie kwenye kompyuta hii",
+	"ext_pair_here_hint": "Mahali Ottie imesakinishwa, kivinjari hiki huingia chenyewe, na Ottie huanza upakuaji unapokuja.",
+	"ext_no_host": "Ottie haijawekwa kwa kivinjari hiki kwenye kompyuta hii: sakinisha programu ya kompyuta, au endesha amri ottie extension install. Au ingia kwa kiungo."
 }

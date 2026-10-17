@@ -751,5 +751,8 @@
 	"ext_excluded": "Web-mjesta prepuštena pregledniku",
 	"ext_excluded_hint": "Njihova preuzimanja ostaju u pregledniku. Jedno po retku; svako obuhvaća i svoje poddomene.",
 	"popup_more": "Još u Ottieju: {count}",
-	"popup_empty": "Još nema preuzimanja."
+	"popup_empty": "Još nema preuzimanja.",
+	"ext_pair_here": "Prijava u Ottie na ovom računalu",
+	"ext_pair_here_hint": "Gdje je Ottie instaliran, ovaj se preglednik prijavljuje sam, a Ottie se pokreće kad stigne preuzimanje.",
+	"ext_no_host": "Ottie na ovom računalu nije postavljen za ovaj preglednik: instalirajte aplikaciju za računalo ili pokrenite naredbu ottie extension install. Ili se prijavite poveznicom."
 }

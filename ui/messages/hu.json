@@ -751,5 +751,8 @@
 	"ext_excluded": "A böngészőben hagyott webhelyek",
 	"ext_excluded_hint": "Ezek letöltései a böngészőben maradnak. Soronként egy; mindegyik az aldomainjeire is vonatkozik.",
 	"popup_more": "Még {count} az Ottie-ban",
-	"popup_empty": "Még nincs letöltés."
+	"popup_empty": "Még nincs letöltés.",
+	"ext_pair_here": "Bejelentkezés az Ottie-ba ezen a számítógépen",
+	"ext_pair_here_hint": "Ahol az Ottie telepítve van, ez a böngésző magától bejelentkezik, és az Ottie elindul, amikor letöltés érkezik.",
+	"ext_no_host": "Az Ottie nincs beállítva ehhez a böngészőhöz ezen a számítógépen: telepítsd az asztali alkalmazást, vagy futtasd az ottie extension install parancsot. Vagy jelentkezz be egy linkkel."
 }

@@ -751,5 +751,8 @@
 	"ext_excluded": "Webbplatser som lämnas åt webbläsaren",
 	"ext_excluded_hint": "Deras nedladdningar stannar i webbläsaren. En per rad; var och en gäller även underdomäner.",
 	"popup_more": "{count} till i Ottie",
-	"popup_empty": "Inga nedladdningar än."
+	"popup_empty": "Inga nedladdningar än.",
+	"ext_pair_here": "Logga in på Ottie på den här datorn",
+	"ext_pair_here_hint": "Där Ottie är installerat loggar webbläsaren in av sig själv, och Ottie startar när en nedladdning kommer.",
+	"ext_no_host": "Ottie är inte konfigurerat för den här webbläsaren på den här datorn: installera skrivbordsappen eller kör kommandot ottie extension install. Eller logga in med en länk."
 }

@@ -751,5 +751,8 @@
 	"ext_excluded": "Amasayithi ashiyelwe isiphequluli",
 	"ext_excluded_hint": "Ukulanda kwawo kuhlala esipheqululini. Elilodwa emugqeni ngamunye; ngalinye lifaka nezizinda zalo ezingaphansi.",
 	"popup_more": "Okunye okungu-{count} ku-Ottie",
-	"popup_empty": "Akukabi khona ukulanda."
+	"popup_empty": "Akukabi khona ukulanda.",
+	"ext_pair_here": "Ngena ku-Ottie kule khompyutha",
+	"ext_pair_here_hint": "Lapho i-Ottie ifakwe khona, lesi siphequluli singena sisodwa, futhi i-Ottie iqala uma kufika ukulanda.",
+	"ext_no_host": "I-Ottie ayisethiwe kulesi siphequluli kule khompyutha: faka uhlelo lwedeskithophu, noma usebenzise umyalo othi ottie extension install. Noma ngena ngesixhumanisi."
 }

@@ -751,5 +751,8 @@
 	"ext_excluded": "Pārlūkam atstātās vietnes",
 	"ext_excluded_hint": "To lejupielādes paliek pārlūkā. Pa vienai rindā; katra aptver arī savus apakšdomēnus.",
 	"popup_more": "Vēl Ottie: {count}",
-	"popup_empty": "Lejupielāžu vēl nav."
+	"popup_empty": "Lejupielāžu vēl nav.",
+	"ext_pair_here": "Pierakstīties Ottie šajā datorā",
+	"ext_pair_here_hint": "Kur Ottie ir instalēts, šis pārlūks pierakstās pats, un Ottie startē, kad pienāk lejupielāde.",
+	"ext_no_host": "Ottie šajā datorā nav iestatīts šim pārlūkam: instalējiet darbvirsmas lietotni vai palaidiet komandu ottie extension install. Vai pierakstieties ar saiti."
 }

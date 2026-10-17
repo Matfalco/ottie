@@ -751,5 +751,8 @@
 	"ext_excluded": "Brauserile jäetud saidid",
 	"ext_excluded_hint": "Nende allalaadimised jäävad brauserisse. Üks rea kohta; iga hõlmab ka oma alamdomeene.",
 	"popup_more": "Ottie’s veel {count}",
-	"popup_empty": "Allalaadimisi veel pole."
+	"popup_empty": "Allalaadimisi veel pole.",
+	"ext_pair_here": "Logi selles arvutis Ottiesse sisse",
+	"ext_pair_here_hint": "Kus Ottie on paigaldatud, logib see brauser ise sisse ja Ottie käivitub, kui tuleb allalaadimine.",
+	"ext_no_host": "Ottie pole selles arvutis selle brauseri jaoks seadistatud: paigalda töölauarakendus või käivita käsk ottie extension install. Või logi sisse lingiga."
 }

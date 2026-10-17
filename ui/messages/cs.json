@@ -751,5 +751,8 @@
 	"ext_excluded": "Weby ponechané prohlížeči",
 	"ext_excluded_hint": "Jejich stahování zůstávají v prohlížeči. Jeden na řádek; každý zahrnuje i své subdomény.",
 	"popup_more": "Další v Ottie: {count}",
-	"popup_empty": "Zatím žádná stahování."
+	"popup_empty": "Zatím žádná stahování.",
+	"ext_pair_here": "Přihlásit se k Ottie na tomto počítači",
+	"ext_pair_here_hint": "Tam, kde je Ottie nainstalovaný, se tento prohlížeč přihlásí sám a Ottie se spustí, když přijde stahování.",
+	"ext_no_host": "Ottie není na tomto počítači pro tento prohlížeč nastavený: nainstalujte aplikaci pro počítač nebo spusťte příkaz ottie extension install. Nebo se přihlaste odkazem."
 }

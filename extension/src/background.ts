@@ -6,10 +6,12 @@
 // accepted it, and is only then cancelled and taken off the browser's list.
 // If the browser finished it first, it keeps it and Ottie's is removed.
 
+import type { AddJob } from '@ottie/api-types/AddJob';
 import { cookieHeader } from './lib/cookies';
-import { addJob, removeJob } from './lib/daemon';
+import { addJob, removeJob, Unauthorized, Unreachable } from './lib/daemon';
+import { onThisComputer, pairHere, startHere } from './lib/host';
 import { RecentPosts } from './lib/posts';
-import { loadSettings } from './lib/settings';
+import { loadSettings, saveSettings, type Pairing } from './lib/settings';
 import { skipReason } from './lib/takeover';
 
 const posts = new RecentPosts();
@@ -24,6 +26,24 @@ chrome.webRequest.onBeforeRequest.addListener(
 	{ urls: ['<all_urls>'], types: ['main_frame', 'sub_frame'] }
 );
 
+// Installed where Ottie is: it signs in by itself (docs/decisions/0055).
+// Without Ottie's host, the options page asks for a sign-in link.
+chrome.runtime.onInstalled.addListener(() => {
+	void signInHere();
+});
+
+async function signInHere(): Promise<void> {
+	const settings = await loadSettings();
+	if (settings.pairing !== null) {
+		return;
+	}
+	try {
+		await saveSettings({ pairing: await pairHere() });
+	} catch {
+		// No host here: a link it is, from the options page.
+	}
+}
+
 chrome.downloads.onCreated.addListener((item) => {
 	void takeOver(item);
 });
@@ -34,15 +54,16 @@ async function takeOver(item: chrome.downloads.DownloadItem): Promise<void> {
 	if (skip !== null || settings.pairing === null) {
 		return;
 	}
-	const pairing = settings.pairing;
+	let pairing = settings.pairing;
 	let id: string;
 	try {
-		id = await addJob(pairing, {
+		const job: AddJob = {
 			url: item.url,
 			cookie: (await cookiesFor(item)) ?? undefined,
 			referrer: item.referrer === '' ? undefined : item.referrer,
 			userAgent: navigator.userAgent
-		});
+		};
+		[pairing, id] = await handOver(pairing, job);
 	} catch (error) {
 		// Unreachable, refused or signed out: the browser carries on.
 		console.warn('Ottie did not take a download:', error);
@@ -61,6 +82,25 @@ async function takeOver(item: chrome.downloads.DownloadItem): Promise<void> {
 		console.warn('The browser kept a download Ottie took too:', error);
 	} finally {
 		await setBrowserUi(true);
+	}
+}
+
+/** Adds the job; where Ottie's host set this browser up, starts Ottie if
+ * it doesn't answer, or signs in again if it refused the token, then tries
+ * once more. The browser's download carries on meanwhile. */
+async function handOver(pairing: Pairing, job: AddJob): Promise<[Pairing, string]> {
+	try {
+		return [pairing, await addJob(pairing, job)];
+	} catch (error) {
+		if (error instanceof Unreachable && onThisComputer(pairing.address) && (await startHere())) {
+			return [pairing, await addJob(pairing, job)];
+		}
+		if (error instanceof Unauthorized && pairing.byHost === true) {
+			const fresh = await pairHere();
+			await saveSettings({ pairing: fresh });
+			return [fresh, await addJob(fresh, job)];
+		}
+		throw error;
 	}
 }
 

@@ -751,5 +751,8 @@
 	"ext_excluded": "Sites deixados ao navegador",
 	"ext_excluded_hint": "As suas transferências ficam no navegador. Um por linha; cada um abrange os seus subdomínios.",
 	"popup_more": "Mais {count} no Ottie",
-	"popup_empty": "Ainda não há transferências."
+	"popup_empty": "Ainda não há transferências.",
+	"ext_pair_here": "Iniciar sessão no Ottie neste computador",
+	"ext_pair_here_hint": "Onde o Ottie está instalado, este navegador inicia sessão sozinho, e o Ottie arranca quando chega uma transferência.",
+	"ext_no_host": "O Ottie não está configurado para este navegador neste computador: instale a aplicação de ambiente de trabalho ou execute o comando ottie extension install. Ou inicie sessão com uma ligação."
 }

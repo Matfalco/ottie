@@ -751,5 +751,8 @@
 	"ext_excluded": "留給瀏覽器的網站",
 	"ext_excluded_hint": "這些網站的下載留在瀏覽器中。每行一個；每個也包含其子網域。",
 	"popup_more": "Ottie 中還有 {count} 個",
-	"popup_empty": "還沒有下載。"
+	"popup_empty": "還沒有下載。",
+	"ext_pair_here": "登入此電腦上的 Ottie",
+	"ext_pair_here_hint": "在安裝了 Ottie 的電腦上，此瀏覽器會自行登入，有下載時 Ottie 會自動啟動。",
+	"ext_no_host": "此電腦上的 Ottie 尚未為此瀏覽器設定：請安裝桌面應用程式，或執行指令 ottie extension install。也可以用連結登入。"
 }

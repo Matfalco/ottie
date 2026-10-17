@@ -237,6 +237,7 @@ fn main() -> tauri::Result<()> {
 /// Ottie in the tray.
 async fn start(app: &AppHandle, shown: bool) -> anyhow::Result<()> {
     let ottie = daemon::sidecar()?;
+    tauri::async_runtime::spawn(daemon::set_up_extension(ottie.clone()));
     let local = daemon::link(&ottie).await?;
     grant_local(app, &local)?;
     app.manage(status::Feed::new());

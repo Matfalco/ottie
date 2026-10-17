@@ -9,7 +9,8 @@
 	import { m } from '#ui/paraglide/messages.js';
 	import { getLocale } from '#ui/paraglide/runtime.js';
 	import { toField } from '#ui/settings.js';
-	import { daemonSettings, Unauthorized, Unreachable } from '../lib/daemon';
+	import { daemonSettings, Unauthorized } from '../lib/daemon';
+	import { NoHost, pairHere } from '../lib/host';
 	import { saveLook } from '../lib/look';
 	import {
 		DEFAULTS,
@@ -29,6 +30,7 @@
 	let status: Status | null = $state(null);
 	let link = $state('');
 	let linkProblem: string | null = $state(null);
+	let hereProblem: string | null = $state(null);
 	let busy = $state(false);
 	/** Firefox lets people withhold a manifest's site access. */
 	let everySite = $state(true);
@@ -77,6 +79,20 @@
 				found === 'refused' ? m.ext_refused() : m.ext_unreachable({ address: pairing.address });
 			status = null;
 		}
+	}
+
+	/** Through Ottie's host on this computer. */
+	async function signInHere() {
+		busy = true;
+		hereProblem = null;
+		try {
+			const pairing = await pairHere();
+			await saveSettings({ pairing });
+			await check(pairing);
+		} catch (error) {
+			hereProblem = error instanceof NoHost ? m.ext_no_host() : String(error);
+		}
+		busy = false;
 	}
 
 	async function signOut() {
@@ -147,7 +163,18 @@
 				</span>
 			</div>
 		{:else}
-			<p class="setting hint">{m.ext_signed_out()}</p>
+			<div class="setting">
+				<span class="names">
+					<span>{m.ext_signed_out()}</span>
+					<span class="hint">{m.ext_pair_here_hint()}</span>
+				</span>
+				<button class="primary" disabled={busy} onclick={() => void signInHere()}>
+					{m.ext_pair_here()}
+				</button>
+				{#if hereProblem}
+					<p class="problem" role="alert">{hereProblem}</p>
+				{/if}
+			</div>
 		{/if}
 		<form class="setting" onsubmit={(event) => void signIn(event)}>
 			<label for="link" class="names">
@@ -163,7 +190,7 @@
 					autocomplete="off"
 					spellcheck="false"
 				/>
-				<button class="primary" disabled={busy || link.trim() === ''}>{m.login_sign_in()}</button>
+				<button disabled={busy || link.trim() === ''}>{m.login_sign_in()}</button>
 			</span>
 			{#if linkProblem}
 				<p class="problem" role="alert">{linkProblem}</p>

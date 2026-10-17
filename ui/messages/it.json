@@ -751,5 +751,8 @@
 	"ext_excluded": "Siti lasciati al browser",
 	"ext_excluded_hint": "I loro download restano nel browser. Uno per riga; ognuno include i suoi sottodomini.",
 	"popup_more": "Altri {count} in Ottie",
-	"popup_empty": "Ancora nessun download."
+	"popup_empty": "Ancora nessun download.",
+	"ext_pair_here": "Accedi a Ottie su questo computer",
+	"ext_pair_here_hint": "Dove Ottie è installato, questo browser accede da solo e Ottie si avvia quando arriva un download.",
+	"ext_no_host": "Ottie non è configurato per questo browser su questo computer: installa l’app desktop o esegui il comando ottie extension install. Oppure accedi con un link."
 }

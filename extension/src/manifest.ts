@@ -7,6 +7,11 @@ export type Browser = 'chrome' | 'firefox';
 /** Firefox's ID for the extension: fixed, so the native host can name it. */
 export const GECKO_ID = 'ottie@matfalco.github.io';
 
+/** The public half of the key that fixes the Chrome ID; the stores give
+ * theirs when it's published there. */
+const CHROME_KEY =
+	'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz2Z65jAwG8UxM0pQLqF/C6lN0KOquf1BTa4ODilTg10qPhRHjePAN2KGy/v7g18yU8bH22zhXwKWV5lnJLH+/f1F/yLgAH6gqgJ90YRi/p735tXRVXoyk+MmPzpfKdo315ZAQe7PcR2W9h6FcGPOCxtuW7w1kD3K4ZhDUyW8/VVwLw9WK3RuS8wKS7Iw/J+RlkylFfb86elByWVrh5LrCENOtGo7gNFlUkog1G98dcsQecI34lPjf4Ghn4TPqTm1ROnTl4pWgL36S9ni4qY/wf/QXs5VApGHAyPLWaX2BXsCYG6Xs7WyRkkkoIhmx9s9Ih/04GkABNso/NwJXwcxswIDAQAB';
+
 const ICONS = { 16: 'icons/16.png', 32: 'icons/32.png', 48: 'icons/48.png', 128: 'icons/128.png' };
 
 export function manifest(browser: Browser, version: string): Record<string, unknown> {
@@ -23,10 +28,13 @@ export function manifest(browser: Browser, version: string): Record<string, unkn
 		// Every site: a download's cookies, and wherever Ottie runs.
 		host_permissions: ['<all_urls>']
 	};
-	const permissions = ['downloads', 'cookies', 'storage', 'webRequest'];
+	const permissions = ['downloads', 'cookies', 'storage', 'webRequest', 'nativeMessaging'];
 	if (browser === 'chrome') {
 		return {
 			...common,
+			// Fixes its ID when loaded unpacked (njjhemepabjjkdpcdplfcgjiooggdpol),
+			// which the native host's manifest names (`crates/ottie/src/extension.rs`).
+			key: CHROME_KEY,
 			background: { service_worker: 'background.js', type: 'module' },
 			permissions: [...permissions, 'downloads.ui'],
 			minimum_chrome_version: '116'

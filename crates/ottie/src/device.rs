@@ -117,14 +117,15 @@ pub async fn run(args: DeviceArgs) -> Result<()> {
     }
 }
 
-struct Client {
-    http: reqwest::Client,
-    addr: SocketAddr,
+/// A client of the daemon on this computer, with this computer's token.
+pub struct Client {
+    pub http: reqwest::Client,
+    pub addr: SocketAddr,
     token: String,
 }
 
 impl Client {
-    fn new(daemon: &DaemonArgs) -> Result<Client> {
+    pub fn new(daemon: &DaemonArgs) -> Result<Client> {
         let dirs = Dirs::resolve(&daemon.dirs)?;
         let file = FileConfig::load(&dirs.config.join(CONFIG_FILE))?;
         let addr = config::listen_addr(daemon.address, daemon.port, &file);
@@ -141,12 +142,12 @@ impl Client {
         })
     }
 
-    fn url(&self, path: &str) -> String {
+    pub fn url(&self, path: &str) -> String {
         format!("http://{}/api/v1{path}", config::local(self.addr))
     }
 
     /// Sends it with this computer's token; a refusal becomes the error.
-    async fn send(&self, request: reqwest::RequestBuilder) -> Result<reqwest::Response> {
+    pub async fn send(&self, request: reqwest::RequestBuilder) -> Result<reqwest::Response> {
         let response = match request.bearer_auth(&self.token).send().await {
             Ok(response) => response,
             Err(err) if err.is_connect() => bail!(

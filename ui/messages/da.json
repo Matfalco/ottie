@@ -751,5 +751,8 @@
 	"ext_excluded": "Websteder overladt til browseren",
 	"ext_excluded_hint": "Deres downloads bliver i browseren. Ét pr. linje; hvert dækker også underdomæner.",
 	"popup_more": "{count} mere i Ottie",
-	"popup_empty": "Ingen downloads endnu."
+	"popup_empty": "Ingen downloads endnu.",
+	"ext_pair_here": "Log ind på Ottie på denne computer",
+	"ext_pair_here_hint": "Hvor Ottie er installeret, logger browseren ind af sig selv, og Ottie starter, når en download kommer.",
+	"ext_no_host": "Ottie er ikke sat op til denne browser på denne computer: installer skrivebordsappen, eller kør kommandoen ottie extension install. Eller log ind med et link."
 }

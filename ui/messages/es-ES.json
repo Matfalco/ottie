@@ -751,5 +751,8 @@
 	"ext_excluded": "Sitios que se quedan en el navegador",
 	"ext_excluded_hint": "Sus descargas se quedan en el navegador. Uno por línea; cada uno incluye sus subdominios.",
 	"popup_more": "{count} más en Ottie",
-	"popup_empty": "Aún no hay descargas."
+	"popup_empty": "Aún no hay descargas.",
+	"ext_pair_here": "Iniciar sesión en Ottie en este ordenador",
+	"ext_pair_here_hint": "Donde Ottie está instalado, este navegador inicia sesión solo, y Ottie arranca cuando llega una descarga.",
+	"ext_no_host": "Ottie no está configurado para este navegador en este ordenador: instala la aplicación de escritorio o ejecuta el comando ottie extension install. O inicia sesión con un enlace."
 }

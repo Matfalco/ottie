@@ -751,5 +751,8 @@
 	"ext_excluded": "留给浏览器的网站",
 	"ext_excluded_hint": "这些网站的下载留在浏览器中。每行一个；每个也包括其子域名。",
 	"popup_more": "Ottie 中还有 {count} 个",
-	"popup_empty": "还没有下载。"
+	"popup_empty": "还没有下载。",
+	"ext_pair_here": "登录此电脑上的 Ottie",
+	"ext_pair_here_hint": "在安装了 Ottie 的电脑上，此浏览器会自行登录，有下载时 Ottie 会自动启动。",
+	"ext_no_host": "此电脑上的 Ottie 尚未为此浏览器设置：请安装桌面应用，或运行命令 ottie extension install。也可以用链接登录。"
 }

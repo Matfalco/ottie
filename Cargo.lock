@@ -3481,6 +3481,7 @@ dependencies = [
  "ottie-core",
  "reqwest",
  "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "tokio-util",

@@ -751,5 +751,8 @@
 	"ext_excluded": "Situs yang dibiarkan di browser",
 	"ext_excluded_hint": "Unduhannya tetap di browser. Satu per baris; masing-masing mencakup subdomainnya.",
 	"popup_more": "{count} lagi di Ottie",
-	"popup_empty": "Belum ada unduhan."
+	"popup_empty": "Belum ada unduhan.",
+	"ext_pair_here": "Masuk ke Ottie di komputer ini",
+	"ext_pair_here_hint": "Di tempat Ottie terpasang, browser ini masuk sendiri, dan Ottie mulai saat ada unduhan.",
+	"ext_no_host": "Ottie belum disiapkan untuk browser ini di komputer ini: pasang aplikasi desktop, atau jalankan perintah ottie extension install. Atau masuk dengan tautan."
 }

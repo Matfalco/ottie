@@ -751,5 +751,8 @@
 	"ext_excluded": "브라우저에 맡기는 사이트",
 	"ext_excluded_hint": "이 사이트들의 다운로드는 브라우저에 남습니다. 한 줄에 하나씩; 각각 하위 도메인도 포함합니다.",
 	"popup_more": "Ottie에 {count}개 더",
-	"popup_empty": "아직 다운로드가 없습니다."
+	"popup_empty": "아직 다운로드가 없습니다.",
+	"ext_pair_here": "이 컴퓨터의 Ottie에 로그인",
+	"ext_pair_here_hint": "Ottie가 설치된 곳에서는 이 브라우저가 스스로 로그인하고, 다운로드가 오면 Ottie가 시작됩니다.",
+	"ext_no_host": "이 컴퓨터의 Ottie가 이 브라우저용으로 설정되지 않았습니다: 데스크톱 앱을 설치하거나 ottie extension install 명령을 실행하세요. 또는 링크로 로그인하세요."
 }

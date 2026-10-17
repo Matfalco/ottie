@@ -9,6 +9,7 @@
 	import { m } from '#ui/paraglide/messages.js';
 	import { daemonSettings, Unauthorized } from '../lib/daemon';
 	import { frameHeight, fromPage } from '../lib/frame';
+	import { pairHere } from '../lib/host';
 	import { saveLook } from '../lib/look';
 	import { DEFAULTS, loadSettings, saveSettings, type ExtensionSettings } from '../lib/settings';
 
@@ -63,6 +64,20 @@
 		return () => removeEventListener('message', listen);
 	});
 
+	/** Through Ottie's host on this computer, else the options page. */
+	async function signIn() {
+		try {
+			const pairing = await pairHere();
+			await saveSettings({ pairing });
+			settings.pairing = pairing;
+			status = 'checking';
+			await saveLook(await daemonSettings(pairing));
+			status = 'ok';
+		} catch {
+			openSettings();
+		}
+	}
+
 	function openSettings() {
 		void chrome.runtime.openOptionsPage();
 		window.close();
@@ -92,7 +107,7 @@
 		{#if settings.pairing === null}
 			<p class="message">
 				<span>{m.ext_signed_out()}</span>
-				<button class="primary" onclick={openSettings}>{m.login_sign_in()}</button>
+				<button class="primary" onclick={() => void signIn()}>{m.login_sign_in()}</button>
 			</p>
 		{:else if status === 'ok'}
 			<iframe

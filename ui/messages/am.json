@@ -751,5 +751,8 @@
 	"ext_excluded": "ለአሳሹ የተተዉ ጣቢያዎች",
 	"ext_excluded_hint": "ውርዶቻቸው በአሳሹ ውስጥ ይቀራሉ። በአንድ መስመር አንድ፤ እያንዳንዱ ንዑስ ጎራዎቹንም ያካትታል።",
 	"popup_more": "በOttie ውስጥ ተጨማሪ {count}",
-	"popup_empty": "እስካሁን ምንም ውርድ የለም።"
+	"popup_empty": "እስካሁን ምንም ውርድ የለም።",
+	"ext_pair_here": "በዚህ ኮምፒውተር ላይ ወዳለው Ottie ይግቡ",
+	"ext_pair_here_hint": "Ottie በተጫነበት፣ ይህ አሳሽ በራሱ ይገባል፣ ውርድ ሲመጣም Ottie ይጀምራል።",
+	"ext_no_host": "በዚህ ኮምፒውተር ላይ Ottie ለዚህ አሳሽ አልተዋቀረም፦ የዴስክቶፕ መተግበሪያውን ይጫኑ፣ ወይም ottie extension install የሚለውን ትእዛዝ ያሂዱ። ወይም በአገናኝ ይግቡ።"
 }

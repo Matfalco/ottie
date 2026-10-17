@@ -751,5 +751,8 @@
 	"ext_excluded": "Site-uri lăsate browserului",
 	"ext_excluded_hint": "Descărcările lor rămân în browser. Câte unul pe rând; fiecare include subdomeniile sale.",
 	"popup_more": "Încă {count} în Ottie",
-	"popup_empty": "Încă nicio descărcare."
+	"popup_empty": "Încă nicio descărcare.",
+	"ext_pair_here": "Conectează-te la Ottie pe acest computer",
+	"ext_pair_here_hint": "Acolo unde Ottie e instalat, acest browser se conectează singur, iar Ottie pornește când vine o descărcare.",
+	"ext_no_host": "Ottie nu e configurat pentru acest browser pe acest computer: instalează aplicația desktop sau rulează comanda ottie extension install. Sau conectează-te cu un link."
 }

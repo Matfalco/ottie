@@ -136,6 +136,12 @@ crates/ottie/      ottie: the binary  [exists]
                      listen address
   src/token.rs       token file: created on first use (never for --system), `ottie token` prints it (`--new` replaces it)
   src/device.rs      `ottie device add|list|remove` (0052): a client of the running daemon, with this computer's token
+  src/native_host.rs the browser extension's native messaging host (0055): a browser starts `ottie` with the
+                     extension's address (recognised before clap); one length-prefixed JSON message each way:
+                     `pair` (starts Ottie if needed, adds a device named after the browser, gives its token) or `start`
+  src/extension.rs   `ottie extension install|uninstall|status` (0055): the host's manifest for each browser found
+                     (a folder of its own on Linux/macOS; on Windows a manifest in the data folder named by an HKCU
+                     key, through reg.exe), written only when it changed; the Chromium IDs it allows
   src/service.rs     `ottie service install|uninstall|status` (0051): what to run, whether Ottie answers, the
                      system service's copy of ottie; per system in service/: systemd.rs (user or system unit,
                      the `ottie` account, lingering), launchd.rs (LaunchAgent), windows.rs (task at sign-in,
@@ -147,7 +153,7 @@ app/               ottie-app: Tauri 2 shell (desktop; Android later, then with c
                      single instance, closing hides it (or quits, per app.json), stops the daemon it
                      started on exit
   src/daemon.rs      find or start `ottie serve --managed` (the sidecar next to the app), ready / stop; at
-                     sign-in, `ottie serve` on its own
+                     sign-in, `ottie serve` on its own; at every start `ottie extension install --quiet` (0055)
   src/client.rs      the app as an API client: events WebSocket, jobs, settings, pause/resume, limit,
                      categories' file types, links in a text (preview), adding several, where a
                      job's file is, whether it answers and takes the token; HTTPS with the system's certificates
@@ -318,7 +324,8 @@ extension/         the browser extension (pnpm package `extension`; Manifest V3,
                      (never dropped: kept if Ottie refuses or the browser finished first); notes forms' POSTs
   src/lib/           plain logic, unit-tested (*.test.ts, Vitest): settings.ts (the extension's own, in
                      chrome.storage.local: pairing, take over, smallest size, sites left out), takeover.ts (which
-                     downloads go, and why not), daemon.ts (Ottie's API with this browser's token), signin.ts
+                     downloads go, and why not), daemon.ts (Ottie's API with this browser's token), host.ts (Ottie
+                     on this computer through its native host: sign in, start it), signin.ts
                      (a sign-in link), cookies.ts (the Cookie header), sites.ts, posts.ts, look.ts (Ottie's shared
                      look and language, kept for the pages), sizes.ts
   src/manifest.ts    the manifest per browser (service worker or background script, downloads.ui, gecko ID)
@@ -357,6 +364,7 @@ cargo run -p ottie -- open           # the web UI in a browser, signed in
 cargo run -p ottie -- link           # print that signed-in address
 cargo run -p ottie -- service status # Ottie as a service (install / uninstall; --system for the computer)
 cargo run -p ottie -- device list    # other devices' tokens (add <name> [--read-only] / remove <id>); `token --new`
+cargo run -p ottie -- extension install  # the extension's native host for each browser found (status / uninstall)
 docker build -t ottie .              # the headless image (docs/service.md)
 
 pnpm install                         # JS dependencies (workspace: ui, shared/api-types)
@@ -425,6 +433,7 @@ Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 3
 
 - The daemon binds 127.0.0.1:24068 by default (`address`/`port` in config.toml, `--address`/`--port`, `OTTIE_ADDRESS`/`OTTIE_PORT`; flags win over the file). Remote access is opt-in, always requires a token, and should sit behind Tailscale, a VPN or a reverse proxy with HTTPS rather than be exposed directly (`docs/remote.md`).
 - Every API request carries a token (`docs/decisions/0014`): `Authorization: Bearer`, or for the events WebSocket the offered protocol `ottie.token.<token>` (never in a URL or a cookie). This computer's (32 random bytes, hex) lives in `<config>/token`, created on first use; `ottie serve` mentions where only when stdout is a terminal, never in logs. Unknown API paths also need it.
+- The extension's native host (`docs/decisions/0055`) gives a browser a full device token of its own; only the extensions its manifests name can start it (Chromium IDs in `extension.rs`, Firefox's gecko ID), and anyone who can run `ottie` here can read the token file anyway. It starts `ottie serve` out of the browser's reach (own process group; on Windows out of its job object when allowed), never with the browser's pipes.
 - Other devices get tokens of their own (`docs/decisions/0052`), full or read-only, kept as SHA-256 hashes in `<config>/access.json`; only this computer's token manages them and the folders list. A read-only token passes `auth::only_reads` (GET, and a few POSTs that change nothing): a new endpoint that changes nothing but isn't a GET must be listed there. Every handler that takes a folder from a client checks it with `Access::folders_for` (devices: categories' folders and those listed only).
 - The daemon's pages may be shown in a frame only by its own pages and browser extensions' (`frame-ancestors`): the extension's popup frames `/popup` and hands it the token by `postMessage`, which that page takes only from an extension's page that is its parent (`docs/decisions/0055`).
 - Play links (`/stream/{ticket}/…`, `docs/decisions/0029`) are the one exception: the random ticket reads one job's file and expires after 12 h unused. They're served with `Content-Security-Policy: sandbox`, so a downloaded page or SVG can't run scripts as the daemon's pages.
@@ -593,7 +602,7 @@ Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review. 
    - ‼️ 8a the browser's cookie, referrer and user agent sent with a download it hands over (`POST /jobs`)
    - ‼️ 8b the extension: takes over downloads (with exceptions), sign-in link
    - ‼️ 8c its popup: the daemon's own `/popup` page
-   - 8d the native messaging host (`ottie` itself): signs in by itself, starts the daemon
+   - ‼️ 8d the native messaging host (`ottie` itself): signs in by itself, starts the daemon
    - 8e "Download with Ottie" in the context menu
 9. yt-dlp backend (its own updates, apart from the app's).
 10. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.

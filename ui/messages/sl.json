@@ -751,5 +751,8 @@
 	"ext_excluded": "Spletna mesta, prepuščena brskalniku",
 	"ext_excluded_hint": "Njihovi prenosi ostanejo v brskalniku. Eno na vrstico; vsako zajema tudi svoje poddomene.",
 	"popup_more": "Še v Ottieju: {count}",
-	"popup_empty": "Še ni prenosov."
+	"popup_empty": "Še ni prenosov.",
+	"ext_pair_here": "Prijava v Ottie na tem računalniku",
+	"ext_pair_here_hint": "Kjer je Ottie nameščen, se ta brskalnik prijavi sam, Ottie pa se zažene, ko pride prenos.",
+	"ext_no_host": "Ottie na tem računalniku ni nastavljen za ta brskalnik: namestite namizno aplikacijo ali zaženite ukaz ottie extension install. Ali pa se prijavite s povezavo."
 }

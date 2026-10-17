@@ -751,5 +751,8 @@
 	"ext_excluded": "Naršyklei paliktos svetainės",
 	"ext_excluded_hint": "Jų atsisiuntimai lieka naršyklėje. Po vieną eilutėje; kiekviena apima ir savo subdomenus.",
 	"popup_more": "Dar Ottie: {count}",
-	"popup_empty": "Atsisiuntimų dar nėra."
+	"popup_empty": "Atsisiuntimų dar nėra.",
+	"ext_pair_here": "Prisijungti prie Ottie šiame kompiuteryje",
+	"ext_pair_here_hint": "Ten, kur įdiegta Ottie, ši naršyklė prisijungia pati, o Ottie pasileidžia, kai atsiranda atsisiuntimas.",
+	"ext_no_host": "Ottie šiame kompiuteryje nenustatyta šiai naršyklei: įdiekite darbalaukio programą arba paleiskite komandą ottie extension install. Arba prisijunkite nuoroda."
 }

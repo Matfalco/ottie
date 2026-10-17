@@ -15,7 +15,7 @@ describe('parseSettings', () => {
 				excluded: ['example.com', 3]
 			})
 		).toEqual({
-			pairing: { address: 'http://127.0.0.1:24068', token: 't' },
+			pairing: { address: 'http://127.0.0.1:24068', token: 't', byHost: false },
 			takeOver: false,
 			minSize: 2048,
 			excluded: ['example.com']

@@ -126,6 +126,29 @@ pub async fn link(ottie: &Path) -> Result<Url> {
     Url::parse(printed.trim()).with_context(|| format!("`ottie link` printed {printed:?}"))
 }
 
+/// Tells the browsers found where the extension's native messaging host is
+/// (`ottie extension install`, docs/decisions/0055), so the extension signs
+/// in by itself. It writes only what changed: nothing, after the first start
+/// (security tools frown on an app that rewrites the registry each time).
+pub async fn set_up_extension(ottie: PathBuf) {
+    let ran = command(&ottie)
+        .args(["extension", "install", "--quiet"])
+        .stdin(Stdio::null())
+        .output()
+        .await;
+    match ran {
+        Ok(output) if output.status.success() => {}
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!(
+                "browser extension: {}",
+                reason(stderr.lines(), output.status)
+            );
+        }
+        Err(err) => eprintln!("browser extension: can't run {}: {err}", ottie.display()),
+    }
+}
+
 /// Whether an Ottie daemon answers at the link's address. Refusing our token
 /// counts: it's Ottie started with other folders, and its page asks for one.
 async fn answers(link: &Url) -> bool {

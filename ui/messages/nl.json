@@ -751,5 +751,8 @@
 	"ext_excluded": "Sites die bij de browser blijven",
 	"ext_excluded_hint": "Hun downloads blijven in de browser. Eén per regel; elk geldt ook voor de subdomeinen.",
 	"popup_more": "Nog {count} in Ottie",
-	"popup_empty": "Nog geen downloads."
+	"popup_empty": "Nog geen downloads.",
+	"ext_pair_here": "Aanmelden bij Ottie op deze computer",
+	"ext_pair_here_hint": "Waar Ottie geïnstalleerd is, meldt deze browser zich vanzelf aan en start Ottie zodra er een download komt.",
+	"ext_no_host": "Ottie is op deze computer niet ingesteld voor deze browser: installeer de desktop-app of voer de opdracht ottie extension install uit. Of meld je aan met een link."
 }

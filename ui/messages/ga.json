@@ -751,5 +751,8 @@
 	"ext_excluded": "Suíomhanna fágtha ag an mbrabhsálaí",
 	"ext_excluded_hint": "Fanann a n-íoslódálacha sa bhrabhsálaí. Ceann in aghaidh na líne; cuimsíonn gach ceann a fhofhearainn.",
 	"popup_more": "{count} eile in Ottie",
-	"popup_empty": "Níl aon íoslódáil fós."
+	"popup_empty": "Níl aon íoslódáil fós.",
+	"ext_pair_here": "Sínigh isteach in Ottie ar an ríomhaire seo",
+	"ext_pair_here_hint": "Áit a bhfuil Ottie suiteáilte, síníonn an brabhsálaí seo isteach leis féin, agus tosaíonn Ottie nuair a thagann íoslódáil.",
+	"ext_no_host": "Níl Ottie socraithe don bhrabhsálaí seo ar an ríomhaire seo: suiteáil an aip deisce, nó rith an t-ordú ottie extension install. Nó sínigh isteach le nasc."
 }

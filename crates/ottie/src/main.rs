@@ -7,6 +7,8 @@
 
 mod config;
 mod device;
+mod extension;
+mod native_host;
 mod open;
 mod serve;
 mod service;
@@ -21,6 +23,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::DaemonArgs;
 use crate::device::DeviceArgs;
+use crate::extension::ExtensionArgs;
+use crate::native_host::NativeHostArgs;
 use crate::serve::ServeArgs;
 use crate::service::ServiceArgs;
 use crate::token::TokenArgs;
@@ -53,16 +57,33 @@ enum Command {
     Device(DeviceArgs),
     /// Run Ottie as a service, without the app: for you, or for the whole computer.
     Service(ServiceArgs),
+    /// Let the browser extension sign in to Ottie on this computer by itself
+    /// (and start it): set up for each browser found, or taken away.
+    Extension(ExtensionArgs),
+    /// What browsers start for the extension (they pass their own arguments).
+    #[command(hide = true)]
+    NativeHost(NativeHostArgs),
 }
 
 fn main() -> ExitCode {
-    let result = match Cli::parse().command {
+    let args: Vec<String> = std::env::args_os()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    // A browser starts the extension's host with arguments of its own.
+    let cli = if native_host::started_by_browser(&args) {
+        Cli::parse_from(["ottie", "native-host"])
+    } else {
+        Cli::parse()
+    };
+    let result = match cli.command {
         Command::Serve(args) => serve_now(args),
         Command::Open(args) => block_on(open::run(&args)),
         Command::Token(args) => token::print(&args),
         Command::Link(args) => open::print_link(&args),
         Command::Device(args) => block_on(device::run(args)),
         Command::Service(args) => service::run(args),
+        Command::Extension(args) => extension::run(&args),
+        Command::NativeHost(args) => block_on(native_host::run(args)),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
