@@ -173,6 +173,14 @@ struct Problems {
     remote_changing: String,
     disk: String,
     file_exists: String,
+    ftp421: String,
+    ftp530: String,
+    ftp550: String,
+    /// `{status}` and `{detail}`.
+    ftp: String,
+    /// `{host}`.
+    certificate: String,
+    no_tls: String,
 }
 
 impl Texts {
@@ -423,6 +431,17 @@ impl Texts {
             Some(Problem::RemoteChanging) => texts.remote_changing.clone(),
             Some(Problem::Disk { detail: d }) => detail(&texts.disk, d),
             Some(Problem::FileExists) => texts.file_exists.clone(),
+            Some(Problem::FtpReply {
+                status: s,
+                detail: d,
+            }) => match s {
+                421 => texts.ftp421.clone(),
+                530 => texts.ftp530.clone(),
+                550 => texts.ftp550.clone(),
+                _ => detail(&status(&texts.ftp, *s), d),
+            },
+            Some(Problem::Certificate { host }) => texts.certificate.replace("{host}", host),
+            Some(Problem::NoTls) => texts.no_tls.clone(),
             Some(Problem::Other { detail }) => detail.clone(),
             Some(Problem::Unknown) | None => english.unwrap_or_default().to_owned(),
         }
@@ -661,6 +680,21 @@ mod tests {
         assert_eq!(
             en.reason(Some(&Problem::Unknown), Some("Something new")),
             "Something new"
+        );
+        let refused = Problem::FtpReply {
+            status: 552,
+            detail: "Quota exceeded".to_owned(),
+        };
+        assert_eq!(
+            en.reason(Some(&refused), None),
+            "The FTP server answered 552: Quota exceeded"
+        );
+        let certificate = Problem::Certificate {
+            host: "nas.local".to_owned(),
+        };
+        assert_eq!(
+            fr.reason(Some(&certificate), None),
+            "Le certificat de nas.local n’est pas reconnu"
         );
         assert_eq!(fr.files(1234), "1\u{202f}234 fichiers téléchargés");
     }

@@ -5,6 +5,7 @@ use reqwest::Url;
 
 use crate::error::Error;
 use crate::filename::{self, Existing};
+use crate::ftp;
 
 /// Everything needed to start or resume one download. This is the state that
 /// will be persisted, so a download can resume after a restart.
@@ -36,6 +37,10 @@ pub struct Download {
     /// first response, and when the file is complete. Set for each run (the
     /// job's choice, else the setting's); not saved here.
     pub existing: Existing,
+    /// FTPS: the SHA-256 fingerprints (lowercase hex) of certificates trusted
+    /// by hand for this server, besides those the system trusts
+    /// (docs/decisions/0054). Set for each run; not saved here.
+    pub trusted: Vec<String>,
 }
 
 /// Where to save a download once its real file name is known (from
@@ -89,6 +94,7 @@ impl Download {
             segments: Vec::new(),
             placement: None,
             existing: Existing::default(),
+            trusted: Vec::new(),
         })
     }
 
@@ -99,18 +105,22 @@ impl Download {
     }
 }
 
-/// Header value proving the remote file hasn't changed: a strong `ETag`, or
-/// failing that `Last-Modified`. Sent back in `If-Range` when resuming.
+/// Proves the remote file hasn't changed. HTTP: a strong `ETag`, or failing
+/// that `Last-Modified`, sent back in `If-Range` when resuming. FTP: its size
+/// and modification time as the server gives them (`SIZE`, `MDTM`), asked
+/// again and compared before resuming.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Validator {
     ETag(String),
     LastModified(String),
+    /// `<size> <MDTM time>`, or `<size> -` from a server without `MDTM`.
+    Ftp(String),
 }
 
 impl Validator {
     pub fn header_value(&self) -> &str {
         match self {
-            Validator::ETag(v) | Validator::LastModified(v) => v,
+            Validator::ETag(v) | Validator::LastModified(v) | Validator::Ftp(v) => v,
         }
     }
 }
@@ -170,9 +180,25 @@ pub enum Outcome {
     Paused,
 }
 
+/// Whether a link can be downloaded: HTTP(S), or FTP in its three forms
+/// (`ftp`, `ftps`, `ftpes`; docs/decisions/0054) to a file (not a folder).
 pub(crate) fn check_scheme(url: &Url) -> Result<(), Error> {
+    match url.scheme() {
+        "http" | "https" => Ok(()),
+        "ftp" | "ftps" | "ftpes" => ftp::check(url),
+        other => Err(Error::UnsupportedScheme(other.to_owned())),
+    }
+}
+
+/// What an HTTP request (or redirect) may go to: http or https only.
+pub(crate) fn check_http_scheme(url: &Url) -> Result<(), Error> {
     match url.scheme() {
         "http" | "https" => Ok(()),
         other => Err(Error::UnsupportedScheme(other.to_owned())),
     }
+}
+
+/// An FTP link (`ftp`, `ftps` or `ftpes`), which the FTP backend downloads.
+pub(crate) fn is_ftp(url: &Url) -> bool {
+    matches!(url.scheme(), "ftp" | "ftps" | "ftpes")
 }

@@ -1,8 +1,8 @@
 [package]
 name = "ottie-core"
 version = "0.1.0"
-description = "Download engine of the Ottie download manager: resumable, multi-connection HTTP downloads with speed limits"
-keywords = ["download-manager", "downloader", "http", "resume"]
+description = "Download engine of the Ottie download manager: resumable, multi-connection HTTP and FTP downloads with speed limits"
+keywords = ["download-manager", "downloader", "http", "ftp", "resume"]
 categories = ["network-programming"]
 edition.workspace = true
 license.workspace = true
@@ -13,12 +13,20 @@ publish = true
 workspace = true
 
 [dependencies]
+bytes = "1.12.1"
 jiff = "0.2.38"
 percent-encoding = "2.3.2"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2", "system-proxy"] }
 rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
+# FTPS: the certificate check (the system's, else one trusted by hand) and its fingerprint.
+rustls = { version = "0.23.45", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+rustls-platform-verifier = "0.7.1"
+sha2 = "0.11.1"
+# FTP and FTPS (docs/decisions/0054). `no-log`: it would log the password at trace level.
+suppaftp = { version = "12.2.1", default-features = false, features = ["tokio-rustls-aws-lc-rs", "deprecated", "no-log"] }
 thiserror = "2.0.21"
-tokio = { version = "1.53.2", features = ["fs", "io-util", "macros", "rt", "sync", "time"] }
+tokio = { version = "1.53.2", features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["aws_lc_rs", "tls12"] }
 tokio-util = "0.7.20"
 tracing = "0.1.44"
 

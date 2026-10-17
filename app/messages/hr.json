@@ -55,6 +55,12 @@
 		"incomplete": "Veza se prerano zatvorila",
 		"remoteChanging": "Datoteka se na poslužitelju stalno mijenjala",
 		"disk": "Datoteku nije moguće zapisati ({detail})",
-		"fileExists": "Datoteka s tim imenom već je u mapi"
+		"fileExists": "Datoteka s tim imenom već je u mapi",
+		"ftp421": "Poslužitelj je zauzet ili dopušta manje veza (421)",
+		"ftp530": "Poslužitelj je odbio korisničko ime ili lozinku (530)",
+		"ftp550": "Nije na poslužitelju ili pristup nije dopušten (550)",
+		"ftp": "FTP poslužitelj odgovorio je {status}: {detail}",
+		"certificate": "Certifikatu poslužitelja {host} se ne vjeruje",
+		"noTls": "Poslužitelj ne nudi šifriranje (TLS), koje poveznica ftpes:// zahtijeva"
 	}
 }

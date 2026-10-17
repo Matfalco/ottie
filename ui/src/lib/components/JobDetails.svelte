@@ -11,6 +11,7 @@
 	import Play from '@lucide/svelte/icons/play';
 	import type { Action } from '#lib/bulk.js';
 	import { categoryName } from '#lib/categories.js';
+	import { untrustedCertificate } from '#lib/certificates.js';
 	import {
 		PRIORITIES,
 		asksAboutFile,
@@ -98,6 +99,8 @@
 	let primary = $derived(primaryAction(job));
 	/** It stopped because its file is already there: rename or replace? */
 	let asks = $derived(asksAboutFile(job));
+	/** It stopped at an FTPS server's certificate nobody trusts: trust it? */
+	let certificate = $derived(untrustedCertificate(job));
 	let done = $derived(fraction(job));
 	/** Finished or cancelled: its own settings no longer matter, so only
 	 * where it is stays (its few facts go with it, under the bar). */
@@ -216,6 +219,15 @@
 				</button>
 				<button title={m.det_replace_hint()} onclick={() => choose('replace')}>
 					{m.existing_replace()}
+				</button>
+			{:else if certificate}
+				{@const { host, fingerprint } = certificate}
+				<button
+					class="primary"
+					title={m.det_trust_hint({ host })}
+					onclick={() => void session.trustAndRetry(job.id, host, fingerprint)}
+				>
+					{m.det_trust()}
 				</button>
 			{:else if primary}
 				<button class="primary" onclick={() => onRun(primary.action)}>{primary.label}</button>
@@ -952,5 +964,7 @@
 		font-size: 0.85rem;
 		border-radius: var(--radius-pill);
 		padding-inline: 1rem;
+		/* A certificate's fingerprint is one long word. */
+		overflow-wrap: anywhere;
 	}
 </style>

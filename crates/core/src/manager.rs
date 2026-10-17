@@ -16,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::backend::Backend;
 use crate::category::{self, BuiltIn, Category, CategoryId, CategorySettings, Matched};
+use crate::certificate::{self, CertificateId, TrustedCertificate};
 use crate::download::{Download, Event, Outcome, Placement};
 use crate::error::Error;
 use crate::filename::{self, Existing};
@@ -125,6 +126,7 @@ impl Manager {
             other,
             views,
             slots,
+            certificates: loaded.certificates,
             effects: Effects::default(),
             ended: Vec::new(),
             yields: 0,
@@ -446,6 +448,32 @@ impl Manager {
             .await
     }
 
+    /// The certificates trusted by hand, by ID (docs/decisions/0054).
+    pub async fn certificates(&self) -> Result<Vec<TrustedCertificate>, Error> {
+        self.request(|reply| Command::Certificates { reply }).await
+    }
+
+    /// Trusts this certificate (its SHA-256) for `host` from now on: FTPS
+    /// downloads from there accept it. Trusting one already trusted gives it back.
+    pub async fn trust_certificate(
+        &self,
+        host: &str,
+        fingerprint: &str,
+    ) -> Result<TrustedCertificate, Error> {
+        let (host, fingerprint) = certificate::normalized(host, fingerprint)?;
+        self.request(|reply| Command::TrustCertificate {
+            host,
+            fingerprint,
+            reply,
+        })
+        .await
+    }
+
+    pub async fn distrust_certificate(&self, id: CertificateId) -> Result<(), Error> {
+        self.request(|reply| Command::DistrustCertificate { id, reply })
+            .await
+    }
+
     /// Every time slot, in the order of the list (the higher one wins where
     /// two apply to the same thing). See docs/decisions/0040.
     pub async fn slots(&self) -> Result<Vec<Slot>, Error> {
@@ -602,6 +630,18 @@ enum Command {
     },
     RemoveView {
         id: ViewId,
+        reply: Reply<()>,
+    },
+    Certificates {
+        reply: Reply<Vec<TrustedCertificate>>,
+    },
+    TrustCertificate {
+        host: String,
+        fingerprint: String,
+        reply: Reply<TrustedCertificate>,
+    },
+    DistrustCertificate {
+        id: CertificateId,
         reply: Reply<()>,
     },
     Slots {
@@ -877,6 +917,8 @@ struct Actor<B> {
     views: BTreeMap<ViewId, ViewSettings>,
     /// Time slots. Saved whenever one changes.
     slots: BTreeMap<SlotId, SlotEntry>,
+    /// Certificates trusted by hand, by ID. Saved whenever one changes.
+    certificates: Vec<TrustedCertificate>,
     /// What the active slots change now (see `apply_effects`).
     effects: Effects,
     /// Slots that happened once, have just ended and keep what they held
@@ -1017,6 +1059,19 @@ impl<B: Backend> Actor<B> {
             } => self.set_category(id, category, reply),
             Command::Views { reply } => {
                 let _ = reply.send(Ok(self.views()));
+            }
+            Command::Certificates { reply } => {
+                let _ = reply.send(Ok(self.certificates.clone()));
+            }
+            Command::TrustCertificate {
+                host,
+                fingerprint,
+                reply,
+            } => {
+                let _ = reply.send(self.trust_certificate(host, fingerprint));
+            }
+            Command::DistrustCertificate { id, reply } => {
+                let _ = reply.send(self.distrust_certificate(id));
             }
             Command::AddView { settings, reply } => {
                 let _ = reply.send(self.add_view(settings));
@@ -1879,6 +1934,50 @@ impl<B: Backend> Actor<B> {
         let _ = self.events.send(JobEvent::CategoryChanged(category));
     }
 
+    fn trust_certificate(
+        &mut self,
+        host: String,
+        fingerprint: String,
+    ) -> Result<TrustedCertificate, Error> {
+        if let Some(known) = self
+            .certificates
+            .iter()
+            .find(|c| c.host == host && c.fingerprint == fingerprint)
+        {
+            return Ok(known.clone());
+        }
+        let last = self.certificates.iter().map(|c| c.id.0).max().unwrap_or(0);
+        let id = CertificateId(last.checked_add(1).ok_or(Error::TooManyCertificates)?);
+        let trusted = TrustedCertificate {
+            id,
+            host,
+            fingerprint,
+        };
+        self.certificates.push(trusted.clone());
+        self.store.save_certificate(trusted.clone());
+        Ok(trusted)
+    }
+
+    fn distrust_certificate(&mut self, id: CertificateId) -> Result<(), Error> {
+        let before = self.certificates.len();
+        self.certificates.retain(|c| c.id != id);
+        if self.certificates.len() == before {
+            return Err(Error::CertificateNotFound(id));
+        }
+        self.store.remove_certificate(id);
+        Ok(())
+    }
+
+    /// The fingerprints trusted by hand for the server of `url`.
+    fn trusted_for(&self, url: &Url) -> Vec<String> {
+        let host = url.host_str().unwrap_or("").to_ascii_lowercase();
+        self.certificates
+            .iter()
+            .filter(|c| c.host == host)
+            .map(|c| c.fingerprint.clone())
+            .collect()
+    }
+
     fn views(&self) -> Vec<View> {
         self.views
             .iter()
@@ -2485,6 +2584,11 @@ impl<B: Backend> Actor<B> {
     /// Starts the task that downloads the job, in the state it's in.
     fn spawn_task(&mut self, id: JobId) -> bool {
         let placement = self.jobs.get(&id).and_then(|job| self.placement(job));
+        let trusted = self
+            .jobs
+            .get(&id)
+            .map(|job| self.trusted_for(&job.download.url))
+            .unwrap_or_default();
         let Some(job) = self.jobs.get_mut(&id) else {
             return false;
         };
@@ -2498,6 +2602,7 @@ impl<B: Backend> Actor<B> {
         let mut download = job.download.clone();
         download.placement = placement;
         download.existing = job.existing.unwrap_or(self.settings.existing);
+        download.trusted = trusted;
         let backend = Arc::clone(&self.backend);
         let internal = self.internal.clone();
         // The job's speed budget lives as long as the task does.

@@ -3,6 +3,7 @@
 import type { Job } from '@ottie/api-types/Job';
 import type { Priority } from '@ottie/api-types/Priority';
 import type { Action } from './bulk';
+import { untrustedCertificate } from './certificates';
 import { fileKind, isMedia } from './filetypes';
 import { displayName, formatAdded, formatBytes, formatDuration, formatSpeed } from './format';
 import { addedAt } from './jobs';
@@ -35,7 +36,8 @@ export function asksAboutFile(job: Job): boolean {
 }
 
 /** The panel's main button: what you'd most likely do next, if anything
- * (none for one that asks about its file: the panel's choices take its place). */
+ * (none for one that asks about its file or a certificate: the panel's
+ * choices take its place). */
 export function primaryAction(
 	job: Job,
 	locale: Locale = getLocale()
@@ -47,7 +49,7 @@ export function primaryAction(
 	if (canPause(job)) {
 		return { action: 'pause', label: m.pause({}, options) };
 	}
-	if (job.state === 'failed' && !asksAboutFile(job)) {
+	if (job.state === 'failed' && !asksAboutFile(job) && !untrustedCertificate(job)) {
 		return { action: 'resume', label: m.det_try_again({}, options) };
 	}
 	if (job.state === 'paused') {

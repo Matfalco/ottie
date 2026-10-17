@@ -26,6 +26,21 @@ describe('explainProblem', () => {
 		expect(say({ code: 'other', detail: 'something' })).toBe('something');
 	});
 
+	it('says why an FTP download stopped', () => {
+		const say = (problem: Problem, locale: 'en' | 'fr' = 'en') =>
+			plain(explainProblem(problem, 'English text', locale));
+		expect(say({ code: 'ftpReply', status: 530, detail: 'Login incorrect.' })).toBe(
+			'The server refused the user name or password (530)'
+		);
+		expect(say({ code: 'ftpReply', status: 552, detail: 'Quota exceeded' })).toBe(
+			'The FTP server answered 552: Quota exceeded'
+		);
+		expect(say({ code: 'certificate', host: 'nas.local', fingerprint: 'ab01' }, 'fr')).toBe(
+			'Le certificat de nas.local n’est pas reconnu. Son empreinte (SHA-256) : AB:01'
+		);
+		expect(say({ code: 'noTls' })).toMatch(/ftpes:\/\//);
+	});
+
 	it('falls back to the English text', () => {
 		expect(explainProblem(null, 'server said no', 'fr')).toBe('server said no');
 		// A code from a newer daemon.
@@ -43,6 +58,11 @@ describe('explainRefusal', () => {
 		const internal: ApiError = { error: 'database error: disk I/O', code: 'internal' };
 		expect(explainRefusal(internal, '', 'fr')).toBe('database error: disk I/O');
 		expect(explainRefusal(null, 'The daemon answered 502.', 'fr')).toBe('The daemon answered 502.');
+	});
+
+	it('says why a certificate can’t be trusted', () => {
+		const body: ApiError = { code: 'invalidCertificate', error: 'x' };
+		expect(explainRefusal(body, 'fallback', 'en')).toMatch(/fingerprint/);
 	});
 
 	it('says why a view can’t be saved', () => {

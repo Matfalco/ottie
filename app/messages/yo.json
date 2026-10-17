@@ -55,6 +55,12 @@
 		"incomplete": "Ìsopọ̀ ti pa ní kùtùkùtù",
 		"remoteChanging": "Fáìlì náà ń yí padà lórí sáfà ṣáá",
 		"disk": "Kò lè kọ fáìlì náà ({detail})",
-		"fileExists": "Fáìlì tí ó ní orúkọ yìí ti wà nínú fódà náà"
+		"fileExists": "Fáìlì tí ó ní orúkọ yìí ti wà nínú fódà náà",
+		"ftp421": "Olùpèsè náà kún, tàbí ó gba ìsopọ̀ díẹ̀ (421)",
+		"ftp530": "Olùpèsè náà kọ orúkọ oníṣe tàbí ọ̀rọ̀ aṣínà (530)",
+		"ftp550": "Kò sí lórí olùpèsè, tàbí a kò gba ìwọlé láàyè (550)",
+		"ftp": "Olùpèsè FTP dáhùn {status}: {detail}",
+		"certificate": "A kò gbẹ́kẹ̀lé ìwé-ẹ̀rí {host}",
+		"noTls": "Olùpèsè náà kò pèsè ìpàrokò (TLS), tí ìjápọ̀ ftpes:// nílò"
 	}
 }

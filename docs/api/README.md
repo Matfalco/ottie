@@ -153,8 +153,8 @@ curl -H "$AUTH" -H "Content-Type: application/json" \
 #       "matched": {"category": 1, "extension": "zip", "byFolder": false}, "known": false,
 #       "exists": false},
 #      {"kind": "link", "url": "https://example.com/b.iso", …},
-#      {"kind": "invalid", "text": "ftp://example.com/c",
-#       "refused": {"error": "…", "code": "unsupportedScheme", "scheme": "ftp"}}]}
+#      {"kind": "invalid", "text": "sftp://example.com/c",
+#       "refused": {"error": "…", "code": "unsupportedScheme", "scheme": "sftp"}}]}
 
 curl -H "$AUTH" -H "Content-Type: application/json" \
      -d '{"jobs": [{"url": "https://example.com/a.zip"}, {"url": "https://example.com/b.iso", "category": 3}]}' \
@@ -180,6 +180,22 @@ curl -H "$AUTH" -H "Content-Type: application/json" \
 curl -H "$AUTH" -H "Content-Type: application/json" -X PATCH \
      -d '{"existing": "rename"}' $API/jobs/2026.10.13-14.28.59-1
 curl -H "$AUTH" -X POST $API/jobs/2026.10.13-14.28.59-1/resume
+```
+
+## FTP and FTPS
+
+Links may also be `ftp://` (TLS when the server offers it, plain otherwise), `ftpes://` (TLS required, `AUTH TLS`) or `ftps://` (TLS from the first byte, port 990), as FileZilla names them (docs/decisions/0054). A user name and password go in the link (`ftp://me:secret@nas.local/films/a.mkv`; without one, anonymous); the daemon keeps the password and never gives it back: a job's `url` is `ftp://me@nas.local/films/a.mkv`. A link to a folder (ending in `/`) is refused as `invalidUrl`.
+
+An FTP download can resume, and use several connections, when the server gives its size and supports `REST STREAM`; it compares the size and modification time again before resuming. An FTP server's refusal is the problem `{"code": "ftpReply", "status": 530, "detail": "Login incorrect."}` (530: user name or password, 550: no such file or no access, 421: busy or too many connections; 4xx are retried), and an `ftpes://` link to a server without TLS is `noTls`.
+
+A certificate the system doesn't trust (a NAS or a router that made its own) stops the download with `{"code": "certificate", "host": "nas.local", "fingerprint": "e1bc…be63"}` (SHA-256, lowercase hex). Trusting that one certificate for that server, then resuming, lets it through; another certificate from the same server is refused again:
+
+```sh
+curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"host": "nas.local", "fingerprint": "e1bc…be63"}' $API/certificates   # → 201 {"id": 1, …}
+curl -H "Authorization: Bearer $TOKEN" -X POST $API/jobs/$ID/resume
+curl -H "Authorization: Bearer $TOKEN" $API/certificates                       # every one trusted
+curl -H "Authorization: Bearer $TOKEN" -X DELETE $API/certificates/1           # refused again
 ```
 
 ## The first-start setup
@@ -246,7 +262,7 @@ Show users a message chosen by `code` (translated, with the extra fields filled 
 | 422 | The body isn't the JSON expected | `invalidBody` |
 | 503 | The daemon is shutting down | `stopping` |
 
-When a download fails, the job itself says why: `error` in English, and `problem` as a code (`network`, `httpStatus`, `stalled`…) to translate the same way.
+When a download fails, the job itself says why: `error` in English, and `problem` as a code (`network`, `httpStatus`, `stalled`, `ftpReply`, `certificate`…) to translate the same way.
 
 ## Play while downloading
 

@@ -1,6 +1,7 @@
 //! SQLite persistence. SQLite calls block, so the connection lives on its own
 //! thread and the manager talks to it through a channel. See docs/decisions/0008.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::mpsc as std_mpsc;
@@ -13,6 +14,7 @@ use rusqlite::{Connection, Row, params};
 use tokio::sync::oneshot;
 
 use crate::category::{BuiltIn, Category, CategoryId, CategorySettings};
+use crate::certificate::{CertificateId, TrustedCertificate};
 use crate::download::{Download, Segment, Validator};
 use crate::error::Error;
 use crate::filename::Existing;
@@ -409,6 +411,57 @@ const MIGRATIONS: &[&str] = &[
     // ends' names.
     "ALTER TABLE settings ADD COLUMN setup_step TEXT
         CHECK (length(setup_step) BETWEEN 1 AND 40);",
+    // 20: FTP (docs/decisions/0054): its validator (size and modification
+    // time) and problems (a reply refusing, an untrusted certificate, no
+    // TLS for an ftpes:// link), so `jobs` is rebuilt for the CHECKs, as in
+    // 18. And the certificates trusted by hand: a server's name and the
+    // SHA-256 of its certificate, lowercase hex.
+    "CREATE TABLE jobs_new (
+        id_secs          INTEGER NOT NULL,
+        id_seq           INTEGER NOT NULL,
+        url              TEXT    NOT NULL,
+        dest_dir         TEXT    NOT NULL,
+        file_name        TEXT,
+        state            TEXT    NOT NULL CHECK (state IN ('queued', 'connecting',
+                             'downloading', 'paused', 'completed', 'failed', 'cancelled',
+                             'retrying', 'scheduled')),
+        total            INTEGER,
+        downloaded       INTEGER NOT NULL DEFAULT 0,
+        validator_kind   TEXT    CHECK (validator_kind IN ('etag', 'last-modified', 'ftp')),
+        validator_value  TEXT,
+        resumable        INTEGER NOT NULL DEFAULT 0 CHECK (resumable IN (0, 1)),
+        error            TEXT,
+        priority         TEXT    NOT NULL DEFAULT 'normal'
+                             CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+        speed_limit      INTEGER NOT NULL DEFAULT 0 CHECK (speed_limit >= 0),
+        category_id      INTEGER NOT NULL DEFAULT 1 REFERENCES categories (id),
+        category_chosen  INTEGER NOT NULL DEFAULT 0 CHECK (category_chosen IN (0, 1)),
+        problem_kind     TEXT    CHECK (problem_kind IN ('network', 'redirect', 'http-status',
+                             'stalled', 'incomplete', 'remote-changing', 'disk', 'file-exists',
+                             'ftp-reply', 'certificate', 'no-tls', 'other')),
+        problem_number   INTEGER,
+        problem_total    INTEGER,
+        problem_detail   TEXT,
+        streaming        INTEGER NOT NULL DEFAULT 0 CHECK (streaming IN (0, 1)),
+        streaming_chosen INTEGER NOT NULL DEFAULT 0 CHECK (streaming_chosen IN (0, 1)),
+        queue_place      INTEGER NOT NULL DEFAULT 0 CHECK (queue_place >= 0),
+        start_at         INTEGER CHECK (start_at >= 0),
+        stop_at          INTEGER CHECK (stop_at >= 0),
+        ignores_slots    INTEGER NOT NULL DEFAULT 0 CHECK (ignores_slots IN (0, 1)),
+        held_by          INTEGER CHECK (held_by >= 1),
+        existing         TEXT    CHECK (existing IN ('rename', 'replace', 'ask')),
+        PRIMARY KEY (id_secs, id_seq)
+     ) STRICT;
+     INSERT INTO jobs_new SELECT * FROM jobs;
+     DROP TABLE jobs;
+     ALTER TABLE jobs_new RENAME TO jobs;
+     CREATE TABLE certificates (
+        id          INTEGER PRIMARY KEY CHECK (id >= 1),
+        host        TEXT    NOT NULL CHECK (host <> ''),
+        fingerprint TEXT    NOT NULL CHECK (length(fingerprint) = 64
+                                AND fingerprint NOT GLOB '*[^0-9a-f]*'),
+        UNIQUE (host, fingerprint)
+     ) STRICT;",
 ];
 
 /// Everything saved about one job.
@@ -463,6 +516,8 @@ pub(crate) struct Loaded {
     pub views: Vec<View>,
     /// By place.
     pub slots: Vec<SlotRecord>,
+    /// By ID.
+    pub certificates: Vec<TrustedCertificate>,
 }
 
 /// Handle to the database thread. The thread stops when this is dropped.
@@ -482,6 +537,8 @@ enum Op {
     RemoveJob { id: JobId, last_id: JobId },
     SaveSlot(SlotRecord),
     RemoveSlot(SlotId),
+    SaveCertificate(TrustedCertificate),
+    RemoveCertificate(CertificateId),
     Flush(oneshot::Sender<()>),
 }
 
@@ -581,6 +638,20 @@ impl Store {
         }
     }
 
+    /// Queued like `save`.
+    pub(crate) fn save_certificate(&self, certificate: TrustedCertificate) {
+        if self.ops.send(Op::SaveCertificate(certificate)).is_err() {
+            tracing::error!("database thread has stopped; certificate not saved");
+        }
+    }
+
+    /// Queued like `save`.
+    pub(crate) fn remove_certificate(&self, id: CertificateId) {
+        if self.ops.send(Op::RemoveCertificate(id)).is_err() {
+            tracing::error!("database thread has stopped; certificate not removed");
+        }
+    }
+
     /// Queued like `save`. Deletes the job and its segments, and records
     /// `last_id`, the highest ID handed out, so it's never handed out again.
     pub(crate) fn remove_job(&self, id: JobId, last_id: JobId) {
@@ -670,6 +741,20 @@ fn serve(mut conn: Connection, requests: std_mpsc::Receiver<Op>) {
                     tracing::error!(%id, error = %err, "could not remove time slot");
                 }
             }
+            Op::SaveCertificate(certificate) => {
+                let saved = conn.execute(
+                    "INSERT INTO certificates (id, host, fingerprint) VALUES (?1, ?2, ?3)",
+                    params![certificate.id.0, certificate.host, certificate.fingerprint],
+                );
+                if let Err(err) = saved {
+                    tracing::error!(id = %certificate.id, error = %err, "could not save certificate");
+                }
+            }
+            Op::RemoveCertificate(id) => {
+                if let Err(err) = conn.execute("DELETE FROM certificates WHERE id = ?1", [id.0]) {
+                    tracing::error!(%id, error = %err, "could not remove certificate");
+                }
+            }
             Op::Flush(reply) => {
                 let _ = reply.send(());
             }
@@ -733,6 +818,7 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
     let (validator_kind, validator_value) = match &dl.validator {
         Some(Validator::ETag(v)) => (Some("etag"), Some(v.as_str())),
         Some(Validator::LastModified(v)) => (Some("last-modified"), Some(v.as_str())),
+        Some(Validator::Ftp(v)) => (Some("ftp"), Some(v.as_str())),
         None => (None, None),
     };
     let (secs, seq) = (record.id.secs(), record.id.seq());
@@ -835,7 +921,22 @@ fn load_all(conn: &Connection) -> Result<Loaded, Error> {
         last_id: load_last_id(conn)?,
         views: load_views(conn)?,
         slots: load_slots(conn)?,
+        certificates: load_certificates(conn)?,
     })
+}
+
+fn load_certificates(conn: &Connection) -> Result<Vec<TrustedCertificate>, Error> {
+    let mut stmt = conn.prepare("SELECT id, host, fingerprint FROM certificates ORDER BY id")?;
+    let certificates = stmt
+        .query_map([], |row| {
+            Ok(TrustedCertificate {
+                id: CertificateId(row.get(0)?),
+                host: row.get(1)?,
+                fingerprint: row.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(certificates)
 }
 
 fn load_last_id(conn: &Connection) -> Result<Option<JobId>, Error> {
@@ -909,6 +1010,7 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
     let validator = match (validator_kind.as_deref(), validator_value) {
         (Some("etag"), Some(v)) => Some(Validator::ETag(v)),
         (Some("last-modified"), Some(v)) => Some(Validator::LastModified(v)),
+        (Some("ftp"), Some(v)) => Some(Validator::Ftp(v)),
         _ => None,
     };
     let download = Download {
@@ -922,6 +1024,7 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         segments: Vec::new(), // filled in by `load`
         placement: None,
         existing: Existing::default(),
+        trusted: Vec::new(),
     };
     Ok(Ok(JobRecord {
         id,
@@ -959,19 +1062,44 @@ fn from_unix_millis(millis: u64) -> SystemTime {
 }
 
 /// How a problem is stored: its kind, up to two numbers and a text.
-fn problem_columns(problem: &Problem) -> (&'static str, Option<u64>, Option<u64>, Option<&str>) {
+fn problem_columns(
+    problem: &Problem,
+) -> (&'static str, Option<u64>, Option<u64>, Option<Cow<'_, str>>) {
     match problem {
-        Problem::Network { detail } => ("network", None, None, Some(detail)),
-        Problem::Redirect { detail } => ("redirect", None, None, Some(detail)),
+        Problem::Network { detail } => {
+            ("network", None, None, Some(Cow::Borrowed(detail.as_str())))
+        }
+        Problem::Redirect { detail } => {
+            ("redirect", None, None, Some(Cow::Borrowed(detail.as_str())))
+        }
         Problem::HttpStatus { status } => ("http-status", Some(u64::from(*status)), None, None),
         Problem::Stalled { seconds } => ("stalled", Some(*seconds), None, None),
         Problem::Incomplete { received, expected } => {
             ("incomplete", Some(*received), Some(*expected), None)
         }
         Problem::RemoteChanging => ("remote-changing", None, None, None),
-        Problem::Disk { detail } => ("disk", None, None, Some(detail)),
-        Problem::FileExists { name } => ("file-exists", None, None, Some(name)),
-        Problem::Other { detail } => ("other", None, None, Some(detail)),
+        Problem::Disk { detail } => ("disk", None, None, Some(Cow::Borrowed(detail.as_str()))),
+        Problem::FileExists { name } => (
+            "file-exists",
+            None,
+            None,
+            Some(Cow::Borrowed(name.as_str())),
+        ),
+        Problem::FtpReply { code, detail } => (
+            "ftp-reply",
+            Some(u64::from(*code)),
+            None,
+            Some(Cow::Borrowed(detail.as_str())),
+        ),
+        // The host has no spaces: the fingerprint first, then it.
+        Problem::Certificate { host, fingerprint } => (
+            "certificate",
+            None,
+            None,
+            Some(Cow::Owned(format!("{fingerprint} {host}"))),
+        ),
+        Problem::NoTls => ("no-tls", None, None, None),
+        Problem::Other { detail } => ("other", None, None, Some(Cow::Borrowed(detail.as_str()))),
     }
 }
 
@@ -998,6 +1126,18 @@ fn problem_from_row(row: &Row) -> rusqlite::Result<Option<Problem>> {
         ("remote-changing", ..) => Some(Problem::RemoteChanging),
         ("disk", _, _, Some(detail)) => Some(Problem::Disk { detail }),
         ("file-exists", _, _, Some(name)) => Some(Problem::FileExists { name }),
+        ("ftp-reply", Some(code), _, Some(detail)) => u16::try_from(code)
+            .ok()
+            .map(|code| Problem::FtpReply { code, detail }),
+        ("certificate", _, _, Some(detail)) => {
+            detail
+                .split_once(' ')
+                .map(|(fingerprint, host)| Problem::Certificate {
+                    host: host.to_owned(),
+                    fingerprint: fingerprint.to_owned(),
+                })
+        }
+        ("no-tls", ..) => Some(Problem::NoTls),
         ("other", _, _, Some(detail)) => Some(Problem::Other { detail }),
         _ => None,
     };
@@ -1623,6 +1763,15 @@ mod tests {
             Problem::FileExists {
                 name: "film.mkv".into(),
             },
+            Problem::FtpReply {
+                code: 530,
+                detail: "Login incorrect.".into(),
+            },
+            Problem::Certificate {
+                host: "[fe80::1]".into(),
+                fingerprint: "ab".repeat(32),
+            },
+            Problem::NoTls,
             Problem::Other {
                 detail: "something".into(),
             },
@@ -1883,6 +2032,31 @@ mod tests {
         films.settings.name = "Films".into();
         store.save_category(films.clone());
         assert_eq!(store.load().await.unwrap().categories[2], films);
+    }
+
+    #[tokio::test]
+    async fn ftp_validators_and_trusted_certificates_are_kept() {
+        let store = Store::open_in_memory().await.unwrap();
+        let mut ftp = record(1);
+        ftp.download.url = Url::parse("ftp://me:pw@nas.local/a.iso").unwrap();
+        ftp.download.validator = Some(Validator::Ftp("1024 20240102030405".into()));
+        store.save(ftp.clone());
+        let nas = TrustedCertificate {
+            id: CertificateId(1),
+            host: "nas.local".into(),
+            fingerprint: "ab".repeat(32),
+        };
+        let router = TrustedCertificate {
+            id: CertificateId(2),
+            host: "192.168.1.1".into(),
+            fingerprint: "cd".repeat(32),
+        };
+        store.save_certificate(nas.clone());
+        store.save_certificate(router);
+        store.remove_certificate(CertificateId(2));
+        let loaded = store.load().await.unwrap();
+        assert_eq!(loaded.jobs, [ftp]);
+        assert_eq!(loaded.certificates, [nas]);
     }
 
     #[tokio::test]

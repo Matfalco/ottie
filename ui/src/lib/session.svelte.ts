@@ -16,6 +16,7 @@ import type { SettingsChange } from '@ottie/api-types/SettingsChange';
 import type { SetupStep } from '@ottie/api-types/SetupStep';
 import type { Event as ApiEvent } from '@ottie/api-types/Event';
 import type { SlotBody } from '@ottie/api-types/SlotBody';
+import type { TrustedCertificate } from '@ottie/api-types/TrustedCertificate';
 import type { ViewBody } from '@ottie/api-types/ViewBody';
 import type { Looked } from './adding';
 import { Api, ApiFailure, Unauthorized } from './api';
@@ -318,6 +319,23 @@ export class Session {
 
 	removeDevice(id: number): Promise<boolean> {
 		return this.attempt(() => this.api.removeDevice(id));
+	}
+
+	/** FTPS servers' certificates trusted by hand, or why not. */
+	certificates(): Promise<Answer<TrustedCertificate[]>> {
+		return this.answer(() => this.api.listCertificates());
+	}
+
+	/** Trusts the certificate a download stopped at, then tries it again
+	 * (docs/decisions/0054). */
+	async trustAndRetry(id: string, host: string, fingerprint: string): Promise<void> {
+		if (await this.attempt(() => this.api.trustCertificate(host, fingerprint))) {
+			await this.attempt(() => this.api.resume(id));
+		}
+	}
+
+	distrustCertificate(id: number): Promise<boolean> {
+		return this.attempt(() => this.api.distrustCertificate(id));
 	}
 
 	/** The folders chosen in Settings that devices may use. Resolves to

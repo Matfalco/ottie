@@ -36,6 +36,8 @@ import type { AddedDevice } from '@ottie/api-types/AddedDevice';
 import type { AllowedFolders } from '@ottie/api-types/AllowedFolders';
 import type { Device } from '@ottie/api-types/Device';
 import type { FolderList } from '@ottie/api-types/FolderList';
+import type { TrustCertificate } from '@ottie/api-types/TrustCertificate';
+import type { TrustedCertificate } from '@ottie/api-types/TrustedCertificate';
 
 const BASE = '/api/v1';
 /** The protocol of the events WebSocket; the token rides along as a second one. */
@@ -225,6 +227,20 @@ export class Api {
 
 	removeDevice(id: number): Promise<void> {
 		return this.request('DELETE', `/access/devices/${id}`);
+	}
+
+	/** FTPS servers' certificates trusted by hand (docs/decisions/0054). */
+	listCertificates(): Promise<TrustedCertificate[]> {
+		return this.request('GET', '/certificates');
+	}
+
+	trustCertificate(host: string, fingerprint: string): Promise<TrustedCertificate> {
+		const body: TrustCertificate = { host, fingerprint };
+		return this.request('POST', '/certificates', body);
+	}
+
+	distrustCertificate(id: number): Promise<void> {
+		return this.request('DELETE', `/certificates/${id}`);
 	}
 
 	/** Opens the live events stream. */

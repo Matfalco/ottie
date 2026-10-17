@@ -28,10 +28,10 @@ function link(name: string, known = false, exists = false): FoundLink {
 	};
 }
 
-const ftp: FoundLink = {
+const sftp: FoundLink = {
 	kind: 'invalid',
-	text: 'ftp://example.com/c.zip',
-	refused: { error: '…', code: 'unsupportedScheme', scheme: 'ftp' }
+	text: 'sftp://example.com/c.zip',
+	refused: { error: '…', code: 'unsupportedScheme', scheme: 'sftp' }
 };
 
 describe('batch', () => {
@@ -63,7 +63,7 @@ describe('batch', () => {
 	});
 
 	it('ticks the links that can be added and aren’t listed yet', () => {
-		const rows = rowsOf([link('a.zip'), link('b.zip', true), ftp], [], 'auto');
+		const rows = rowsOf([link('a.zip'), link('b.zip', true), sftp], [], 'auto');
 		expect(rows.map((row) => row.chosen)).toEqual([true, false, false]);
 		expect(rows.every((row) => row.choice === 'auto' && row.refused === null)).toBe(true);
 		expect(chosenRows(rows).map((row) => row.found)).toEqual([link('a.zip')]);
@@ -86,7 +86,7 @@ describe('batch', () => {
 	});
 
 	it('sets the category of all, and ticks all or none', () => {
-		const rows = rowsOf([link('a.zip'), link('b.zip', true), ftp], [], 'auto');
+		const rows = rowsOf([link('a.zip'), link('b.zip', true), sftp], [], 'auto');
 		expect(chooseForAll(rows, 4).map((row) => row.choice)).toEqual([4, 4, 4]);
 		expect(tickAll(rows, true).map((row) => row.chosen)).toEqual([true, true, false]);
 		expect(tickAll(rows, false).map((row) => row.chosen)).toEqual([false, false, false]);
@@ -136,7 +136,7 @@ describe('batch', () => {
 	});
 
 	it('keeps only the refused links once added, saying why', () => {
-		const rows = rowsOf([link('a.zip'), link('b.zip'), link('c.zip', true), ftp], [], 'auto');
+		const rows = rowsOf([link('a.zip'), link('b.zip'), link('c.zip', true), sftp], [], 'auto');
 		const sent = chosenRows(rows);
 		const left = afterAdding(
 			rows,
@@ -147,19 +147,21 @@ describe('batch', () => {
 			},
 			'en'
 		);
-		expect(left.map((row) => row.found)).toEqual([link('b.zip'), link('c.zip', true), ftp]);
+		expect(left.map((row) => row.found)).toEqual([link('b.zip'), link('c.zip', true), sftp]);
 		expect(left[0].chosen).toBe(false);
 		expect(left[0].refused).toBe('Choose a folder: the category General has none.');
 		expect(textOf(left)).toBe(
-			'https://example.com/b.zip\nhttps://example.com/c.zip\nftp://example.com/c.zip'
+			'https://example.com/b.zip\nhttps://example.com/c.zip\nsftp://example.com/c.zip'
 		);
 	});
 
 	it('says what’s wrong with a link', () => {
-		const [fine, known, invalid] = rowsOf([link('a.zip'), link('b.zip', true), ftp], [], 'auto');
+		const [fine, known, invalid] = rowsOf([link('a.zip'), link('b.zip', true), sftp], [], 'auto');
 		expect(rowNote(fine, 'en')).toBeNull();
 		expect(rowNote(known, 'en')).toBe('Already in the list');
-		expect(rowNote(invalid, 'en')).toBe('Only http and https links are supported (not ftp).');
+		expect(rowNote(invalid, 'en')).toBe(
+			'Only http, https, ftp, ftps and ftpes links are supported (not sftp).'
+		);
 		expect(plain(rowNote(known, 'fr') ?? '')).toBe('Déjà dans la liste');
 		expect(rowNote({ ...fine, refused: 'No.' }, 'en')).toBe('No.');
 	});

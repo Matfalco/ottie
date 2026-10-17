@@ -75,6 +75,17 @@ pub enum Problem {
         detail: String,
     },
     FileExists,
+    /// FTP (docs/decisions/0054): the server refused, with its reply code.
+    FtpReply {
+        status: u16,
+        detail: String,
+    },
+    /// An FTPS server's certificate nobody trusts (its fingerprint is left
+    /// out: the page shows it).
+    Certificate {
+        host: String,
+    },
+    NoTls,
     Other {
         detail: String,
     },

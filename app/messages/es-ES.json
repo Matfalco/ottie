@@ -55,6 +55,12 @@
 		"incomplete": "La conexión se ha cerrado antes de tiempo",
 		"remoteChanging": "El archivo cambiaba sin parar en el servidor",
 		"disk": "No se ha podido escribir el archivo ({detail})",
-		"fileExists": "Ya hay un archivo con este nombre en la carpeta"
+		"fileExists": "Ya hay un archivo con este nombre en la carpeta",
+		"ftp421": "El servidor está ocupado o admite menos conexiones (421)",
+		"ftp530": "El servidor rechazó el nombre de usuario o la contraseña (530)",
+		"ftp550": "No está en el servidor o no se permite el acceso (550)",
+		"ftp": "El servidor FTP respondió {status}: {detail}",
+		"certificate": "El certificado de {host} no es de confianza",
+		"noTls": "El servidor no ofrece cifrado (TLS), que un enlace ftpes:// exige"
 	}
 }

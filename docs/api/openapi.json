@@ -724,6 +724,196 @@
         }
       }
     },
+    "/api/v1/certificates": {
+      "get": {
+        "tags": [
+          "certificates"
+        ],
+        "summary": "Every certificate trusted by hand, oldest first.",
+        "operationId": "listCertificates",
+        "responses": {
+          "200": {
+            "description": "Every trusted certificate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrustedCertificate"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "certificates"
+        ],
+        "summary": "Trusts a server's certificate from now on. Trusting one already trusted\nanswers with it.",
+        "operationId": "trustCertificate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrustCertificate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Trusted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrustedCertificate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalidCertificate`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/certificates/{id}": {
+      "delete": {
+        "tags": [
+          "certificates"
+        ],
+        "summary": "Stops trusting a certificate: FTPS downloads from that server refuse it again.",
+        "operationId": "distrustCertificate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Certificate ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No longer trusted"
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`certificateNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/events": {
       "get": {
         "tags": [
@@ -3832,7 +4022,8 @@
             "minimum": 0
           },
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "The link, without a password it holds (FTP: `ftp://user@host/…`)."
           },
           "waitingForBandwidth": {
             "type": "boolean",
@@ -4186,6 +4377,69 @@
               },
               "name": {
                 "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The FTP server refused a command with reply `status` (530: the user\nname or password, 550: no such file or no access…); `detail` is what\nit said.",
+            "required": [
+              "status",
+              "detail",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "ftpReply"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              },
+              "status": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Neither the system nor the person trusts the FTPS server's\ncertificate: posting `host` and `fingerprint` (SHA-256, lowercase\nhex) to `POST /certificates` trusts it; then resume the download.",
+            "required": [
+              "host",
+              "fingerprint",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "certificate"
+                ]
+              },
+              "fingerprint": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An `ftpes://` link to a server that doesn't offer TLS.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "noTls"
+                ]
               }
             }
           },
@@ -4822,6 +5076,41 @@
               },
               "name": {
                 "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Not a server's name and a certificate's SHA-256 (64 hex digits).",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidCertificate"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "certificateNotFound"
+                ]
+              },
+              "id": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
               }
             }
           },
@@ -5567,6 +5856,47 @@
           }
         }
       },
+      "TrustCertificate": {
+        "type": "object",
+        "description": "Body of `POST /certificates`: what a `certificate` problem says.",
+        "required": [
+          "host",
+          "fingerprint"
+        ],
+        "properties": {
+          "fingerprint": {
+            "type": "string",
+            "description": "Hex, any case, colons allowed."
+          },
+          "host": {
+            "type": "string"
+          }
+        }
+      },
+      "TrustedCertificate": {
+        "type": "object",
+        "description": "An FTPS server's certificate trusted by hand (docs/decisions/0054), as\n`GET /certificates` lists them.",
+        "required": [
+          "id",
+          "host",
+          "fingerprint"
+        ],
+        "properties": {
+          "fingerprint": {
+            "type": "string",
+            "description": "SHA-256 of the certificate, 64 lowercase hex digits."
+          },
+          "host": {
+            "type": "string",
+            "description": "The server's name as in links, lowercase."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
       "View": {
         "type": "object",
         "description": "A saved view: a name, which downloads it shows and how they're laid out.\nListed by `GET /views` and sent in `viewChanged` events.",
@@ -5682,6 +6012,10 @@
     {
       "name": "views",
       "description": "Saved views of the downloads list"
+    },
+    {
+      "name": "certificates",
+      "description": "FTPS servers' certificates trusted by hand"
     },
     {
       "name": "schedule",

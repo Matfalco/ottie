@@ -55,6 +55,12 @@
 		"incomplete": "A conexão fechou antes da hora",
 		"remoteChanging": "O arquivo mudava sem parar no servidor",
 		"disk": "Não foi possível gravar o arquivo ({detail})",
-		"fileExists": "Já existe um arquivo com este nome na pasta"
+		"fileExists": "Já existe um arquivo com este nome na pasta",
+		"ftp421": "O servidor está ocupado ou aceita menos conexões (421)",
+		"ftp530": "O servidor recusou o nome de usuário ou a senha (530)",
+		"ftp550": "Não está no servidor, ou o acesso não é permitido (550)",
+		"ftp": "O servidor FTP respondeu {status}: {detail}",
+		"certificate": "O certificado de {host} não é confiável",
+		"noTls": "O servidor não oferece criptografia (TLS), que um link ftpes:// exige"
 	}
 }

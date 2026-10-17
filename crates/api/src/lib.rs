@@ -18,6 +18,7 @@
 mod access;
 mod auth;
 mod categories;
+mod certificates;
 mod error;
 mod events;
 mod jobs;
@@ -53,6 +54,7 @@ pub use types::{
     ViewFilters,
 };
 pub use types::{AddedSlot, Day, ReorderSlots, Slot, SlotBody, SlotDownloads, SlotList};
+pub use types::{TrustCertificate, TrustedCertificate};
 pub use ui::UiSource;
 
 /// Shared by every request handler.
@@ -102,6 +104,8 @@ fn private_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(access::set_folders))
         .routes(routes!(access::list_devices, access::add_device))
         .routes(routes!(access::remove_device))
+        .routes(routes!(certificates::list, certificates::trust))
+        .routes(routes!(certificates::distrust))
         .routes(routes!(events::subscribe))
         .routes(routes!(openapi::spec))
 }

@@ -4,6 +4,7 @@ use std::time::Duration;
 use reqwest::StatusCode;
 
 use crate::category::CategoryId;
+use crate::certificate::CertificateId;
 use crate::id::JobId;
 use crate::job::JobState;
 use crate::slot::SlotId;
@@ -11,7 +12,7 @@ use crate::view::ViewId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("unsupported URL scheme `{0}` (only http and https are supported)")]
+    #[error("unsupported URL scheme `{0}` (only http, https, ftp, ftps and ftpes are supported)")]
     UnsupportedScheme(String),
 
     /// Something that starts like a link but isn't one. The text isn't
@@ -37,6 +38,25 @@ pub enum Error {
 
     #[error("no data from the server for {} s", .0.as_secs())]
     Stalled(Duration),
+
+    /// FTP: connecting, the TLS handshake or reading failed, or the server's
+    /// answer made no sense. English, never with the password.
+    #[error("FTP failed: {0}")]
+    Ftp(String),
+
+    /// FTP: the server refused a command; `text` is what it said.
+    #[error("the FTP server answered {code} {text}")]
+    FtpReply { code: u16, text: String },
+
+    /// FTPS: neither the system nor the person trusts the server's
+    /// certificate (docs/decisions/0054). `fingerprint` is its SHA-256,
+    /// lowercase hex, for trusting it.
+    #[error("the certificate of {host} isn't trusted (SHA-256 {fingerprint})")]
+    UntrustedCertificate { host: String, fingerprint: String },
+
+    /// An `ftpes://` link, and the server doesn't offer TLS.
+    #[error("the FTP server doesn't offer TLS, which an ftpes:// link requires")]
+    NoTls,
 
     #[error("download stopped after {received} of {expected} bytes")]
     Incomplete { received: u64, expected: u64 },
@@ -144,6 +164,15 @@ pub enum Error {
     #[error("no more view IDs are available")]
     TooManyViews,
 
+    #[error("not a server's name and a certificate's SHA-256")]
+    InvalidCertificate,
+
+    #[error("no trusted certificate with ID {0}")]
+    CertificateNotFound(CertificateId),
+
+    #[error("no more certificate IDs are available")]
+    TooManyCertificates,
+
     /// Reading a download that failed or was cancelled before the bytes
     /// asked for arrived.
     #[error("download {0} stopped before these bytes arrived")]
@@ -169,7 +198,9 @@ impl Error {
                         StatusCode::REQUEST_TIMEOUT | StatusCode::TOO_MANY_REQUESTS
                     )
             }
-            Error::Incomplete { .. } | Error::Stalled(_) => true,
+            Error::Incomplete { .. } | Error::Stalled(_) | Error::Ftp(_) => true,
+            // 4xx: the command may succeed later (busy, too many connections).
+            Error::FtpReply { code, .. } => (400..500).contains(code),
             _ => false,
         }
     }

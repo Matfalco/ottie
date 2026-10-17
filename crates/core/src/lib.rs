@@ -6,9 +6,11 @@
 
 mod backend;
 mod category;
+mod certificate;
 mod download;
 mod error;
 mod filename;
+mod ftp;
 mod http;
 mod id;
 mod job;
@@ -24,11 +26,13 @@ mod speed;
 mod store;
 mod stream;
 mod throttle;
+mod transfer;
 mod view;
 mod webmark;
 
-pub use backend::{Backend, HttpBackend};
+pub use backend::{Backend, HttpBackend, NativeBackend};
 pub use category::{BuiltIn, Category, CategoryId, CategorySettings, Matched};
+pub use certificate::{CertificateId, TrustedCertificate};
 pub use download::{Download, Event, Outcome, Placement, RestartReason, Segment, Validator};
 pub use error::Error;
 pub use filename::{Existing, PART_SUFFIX};

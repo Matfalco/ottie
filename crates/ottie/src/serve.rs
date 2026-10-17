@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use anyhow::{Context, Result};
 use clap::Args;
 use ottie_api::{ACCESS_FILE, Access, AccessConfig, Token, UiSource};
-use ottie_core::{CategoryId, HttpBackend, Manager, Store};
+use ottie_core::{CategoryId, Manager, NativeBackend, Store};
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
@@ -102,7 +102,7 @@ async fn serve(
     let store = Store::open(&database)
         .await
         .with_context(|| format!("can't open the database {}", database.display()))?;
-    let manager = Manager::start(HttpBackend::new()?, store).await?;
+    let manager = Manager::start(NativeBackend::new()?, store).await?;
     let downloads = args
         .downloads_dir
         .clone()
@@ -246,7 +246,7 @@ mod tests {
     #[tokio::test]
     async fn general_gets_the_downloads_folder_once() {
         let store = Store::open_in_memory().await.unwrap();
-        let manager = Manager::start(HttpBackend::new().unwrap(), store)
+        let manager = Manager::start(NativeBackend::new().unwrap(), store)
             .await
             .unwrap();
         let folder = |m: Vec<ottie_core::Category>| m[0].settings.folder.clone();

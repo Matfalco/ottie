@@ -55,6 +55,12 @@
 		"incomplete": "Połączenie zostało zamknięte za wcześnie",
 		"remoteChanging": "Plik na serwerze ciągle się zmieniał",
 		"disk": "Nie można zapisać pliku ({detail})",
-		"fileExists": "Plik o tej nazwie jest już w folderze"
+		"fileExists": "Plik o tej nazwie jest już w folderze",
+		"ftp421": "Serwer jest zajęty lub pozwala na mniej połączeń (421)",
+		"ftp530": "Serwer odrzucił nazwę użytkownika lub hasło (530)",
+		"ftp550": "Brak na serwerze albo brak dostępu (550)",
+		"ftp": "Serwer FTP odpowiedział {status}: {detail}",
+		"certificate": "Certyfikat {host} nie jest zaufany",
+		"noTls": "Serwer nie oferuje szyfrowania (TLS), którego wymaga link ftpes://"
 	}
 }

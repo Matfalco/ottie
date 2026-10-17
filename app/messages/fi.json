@@ -55,6 +55,12 @@
 		"incomplete": "Yhteys katkesi liian aikaisin",
 		"remoteChanging": "Tiedosto muuttui jatkuvasti palvelimella",
 		"disk": "Tiedostoa ei voitu kirjoittaa ({detail})",
-		"fileExists": "Kansiossa on jo samanniminen tiedosto"
+		"fileExists": "Kansiossa on jo samanniminen tiedosto",
+		"ftp421": "Palvelin on varattu tai sallii vähemmän yhteyksiä (421)",
+		"ftp530": "Palvelin hylkäsi käyttäjätunnuksen tai salasanan (530)",
+		"ftp550": "Ei palvelimella, tai käyttö ei ole sallittu (550)",
+		"ftp": "FTP-palvelin vastasi {status}: {detail}",
+		"certificate": "Palvelimen {host} varmenteeseen ei luoteta",
+		"noTls": "Palvelin ei tarjoa salausta (TLS), jota ftpes://-linkki vaatii"
 	}
 }

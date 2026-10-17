@@ -55,6 +55,12 @@
 		"incomplete": "Savienojums aizvērās par agru",
 		"remoteChanging": "Fails serverī nepārtraukti mainījās",
 		"disk": "Failu neizdevās ierakstīt ({detail})",
-		"fileExists": "Fails ar šādu nosaukumu jau ir mapē"
+		"fileExists": "Fails ar šādu nosaukumu jau ir mapē",
+		"ftp421": "Serveris ir aizņemts vai atļauj mazāk savienojumu (421)",
+		"ftp530": "Serveris noraidīja lietotājvārdu vai paroli (530)",
+		"ftp550": "Nav serverī, vai piekļuve nav atļauta (550)",
+		"ftp": "FTP serveris atbildēja {status}: {detail}",
+		"certificate": "Servera {host} sertifikāts netiek uzskatīts par uzticamu",
+		"noTls": "Serveris nepiedāvā šifrēšanu (TLS), ko pieprasa ftpes:// saite"
 	}
 }

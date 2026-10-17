@@ -63,6 +63,12 @@
 		"incomplete": "The connection closed early",
 		"remoteChanging": "The file kept changing on the server",
 		"disk": "Couldn’t write the file ({detail})",
-		"fileExists": "A file with this name is already in the folder"
+		"fileExists": "A file with this name is already in the folder",
+		"ftp421": "The server is busy, or allows fewer connections (421)",
+		"ftp530": "The server refused the user name or password (530)",
+		"ftp550": "Not on the server, or not allowed there (550)",
+		"ftp": "The FTP server answered {status}: {detail}",
+		"certificate": "The certificate of {host} isn’t trusted",
+		"noTls": "The server doesn’t offer encryption (TLS), which an ftpes:// link requires"
 	}
 }

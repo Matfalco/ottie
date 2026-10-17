@@ -3,6 +3,7 @@
 
 import type { ApiError } from '@ottie/api-types/ApiError';
 import type { Problem } from '@ottie/api-types/Problem';
+import { formatFingerprint } from './certificates';
 import { formatBytes, formatCount, formatDuration } from './format';
 import { m } from './paraglide/messages.js';
 import { getLocale, type Locale } from './paraglide/runtime.js';
@@ -40,6 +41,15 @@ export function explainProblem(
 			return m.problem_disk({ detail: problem.detail }, options);
 		case 'fileExists':
 			return m.problem_file_exists({ name: problem.name }, options);
+		case 'ftpReply':
+			return ftpReply(problem.status, problem.detail, locale);
+		case 'certificate':
+			return m.problem_certificate(
+				{ host: problem.host, fingerprint: formatFingerprint(problem.fingerprint) },
+				options
+			);
+		case 'noTls':
+			return m.problem_no_tls({}, options);
 		case 'other':
 			return problem.detail;
 		default:
@@ -62,6 +72,22 @@ function httpStatus(status: number, locale: Locale): string {
 			return status >= 500
 				? m.problem_http_5xx({ status: String(status) }, options)
 				: m.problem_http({ status: String(status) }, options);
+	}
+}
+
+/** An FTP server's refusal: the usual ones in words, else its code and
+ * what it said. */
+function ftpReply(status: number, detail: string, locale: Locale): string {
+	const options = { locale };
+	switch (status) {
+		case 421:
+			return m.problem_ftp_421({}, options);
+		case 530:
+			return m.problem_ftp_530({}, options);
+		case 550:
+			return m.problem_ftp_550({}, options);
+		default:
+			return m.problem_ftp({ status: String(status), detail }, options);
 	}
 }
 
@@ -135,6 +161,10 @@ export function explainRefusal(
 			return m.reason_invalid_view_name({}, options);
 		case 'viewNameTaken':
 			return m.reason_view_name_taken({ name: body.name }, options);
+		case 'invalidCertificate':
+			return m.reason_invalid_certificate({}, options);
+		case 'certificateNotFound':
+			return m.reason_certificate_not_found({}, options);
 		case 'readOnly':
 			return m.reason_read_only({}, options);
 		case 'ownerOnly':

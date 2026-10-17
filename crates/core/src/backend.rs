@@ -2,14 +2,16 @@ use std::future::Future;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::download::{Download, Event, Outcome};
+use crate::download::{Download, Event, Outcome, is_ftp};
 use crate::error::Error;
+use crate::ftp;
 use crate::http::{self, HttpConfig};
 use crate::playback::Playback;
 use crate::throttle::Throttle;
+use crate::transfer;
 
 /// Something that can carry out a download. The manager only talks to this,
-/// so other protocols (yt-dlp, FTP…) can plug in later.
+/// so other protocols (yt-dlp…) can plug in later.
 pub trait Backend: Send + Sync + 'static {
     /// Same contract as [`crate::run`]: download until done or until `cancel`
     /// fires, keeping `dl` in step with what's on disk, and pass every
@@ -67,5 +69,49 @@ impl Backend for HttpBackend {
             cancel,
         };
         http::run_in(&env, dl, on_event).await
+    }
+}
+
+/// Every link Ottie downloads itself: HTTP(S) as [`HttpBackend`], FTP and
+/// FTPS (docs/decisions/0054). One configuration for both.
+pub struct NativeBackend {
+    http: HttpBackend,
+}
+
+impl NativeBackend {
+    pub fn new() -> Result<Self, Error> {
+        Self::with_config(HttpConfig::default())
+    }
+
+    /// Fails if no HTTP client can be built (TLS can't be set up).
+    pub fn with_config(config: HttpConfig) -> Result<Self, Error> {
+        Ok(Self {
+            http: HttpBackend::with_config(config)?,
+        })
+    }
+}
+
+impl Backend for NativeBackend {
+    async fn run(
+        &self,
+        dl: &mut Download,
+        throttle: &Throttle,
+        playback: &Playback,
+        cancel: &CancellationToken,
+        on_event: &mut (dyn FnMut(Event) + Send),
+    ) -> Result<Outcome, Error> {
+        if !is_ftp(&dl.url) {
+            return self
+                .http
+                .run(dl, throttle, playback, cancel, on_event)
+                .await;
+        }
+        let env = transfer::Env {
+            config: &self.http.config,
+            throttle,
+            playback,
+            cancel,
+        };
+        ftp::run_in(&env, dl, on_event).await
     }
 }

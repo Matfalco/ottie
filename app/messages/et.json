@@ -55,6 +55,12 @@
 		"incomplete": "Ühendus suleti liiga vara",
 		"remoteChanging": "Fail muutus serveris pidevalt",
 		"disk": "Faili ei saanud kirjutada ({detail})",
-		"fileExists": "Selle nimega fail on juba kaustas"
+		"fileExists": "Selle nimega fail on juba kaustas",
+		"ftp421": "Server on hõivatud või lubab vähem ühendusi (421)",
+		"ftp530": "Server lükkas kasutajanime või parooli tagasi (530)",
+		"ftp550": "Serveris pole, või juurdepääs pole lubatud (550)",
+		"ftp": "FTP-server vastas {status}: {detail}",
+		"certificate": "Serveri {host} sertifikaati ei usaldata",
+		"noTls": "Server ei paku krüptimist (TLS), mida ftpes://-link nõuab"
 	}
 }

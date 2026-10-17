@@ -28,6 +28,14 @@ pub enum Problem {
     /// A file named `name` is already in the folder, and the download asks
     /// whether to rename or replace (docs/decisions/0049).
     FileExists { name: String },
+    /// The FTP server refused a command with `code`; `detail` is what it said.
+    FtpReply { code: u16, detail: String },
+    /// Neither the system nor the person trusts the FTPS server's
+    /// certificate; `fingerprint` (SHA-256, lowercase hex) can be trusted
+    /// for `host` (docs/decisions/0054).
+    Certificate { host: String, fingerprint: String },
+    /// An `ftpes://` link to a server that doesn't offer TLS.
+    NoTls,
     /// Anything else; `detail` is the English message.
     Other { detail: String },
 }
@@ -57,6 +65,18 @@ impl From<&Error> for Problem {
                 detail: e.to_string(),
             },
             Error::FileExists { name } => Problem::FileExists { name: name.clone() },
+            Error::Ftp(detail) => Problem::Network {
+                detail: format!("FTP: {detail}"),
+            },
+            Error::FtpReply { code, text } => Problem::FtpReply {
+                code: *code,
+                detail: text.clone(),
+            },
+            Error::UntrustedCertificate { host, fingerprint } => Problem::Certificate {
+                host: host.clone(),
+                fingerprint: fingerprint.clone(),
+            },
+            Error::NoTls => Problem::NoTls,
             other => Problem::Other {
                 detail: other.to_string(),
             },
@@ -67,7 +87,7 @@ impl From<&Error> for Problem {
 impl fmt::Display for Problem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Problem::Network { detail } => write!(f, "HTTP request failed: {detail}"),
+            Problem::Network { detail } => write!(f, "network error: {detail}"),
             Problem::Redirect { detail } => write!(f, "bad redirect: {detail}"),
             Problem::HttpStatus { status } => match StatusCode::from_u16(*status) {
                 Ok(status) => write!(f, "server answered {status}"),
@@ -82,6 +102,17 @@ impl fmt::Display for Problem {
             }
             Problem::Disk { detail } => write!(f, "file error: {detail}"),
             Problem::FileExists { name } => write!(f, "{name} is already in the folder"),
+            Problem::FtpReply { code, detail } => {
+                write!(f, "the FTP server answered {code} {detail}")
+            }
+            Problem::Certificate { host, fingerprint } => write!(
+                f,
+                "the certificate of {host} isn't trusted (SHA-256 {fingerprint})"
+            ),
+            Problem::NoTls => write!(
+                f,
+                "the FTP server doesn't offer TLS, which an ftpes:// link requires"
+            ),
             Problem::Other { detail } => f.write_str(detail),
         }
     }
@@ -113,6 +144,23 @@ mod tests {
             name: "film.mkv".into(),
         };
         assert_eq!(Problem::from(&exists).to_string(), exists.to_string());
+        let reply = Error::FtpReply {
+            code: 550,
+            text: "No such file".into(),
+        };
+        assert_eq!(Problem::from(&reply).to_string(), reply.to_string());
+        let certificate = Error::UntrustedCertificate {
+            host: "nas.local".into(),
+            fingerprint: "ab".repeat(32),
+        };
+        assert_eq!(
+            Problem::from(&certificate).to_string(),
+            certificate.to_string()
+        );
+        assert_eq!(
+            Problem::from(&Error::NoTls).to_string(),
+            Error::NoTls.to_string()
+        );
         let other = Error::ManagerStopped;
         assert_eq!(Problem::from(&other).to_string(), other.to_string());
     }

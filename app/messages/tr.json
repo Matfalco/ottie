@@ -55,6 +55,12 @@
 		"incomplete": "Bağlantı erken kapandı",
 		"remoteChanging": "Sunucudaki dosya sürekli değişti",
 		"disk": "Dosya yazılamadı ({detail})",
-		"fileExists": "Bu adda bir dosya zaten klasörde"
+		"fileExists": "Bu adda bir dosya zaten klasörde",
+		"ftp421": "Sunucu meşgul veya daha az bağlantıya izin veriyor (421)",
+		"ftp530": "Sunucu kullanıcı adını veya parolayı reddetti (530)",
+		"ftp550": "Sunucuda yok veya erişime izin verilmiyor (550)",
+		"ftp": "FTP sunucusunun yanıtı: {status} {detail}",
+		"certificate": "{host} sertifikasına güvenilmiyor",
+		"noTls": "Sunucu, ftpes:// bağlantısının gerektirdiği şifrelemeyi (TLS) sunmuyor"
 	}
 }

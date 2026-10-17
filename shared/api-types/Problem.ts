@@ -4,4 +4,4 @@
  * Why a job failed or is retrying. Clients translate it by `code` and
  * fall back to the job's English `error` for codes they don't know.
  */
-export type Problem = { "code": "network", detail: string, } | { "code": "redirect", detail: string, } | { "code": "httpStatus", status: number, } | { "code": "stalled", seconds: number, } | { "code": "incomplete", received: number, expected: number, } | { "code": "remoteChanging" } | { "code": "disk", detail: string, } | { "code": "fileExists", name: string, } | { "code": "other", detail: string, };
+export type Problem = { "code": "network", detail: string, } | { "code": "redirect", detail: string, } | { "code": "httpStatus", status: number, } | { "code": "stalled", seconds: number, } | { "code": "incomplete", received: number, expected: number, } | { "code": "remoteChanging" } | { "code": "disk", detail: string, } | { "code": "fileExists", name: string, } | { "code": "ftpReply", status: number, detail: string, } | { "code": "certificate", host: string, fingerprint: string, } | { "code": "noTls" } | { "code": "other", detail: string, };

@@ -55,6 +55,12 @@
 		"incomplete": "Kết nối bị đóng sớm",
 		"remoteChanging": "Tệp trên máy chủ liên tục thay đổi",
 		"disk": "Không thể ghi tệp ({detail})",
-		"fileExists": "Một tệp cùng tên đã có trong thư mục"
+		"fileExists": "Một tệp cùng tên đã có trong thư mục",
+		"ftp421": "Máy chủ đang bận, hoặc cho phép ít kết nối hơn (421)",
+		"ftp530": "Máy chủ từ chối tên người dùng hoặc mật khẩu (530)",
+		"ftp550": "Không có trên máy chủ, hoặc không được phép truy cập (550)",
+		"ftp": "Máy chủ FTP trả lời {status}: {detail}",
+		"certificate": "Chứng chỉ của {host} không được tin cậy",
+		"noTls": "Máy chủ không cung cấp mã hóa (TLS), điều mà liên kết ftpes:// yêu cầu"
 	}
 }

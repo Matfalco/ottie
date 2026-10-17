@@ -55,6 +55,12 @@
 		"incomplete": "Muunganisho ulifungwa mapema",
 		"remoteChanging": "Faili iliendelea kubadilika kwenye seva",
 		"disk": "Haikuweza kuandika faili ({detail})",
-		"fileExists": "Faili yenye jina hili tayari iko kwenye folda"
+		"fileExists": "Faili yenye jina hili tayari iko kwenye folda",
+		"ftp421": "Seva ina shughuli nyingi, au inaruhusu miunganisho michache (421)",
+		"ftp530": "Seva imekataa jina la mtumiaji au nenosiri (530)",
+		"ftp550": "Haipo kwenye seva, au hakuna ruhusa ya kuifikia (550)",
+		"ftp": "Seva ya FTP imejibu {status}: {detail}",
+		"certificate": "Cheti cha {host} hakiaminiwi",
+		"noTls": "Seva haitoi usimbaji fiche (TLS), unaohitajika na kiungo cha ftpes://"
 	}
 }

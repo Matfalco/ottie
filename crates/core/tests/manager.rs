@@ -269,9 +269,9 @@ async fn invalid_requests_are_refused() {
         Err(Error::JobNotFound(_))
     ));
 
-    let ftp: reqwest::Url = "ftp://example.com/file".parse().unwrap();
+    let sftp: reqwest::Url = "sftp://example.com/file".parse().unwrap();
     assert!(matches!(
-        s.manager.add(NewJob::new(ftp).in_dir(s.dir.path())).await,
+        s.manager.add(NewJob::new(sftp).in_dir(s.dir.path())).await,
         Err(Error::UnsupportedScheme(_))
     ));
 }
@@ -587,12 +587,12 @@ async fn several_jobs_are_added_at_once_in_order() {
     let mut s = setup(3, 0).await;
     let new =
         |name: &str| NewJob::new(s.server.url(&format!("/files/{name}"))).in_dir(s.dir.path());
-    let ftp: reqwest::Url = "ftp://example.com/file".parse().unwrap();
+    let sftp: reqwest::Url = "sftp://example.com/file".parse().unwrap();
     let results = s
         .manager
         .add_many(vec![
             new("a.bin"),
-            NewJob::new(ftp).in_dir(s.dir.path()),
+            NewJob::new(sftp).in_dir(s.dir.path()),
             new("b.bin"),
             new("c.bin").in_category(CategoryId(99)),
             new("d.bin"),
@@ -691,7 +691,7 @@ async fn a_preview_tells_each_link_found_and_those_already_listed() {
     s.add("a.bin").await;
     let a = s.server.url("/files/a.bin");
     let b = s.server.url("/files/b%20c.mp4");
-    let text = format!("Get {a}, then {b} (not ftp://example.com/x.zip), and {a} again.");
+    let text = format!("Get {a}, then {b} (not sftp://example.com/x.zip), and {a} again.");
 
     let previews = s.manager.preview(&text, None).await.unwrap();
     let [first, second, third] = &previews[..] else {
@@ -720,7 +720,7 @@ async fn a_preview_tells_each_link_found_and_those_already_listed() {
     assert!(matches!(
         third,
         LinkPreview::Invalid { text, error: Error::UnsupportedScheme(_) }
-            if text == "ftp://example.com/x.zip"
+            if text == "sftp://example.com/x.zip"
     ));
 
     // A folder of no category decides.

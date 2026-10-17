@@ -55,6 +55,12 @@
 		"incomplete": "Il-konnessjoni ngħalqet kmieni wisq",
 		"remoteChanging": "Il-fajl baqa’ jinbidel fuq is-server",
 		"disk": "Il-fajl ma setax jinkiteb ({detail})",
-		"fileExists": "Diġà hemm fajl b’dan l-isem fil-folder"
+		"fileExists": "Diġà hemm fajl b’dan l-isem fil-folder",
+		"ftp421": "Is-server huwa okkupat, jew jippermetti inqas konnessjonijiet (421)",
+		"ftp530": "Is-server ċaħad l-isem tal-utent jew il-password (530)",
+		"ftp550": "Mhux fuq is-server, jew l-aċċess mhux permess (550)",
+		"ftp": "Is-server FTP wieġeb {status}: {detail}",
+		"certificate": "Iċ-ċertifikat ta’ {host} mhuwiex fdat",
+		"noTls": "Is-server ma joffrix kriptaġġ (TLS), li ħolqa ftpes:// teħtieġ"
 	}
 }

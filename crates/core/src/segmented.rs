@@ -20,7 +20,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering::SeqCst};
 use std::time::{Duration, Instant};
 
-use reqwest::{Client, Response, StatusCode, Url};
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt, BufWriter};
 use tokio::task::JoinSet;
@@ -28,10 +27,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::download::{Download, Event, RestartReason, Segment, Validator};
 use crate::error::Error;
-use crate::http::{
-    Env, HttpConfig, content_range_matches, flush, get, response_reason, status_error,
-};
+use crate::http::HttpConfig;
 use crate::throttle::Throttle;
+use crate::transfer::{Body, Env, Same, Source, flush};
 
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(200);
 /// How often each connection flushes to disk, and so how often the saved
@@ -171,12 +169,12 @@ impl Part {
 
 /// What every connection needs, shared read-only (but for `connections`).
 struct Context {
-    client: Client,
+    /// Where ranges come from: HTTP or FTP.
+    source: Source,
     stall: Duration,
     starved_after: Duration,
     /// How many connections this run may have: one fewer after each that failed.
     connections: AtomicUsize,
-    url: Url,
     validator: Validator,
     path: PathBuf,
     total: u64,
@@ -195,13 +193,15 @@ enum Ended {
 }
 
 /// Downloads every unfinished range of `dl.segments` into the full-size file
-/// at `path`. `first` is an already-open response starting at byte 0 (fresh
-/// downloads reuse the request that discovered the file).
+/// at `path`, asking `source` for them. `first` is an already-open answer
+/// starting at byte 0 (fresh downloads reuse the request that discovered the
+/// file).
 pub(crate) async fn run(
     env: &Env<'_>,
+    source: Source,
     dl: &mut Download,
     path: &Path,
-    first: Option<Response>,
+    first: Option<Body>,
     on_event: &mut impl FnMut(Event),
 ) -> Result<Segmented, Error> {
     let Env { config, cancel, .. } = env;
@@ -209,11 +209,10 @@ pub(crate) async fn run(
         return Ok(Segmented::Restart(RestartReason::NotResumable));
     };
     let context = Arc::new(Context {
-        client: env.client.clone(),
+        source,
         stall: config.stall_timeout,
         starved_after: config.starved_after,
         connections: AtomicUsize::new(config.connections.max(1)),
-        url: dl.url.clone(),
         validator,
         path: path.to_owned(),
         total,
@@ -386,7 +385,7 @@ fn fill(
     tasks: &mut JoinSet<Task>,
     context: &Arc<Context>,
     stop: &CancellationToken,
-    first: &mut Option<Response>,
+    first: &mut Option<Body>,
     config: &HttpConfig,
     order: &Order,
 ) {
@@ -603,7 +602,7 @@ fn make_room(parts: &mut Vec<Part>, wanted: &[u64], lead: u64) {
 async fn connection(
     context: &Context,
     shared: &Shared,
-    response: Option<Response>,
+    response: Option<Body>,
     stop: &CancellationToken,
 ) -> Result<Ended, Error> {
     let mut pos = shared.pos.load(SeqCst);
@@ -698,42 +697,24 @@ async fn connection(
     result
 }
 
-/// Requests `pos..end` with `If-Range`. `Ok(Err(_))` means the connection
-/// ended without data: paused, or the file changed on the server.
+/// Asks for `pos..end`. `Ok(Err(_))` means the connection ended without
+/// data: paused, or the file changed on the server.
 async fn request(
     context: &Context,
     pos: u64,
     end: u64,
     stop: &CancellationToken,
-) -> Result<Result<Response, Ended>, Error> {
-    let last = end - 1;
-    let sent = get(
-        &context.client,
-        context.stall,
-        &context.url,
-        Some((pos, Some(last))),
-        Some(&context.validator),
-    );
-    let response = tokio::select! {
-        biased;
-        _ = stop.cancelled() => return Ok(Err(Ended::Cancelled)),
-        response = sent => response?,
+) -> Result<Result<Body, Ended>, Error> {
+    let same = Same {
+        total: context.total,
+        validator: &context.validator,
     };
-    Ok(match response.status() {
-        StatusCode::PARTIAL_CONTENT
-            if content_range_matches(response.headers(), pos, Some(last), Some(context.total)) =>
-        {
-            Ok(response)
-        }
-        StatusCode::PARTIAL_CONTENT | StatusCode::RANGE_NOT_SATISFIABLE => {
-            Err(Ended::Changed(RestartReason::RemoteChanged))
-        }
-        StatusCode::OK => Err(Ended::Changed(response_reason(
-            &response,
-            &context.validator,
-        ))),
-        _ => return Err(status_error(&response)),
-    })
+    let sent = context.source.range(pos, end, same, context.stall);
+    tokio::select! {
+        biased;
+        _ = stop.cancelled() => Ok(Err(Ended::Cancelled)),
+        answer = sent => Ok(answer?.map_err(Ended::Changed)),
+    }
 }
 
 /// Bytes written so far, flushed or not (for progress display).

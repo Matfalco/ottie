@@ -11,7 +11,11 @@ export type Job = {
 /**
  * Like `2026.10.12-14.03.07-1`; sorting by it sorts by creation.
  */
-id: string, url: string, destDir: string, 
+id: string, 
+/**
+ * The link, without a password it holds (FTP: `ftp://user@host/…`).
+ */
+url: string, destDir: string, 
 /**
  * Known once the server has answered.
  */

@@ -55,6 +55,12 @@
 		"incomplete": "Haɗin ya rufe da wuri",
 		"remoteChanging": "Fayil ɗin ya ci gaba da canzawa a sabar",
 		"disk": "Ba a iya rubuta fayil ɗin ba ({detail})",
-		"fileExists": "Akwai fayil mai wannan suna a babban fayil ɗin tuni"
+		"fileExists": "Akwai fayil mai wannan suna a babban fayil ɗin tuni",
+		"ftp421": "Sabar tana aiki sosai, ko tana barin haɗi kaɗan (421)",
+		"ftp530": "Sabar ta ƙi sunan mai amfani ko kalmar sirri (530)",
+		"ftp550": "Ba ya kan sabar, ko ba a ba da izinin shiga ba (550)",
+		"ftp": "Sabar FTP ta amsa {status}: {detail}",
+		"certificate": "Ba a amince da takardar shaidar {host} ba",
+		"noTls": "Sabar ba ta ba da ɓoyewa (TLS) ba, wanda mahaɗin ftpes:// ke buƙata"
 	}
 }

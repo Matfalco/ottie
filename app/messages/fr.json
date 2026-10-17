@@ -55,6 +55,12 @@
 		"incomplete": "La connexion s’est fermée trop tôt",
 		"remoteChanging": "Le fichier changeait sans cesse sur le serveur",
 		"disk": "Impossible d’écrire le fichier ({detail})",
-		"fileExists": "Un fichier de ce nom est déjà dans le dossier"
+		"fileExists": "Un fichier de ce nom est déjà dans le dossier",
+		"ftp421": "Le serveur est occupé ou accepte moins de connexions (421)",
+		"ftp530": "Le serveur a refusé le nom d’utilisateur ou le mot de passe (530)",
+		"ftp550": "Introuvable sur le serveur, ou accès interdit (550)",
+		"ftp": "Le serveur FTP a répondu {status} : {detail}",
+		"certificate": "Le certificat de {host} n’est pas reconnu",
+		"noTls": "Le serveur ne propose pas de chiffrement (TLS), qu’un lien ftpes:// exige"
 	}
 }

@@ -30,6 +30,7 @@ const TOKEN: &str = "token";
         (name = "play", description = "Play while downloading: play links that need no token"),
         (name = "categories", description = "Where downloads go, by file extension or folder"),
         (name = "views", description = "Saved views of the downloads list"),
+        (name = "certificates", description = "FTPS servers' certificates trusted by hand"),
         (name = "schedule", description = "Time slots: when downloads run, stop or are limited"),
         (name = "settings", description = "What applies to the whole daemon"),
         (name = "speed", description = "The total download speed over the last hour"),

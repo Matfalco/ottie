@@ -27,6 +27,7 @@ use crate::error::Failure;
 pub struct Job {
     /// Like `2026.10.12-14.03.07-1`; sorting by it sorts by creation.
     pub id: String,
+    /// The link, without a password it holds (FTP: `ftp://user@host/…`).
     pub url: String,
     pub dest_dir: String,
     /// Known once the server has answered.
@@ -467,6 +468,29 @@ pub struct ViewBody {
     pub name: String,
     pub filters: ViewFilters,
     pub arrangement: Arrangement,
+}
+
+/// An FTPS server's certificate trusted by hand (docs/decisions/0054), as
+/// `GET /certificates` lists them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TrustedCertificate {
+    pub id: u32,
+    /// The server's name as in links, lowercase.
+    pub host: String,
+    /// SHA-256 of the certificate, 64 lowercase hex digits.
+    pub fingerprint: String,
+}
+
+/// Body of `POST /certificates`: what a `certificate` problem says.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TrustCertificate {
+    pub host: String,
+    /// Hex, any case, colons allowed.
+    pub fingerprint: String,
 }
 
 /// Answer to `POST /views`.
@@ -1097,6 +1121,22 @@ pub enum Problem {
     FileExists {
         name: String,
     },
+    /// The FTP server refused a command with reply `status` (530: the user
+    /// name or password, 550: no such file or no access…); `detail` is what
+    /// it said.
+    FtpReply {
+        status: u16,
+        detail: String,
+    },
+    /// Neither the system nor the person trusts the FTPS server's
+    /// certificate: posting `host` and `fingerprint` (SHA-256, lowercase
+    /// hex) to `POST /certificates` trusts it; then resume the download.
+    Certificate {
+        host: String,
+        fingerprint: String,
+    },
+    /// An `ftpes://` link to a server that doesn't offer TLS.
+    NoTls,
     Other {
         detail: String,
     },
@@ -1298,6 +1338,11 @@ pub enum Reason {
     ViewNameTaken {
         name: String,
     },
+    /// Not a server's name and a certificate's SHA-256 (64 hex digits).
+    InvalidCertificate,
+    CertificateNotFound {
+        id: u32,
+    },
     /// Not a language tag like `en` or `pt-BR`.
     InvalidLanguage {
         language: String,
@@ -1375,7 +1420,7 @@ impl From<JobSnapshot> for Job {
     fn from(job: JobSnapshot) -> Self {
         Job {
             id: job.id.to_string(),
-            url: job.url.into(),
+            url: without_password(job.url),
             dest_dir: job.dest_dir.to_string_lossy().into_owned(),
             file_name: job.file_name,
             state: job.state.into(),
@@ -1539,6 +1584,26 @@ fn path_text(path: &Path) -> String {
 }
 
 /// Spelled out, so engine changes can't silently change the API.
+/// A link as shown: the password it holds stays with the daemon
+/// (docs/decisions/0054).
+fn without_password(mut url: ottie_core::Url) -> String {
+    if url.password().is_some() {
+        // Only fails for links that can't hold one.
+        let _ = url.set_password(None);
+    }
+    url.into()
+}
+
+impl From<ottie_core::TrustedCertificate> for TrustedCertificate {
+    fn from(certificate: ottie_core::TrustedCertificate) -> Self {
+        TrustedCertificate {
+            id: certificate.id.0,
+            host: certificate.host,
+            fingerprint: certificate.fingerprint,
+        }
+    }
+}
+
 impl From<ottie_core::Problem> for Problem {
     fn from(problem: ottie_core::Problem) -> Self {
         use ottie_core::Problem as P;
@@ -1551,6 +1616,12 @@ impl From<ottie_core::Problem> for Problem {
             P::RemoteChanging => Problem::RemoteChanging,
             P::Disk { detail } => Problem::Disk { detail },
             P::FileExists { name } => Problem::FileExists { name },
+            P::FtpReply { code, detail } => Problem::FtpReply {
+                status: code,
+                detail,
+            },
+            P::Certificate { host, fingerprint } => Problem::Certificate { host, fingerprint },
+            P::NoTls => Problem::NoTls,
             P::Other { detail } => Problem::Other { detail },
         }
     }

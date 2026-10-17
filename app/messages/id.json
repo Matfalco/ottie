@@ -55,6 +55,12 @@
 		"incomplete": "Koneksi terputus sebelum selesai",
 		"remoteChanging": "File di server terus berubah",
 		"disk": "File tidak dapat ditulis ({detail})",
-		"fileExists": "File dengan nama ini sudah ada di folder"
+		"fileExists": "File dengan nama ini sudah ada di folder",
+		"ftp421": "Server sedang sibuk, atau mengizinkan lebih sedikit koneksi (421)",
+		"ftp530": "Server menolak nama pengguna atau kata sandi (530)",
+		"ftp550": "Tidak ada di server, atau akses tidak diizinkan (550)",
+		"ftp": "Server FTP menjawab {status}: {detail}",
+		"certificate": "Sertifikat {host} tidak dipercaya",
+		"noTls": "Server tidak menawarkan enkripsi (TLS), yang diwajibkan tautan ftpes://"
 	}
 }

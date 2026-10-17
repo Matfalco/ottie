@@ -55,6 +55,12 @@
 		"incomplete": "Dúnadh an ceangal róluath",
 		"remoteChanging": "Bhí an comhad ag athrú an t-am ar fad ar an bhfreastalaí",
 		"disk": "Níorbh fhéidir an comhad a scríobh ({detail})",
-		"fileExists": "Tá comhad leis an ainm seo san fhillteán cheana"
+		"fileExists": "Tá comhad leis an ainm seo san fhillteán cheana",
+		"ftp421": "Tá an freastalaí gnóthach, nó ceadaíonn sé níos lú ceangal (421)",
+		"ftp530": "Dhiúltaigh an freastalaí don ainm úsáideora nó don phasfhocal (530)",
+		"ftp550": "Níl sé ar an bhfreastalaí, nó níl cead rochtana (550)",
+		"ftp": "D’fhreagair an freastalaí FTP {status}: {detail}",
+		"certificate": "Níl muinín as teastas {host}",
+		"noTls": "Ní thairgeann an freastalaí criptiú (TLS), a theastaíonn ó nasc ftpes://"
 	}
 }

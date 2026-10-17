@@ -74,6 +74,7 @@
 		type Startup
 	} from '#lib/window.js';
 	import AccessSettings from './AccessSettings.svelte';
+	import CertificatesSettings from './CertificatesSettings.svelte';
 	import LanguagePicker from './LanguagePicker.svelte';
 	import LimitControl from './LimitControl.svelte';
 	import LookChoices from './LookChoices.svelte';
@@ -947,6 +948,7 @@
 			</div>
 			<OthersSettings />
 			<AccessSettings />
+			<CertificatesSettings />
 		</section>
 	</div>
 </div>

@@ -55,6 +55,12 @@
 		"incomplete": "連線提前關閉",
 		"remoteChanging": "伺服器上的檔案一直在變動",
 		"disk": "無法寫入檔案（{detail}）",
-		"fileExists": "資料夾中已有同名檔案"
+		"fileExists": "資料夾中已有同名檔案",
+		"ftp421": "伺服器忙碌中，或允許的連線較少（421）",
+		"ftp530": "伺服器拒絕了使用者名稱或密碼（530）",
+		"ftp550": "伺服器上沒有該檔案，或不允許存取（550）",
+		"ftp": "FTP 伺服器回覆 {status}：{detail}",
+		"certificate": "{host} 的憑證不受信任",
+		"noTls": "伺服器未提供加密（TLS），而 ftpes:// 連結需要加密"
 	}
 }

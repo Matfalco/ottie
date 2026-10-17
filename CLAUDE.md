@@ -23,7 +23,7 @@
 - Must-haves: pause/resume (including after a restart or crash), multi-connection downloads, and speed limits at three levels (per download, per category, global), adjustable while downloads run.
 - **Play while downloading** (uGet can): a short-lived play link (`POST /jobs/{id}/stream` → `GET /stream/{ticket}/{name}`, no token, range support) serves a partial file, so the browser, VLC/mpv or an Android player can play a video before it finishes, locally or from a remote daemon (`docs/decisions/0029`). The download order follows the player and, in a per-download streaming mode, stays in order and fetches the last chunk early (many MP4s keep their index at the end).
 - **Translated UI:** in the system's language by default (a device or every device can choose another), English as the fallback. English and French, then languages in batches (EU, Latin America, Asia, Africa; `docs/decisions/0041`): de, es-ES, es-419, it, nl, pl, pt-PT, pt-BR, then the rest of the EU in Latin script (sv, ro, cs, hu, da, fi, sk, hr, sl, lt, lv, et, ga, mt), Greek and Cyrillic (el, bg, uk), Asia (zh-Hans, zh-Hant, ja, ko, id, hi, vi, tr), Africa (sw, am, ha, yo, zu), and right to left, with the whole page mirrored (ar, fa, ur; `docs/decisions/0042`). Each is one JSON file in `ui/messages/` and, for the tray, one in `app/messages/`; daemon messages reach clients as codes they translate. The `ottie` command line and logs stay English.
-- uGet features to bring over time: categories (folder + file-type rules), queue with max concurrent downloads, opt-in clipboard monitoring (desktop app, `docs/decisions/0043`), batch/URL-list import, scheduler.
+- uGet features to bring over time: categories (folder + file-type rules), queue with max concurrent downloads, opt-in clipboard monitoring (desktop app, `docs/decisions/0043`), batch/URL-list import, scheduler, FTP and FTPS (downloads only, `docs/decisions/0054`).
 
 ## Stack
 
@@ -37,7 +37,7 @@
 
 Why: one Rust engine compiles for every target including Android; one web frontend is reused by the web UI, the desktop app and the Android app; the extension and the UI share a language.
 
-reqwest runs with `default-features = false` and features `rustls` (aws-lc-rs crypto, OS certificate store), `http2`, `system-proxy`. See `docs/decisions/0002`.
+reqwest runs with `default-features = false` and features `rustls` (aws-lc-rs crypto, OS certificate store), `http2`, `system-proxy`. See `docs/decisions/0002`. FTP and FTPS go through `suppaftp` (tokio, rustls with aws-lc-rs, `no-log`: it would log the password; `docs/decisions/0054`).
 
 ## Architecture
 
@@ -65,7 +65,7 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/job.rs         JobState + state machine (can_become), JobSnapshot, JobEvent, Reorder
   src/id.rs          JobId (yyyy.mm.dd-hh.mm.ss-N, UTC) and its generator
   src/category.rs    CategoryId (General = 1), CategorySettings, extension matching
-  src/backend.rs     Backend trait, HttpBackend
+  src/backend.rs     Backend trait, HttpBackend, NativeBackend (HTTP(S) or FTP by the link; what `ottie serve` uses)
   src/store.rs       SQLite on its own thread: schema migrations, save/load jobs and settings
   src/settings.rs    Settings, RetryPolicy, Appearance, language, stream_media, max_batch, existing, setup_step;
                      SettingsChange (applied all at once)
@@ -78,8 +78,13 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/sequence.rs    sequences in one link, curl-style ([001-120], [a-z], {a,b}): count, then expand
   src/throttle.rs    speed limits: per-job token buckets, refill task, priority-weighted sharing, category caps
   src/speed.rs       the last hour of total speed, one sample per second, from each job's smoothed rate (0044)
-  src/http.rs        HTTP transfer: first request, single-connection stream, resume, restart rules, stall timeout
-  src/segmented.rs   multi-connection transfer: coordinator, connection tasks, dynamic splitting
+  src/http.rs        HTTP transfer: first request, resume, restart rules, an HTTP range for segmented.rs
+  src/ftp.rs         FTP and FTPS transfer (0054): the link (TLS as ftp/ftpes/ftps ask, account, path), the certificate
+                     check (the system's, else trusted by hand), login, SIZE/MDTM/REST, a range per login
+  src/transfer.rs    what both share: Body (an answer's bytes), Source (where a multi-connection run's ranges come
+                     from), naming the file at the first answer, one connection's loop, completing
+  src/segmented.rs   multi-connection transfer: coordinator, connection tasks, dynamic splitting (HTTP or FTP)
+  src/certificate.rs certificates trusted by hand for FTPS servers (0054): TrustedCertificate, a host + SHA-256
   src/download.rs    Download state (what gets persisted), Placement, Event, Outcome
   src/problem.rs     Problem: why a job failed, as a kind + details (English via Display)
   src/stream.rs      Reader: a job's bytes at any offset, waiting until they're on disk (play links)
@@ -88,7 +93,8 @@ crates/core/       ottie-core: engine library. No HTTP server, no UI.       [exi
   src/filename.rs    names from URL / Content-Disposition, sanitizing, collision-free names, .part.ottie → final rename,
                      Existing (a name taken: rename, replace, ask; 0049),
                      relocate (a job's file into another folder; copy + delete between drives)
-  tests/support/     in-process axum test server with fault injection
+  tests/support/     in-process axum test server with fault injection; ftp.rs: an FTP server (plain, explicit or
+                     implicit TLS with the self-signed certificate beside it) with faults, for tests/ftp.rs
   examples/fetch.rs  manual CLI try-out
 crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 3b)  [exists]
   src/lib.rs         router(manager, token, shutdown), AppState, JSON 404 fallback; routes come
@@ -110,6 +116,7 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
                      appearance + language, setupDone + setupStep (0050), streamMedia, maxBatch, existing; the ranges people may choose (its tests
                      write them to shared/api-types/Ranges.ts)
   src/views.rs       GET/POST /views, PUT/DELETE /views/{id} (saved views)
+  src/certificates.rs GET/POST /certificates, DELETE /certificates/{id}: FTPS certificates trusted by hand (0054)
   src/slots.rs       GET/POST /slots (with the time zone), PUT/DELETE /slots/{id}, POST /slots/reorder
   src/speed.rs       GET /speed: the last hour of total speed, for the graph (0044)
   src/stream.rs      play links: POST /jobs/{id}/stream → GET /stream/{ticket}/{name} (no token, Range)
@@ -242,6 +249,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      caught.ts (links copied elsewhere: the window's rows and title, how long it stays,
                      what was added or refused, 0043),
                      access.ts (devices and the folders they may use, as Settings shows them, 0052),
+                     certificates.ts (FTPS certificates: a fingerprint in pairs, the one a download stopped at, 0054),
                      others.ts (Ottie on other computers: sign-in links, the switcher's rows, a browser's list, 0053;
                      others.svelte.ts: that list live, the app's or this browser's),
                      shortcuts.ts (keyboard shortcuts: what a key press means on every page and in
@@ -286,8 +294,9 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        LanguagePicker; downloads (Stepper for how many at once);
                        desktop app (sign-in, closing), clipboard, notifications + playing (desktop app only); retries;
                        keyboard shortcuts (ShortcutList); connection: AccessSettings (other devices, their sign-in
-                       links, the folders they may use; a device sees which it is, 0052) and OthersSettings (Ottie on other
-                       computers, 0053)), Switch, NumberField, LimitControl,
+                       links, the folders they may use; a device sees which it is, 0052), OthersSettings (Ottie on other
+                       computers, 0053) and CertificatesSettings (FTPS certificates trusted by hand, once there's one,
+                       0054)), Switch, NumberField, LimitControl,
                        TitleBar (+ WindowControls; Switcher beside the logo once there's another computer's Ottie, 0053;
                        folds to fit: tab icons, slot chip, logo and switcher names), AddCard (AddBar: link, then category + folder step;
                        BatchDialog: several links, from a paste, the list button or a file),
@@ -380,7 +389,8 @@ Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 3
 - **Shutdown keeps running jobs running** in the database (it doesn't mark them Paused), so the next start continues them; user-paused jobs stay paused.
 - **Files:** write to `<name>.part.ottie` (`PART_SUFFIX`, see `docs/decisions/0007`), rename on completion. Names come from `Content-Disposition` (`filename*`, then `filename`), else the final URL; chosen once at the first response. Sanitize them; never write outside the target folder. A name already taken in the folder (`docs/decisions/0049`) follows the job's `existing`, else the setting's: Rename (` (1)`, ` (2)`), Replace (reserves the name itself, renamed over the old file only once complete; another download's `.part.ottie` still counts as taken) or Ask (`Error::FileExists` before any file is made: the job fails with `Problem::FileExists`). Reserve names with `create_new` so it's atomic. Close the file before renaming (Windows refuses to rename open files). On Windows the finished file gets the Mark of the Web (`webmark.rs`, `docs/decisions/0045`), unless policy says not to.
 - **Cancellation:** `tokio_util::sync::CancellationToken`, raced against network reads with `tokio::select! { biased; … }`. Pausing must stop all segments promptly and leave state consistent.
-- **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. The native HTTP(S) backend comes first; native FTP/SFTP (7j) and yt-dlp (step 9) plug in beside it, so keep HTTP assumptions inside the HTTP backend.
+- **Backends:** downloads go through the `Backend` trait (`backend.rs`); the manager is generic over it. `NativeBackend` sends HTTP(S) links to `HttpBackend` and FTP ones to `ftp.rs`; yt-dlp (step 9) plugs in beside it, so keep each protocol's assumptions inside its module. What every protocol's run shares is in `transfer.rs`, and `segmented.rs` asks a `Source` for its ranges, never HTTP itself.
+- **FTP** (`docs/decisions/0054`): `ftp://` uses TLS when the server offers it, `ftpes://` requires it (refused before the password goes out), `ftps://` is implicit (990); data connections over TLS too (`PROT P`); passive mode only, the `PASV` address replaced by the server's (`EPSV` over IPv6). The account comes from the link, else anonymous. A certificate the system refuses is accepted only if its SHA-256 is one of `Download::trusted` (set for each run from the manager's trusted certificates for that host); else `Error::UntrustedCertificate` with the fingerprint, and nothing more is sent. Resumable and splittable when the server gives `SIZE` and lists `REST STREAM`; the validator is `Validator::Ftp("<size> <MDTM>")`, asked again before each resume and range (a change restarts). Each range is a login of its own, closed at its end; a 421 at login gets one more try after `BUSY_WAIT`. Without a size, the server's 226 tells a whole transfer from a cut one. Every exchange runs within the stall timeout. A reply refusing is `Error::FtpReply` (4xx retryable); a connection or TLS failure `Error::Ftp` (retryable).
 
 ## Platform gotchas
 
@@ -397,6 +407,7 @@ Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 3
 - Other devices get tokens of their own (`docs/decisions/0052`), full or read-only, kept as SHA-256 hashes in `<config>/access.json`; only this computer's token manages them and the folders list. A read-only token passes `auth::only_reads` (GET, and a few POSTs that change nothing): a new endpoint that changes nothing but isn't a GET must be listed there. Every handler that takes a folder from a client checks it with `Access::folders_for` (devices: categories' folders and those listed only).
 - Play links (`/stream/{ticket}/…`, `docs/decisions/0029`) are the one exception: the random ticket reads one job's file and expires after 12 h unused. They're served with `Content-Security-Policy: sandbox`, so a downloaded page or SVG can't run scripts as the daemon's pages.
 - Cookies and auth headers forwarded by the extension belong to that one job: never log them, never reuse them for another job.
+- An FTP link's password (`docs/decisions/0054`) stays in the daemon's database: the API (jobs, events) gives links without it, logs go through `redact()`, `suppaftp` logs nothing (`no-log`). An FTPS certificate the system doesn't trust is accepted only when trusted by hand for that host, by its exact SHA-256 (`POST /certificates`, from the download that stopped at it); its handshake's signatures are still checked.
 - Another computer's Ottie shown in the desktop app (`docs/decisions/0053`) is only as trustworthy as that computer: its pages get `REMOTE_PERMISSIONS` (window, tray menu, copied links, switching), never a command that reaches this computer's files, programs, settings or power; a new app command is left out of that list unless it can't. Its token lives in the system's keychain, and no page gets a token back.
 - The desktop app opens files only through commands that take a job ID (`docs/decisions/0045`): it asks the daemon for the path and refuses a name that's more than a name. Running a program always asks first, in the app's own dialog.
 - Logs and errors never contain query strings or credentials: log URLs through `redact()`, and wrap `reqwest::Error` with `without_url()` (done in `Error::from`).
@@ -551,7 +562,11 @@ Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review.
      with fewer app commands, the tray, notifications and copied links following the one shown, this
      computer's still starting (a setting: only once shown); in a browser, a list per address, switching
      to the other page. Built, not reviewed yet: what's left to check is at the end of 0053
-   - 7j FTP/SFTP as a native backend
+   - 🟡 7j FTP and FTPS downloads (`docs/decisions/0054`): `ftp://` (TLS when offered), `ftpes://`, `ftps://`;
+     the account in the link, its password never shown again; a certificate nobody trusts trusted from the
+     download (Settings → Connection lists them); resuming and several connections as for HTTP. Built, not
+     reviewed yet: what's left to check (real servers, a NAS's own certificate on Windows) is at the end of 0054.
+     SFTP later
 8. Browser extension.
 9. yt-dlp backend (its own updates, apart from the app's).
 10. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.

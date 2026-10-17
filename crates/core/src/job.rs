@@ -314,6 +314,9 @@ pub struct JobSnapshot {
 }
 
 /// Broadcast to every subscriber of the manager.
+// `Changed` is the biggest and by far the most frequent: boxing it would
+// allocate for each one.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobEvent {
     /// A job was added, changed state, or learned its file name and size.

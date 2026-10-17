@@ -55,6 +55,12 @@
 		"incomplete": "Conexiunea s-a închis prea devreme",
 		"remoteChanging": "Fișierul se tot schimba pe server",
 		"disk": "Fișierul nu a putut fi scris ({detail})",
-		"fileExists": "Un fișier cu acest nume este deja în folder"
+		"fileExists": "Un fișier cu acest nume este deja în folder",
+		"ftp421": "Serverul este ocupat sau permite mai puține conexiuni (421)",
+		"ftp530": "Serverul a refuzat numele de utilizator sau parola (530)",
+		"ftp550": "Nu există pe server sau accesul nu este permis (550)",
+		"ftp": "Serverul FTP a răspuns {status}: {detail}",
+		"certificate": "Certificatul lui {host} nu este de încredere",
+		"noTls": "Serverul nu oferă criptare (TLS), pe care un link ftpes:// o cere"
 	}
 }

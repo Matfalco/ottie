@@ -55,6 +55,12 @@
 		"incomplete": "Forbindelsen lukkede for tidligt",
 		"remoteChanging": "Filen blev ved med at ændre sig på serveren",
 		"disk": "Kunne ikke skrive filen ({detail})",
-		"fileExists": "Der findes allerede en fil med dette navn i mappen"
+		"fileExists": "Der findes allerede en fil med dette navn i mappen",
+		"ftp421": "Serveren er optaget eller tillader færre forbindelser (421)",
+		"ftp530": "Serveren afviste brugernavnet eller adgangskoden (530)",
+		"ftp550": "Findes ikke på serveren, eller adgang er ikke tilladt (550)",
+		"ftp": "FTP-serveren svarede {status}: {detail}",
+		"certificate": "Certifikatet for {host} er ikke betroet",
+		"noTls": "Serveren tilbyder ikke kryptering (TLS), som et ftpes://-link kræver"
 	}
 }

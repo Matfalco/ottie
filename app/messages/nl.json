@@ -55,6 +55,12 @@
 		"incomplete": "De verbinding werd te vroeg gesloten",
 		"remoteChanging": "Het bestand bleef op de server veranderen",
 		"disk": "Kan het bestand niet schrijven ({detail})",
-		"fileExists": "Er staat al een bestand met deze naam in de map"
+		"fileExists": "Er staat al een bestand met deze naam in de map",
+		"ftp421": "De server is bezet of staat minder verbindingen toe (421)",
+		"ftp530": "De server weigerde de gebruikersnaam of het wachtwoord (530)",
+		"ftp550": "Niet op de server, of daar niet toegestaan (550)",
+		"ftp": "De FTP-server antwoordde {status}: {detail}",
+		"certificate": "Het certificaat van {host} wordt niet vertrouwd",
+		"noTls": "De server biedt geen versleuteling (TLS), die een ftpes://-link vereist"
 	}
 }

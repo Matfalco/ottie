@@ -55,6 +55,12 @@
 		"incomplete": "Anslutningen stängdes för tidigt",
 		"remoteChanging": "Filen ändrades hela tiden på servern",
 		"disk": "Kunde inte skriva filen ({detail})",
-		"fileExists": "En fil med det här namnet finns redan i mappen"
+		"fileExists": "En fil med det här namnet finns redan i mappen",
+		"ftp421": "Servern är upptagen eller tillåter färre anslutningar (421)",
+		"ftp530": "Servern nekade användarnamnet eller lösenordet (530)",
+		"ftp550": "Finns inte på servern, eller åtkomst nekas (550)",
+		"ftp": "FTP-servern svarade {status}: {detail}",
+		"certificate": "Certifikatet för {host} är inte betrott",
+		"noTls": "Servern erbjuder ingen kryptering (TLS), som en ftpes://-länk kräver"
 	}
 }

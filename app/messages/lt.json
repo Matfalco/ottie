@@ -55,6 +55,12 @@
 		"incomplete": "Ryšys užsidarė per anksti",
 		"remoteChanging": "Failas serveryje nuolat keitėsi",
 		"disk": "Nepavyko įrašyti failo ({detail})",
-		"fileExists": "Failas tokiu pavadinimu jau yra aplanke"
+		"fileExists": "Failas tokiu pavadinimu jau yra aplanke",
+		"ftp421": "Serveris užimtas arba leidžia mažiau ryšių (421)",
+		"ftp530": "Serveris atmetė naudotojo vardą arba slaptažodį (530)",
+		"ftp550": "Serveryje nėra arba prieiga neleidžiama (550)",
+		"ftp": "FTP serveris atsakė {status}: {detail}",
+		"certificate": "Serverio {host} sertifikatu nepasitikima",
+		"noTls": "Serveris nesiūlo šifravimo (TLS), kurio reikalauja ftpes:// nuoroda"
 	}
 }

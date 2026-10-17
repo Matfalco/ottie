@@ -20,7 +20,8 @@ use ottie_api::{
 };
 use ottie_api::{AddedSlot, Day, ReorderSlots, Slot, SlotDownloads, SlotList};
 use ottie_api::{Device, FolderList};
-use ottie_core::{HttpBackend, Manager, Store};
+use ottie_api::{TrustCertificate, TrustedCertificate};
+use ottie_core::{Manager, NativeBackend, Store};
 use reqwest::{RequestBuilder, StatusCode};
 use tempfile::TempDir;
 use tokio::net::TcpListener;
@@ -54,7 +55,7 @@ async fn start_with(ui: UiSource) -> Daemon {
     let files = serve(files).await;
 
     let store = Store::open_in_memory().await.unwrap();
-    let manager = Manager::start(HttpBackend::new().unwrap(), store)
+    let manager = Manager::start(NativeBackend::new().unwrap(), store)
         .await
         .unwrap();
     let shutdown = CancellationToken::new();
@@ -693,11 +694,11 @@ async fn remove_takes_a_job_off_the_list() {
 #[tokio::test]
 async fn several_downloads_are_added_at_once() {
     let d = start().await;
-    let mut ftp = d.new_job("file.bin");
-    ftp.url = "ftp://example.com/file.bin".into();
+    let mut sftp = d.new_job("file.bin");
+    sftp.url = "sftp://example.com/file.bin".into();
     let mut relative = d.new_job("file.bin");
     relative.dest_dir = Some("downloads".into());
-    let jobs = vec![d.new_job("file.bin"), ftp, relative, d.new_job("slow.bin")];
+    let jobs = vec![d.new_job("file.bin"), sftp, relative, d.new_job("slow.bin")];
 
     let response = d.post("/jobs/batch").json(&AddJobs { jobs }).send().await;
     let response = response.unwrap();
@@ -717,7 +718,7 @@ async fn several_downloads_are_added_at_once() {
             (
                 1,
                 Reason::UnsupportedScheme {
-                    scheme: "ftp".into()
+                    scheme: "sftp".into()
                 }
             ),
             (2, Reason::RelativeFolder),
@@ -750,7 +751,7 @@ async fn a_preview_lists_the_links_in_some_text() {
     let id = d.add("file.bin").await;
     let known = d.job(&id).await.url;
     let other = format!("{}/clip%20one.mp4", d.files);
-    let text = format!("Here: {known}\n{other}, and ftp://example.com/x.zip.\n{known}");
+    let text = format!("Here: {known}\n{other}, and sftp://example.com/x.zip.\n{known}");
     let preview = |text: String, dest_dir: Option<String>| {
         d.post("/jobs/preview")
             .json(&PreviewLinks { text, dest_dir })
@@ -785,11 +786,11 @@ async fn a_preview_lists_the_links_in_some_text() {
     let FoundLink::Invalid { text, refused } = &links[2] else {
         panic!("expected an invalid link, got {:?}", links[2]);
     };
-    assert_eq!(text, "ftp://example.com/x.zip");
+    assert_eq!(text, "sftp://example.com/x.zip");
     assert_eq!(
         refused.reason,
         Reason::UnsupportedScheme {
-            scheme: "ftp".into()
+            scheme: "sftp".into()
         }
     );
     assert_eq!(links.len(), 3);
@@ -871,10 +872,10 @@ async fn bad_requests_say_what_is_wrong() {
     );
     assert!(body.error.contains("not a URL"), "{}", body.error);
 
-    job.url = "ftp://example.com/file".to_owned();
+    job.url = "sftp://example.com/file".to_owned();
     let (status, body) = error_of(add(&job).await.unwrap()).await;
     let scheme = Reason::UnsupportedScheme {
-        scheme: "ftp".into(),
+        scheme: "sftp".into(),
     };
     assert_eq!((status, body.reason), (StatusCode::BAD_REQUEST, scheme));
 
@@ -1739,4 +1740,79 @@ async fn devices_write_only_where_they_may() {
         .send()
         .await;
     assert_eq!(added.unwrap().status(), StatusCode::CREATED);
+}
+
+#[tokio::test]
+async fn certificates_are_trusted_and_forgotten() {
+    let d = start().await;
+    let list = || async {
+        let response = d.get("/certificates").send().await.unwrap();
+        response.json::<Vec<TrustedCertificate>>().await.unwrap()
+    };
+    assert_eq!(list().await, []);
+
+    let bad = TrustCertificate {
+        host: "nas.local".into(),
+        fingerprint: "abc".into(),
+    };
+    let refused = d.post("/certificates").json(&bad).send().await.unwrap();
+    let (status, refused) = error_of(refused).await;
+    assert_eq!(
+        (status, refused.reason),
+        (StatusCode::BAD_REQUEST, Reason::InvalidCertificate)
+    );
+
+    // As a certificate problem gives them, or written by hand.
+    let body = TrustCertificate {
+        host: "NAS.local".into(),
+        fingerprint: vec!["AB"; 32].join(":"),
+    };
+    let trusted = d.post("/certificates").json(&body).send().await.unwrap();
+    assert_eq!(trusted.status(), StatusCode::CREATED);
+    let trusted: TrustedCertificate = trusted.json().await.unwrap();
+    assert_eq!(
+        (trusted.host.as_str(), trusted.fingerprint.clone()),
+        ("nas.local", "ab".repeat(32))
+    );
+    let again = d.post("/certificates").json(&body).send().await.unwrap();
+    assert_eq!(again.json::<TrustedCertificate>().await.unwrap(), trusted);
+    assert_eq!(list().await, std::slice::from_ref(&trusted));
+
+    let tv = d.add_device("TV", true).await;
+    let as_tv = d.client.post(d.url("/certificates")).bearer_auth(&tv.token);
+    let as_tv = as_tv.json(&body).send().await.unwrap();
+    assert_eq!(as_tv.status(), StatusCode::FORBIDDEN);
+
+    let path = format!("/certificates/{}", trusted.id);
+    let removed = d.client.delete(d.url(&path)).bearer_auth(TOKEN);
+    assert_eq!(
+        removed.send().await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    let again = d.client.delete(d.url(&path)).bearer_auth(TOKEN);
+    let (status, refused) = error_of(again.send().await.unwrap()).await;
+    assert_eq!(
+        (status, refused.reason),
+        (
+            StatusCode::NOT_FOUND,
+            Reason::CertificateNotFound { id: trusted.id }
+        )
+    );
+    assert_eq!(list().await, []);
+}
+
+#[tokio::test]
+async fn an_ftp_link_s_password_stays_with_the_daemon() {
+    let d = start().await;
+    // Nothing answers there: it fails and retries, which is fine here.
+    let mut job = d.new_job("unused");
+    job.url = "ftp://me:s3cret@127.0.0.1:9/pub/file.bin".into();
+    let response = d.post("/jobs").json(&job).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let id = response.json::<Added>().await.unwrap().id;
+
+    let shown = d.job(&id).await;
+    assert_eq!(shown.url, "ftp://me@127.0.0.1:9/pub/file.bin");
+    let listed = d.get("/jobs").send().await.unwrap().text().await.unwrap();
+    assert!(!listed.contains("s3cret"), "{listed}");
 }

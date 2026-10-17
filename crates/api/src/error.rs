@@ -140,6 +140,10 @@ impl From<Error> for Failure {
             Error::ViewNameTaken(name) => {
                 (S::CONFLICT, Reason::ViewNameTaken { name: name.clone() })
             }
+            Error::InvalidCertificate => (S::BAD_REQUEST, Reason::InvalidCertificate),
+            Error::CertificateNotFound(id) => {
+                (S::NOT_FOUND, Reason::CertificateNotFound { id: id.0 })
+            }
             Error::DownloadStopped(id) => {
                 (S::CONFLICT, Reason::DownloadStopped { id: id.to_string() })
             }

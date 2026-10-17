@@ -256,11 +256,26 @@ mod tests {
     #[test]
     fn links_that_cant_be_downloaded_are_reported() {
         assert_eq!(
-            found("ftp://example.com/a.zip http://exa%mple.com/ ://nothing https://"),
+            found(
+                "sftp://example.com/a.zip http://exa%mple.com/ ://nothing https:// ftp://example.com/pub/"
+            ),
             [
-                "invalid: ftp://example.com/a.zip (unsupported URL scheme `ftp` (only http and https are supported))",
+                "invalid: sftp://example.com/a.zip (unsupported URL scheme `sftp` (only http, https, ftp, ftps and ftpes are supported))",
                 "invalid: http://exa%mple.com/ (not a valid link)",
                 "invalid: https:// (not a valid link)",
+                "invalid: ftp://example.com/pub/ (not a valid link)",
+            ]
+        );
+    }
+
+    #[test]
+    fn ftp_links_count() {
+        assert_eq!(
+            found("ftp://nas.local/a.iso ftps://me:pw@nas.local/b.iso ftpes://nas.local/c.iso"),
+            [
+                "ftp://nas.local/a.iso",
+                "ftps://me:pw@nas.local/b.iso",
+                "ftpes://nas.local/c.iso"
             ]
         );
     }
@@ -314,9 +329,9 @@ mod tests {
     #[test]
     fn a_sequence_that_cant_be_downloaded_is_reported_once() {
         assert_eq!(
-            found("ftp://example.com/[1-100].zip"),
+            found("sftp://example.com/[1-100].zip"),
             [
-                "invalid: ftp://example.com/[1-100].zip (unsupported URL scheme `ftp` (only http and https are supported))"
+                "invalid: sftp://example.com/[1-100].zip (unsupported URL scheme `sftp` (only http, https, ftp, ftps and ftpes are supported))"
             ]
         );
     }

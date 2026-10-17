@@ -55,6 +55,12 @@
 		"incomplete": "Die Verbindung wurde zu früh geschlossen",
 		"remoteChanging": "Die Datei änderte sich auf dem Server ständig",
 		"disk": "Die Datei konnte nicht geschrieben werden ({detail})",
-		"fileExists": "Eine Datei mit diesem Namen ist schon im Ordner"
+		"fileExists": "Eine Datei mit diesem Namen ist schon im Ordner",
+		"ftp421": "Der Server ist ausgelastet oder erlaubt weniger Verbindungen (421)",
+		"ftp530": "Der Server hat Benutzername oder Passwort abgelehnt (530)",
+		"ftp550": "Nicht auf dem Server oder dort nicht erlaubt (550)",
+		"ftp": "Der FTP-Server antwortete {status}: {detail}",
+		"certificate": "Dem Zertifikat von {host} wird nicht vertraut",
+		"noTls": "Der Server bietet keine Verschlüsselung (TLS) an, die ein ftpes://-Link verlangt"
 	}
 }

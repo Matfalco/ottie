@@ -55,6 +55,12 @@
 		"incomplete": "Spojenie sa skončilo predčasne",
 		"remoteChanging": "Súbor sa na serveri stále menil",
 		"disk": "Súbor sa nedá zapísať ({detail})",
-		"fileExists": "Súbor s týmto názvom už v priečinku je"
+		"fileExists": "Súbor s týmto názvom už v priečinku je",
+		"ftp421": "Server je zaneprázdnený alebo povoľuje menej pripojení (421)",
+		"ftp530": "Server odmietol používateľské meno alebo heslo (530)",
+		"ftp550": "Na serveri nie je, alebo k nemu nie je prístup (550)",
+		"ftp": "FTP server odpovedal {status}: {detail}",
+		"certificate": "Certifikátu servera {host} sa nedôveruje",
+		"noTls": "Server neponúka šifrovanie (TLS), ktoré odkaz ftpes:// vyžaduje"
 	}
 }

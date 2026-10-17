@@ -12,16 +12,17 @@ use reqwest::header::{
 };
 use reqwest::{Client, Response, StatusCode, Url, redirect};
 use tokio::fs::{self, File, OpenOptions};
-use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_util::sync::CancellationToken;
 
-use crate::download::{Download, Event, Outcome, RestartReason, Validator, check_scheme};
+use crate::download::{Download, Event, Outcome, RestartReason, Validator, check_http_scheme};
 use crate::error::Error;
-use crate::filename::{self, Existing};
+use crate::filename;
 use crate::playback::Playback;
 use crate::segmented::{self, Segmented};
 use crate::throttle::Throttle;
-use crate::webmark;
+use crate::transfer::{
+    self, Body, Same, Source, complete, redact, restarting, single, splittable, started,
+};
 
 const MAX_REDIRECTS: usize = 10;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -30,7 +31,8 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 /// died silently (the network changed) is noticed sooner than a stall.
 const PING_AFTER: Duration = Duration::from_secs(10);
 
-/// How HTTP downloads are split across connections.
+/// How downloads are split across connections, and how long a server may
+/// keep quiet. For FTP too, despite the name.
 #[derive(Debug, Clone)]
 pub struct HttpConfig {
     /// Connections per download. 1 disables splitting.
@@ -70,7 +72,7 @@ pub fn build_client() -> Result<Client, Error> {
     let policy = redirect::Policy::custom(|attempt| {
         if attempt.previous().len() >= MAX_REDIRECTS {
             attempt.error("too many redirects")
-        } else if check_scheme(attempt.url()).is_err() {
+        } else if check_http_scheme(attempt.url()).is_err() {
             let scheme = attempt.url().scheme().to_owned();
             attempt.error(format!("redirect to unsupported scheme `{scheme}`"))
         } else {
@@ -146,10 +148,12 @@ pub(crate) async fn run_in(
             started(dl, &name, &mut on_event);
             return complete(dl, &name).await;
         };
-        let Some(total) = splittable(config, dl, &response) else {
+        let ranges = response.status() == StatusCode::PARTIAL_CONTENT;
+        let Some(total) = splittable(config, dl, ranges) else {
             started(dl, &name, &mut on_event);
             tracing::debug!(%name, "one connection");
-            return single(env, response, file, dl, &name, &mut on_event).await;
+            let body = Body::Http(response);
+            return single(&env.common(), body, file, dl, &name, &mut on_event).await;
         };
 
         // Full size up front, so every connection can write at its offset
@@ -159,8 +163,9 @@ pub(crate) async fn run_in(
         dl.segments = segmented::plan(total, config);
         started(dl, &name, &mut on_event);
         let part = dl.dest_dir.join(filename::part_name(&name));
-        let first = Some(response);
-        match segmented::run(env, dl, &part, first, &mut on_event).await? {
+        let first = Some(Body::Http(response));
+        let source = env.source(dl);
+        match segmented::run(&env.common(), source, dl, &part, first, &mut on_event).await? {
             Segmented::Finished => return complete(dl, &name).await,
             Segmented::Cancelled => return Ok(Outcome::Paused),
             Segmented::Restart(reason) if !restarted_mid_run => {
@@ -173,14 +178,32 @@ pub(crate) async fn run_in(
     }
 }
 
-/// What every step of one run shares. The `'a` says these are borrowed from
-/// the caller of [`run`] and only live as long as that call.
+/// What every step of one run shares: [`transfer::Env`] and the client.
 pub(crate) struct Env<'a> {
     pub client: &'a Client,
     pub config: &'a HttpConfig,
     pub throttle: &'a Throttle,
     pub playback: &'a Playback,
     pub cancel: &'a CancellationToken,
+}
+
+impl<'a> Env<'a> {
+    fn common(&self) -> transfer::Env<'a> {
+        transfer::Env {
+            config: self.config,
+            throttle: self.throttle,
+            playback: self.playback,
+            cancel: self.cancel,
+        }
+    }
+
+    /// Where the other connections get their ranges.
+    fn source(&self, dl: &Download) -> Source {
+        Source::Http {
+            client: self.client.clone(),
+            url: dl.url.clone(),
+        }
+    }
 }
 
 struct Opened {
@@ -198,24 +221,8 @@ async fn open(
 ) -> Result<Opened, Error> {
     let (Some(name), Some(part)) = (dl.file_name.clone(), dl.part_path()) else {
         let response = get_from_start(env, &dl.url).await?;
-        let suggested = suggested_name(&response);
-        if let Some(placement) = dl.placement.take()
-            && let Some(folder) = placement.folder_for(&suggested)
-        {
-            dl.dest_dir = folder.to_owned();
-        }
-        let replace = match dl.existing {
-            Existing::Rename => false,
-            Existing::Replace => true,
-            Existing::Ask if filename::exists(&dl.dest_dir, &suggested).await? => {
-                // Nothing written: it asks before any file is made.
-                return Err(Error::FileExists { name: suggested });
-            }
-            Existing::Ask => false,
-        };
-        let (name, file) = filename::reserve(&dl.dest_dir, &suggested, replace).await?;
+        let (name, file) = transfer::reserve(dl, suggested_name(&response)).await?;
         tracing::debug!(url = %redact(&dl.url), %name, "starting download");
-        dl.file_name = Some(name.clone());
         learn(dl, &response);
         return Ok(Opened {
             name,
@@ -346,7 +353,8 @@ async fn resume_segmented(
         Ok(_) => {
             dl.downloaded = dl.segments.iter().map(|s| s.done).sum();
             started(dl, name, on_event);
-            match segmented::run(env, dl, part, None, on_event).await? {
+            let source = env.source(dl);
+            match segmented::run(&env.common(), source, dl, part, None, on_event).await? {
                 Segmented::Finished => return complete(dl, name).await.map(Resumed::Stopped),
                 Segmented::Cancelled => return Ok(Resumed::Stopped(Outcome::Paused)),
                 Segmented::Restart(reason) => reason,
@@ -366,26 +374,6 @@ pub(crate) fn response_reason(response: &Response, validator: &Validator) -> Res
     }
 }
 
-fn restarting(dl: &mut Download, reason: RestartReason, on_event: &mut impl FnMut(Event)) {
-    tracing::debug!(url = %redact(&dl.url), ?reason, "restarting download from zero");
-    dl.downloaded = 0;
-    dl.segments.clear();
-    on_event(Event::Restarted(reason));
-}
-
-fn started(dl: &Download, name: &str, on_event: &mut impl FnMut(Event)) {
-    on_event(Event::Started {
-        file_name: name.to_owned(),
-        dest_dir: dl.dest_dir.clone(),
-
-        total: dl.total,
-        validator: dl.validator.clone(),
-        resumable: dl.resumable,
-        downloaded: dl.downloaded,
-        segments: dl.segments.clone(),
-    });
-}
-
 /// Records what a response from the start of the file tells us about it.
 fn learn(dl: &mut Download, response: &Response) {
     let headers = response.headers();
@@ -401,113 +389,6 @@ fn learn(dl: &mut Download, response: &Response) {
     dl.downloaded = 0;
 }
 
-/// The total size if this fresh response may be split across connections:
-/// the server answered our range with a 206 (so ranges really work), we can
-/// check the file stays the same, and it's big enough to be worth it.
-fn splittable(config: &HttpConfig, dl: &Download, response: &Response) -> Option<u64> {
-    let total = dl.total?;
-    let worth_it = config.connections > 1 && total >= 2 * config.min_split.max(1);
-    let safe = response.status() == StatusCode::PARTIAL_CONTENT && dl.resumable;
-    (worth_it && safe && dl.downloaded == 0).then_some(total)
-}
-
-async fn single(
-    env: &Env<'_>,
-    response: Response,
-    file: File,
-    dl: &mut Download,
-    name: &str,
-    on_event: &mut impl FnMut(Event),
-) -> Result<Outcome, Error> {
-    let mut writer = BufWriter::new(file);
-    let streamed = stream_body(env, response, &mut writer, dl, on_event).await;
-    // Flush even after an error, so the .part.ottie length matches `dl.downloaded`.
-    let flushed = flush(&mut writer).await;
-    drop(writer); // Windows can't rename a file that's still open.
-    if streamed? == Stop::Cancelled {
-        flushed?;
-        return Ok(Outcome::Paused);
-    }
-    flushed?;
-    complete(dl, name).await
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum Stop {
-    Finished,
-    Cancelled,
-}
-
-async fn stream_body(
-    env: &Env<'_>,
-    mut response: Response,
-    writer: &mut BufWriter<File>,
-    dl: &mut Download,
-    on_event: &mut impl FnMut(Event),
-) -> Result<Stop, Error> {
-    let Env {
-        throttle,
-        cancel,
-        config,
-        ..
-    } = env;
-    let stall = config.stall_timeout;
-    loop {
-        // Wait for whichever comes first: the next chunk or a pause request.
-        // `biased` checks the pause first, so a fast server can't delay it.
-        let chunk = tokio::select! {
-            biased;
-            _ = cancel.cancelled() => return Ok(Stop::Cancelled),
-            chunk = tokio::time::timeout(stall, response.chunk()) => {
-                chunk.map_err(|_| Error::Stalled(stall))??
-            }
-        };
-        let Some(bytes) = chunk else {
-            return Ok(Stop::Finished);
-        };
-        writer.write_all(&bytes).await?;
-        dl.downloaded += bytes.len() as u64;
-        on_event(Event::Progress {
-            downloaded: dl.downloaded,
-            total: dl.total,
-            segments: Vec::new(),
-        });
-        // Over the speed limit: wait before reading more (a pause still wins).
-        tokio::select! {
-            biased;
-            _ = cancel.cancelled() => return Ok(Stop::Cancelled),
-            () = throttle.spend(bytes.len()) => {}
-        }
-    }
-}
-
-/// Writes buffered bytes and asks the OS to put them on disk.
-pub(crate) async fn flush(writer: &mut BufWriter<File>) -> io::Result<()> {
-    writer.flush().await?;
-    writer.get_ref().sync_data().await
-}
-
-async fn complete(dl: &mut Download, name: &str) -> Result<Outcome, Error> {
-    match dl.total {
-        Some(expected) if expected != dl.downloaded => {
-            return Err(Error::Incomplete {
-                received: dl.downloaded,
-                expected,
-            });
-        }
-        _ => dl.total = Some(dl.downloaded),
-    }
-    let part = dl.dest_dir.join(filename::part_name(name));
-    // A file that appeared meanwhile is replaced only if asked to.
-    let replace = dl.existing == Existing::Replace;
-    let final_name = filename::finalize(&dl.dest_dir, name, &part, replace).await?;
-    let path = dl.dest_dir.join(&final_name);
-    webmark::mark(&path, &dl.url).await;
-    dl.file_name = Some(final_name);
-    dl.segments.clear();
-    Ok(Outcome::Completed { path })
-}
-
 /// Sends a GET. `range` is `(first byte, last byte if any)`; `if_range` makes
 /// the server send the whole file instead if it has changed since.
 /// Waiting longer than `stall` for the answer's headers is an error.
@@ -518,7 +399,7 @@ pub(crate) async fn get(
     range: Option<(u64, Option<u64>)>,
     if_range: Option<&Validator>,
 ) -> Result<Response, Error> {
-    check_scheme(url)?;
+    check_http_scheme(url)?;
     // Ask for the raw bytes: no compression, so ranges map to file offsets.
     let mut request = client.get(url.clone()).header(ACCEPT_ENCODING, "identity");
     if let Some((first, last)) = range {
@@ -577,6 +458,39 @@ async fn get_from_start(env: &Env<'_>, url: &Url) -> Result<Response, Error> {
     }
 }
 
+/// One range of a multi-connection download: `pos..end` with `If-Range`.
+/// `Ok(Err(_))`: the file changed on the server, or ranges stopped working.
+pub(crate) async fn range(
+    client: &Client,
+    stall: Duration,
+    url: &Url,
+    same: Same<'_>,
+    pos: u64,
+    end: u64,
+) -> Result<Result<Body, RestartReason>, Error> {
+    let last = end - 1;
+    let response = get(
+        client,
+        stall,
+        url,
+        Some((pos, Some(last))),
+        Some(same.validator),
+    )
+    .await?;
+    Ok(match response.status() {
+        StatusCode::PARTIAL_CONTENT
+            if content_range_matches(response.headers(), pos, Some(last), Some(same.total)) =>
+        {
+            Ok(Body::Http(response))
+        }
+        StatusCode::PARTIAL_CONTENT | StatusCode::RANGE_NOT_SATISFIABLE => {
+            Err(RestartReason::RemoteChanged)
+        }
+        StatusCode::OK => Err(response_reason(&response, same.validator)),
+        _ => return Err(status_error(&response)),
+    })
+}
+
 /// Weak ETags (`W/"…"`) can't be used with `If-Range`, so fall back to `Last-Modified`.
 fn validator_from(headers: &HeaderMap) -> Option<Validator> {
     let text = |name| headers.get(name).and_then(|v| v.to_str().ok());
@@ -627,17 +541,6 @@ fn parse_content_range(value: &str) -> Option<(u64, u64, Option<u64>)> {
     Some((start.parse().ok()?, end.parse().ok()?, size))
 }
 
-/// URL without credentials, query or fragment, safe to log.
-fn redact(url: &Url) -> String {
-    let mut url = url.clone();
-    url.set_query(None);
-    url.set_fragment(None);
-    // These only fail for URLs that can't have credentials anyway.
-    let _ = url.set_username("");
-    let _ = url.set_password(None);
-    url.to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -651,11 +554,5 @@ mod tests {
         assert_eq!(parse_content_range("bytes 10-99/*"), Some((10, 99, None)));
         assert_eq!(parse_content_range("bytes */100"), None);
         assert_eq!(parse_content_range("items 1-2/3"), None);
-    }
-
-    #[test]
-    fn redacts_secrets() {
-        let url = Url::parse("https://user:pw@example.com/f.zip?token=abc#x").unwrap();
-        assert_eq!(redact(&url), "https://example.com/f.zip");
     }
 }

@@ -55,6 +55,12 @@
 		"incomplete": "连接提前关闭",
 		"remoteChanging": "服务器上的文件一直在变化",
 		"disk": "无法写入文件（{detail}）",
-		"fileExists": "文件夹中已有同名文件"
+		"fileExists": "文件夹中已有同名文件",
+		"ftp421": "服务器繁忙，或允许的连接更少（421）",
+		"ftp530": "服务器拒绝了用户名或密码（530）",
+		"ftp550": "服务器上没有该文件，或不允许访问（550）",
+		"ftp": "FTP 服务器回复 {status}：{detail}",
+		"certificate": "{host} 的证书不受信任",
+		"noTls": "服务器不提供加密（TLS），而 ftpes:// 链接需要加密"
 	}
 }
