@@ -35,3 +35,5 @@ Accepted 2026-10-12.
 **Crates:** `ottie-api` (axum, ts-rs) and the `ottie` binary (clap for the command line, `directories` for the OS folders, `toml` for the config file, `getrandom` for the token, `tracing-subscriber` for logs on stderr, filtered by `OTTIE_LOG`). `ottie-core` and `ottie-api` are now published with `ottie`.
 
 **Stopping:** on Ctrl+C or SIGTERM, event streams close, the server finishes its requests, then `Manager::shutdown` saves every download so the next start continues it.
+
+**Later:** other devices get tokens of their own, and may only write into some folders (`docs/decisions/0052`).

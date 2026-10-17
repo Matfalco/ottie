@@ -135,6 +135,16 @@ export function explainRefusal(
 			return m.reason_invalid_view_name({}, options);
 		case 'viewNameTaken':
 			return m.reason_view_name_taken({ name: body.name }, options);
+		case 'readOnly':
+			return m.reason_read_only({}, options);
+		case 'ownerOnly':
+			return m.reason_owner_only({}, options);
+		case 'folderNotAllowed':
+			return m.reason_folder_not_allowed({ folder: body.folder }, options);
+		case 'invalidDeviceName':
+			return m.reason_invalid_device_name({}, options);
+		case 'deviceNotFound':
+			return m.reason_device_not_found({}, options);
 		case 'tooManyLinks':
 			return m.reason_too_many_links(
 				{ count: formatCount(body.count, locale), max: formatCount(body.max, locale) },

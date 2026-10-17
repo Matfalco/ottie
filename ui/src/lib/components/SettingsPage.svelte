@@ -3,7 +3,6 @@
 	import AppWindow from '@lucide/svelte/icons/app-window';
 	import Bell from '@lucide/svelte/icons/bell';
 	import ClipboardCopy from '@lucide/svelte/icons/clipboard-copy';
-	import Copy from '@lucide/svelte/icons/copy';
 	import Download from '@lucide/svelte/icons/download';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import Paintbrush from '@lucide/svelte/icons/palette';
@@ -42,7 +41,6 @@
 		type SoundKind
 	} from '#lib/sounds.js';
 	import { STARTUP_CHOICES, STARTUP_NAMES } from '#lib/startup.js';
-	import { signInLink } from '#lib/token.js';
 	import {
 		canChoosePlayer,
 		choosePlayer,
@@ -73,6 +71,7 @@
 		type Player,
 		type Startup
 	} from '#lib/window.js';
+	import AccessSettings from './AccessSettings.svelte';
 	import LanguagePicker from './LanguagePicker.svelte';
 	import LimitControl from './LimitControl.svelte';
 	import LookChoices from './LookChoices.svelte';
@@ -81,10 +80,9 @@
 	import Stepper from './Stepper.svelte';
 	import Switch from './Switch.svelte';
 
-	const { session, token } = useApp();
+	const { session } = useApp();
 	/** The daemon's settings; null until it has answered. */
 	const settings = $derived(session.settings);
-	const link = signInLink(location.origin, token);
 
 	const MOTION_NAMES: Record<Motion, () => string> = {
 		system: m.set_motion_system,
@@ -148,9 +146,6 @@
 	);
 	/** Why the last change wasn't saved. */
 	let problem: string | null = $state(null);
-	let copied = $state(false);
-	/** The clipboard refused: the link is shown to copy by hand. */
-	let showLink = $state(false);
 	/** How the desktop app plays; null until it has answered (or in a browser). */
 	let playing: Player | null = $state(null);
 	/** The choice shown, put back if a change doesn't happen. */
@@ -296,7 +291,7 @@
 	/** Changes the look here, and for every device that follows it. */
 	function choose(change: Partial<DeviceAppearance>) {
 		setAppearance(change);
-		if (appearance.synced) {
+		if (appearance.synced && !session.readOnly) {
 			void save({ appearance: lookOf(appearance) });
 		}
 	}
@@ -304,20 +299,10 @@
 	/** A language for this page, and for every device that follows (null:
 	 * each its own system's). */
 	async function chooseLanguage(locale: Locale | null) {
-		if (appearance.synced && !(await save({ language: locale }))) {
+		if (appearance.synced && !session.readOnly && !(await save({ language: locale }))) {
 			return;
 		}
 		switchLanguage(locale);
-	}
-
-	async function copy() {
-		try {
-			await navigator.clipboard.writeText(link);
-			copied = true;
-			setTimeout(() => (copied = false), 2000);
-		} catch {
-			showLink = true; // Not allowed here (a plain-http remote page).
-		}
 	}
 </script>
 
@@ -453,73 +438,75 @@
 				<h2 id="downloads-title">{m.set_downloads()}</h2>
 			</header>
 			{#if settings}
-				<div class="setting">
-					<span class="names">
-						<span>{m.set_max_concurrent()}</span>
-						<span class="hint">{m.set_max_concurrent_hint()}</span>
-					</span>
-					<Stepper
-						value={settings.maxConcurrent}
-						range={RANGES.maxConcurrent}
-						label={m.set_max_concurrent()}
-						onChange={(maxConcurrent) => save({ maxConcurrent })}
-					/>
-				</div>
-				<div class="setting">
-					<span class="names">
-						<span>{m.limit_total()}</span>
-						<span class="hint">{m.limit_total_hint()}</span>
-					</span>
-					<LimitControl
-						limit={settings.globalLimit}
-						onChange={(globalLimit) => save({ globalLimit })}
-					/>
-				</div>
-				<div class="setting">
-					<span class="names">
-						<span>{m.set_stream_media()}</span>
-						<span class="hint">{m.set_stream_media_hint()}</span>
-					</span>
-					<Switch
-						on={settings.streamMedia}
-						label={m.set_stream_media()}
-						onChange={(streamMedia) => save({ streamMedia })}
-					/>
-				</div>
-				<div class="setting">
-					<label for="existing" class="names">
-						<span>{m.set_existing()}</span>
-						<span class="hint">{m.set_existing_hint()}</span>
-					</label>
-					<select
-						id="existing"
-						class="existing"
-						value={settings.existing}
-						onchange={(event) => {
-							const value = event.currentTarget.value;
-							const chosen = EXISTING_CHOICES.find((existing) => existing === value);
-							if (chosen) {
-								void save({ existing: chosen });
-							}
-						}}
-					>
-						{#each EXISTING_CHOICES as existing (existing)}
-							<option value={existing}>{EXISTING_NAMES[existing]()}</option>
-						{/each}
-					</select>
-				</div>
-				<div class="setting">
-					<span class="names">
-						<span>{m.set_max_batch()}</span>
-						<span class="hint">{m.set_max_batch_hint()}</span>
-					</span>
-					<NumberField
-						value={settings.maxBatch}
-						label={m.set_max_batch()}
-						parse={(text) => parseWhole(text, RANGES.maxBatch)}
-						onChange={(maxBatch) => save({ maxBatch })}
-					/>
-				</div>
+				<fieldset class="shared" disabled={session.readOnly}>
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_max_concurrent()}</span>
+							<span class="hint">{m.set_max_concurrent_hint()}</span>
+						</span>
+						<Stepper
+							value={settings.maxConcurrent}
+							range={RANGES.maxConcurrent}
+							label={m.set_max_concurrent()}
+							onChange={(maxConcurrent) => save({ maxConcurrent })}
+						/>
+					</div>
+					<div class="setting">
+						<span class="names">
+							<span>{m.limit_total()}</span>
+							<span class="hint">{m.limit_total_hint()}</span>
+						</span>
+						<LimitControl
+							limit={settings.globalLimit}
+							onChange={(globalLimit) => save({ globalLimit })}
+						/>
+					</div>
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_stream_media()}</span>
+							<span class="hint">{m.set_stream_media_hint()}</span>
+						</span>
+						<Switch
+							on={settings.streamMedia}
+							label={m.set_stream_media()}
+							onChange={(streamMedia) => save({ streamMedia })}
+						/>
+					</div>
+					<div class="setting">
+						<label for="existing" class="names">
+							<span>{m.set_existing()}</span>
+							<span class="hint">{m.set_existing_hint()}</span>
+						</label>
+						<select
+							id="existing"
+							class="existing"
+							value={settings.existing}
+							onchange={(event) => {
+								const value = event.currentTarget.value;
+								const chosen = EXISTING_CHOICES.find((existing) => existing === value);
+								if (chosen) {
+									void save({ existing: chosen });
+								}
+							}}
+						>
+							{#each EXISTING_CHOICES as existing (existing)}
+								<option value={existing}>{EXISTING_NAMES[existing]()}</option>
+							{/each}
+						</select>
+					</div>
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_max_batch()}</span>
+							<span class="hint">{m.set_max_batch_hint()}</span>
+						</span>
+						<NumberField
+							value={settings.maxBatch}
+							label={m.set_max_batch()}
+							parse={(text) => parseWhole(text, RANGES.maxBatch)}
+							onChange={(maxBatch) => save({ maxBatch })}
+						/>
+					</div>
+				</fieldset>
 			{:else}
 				<p class="waiting">{m.connection_connecting()}</p>
 			{/if}
@@ -837,46 +824,48 @@
 				<p class="hint">{m.set_retries_hint()}</p>
 			</header>
 			{#if settings}
-				<div class="setting">
-					<span class="names">
-						<span>{m.set_max_retries()}</span>
-						<span class="hint">{m.set_max_retries_hint()}</span>
-					</span>
-					<NumberField
-						value={settings.maxRetries}
-						label={m.set_max_retries()}
-						unit=""
-						parse={(text) => parseWhole(text, RANGES.maxRetries)}
-						onChange={(maxRetries) => save({ maxRetries })}
-					/>
-				</div>
-				<div class="setting">
-					<span class="names">
-						<span>{m.set_first_wait()}</span>
-						<span class="hint">{m.set_first_wait_hint()}</span>
-					</span>
-					<NumberField
-						value={settings.firstRetryWaitMs}
-						label={m.set_first_wait()}
-						unit={m.unit_seconds()}
-						parse={(text) => parseSeconds(text, RANGES.firstRetryWaitMs)}
-						show={(ms) => toField(ms / 1000)}
-						onChange={(firstRetryWaitMs) => save({ firstRetryWaitMs })}
-					/>
-				</div>
-				<div class="setting">
-					<span class="names">
-						<span>{m.set_yield()}</span>
-						<span class="hint">{m.set_yield_hint()}</span>
-					</span>
-					<NumberField
-						value={settings.retriesBeforeYield}
-						label={m.set_yield()}
-						unit=""
-						parse={(text) => parseWhole(text, RANGES.retriesBeforeYield)}
-						onChange={(retriesBeforeYield) => save({ retriesBeforeYield })}
-					/>
-				</div>
+				<fieldset class="shared" disabled={session.readOnly}>
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_max_retries()}</span>
+							<span class="hint">{m.set_max_retries_hint()}</span>
+						</span>
+						<NumberField
+							value={settings.maxRetries}
+							label={m.set_max_retries()}
+							unit=""
+							parse={(text) => parseWhole(text, RANGES.maxRetries)}
+							onChange={(maxRetries) => save({ maxRetries })}
+						/>
+					</div>
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_first_wait()}</span>
+							<span class="hint">{m.set_first_wait_hint()}</span>
+						</span>
+						<NumberField
+							value={settings.firstRetryWaitMs}
+							label={m.set_first_wait()}
+							unit={m.unit_seconds()}
+							parse={(text) => parseSeconds(text, RANGES.firstRetryWaitMs)}
+							show={(ms) => toField(ms / 1000)}
+							onChange={(firstRetryWaitMs) => save({ firstRetryWaitMs })}
+						/>
+					</div>
+					<div class="setting">
+						<span class="names">
+							<span>{m.set_yield()}</span>
+							<span class="hint">{m.set_yield_hint()}</span>
+						</span>
+						<NumberField
+							value={settings.retriesBeforeYield}
+							label={m.set_yield()}
+							unit=""
+							parse={(text) => parseWhole(text, RANGES.retriesBeforeYield)}
+							onChange={(retriesBeforeYield) => save({ retriesBeforeYield })}
+						/>
+					</div>
+				</fieldset>
 			{:else}
 				<p class="waiting">{m.connection_connecting()}</p>
 			{/if}
@@ -910,23 +899,8 @@
 						{/if}
 					</span>
 				</span>
-				<button class="copy" onclick={copy}>
-					<Copy size={15} aria-hidden="true" />
-					{copied ? m.set_link_copied() : m.set_copy_link()}
-				</button>
 			</div>
-			{#if showLink}
-				<div class="link" in:unfold out:unfold>
-					<input
-						readonly
-						value={link}
-						dir="auto"
-						aria-label={m.set_link_label()}
-						onfocus={(event) => event.currentTarget.select()}
-					/>
-				</div>
-			{/if}
-			<p class="hint below">{m.set_link_hint()}</p>
+			<AccessSettings />
 		</section>
 	</div>
 </div>
@@ -1253,25 +1227,9 @@
 		overflow-wrap: anywhere;
 	}
 
-	.copy {
-		display: flex;
-		align-items: center;
-		gap: 0.45rem;
-		font-weight: 500;
-	}
-
-	.link {
-		padding: 0 1.25rem 0.5rem;
-	}
-
-	.link input {
-		width: 100%;
-		font-family: var(--mono);
-		font-size: 0.8rem;
-	}
-
-	.hint.below {
-		padding: 0 1.25rem 1.1rem;
+	/* A read-only device sees the shared settings but can't change them. */
+	.shared {
+		display: contents;
 	}
 
 	/* Phones: no list, the sections alone. */

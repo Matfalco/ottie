@@ -124,6 +124,11 @@ pub struct FileConfig {
     /// `"0.0.0.0"` opens the API to other computers (use a VPN or reverse proxy).
     pub address: Option<IpAddr>,
     pub port: Option<u16>,
+    /// Folders other devices may have downloads written to, besides every
+    /// category's (docs/decisions/0052). Settings can add more, not remove
+    /// these. The computer running Ottie isn't limited.
+    #[serde(default)]
+    pub folders: Vec<PathBuf>,
 }
 
 impl FileConfig {
@@ -134,7 +139,16 @@ impl FileConfig {
             Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(FileConfig::default()),
             Err(err) => return Err(err).with_context(|| format!("can't read {}", path.display())),
         };
-        toml::from_str(&text).with_context(|| format!("{} is not valid", path.display()))
+        let file: FileConfig =
+            toml::from_str(&text).with_context(|| format!("{} is not valid", path.display()))?;
+        if let Some(relative) = file.folders.iter().find(|folder| !folder.is_absolute()) {
+            anyhow::bail!(
+                "{}: `folders` takes absolute folders, not {}",
+                path.display(),
+                relative.display()
+            );
+        }
+        Ok(file)
     }
 }
 
@@ -199,6 +213,9 @@ mod tests {
         std::fs::write(&path, "prot = 80").unwrap();
         let typo = FileConfig::load(&path).unwrap_err();
         assert!(format!("{typo:#}").contains("prot"), "{typo:#}");
+        std::fs::write(&path, "folders = [\"Downloads\"]").unwrap();
+        let relative = FileConfig::load(&path).unwrap_err();
+        assert!(format!("{relative:#}").contains("absolute"), "{relative:#}");
     }
 
     #[test]

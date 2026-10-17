@@ -34,6 +34,7 @@ const TOKEN: &str = "token";
         (name = "settings", description = "What applies to the whole daemon"),
         (name = "speed", description = "The total download speed over the last hour"),
         (name = "events", description = "Live changes over a WebSocket"),
+        (name = "access", description = "Devices with tokens of their own, and the folders they may use"),
         (name = "meta", description = "About the API itself"),
     ),
     // Only sent over the WebSocket, so no route names it.
@@ -52,7 +53,8 @@ pub(crate) fn describe(mut api: utoipa::openapi::OpenApi) -> utoipa::openapi::Op
     let scheme = HttpBuilder::new()
         .scheme(HttpAuthScheme::Bearer)
         .description(Some(
-            "The token from `ottie token` (or `<config folder>/token`). \
+            "The token from `ottie token` (or `<config folder>/token`): this computer's, \
+             or a device's from `POST /access/devices` (`ottie device add`). \
              The events WebSocket takes it as the protocol `ottie.token.<token>` instead.",
         ))
         .build();
@@ -61,21 +63,31 @@ pub(crate) fn describe(mut api: utoipa::openapi::OpenApi) -> utoipa::openapi::Op
         .add_security_scheme(TOKEN, SecurityScheme::Http(scheme));
     doc.security = Some(vec![SecurityRequirement::new(TOKEN, Vec::<String>::new())]);
 
-    for item in doc.paths.paths.values_mut() {
+    for (path, item) in doc.paths.paths.iter_mut() {
         let operations = [
-            &mut item.get,
-            &mut item.put,
-            &mut item.post,
-            &mut item.delete,
-            &mut item.patch,
+            (&mut item.get, false),
+            (&mut item.put, true),
+            (&mut item.post, true),
+            (&mut item.delete, true),
+            (&mut item.patch, true),
         ];
-        for operation in operations.into_iter().flatten() {
+        for (operation, changes) in operations {
+            let Some(operation) = operation else {
+                continue;
+            };
             let responses = &mut operation.responses.responses;
             // Operations that set their own security are the public ones.
             if operation.security.is_none() {
                 responses
                     .entry("401".into())
                     .or_insert_with(|| refusal("`unauthorized`: no token, or the wrong one"));
+                // A read-only device's token may only read (auth.rs).
+                let reads = ["/jobs/preview", "/categories/match", "/stream"];
+                if changes && !reads.iter().any(|end| path.ends_with(end)) {
+                    responses.entry("403".into()).or_insert_with(|| {
+                        refusal("`readOnly`: a device's token that may only read")
+                    });
+                }
             }
             responses
                 .entry("503".into())

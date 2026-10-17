@@ -214,3 +214,81 @@ fn managed_serve_says_ready_and_stops_when_stdin_closes() {
     );
     assert!(logs.contains("saving downloads"), "{logs}");
 }
+
+#[tokio::test]
+async fn devices_and_a_new_token_from_the_command_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let port = free_port();
+    let port_arg = port.to_string();
+    let child = ottie(dir.path())
+        .args(["serve", "--port", &port_arg])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let _running = Running(child);
+    let run = |args: &[&str]| {
+        let output = ottie(dir.path())
+            .args(args)
+            .args(["--port", &port_arg])
+            .output()
+            .unwrap();
+        let text = String::from_utf8(output.stdout).unwrap();
+        let errors = String::from_utf8(output.stderr).unwrap();
+        assert!(output.status.success(), "{args:?}: {errors}");
+        text
+    };
+    let url = format!("http://127.0.0.1:{port}/api/v1/jobs");
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let answers = |token: String| {
+        let request = client.get(&url).bearer_auth(token);
+        async move { request.send().await.map(|a| a.status()).ok() }
+    };
+    let started = Instant::now();
+    let owner = loop {
+        assert!(
+            started.elapsed() < Duration::from_secs(15),
+            "never answered"
+        );
+        let token = std::fs::read_to_string(dir.path().join("config").join("token"));
+        if let Ok(token) = token
+            && answers(token.trim().to_owned()).await == Some(StatusCode::OK)
+        {
+            break token.trim().to_owned();
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+
+    let added = run(&["device", "add", "Phone", "--read-only"]);
+    assert!(added.contains("device 1, read-only"), "{added}");
+    let phone = added
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix(&format!("http://127.0.0.1:{port}/#token="))
+        })
+        .unwrap()
+        .to_owned();
+    assert_eq!(answers(phone.clone()).await, Some(StatusCode::OK));
+    let listed = run(&["device", "list"]);
+    assert!(
+        listed.contains("Phone") && listed.contains("read-only"),
+        "{listed}"
+    );
+    let saved = std::fs::read_to_string(dir.path().join("config").join("access.json")).unwrap();
+    assert!(!saved.contains(&phone), "only a hash is kept");
+
+    // A new token for this computer: the old one stops working at once;
+    // devices keep theirs.
+    let output = ottie(dir.path()).args(["token", "--new"]).output().unwrap();
+    assert!(output.status.success());
+    let new = String::from_utf8(output.stdout).unwrap().trim().to_owned();
+    assert_ne!(new, owner);
+    assert_eq!(answers(owner).await, Some(StatusCode::UNAUTHORIZED));
+    assert_eq!(answers(new).await, Some(StatusCode::OK));
+    assert_eq!(answers(phone.clone()).await, Some(StatusCode::OK));
+
+    run(&["device", "remove", "1"]);
+    assert_eq!(answers(phone).await, Some(StatusCode::UNAUTHORIZED));
+    assert!(run(&["device", "list"]).contains("No devices yet"));
+}

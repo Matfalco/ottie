@@ -49,6 +49,8 @@
 		canResumeAll: boolean;
 		onPauseAll: () => void;
 		onResumeAll: () => void;
+		/** A read-only device: only the filters. */
+		readOnly?: boolean;
 	}
 
 	let {
@@ -68,7 +70,8 @@
 		canPauseAll,
 		canResumeAll,
 		onPauseAll,
-		onResumeAll
+		onResumeAll,
+		readOnly = false
 	}: Props = $props();
 
 	const BUTTONS: { action: Action; icon: Component; label: () => string }[] = [
@@ -80,74 +83,78 @@
 </script>
 
 <div class="toolbar" role="toolbar" aria-label={m.toolbar_label()}>
-	{#each BUTTONS as { action, icon: Icon, label } (action)}
+	{#if !readOnly}
+		{#each BUTTONS as { action, icon: Icon, label } (action)}
+			<button
+				disabled={targets(selected, action).length === 0}
+				onclick={() => onRun(action, selected)}
+				aria-label={label()}
+				title={label()}
+			>
+				<Icon size={15} aria-hidden="true" />
+				<span>{label()}</span>
+			</button>
+		{/each}
+		<MoveMenu {categories} disabled={selected.length === 0} {onMove} />
+		<span class="separator" aria-hidden="true"></span>
 		<button
-			disabled={targets(selected, action).length === 0}
-			onclick={() => onRun(action, selected)}
-			aria-label={label()}
-			title={label()}
+			disabled={!canUp}
+			onclick={() => onReorder('up')}
+			aria-label={m.queue_up()}
+			title={m.queue_up()}
 		>
-			<Icon size={15} aria-hidden="true" />
-			<span>{label()}</span>
+			<ChevronUp size={15} aria-hidden="true" />
 		</button>
-	{/each}
-	<MoveMenu {categories} disabled={selected.length === 0} {onMove} />
-	<span class="separator" aria-hidden="true"></span>
-	<button
-		disabled={!canUp}
-		onclick={() => onReorder('up')}
-		aria-label={m.queue_up()}
-		title={m.queue_up()}
-	>
-		<ChevronUp size={15} aria-hidden="true" />
-	</button>
-	<button
-		disabled={!canDown}
-		onclick={() => onReorder('down')}
-		aria-label={m.queue_down()}
-		title={m.queue_down()}
-	>
-		<ChevronDown size={15} aria-hidden="true" />
-	</button>
+		<button
+			disabled={!canDown}
+			onclick={() => onReorder('down')}
+			aria-label={m.queue_down()}
+			title={m.queue_down()}
+		>
+			<ChevronDown size={15} aria-hidden="true" />
+		</button>
+	{/if}
 	{#if selected.length > 0}
 		<span class="count" in:unfold={{ axis: 'x' }} out:unfold={{ axis: 'x' }}
 			>{m.selected_count({ count: formatCount(selected.length) })}</span
 		>
 	{/if}
 	<span class="spacer"></span>
-	<button
-		class="all"
-		disabled={!canPauseAll}
-		onclick={onPauseAll}
-		aria-label={m.pause_all()}
-		title={m.pause_all()}
-	>
-		<CirclePause size={15} aria-hidden="true" />
-		<span>{m.pause_all()}</span>
-	</button>
-	<button
-		class="all"
-		disabled={!canResumeAll}
-		onclick={onResumeAll}
-		aria-label={m.resume_all()}
-		title={m.resume_all()}
-	>
-		<CirclePlay size={15} aria-hidden="true" />
-		<span>{m.resume_all()}</span>
-	</button>
-	{#if canFinish()}
-		<FinishMenu />
-	{/if}
-	{#if finished.length > 0}
+	{#if !readOnly}
 		<button
-			class="clear"
-			in:unfold={{ axis: 'x' }}
-			out:unfold={{ axis: 'x' }}
-			onclick={() => onRun('remove', finished)}
+			class="all"
+			disabled={!canPauseAll}
+			onclick={onPauseAll}
+			aria-label={m.pause_all()}
+			title={m.pause_all()}
 		>
-			<Eraser size={15} aria-hidden="true" />
-			<span>{m.clear_finished()}</span>
+			<CirclePause size={15} aria-hidden="true" />
+			<span>{m.pause_all()}</span>
 		</button>
+		<button
+			class="all"
+			disabled={!canResumeAll}
+			onclick={onResumeAll}
+			aria-label={m.resume_all()}
+			title={m.resume_all()}
+		>
+			<CirclePlay size={15} aria-hidden="true" />
+			<span>{m.resume_all()}</span>
+		</button>
+		{#if canFinish()}
+			<FinishMenu />
+		{/if}
+		{#if finished.length > 0}
+			<button
+				class="clear"
+				in:unfold={{ axis: 'x' }}
+				out:unfold={{ axis: 'x' }}
+				onclick={() => onRun('remove', finished)}
+			>
+				<Eraser size={15} aria-hidden="true" />
+				<span>{m.clear_finished()}</span>
+			</button>
+		{/if}
 	{/if}
 	{#if shown < total}
 		<span class="shown" in:unfold={{ axis: 'x' }} out:unfold={{ axis: 'x' }}>

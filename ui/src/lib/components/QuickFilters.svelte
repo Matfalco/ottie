@@ -26,10 +26,22 @@
 		onArrange: (arrangement: Arrangement) => void;
 		onRename: (view: View) => void;
 		onDelete: (view: View) => void;
+		/** A read-only device: the views without their menu. */
+		readOnly?: boolean;
 	}
 
-	let { filters, arrangement, jobs, categories, views, now, onArrange, onRename, onDelete }: Props =
-		$props();
+	let {
+		filters,
+		arrangement,
+		jobs,
+		categories,
+		views,
+		now,
+		onArrange,
+		onRename,
+		onDelete,
+		readOnly = false
+	}: Props = $props();
 	const downloads = resolve('/downloads');
 
 	let pills = $derived(quickFilters(categories));
@@ -89,7 +101,7 @@
 		{@const current = showsView(view, filters, arrangement)}
 		<div class="view" class:current onfocusout={focusOut}>
 			{@render link(viewFilters(view), view.name, current, `view ${view.id}`, view)}
-			{#if current}
+			{#if current && !readOnly}
 				<button
 					class="options"
 					in:unfold={{ axis: 'x' }}

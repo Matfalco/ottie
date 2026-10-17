@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 
+use clap::Args;
+
 use crate::config::{DirArgs, Dirs};
 
 const TOKEN_FILE: &str = "token";
@@ -16,9 +18,40 @@ pub fn path(config_dir: &Path) -> PathBuf {
     config_dir.join(TOKEN_FILE)
 }
 
-/// `ottie token`: prints it (creating it if this is the first run).
-pub fn print(args: &DirArgs) -> Result<()> {
-    println!("{}", for_client(&Dirs::resolve(args)?)?);
+#[derive(Args, Debug)]
+pub struct TokenArgs {
+    #[command(flatten)]
+    dirs: DirArgs,
+    /// Replace it with a new one: browsers and the desktop app signed in with
+    /// the old one must sign in again. Devices keep their own tokens.
+    #[arg(long)]
+    new: bool,
+}
+
+/// `ottie token`: prints it (creating it if this is the first run), or
+/// replaces it. A running Ottie notices the new one at its next request.
+pub fn print(args: &TokenArgs) -> Result<()> {
+    let dirs = Dirs::resolve(&args.dirs)?;
+    if !args.new {
+        println!("{}", for_client(&dirs)?);
+        return Ok(());
+    }
+    let path = path(&dirs.config);
+    if dirs.system {
+        // Rewritten in place, so it stays the service account's.
+        for_client(&dirs)?;
+    } else {
+        fs::create_dir_all(&dirs.config)
+            .with_context(|| format!("can't create {}", dirs.config.display()))?;
+    }
+    let token = generate()?;
+    write_private(&path, &format!("{token}\n"), true)
+        .with_context(|| format!("can't write {}", path.display()))?;
+    println!("{token}");
+    eprintln!(
+        "The old token no longer works: sign in again with `ottie open` or `ottie link`, \
+         and restart the desktop app. Devices keep their own tokens."
+    );
     Ok(())
 }
 

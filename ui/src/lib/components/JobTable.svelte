@@ -34,6 +34,8 @@
 		onSort: (sort: SortKey) => void;
 		/** Moves downloads in the queue (dragged, or the arrow keys on a grip). */
 		onReorder: (ids: string[], to: Reorder) => void;
+		/** A read-only device: no buttons on the rows, nothing to drag. */
+		readOnly?: boolean;
 	}
 
 	let {
@@ -47,6 +49,7 @@
 		onSelect,
 		onRun,
 		onOpen,
+		readOnly = false,
 		onSort,
 		onReorder
 	}: Props = $props();
@@ -199,7 +202,7 @@
 						onRun={(action) => onRun(action, [job])}
 						onOpen={onOpen && canOpen(job) ? () => onOpen(job) : null}
 						grip={arrangement.grouped}
-						movable={section.group === 'waiting'}
+						movable={section.group === 'waiting' && !readOnly}
 						carried={drag?.jobs.some((each) => each.id === job.id) ?? false}
 						drop={landing(job.id)}
 						onGrab={(event) => grab(job, event)}

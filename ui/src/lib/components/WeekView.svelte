@@ -25,9 +25,11 @@
 		onEdit: (slot: Slot) => void;
 		/** A slot dragged to new hours or days: saves it. */
 		onMove: (slot: Slot) => Promise<void>;
+		/** A read-only device: the week to look at, nothing to drag or open. */
+		readOnly?: boolean;
 	}
 
-	let { slots, conflicts, now, onEdit, onMove }: Props = $props();
+	let { slots, conflicts, now, onEdit, onMove, readOnly = false }: Props = $props();
 
 	const DAY_MINUTES = 24 * 60;
 	const HOURS = [0, 3, 6, 9, 12, 15, 18, 21];
@@ -69,7 +71,7 @@
 	}
 
 	function begin(event: PointerEvent, slot: Slot, drag: Drag) {
-		if (event.button !== 0) {
+		if (event.button !== 0 || readOnly) {
 			return;
 		}
 		// An edge is inside its block: the block mustn't start a move too.
@@ -124,7 +126,7 @@
 	}
 
 	function click(slot: Slot) {
-		if (!dropped) {
+		if (!dropped && !readOnly) {
 			onEdit(slot);
 		}
 	}

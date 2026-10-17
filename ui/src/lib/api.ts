@@ -30,6 +30,13 @@ import type { SlotList } from '@ottie/api-types/SlotList';
 import type { View } from '@ottie/api-types/View';
 import type { ViewBody } from '@ottie/api-types/ViewBody';
 
+import type { AccessInfo } from '@ottie/api-types/AccessInfo';
+import type { AddDevice } from '@ottie/api-types/AddDevice';
+import type { AddedDevice } from '@ottie/api-types/AddedDevice';
+import type { AllowedFolders } from '@ottie/api-types/AllowedFolders';
+import type { Device } from '@ottie/api-types/Device';
+import type { FolderList } from '@ottie/api-types/FolderList';
+
 const BASE = '/api/v1';
 /** The protocol of the events WebSocket; the token rides along as a second one. */
 const EVENTS_PROTOCOL = 'ottie.v1';
@@ -192,6 +199,32 @@ export class Api {
 	reorderSlots(ids: number[]): Promise<void> {
 		const body: ReorderSlots = { ids };
 		return this.request('POST', '/slots/reorder', body);
+	}
+
+	/** Who this token belongs to, and the folders devices may use
+	 * (docs/decisions/0052). */
+	getAccess(): Promise<AccessInfo> {
+		return this.request('GET', '/access');
+	}
+
+	/** The folders chosen in Settings that devices may use (this computer only). */
+	setFolders(folders: string[]): Promise<AllowedFolders> {
+		const body: FolderList = { folders };
+		return this.request('PUT', '/access/folders', body);
+	}
+
+	listDevices(): Promise<Device[]> {
+		return this.request('GET', '/access/devices');
+	}
+
+	/** A token of its own for another device, in this answer only. */
+	addDevice(name: string, readOnly: boolean): Promise<AddedDevice> {
+		const body: AddDevice = { name, readOnly };
+		return this.request('POST', '/access/devices', body);
+	}
+
+	removeDevice(id: number): Promise<void> {
+		return this.request('DELETE', `/access/devices/${id}`);
 	}
 
 	/** Opens the live events stream. */

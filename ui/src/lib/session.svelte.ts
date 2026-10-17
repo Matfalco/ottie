@@ -1,9 +1,12 @@
 // What the downloads page shows, kept live: the job list from `GET /jobs`,
 // updated by the events WebSocket, which reconnects on its own.
 
+import type { AccessInfo } from '@ottie/api-types/AccessInfo';
 import type { AddJob } from '@ottie/api-types/AddJob';
+import type { AddedDevice } from '@ottie/api-types/AddedDevice';
 import type { AddedJobs } from '@ottie/api-types/AddedJobs';
 import type { CategoryBody } from '@ottie/api-types/CategoryBody';
+import type { Device } from '@ottie/api-types/Device';
 import type { JobChange } from '@ottie/api-types/JobChange';
 import type { Matched } from '@ottie/api-types/Matched';
 import type { Preview } from '@ottie/api-types/Preview';
@@ -64,6 +67,13 @@ export class Session {
 	/** The setup, run again from Settings: in this window only, and nothing
 	 * about it is saved but the settings it changes (docs/decisions/0050). */
 	settingUpAgain = $state(false);
+	/** Who this page's token belongs to (docs/decisions/0052); null until known. */
+	access: AccessInfo | null = $state(null);
+	/** A device that may only look: no adding, pausing, changing. */
+	readOnly = $derived(this.access?.readOnly ?? false);
+	/** The computer running Ottie (its token file's token): it alone manages
+	 * devices and the folders they may use. */
+	owner = $derived(this.access !== null && this.access.device === null);
 
 	private readonly api: Api;
 	private socket: WebSocket | null = null;
@@ -296,6 +306,34 @@ export class Session {
 		return why;
 	}
 
+	/** Every device with a token of its own, or why not. */
+	devices(): Promise<Answer<Device[]>> {
+		return this.answer(() => this.api.listDevices());
+	}
+
+	/** A token for another device, shown this once. */
+	addDevice(name: string, readOnly: boolean): Promise<Answer<AddedDevice>> {
+		return this.answer(() => this.api.addDevice(name, readOnly));
+	}
+
+	removeDevice(id: number): Promise<boolean> {
+		return this.attempt(() => this.api.removeDevice(id));
+	}
+
+	/** The folders chosen in Settings that devices may use. Resolves to
+	 * null once saved, else to why not. */
+	async setFolders(folders: string[]): Promise<string | null> {
+		try {
+			const allowed = await this.api.setFolders(folders);
+			if (this.access) {
+				this.access.folders = allowed;
+			}
+			return null;
+		} catch (error) {
+			return this.why(error);
+		}
+	}
+
 	/** Runs a request; on failure shows why and returns false. */
 	private async attempt(request: () => Promise<unknown>): Promise<boolean> {
 		try {
@@ -400,14 +438,16 @@ export class Session {
 		}
 		this.pending = [];
 		try {
-			const [jobs, categories, settings, views, slots, speed] = await Promise.all([
+			const [jobs, categories, settings, views, slots, speed, access] = await Promise.all([
 				this.api.listJobs(),
 				this.api.listCategories(),
 				this.api.getSettings(),
 				this.api.listViews(),
 				this.api.listSlots(),
-				this.api.speedHistory()
+				this.api.speedHistory(),
+				this.api.getAccess()
 			]);
+			this.access = access;
 			this.history = speed.samples;
 			this.historyAt = Date.now();
 			this.jobs = Object.fromEntries(jobs.map((job) => [job.id, job]));

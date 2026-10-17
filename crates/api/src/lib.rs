@@ -6,13 +6,16 @@
 //! client (web UI, desktop and Android apps, browser extension, CLI) goes
 //! through it. See docs/decisions/0014.
 //!
-//! Everything is under `/api/v1` and needs the token, as
+//! Everything is under `/api/v1` and needs a token, as
 //! `Authorization: Bearer <token>` or, for the events WebSocket (browsers
-//! can't set headers there), as the WebSocket protocol `ottie.token.<token>`.
-//! Only play links (`/stream/…`) do without it: their ticket is the permission.
+//! can't set headers there), as the WebSocket protocol `ottie.token.<token>`:
+//! the token file's (this computer's), or a device's ([`Access`],
+//! docs/decisions/0052). Only play links (`/stream/…`) do without it: their
+//! ticket is the permission.
 //!
 //! [`openapi`] describes it all; the tests write that to `docs/api/openapi.json`.
 
+mod access;
 mod auth;
 mod categories;
 mod error;
@@ -38,7 +41,9 @@ use tokio_util::sync::CancellationToken;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
+pub use access::{ACCESS_FILE, Access, AccessConfig};
 pub use auth::{EVENTS_PROTOCOL, TOKEN_PROTOCOL_PREFIX, Token};
+pub use types::{AccessInfo, AddDevice, AddedDevice, AllowedFolders, Device, FolderList};
 pub use types::{
     AddJob, AddJobs, Added, AddedCategory, AddedJobs, AddedView, AddedWithin, ApiError, Appearance,
     AppearanceMode, Arrangement, BuiltIn, ByteRange, Category, CategoryBody, Event, Existing,
@@ -54,7 +59,7 @@ pub use ui::UiSource;
 #[derive(Clone)]
 struct AppState {
     manager: Manager,
-    token: Token,
+    access: Access,
     /// Cancelled when the daemon stops, so open WebSockets and streams close.
     shutdown: CancellationToken,
     links: Arc<stream::Links>,
@@ -93,6 +98,10 @@ fn private_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(slots::list, slots::add))
         .routes(routes!(slots::update, slots::remove))
         .routes(routes!(slots::reorder))
+        .routes(routes!(access::get))
+        .routes(routes!(access::set_folders))
+        .routes(routes!(access::list_devices, access::add_device))
+        .routes(routes!(access::remove_device))
         .routes(routes!(events::subscribe))
         .routes(routes!(openapi::spec))
 }
@@ -114,12 +123,17 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
 
 /// The API under `/api/v1`, and the web UI everywhere else. Cancel
 /// `shutdown` before stopping the server so event streams end.
-pub fn router(manager: Manager, token: Token, shutdown: CancellationToken, ui: UiSource) -> Router {
+pub fn router(
+    manager: Manager,
+    access: Access,
+    shutdown: CancellationToken,
+    ui: UiSource,
+) -> Router {
     // Can't fail: these types always serialize.
     let spec = serde_json::to_value(openapi()).unwrap_or_default();
     let state = AppState {
         manager,
-        token,
+        access,
         shutdown,
         links: Arc::default(),
         spec: Arc::new(spec),

@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 use anyhow::{Context, Result};
 use clap::Args;
-use ottie_api::{Token, UiSource};
+use ottie_api::{ACCESS_FILE, Access, AccessConfig, Token, UiSource};
 use ottie_core::{CategoryId, HttpBackend, Manager, Store};
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
@@ -82,6 +82,13 @@ async fn serve(
     let file = FileConfig::load(&dirs.config.join(CONFIG_FILE))?;
     let addr = config::listen_addr(daemon.address, daemon.port, &file);
     let token = token::load_or_create(&dirs.config)?;
+    let access = Access::open(AccessConfig {
+        token: Token::new(token.clone()),
+        token_file: Some(token::path(&dirs.config)),
+        file: Some(dirs.config.join(ACCESS_FILE)),
+        folders: file.folders,
+    })
+    .context("can't read the devices' tokens")?;
 
     // The usual failure: another Ottie already has the port. Checked before
     // the database is opened, or this one would resume its downloads too.
@@ -126,7 +133,7 @@ async fn serve(
         None => UiSource::Embedded,
     };
     let shutdown = CancellationToken::new();
-    let app = ottie_api::router(manager.clone(), Token::new(token), shutdown.clone(), ui);
+    let app = ottie_api::router(manager.clone(), access, shutdown.clone(), ui);
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             stop_requested(parent_gone, stop).await;

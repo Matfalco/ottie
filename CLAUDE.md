@@ -52,6 +52,7 @@ Android app (Tauri) ──────┘    (on Android, core + api run inside 
 - **One binary:** `ottie serve` runs the daemon (core + api); other `ottie` subcommands are thin clients of the HTTP API. See `docs/decisions/0004`.
 - **Desktop** (`docs/decisions/0017`): the daemon is its own process. The app starts it as a Tauri sidecar (`ottie serve --managed`: prints `ready`, stops when its stdin closes) unless one already answers (a terminal, or installed as a service), and its window shows the daemon's own page, signed in via `ottie link`. Closing the window hides it to the tray unless a setting says quit (`docs/decisions/0034`). At sign-in (`0039`) the system starts the app with `--autostart`: hidden in the tray, or, per `app.json`, it only starts `ottie serve` on its own (log in the app's log folder) and quits. A right click on the tray icon opens Ottie's own menu, the daemon's `/tray` page in a small borderless window; the app also follows the daemon itself (events WebSocket + the usual endpoints) for the system's menu (Linux, daemon unreachable), the tooltip and notifications (finished: all at once by default, or each, or never; failed: a switch; `docs/decisions/0035`; with their sounds: the system's, silent, a set of Ottie's or one for each kind, `0038`), with its own texts in `app/messages/`. When everything has finished (`0040`) it can quit, or put the computer to sleep, hibernate it or shut it down after a countdown (a small window on the daemon's `/finish` page, or a notification), chosen every time in Settings or for once from the tray menu or the Downloads page. It can watch the clipboard (`0043`, opt-in): a link copied elsewhere to a file type a category lists is offered in a small window that never takes the focus (the daemon's `/caught` page; Download, More… opens the main window's list, Ignore), or added at once with a notification. Later the app can also connect to a remote daemon (e.g. on a NAS) by URL + token.
 - **Android:** no separate daemon. The app embeds `core` + `api` and serves the API on 127.0.0.1, so the UI code is unchanged.
+- **Other devices** (`docs/decisions/0052`): each gets a token of its own (full or read-only), and may only have downloads written into categories' folders and those listed; the token file's is this computer's, which alone manages them.
 - **Headless:** the daemon runs standalone and serves the built web UI itself: `ottie service install` sets it up for you (systemd user unit, a task at sign-in, LaunchAgent) or, with `--system`, for the computer under an account of its own (systemd unit, Windows service); or the Docker image (`docs/decisions/0051`, `docs/service.md`).
 
 ## Repo layout
@@ -94,7 +95,10 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
                      from each handler's #[utoipa::path] (utoipa-axum), openapi()
   src/openapi.rs     the OpenAPI description: info, token scheme, 401/503 everywhere,
                      GET /openapi.json; its test writes docs/api/openapi.json
-  src/auth.rs        Token, Bearer / WebSocket-protocol check (constant-time)
+  src/auth.rs        Token, Bearer / WebSocket-protocol check (constant-time), what a read-only token may do
+  src/access.rs      who is asking (0052): this computer (token file, read again when it changes) or a device
+                     (access.json: names, SHA-256 of tokens, read-only); Caller (extractor); the folders a device
+                     may write to; GET /access, PUT /access/folders, GET/POST /access/devices, DELETE /access/devices/{id}
   src/types.rs       wire types (camelCase JSON) + ts-rs export, From<engine types>
   src/jobs.rs        GET/POST /jobs, GET /jobs/{id}, POST /jobs/{id}/pause|resume|cancel|category,
                      PATCH /jobs/{id} (own speed limit, priority, streaming mode, start/stop time),
@@ -122,7 +126,8 @@ crates/ottie/      ottie: the binary  [exists]
   src/open.rs        `ottie open`: browser on the UI, signed in (via a private redirect page); `ottie link`
   src/config.rs      folders (OS defaults / flags / OTTIE_* env / --system: the system service's), config.toml,
                      listen address
-  src/token.rs       token file: created on first use (never for --system), `ottie token` prints it
+  src/token.rs       token file: created on first use (never for --system), `ottie token` prints it (`--new` replaces it)
+  src/device.rs      `ottie device add|list|remove` (0052): a client of the running daemon, with this computer's token
   src/service.rs     `ottie service install|uninstall|status` (0051): what to run, whether Ottie answers, the
                      system service's copy of ottie; per system in service/: systemd.rs (user or system unit,
                      the `ottie` account, lingering), launchd.rs (LaunchAgent), windows.rs (task at sign-in,
@@ -230,6 +235,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      can't do, the countdown's text, 0040),
                      caught.ts (links copied elsewhere: the window's rows and title, how long it stays,
                      what was added or refused, 0043),
+                     access.ts (devices and the folders they may use, as Settings shows them, 0052),
                      shortcuts.ts (keyboard shortcuts: what a key press means on every page and in
                      Downloads, whether the focused control needs that key, what a paste holds, the
                      list of them with key names per language, 0046)
@@ -271,7 +277,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                        SettingsPage (section list, Run the setup again; appearance + sync, LookChoices, language:
                        LanguagePicker; downloads (Stepper for how many at once);
                        desktop app (sign-in, closing), clipboard, notifications + playing (desktop app only); retries;
-                       keyboard shortcuts (ShortcutList); connection + sign-in link), Switch, NumberField, LimitControl,
+                       keyboard shortcuts (ShortcutList); connection: AccessSettings (other devices, their sign-in
+                       links, the folders they may use; a device sees which it is, 0052)), Switch, NumberField, LimitControl,
                        TitleBar (+ WindowControls; folds to fit: tab icons, slot chip, logo name), AddCard (AddBar: link, then category + folder step;
                        BatchDialog: several links, from a paste, the list button or a file),
                        FileIcon, ConfirmDialog, Login, TrayMenu (the desktop app's tray menu, its RunningList), Countdown (its
@@ -292,6 +299,7 @@ docs/decisions/    one short file per accepted decision (NNNN-title.md), and REA
 res/icons/         the drawn Ottie icons (app, tray), PNG + SVG               [exists]
 Dockerfile         the headless image: UI build → release ottie → debian-slim, /config + /downloads (0051)
 docs/service.md    running Ottie as a service: for you, for the computer, Docker
+docs/remote.md     reaching Ottie from other devices: Tailscale, a VPN, a reverse proxy; a token per device; folders
 .claude/           settings.json (SessionStart hook) + cloud-setup.sh: cloud sessions' setup [exists]
 ```
 
@@ -310,6 +318,7 @@ cargo test -p ottie-api              # also regenerates shared/api-types/*.ts an
 cargo run -p ottie -- open           # the web UI in a browser, signed in
 cargo run -p ottie -- link           # print that signed-in address
 cargo run -p ottie -- service status # Ottie as a service (install / uninstall; --system for the computer)
+cargo run -p ottie -- device list    # other devices' tokens (add <name> [--read-only] / remove <id>); `token --new`
 docker build -t ottie .              # the headless image (docs/service.md)
 
 pnpm install                         # JS dependencies (workspace: ui, shared/api-types)
@@ -373,8 +382,9 @@ Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 3
 
 ## Security
 
-- The daemon binds 127.0.0.1:24068 by default (`address`/`port` in config.toml, `--address`/`--port`, `OTTIE_ADDRESS`/`OTTIE_PORT`; flags win over the file). Remote access is opt-in, always requires the token, and should sit behind a reverse proxy or VPN rather than be exposed directly.
-- Every API request carries the token (`docs/decisions/0014`): `Authorization: Bearer`, or for the events WebSocket the offered protocol `ottie.token.<token>` (never in a URL or a cookie). The token (32 random bytes, hex) lives in `<config>/token`, created on first use; `ottie serve` mentions where only when stdout is a terminal, never in logs. Unknown API paths also need it.
+- The daemon binds 127.0.0.1:24068 by default (`address`/`port` in config.toml, `--address`/`--port`, `OTTIE_ADDRESS`/`OTTIE_PORT`; flags win over the file). Remote access is opt-in, always requires a token, and should sit behind Tailscale, a VPN or a reverse proxy with HTTPS rather than be exposed directly (`docs/remote.md`).
+- Every API request carries a token (`docs/decisions/0014`): `Authorization: Bearer`, or for the events WebSocket the offered protocol `ottie.token.<token>` (never in a URL or a cookie). This computer's (32 random bytes, hex) lives in `<config>/token`, created on first use; `ottie serve` mentions where only when stdout is a terminal, never in logs. Unknown API paths also need it.
+- Other devices get tokens of their own (`docs/decisions/0052`), full or read-only, kept as SHA-256 hashes in `<config>/access.json`; only this computer's token manages them and the folders list. A read-only token passes `auth::only_reads` (GET, and a few POSTs that change nothing): a new endpoint that changes nothing but isn't a GET must be listed there. Every handler that takes a folder from a client checks it with `Access::folders_for` (devices: categories' folders and those listed only).
 - Play links (`/stream/{ticket}/…`, `docs/decisions/0029`) are the one exception: the random ticket reads one job's file and expires after 12 h unused. They're served with `Content-Security-Policy: sandbox`, so a downloaded page or SVG can't run scripts as the daemon's pages.
 - Cookies and auth headers forwarded by the extension belong to that one job: never log them, never reuse them for another job.
 - The desktop app opens files only through commands that take a job ID (`docs/decisions/0045`): it asks the daemon for the path and refuses a name that's more than a name. Running a program always asks first, in the app's own dialog.
@@ -520,11 +530,11 @@ Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review.
      today: the daemon's page in a browser (`ottie open`/`ottie link`, `--system` for the system's),
      the desktop app (uses a daemon that answers), the extension. Built, not reviewed yet: what was tried
      and what's left to check (real systemd, Windows, macOS) is at the end of 0051
-   - 7h remote access, documented: `tailscale serve` (stays on 127.0.0.1, HTTPS within the tailnet), a
-     VPN, or a reverse proxy with HTTPS; never the port open to the internet. Hardening: folders a
-     client may write to limited to a list in config.toml (the token can name any folder today, so it
-     can write anywhere the daemon's user can, e.g. a Startup folder); a token per device, revocable,
-     and rotation (maybe read-only ones); a system service under its own locked-down user
+   - 🟡 7h remote access (`docs/remote.md`: Tailscale, a VPN or a reverse proxy with HTTPS, never the port
+     open) and hardening (`docs/decisions/0052`): a token per device, full or read-only, removable
+     (Settings → Connection, `ottie device`), this computer's replaced by `ottie token --new`; devices write
+     only in categories' folders and those listed (Settings, `folders` in config.toml); the system service
+     under its own account came with 7g. Built, not reviewed yet: what's left to check is at the end of 0052
    - 7i several daemons from one place: in the desktop app, a list (name, URL, token in the OS
      keychain) and a switcher, with fewer app commands for a remote daemon's page (no open folder, no
      play with); in the web UI, a switcher first (needs CORS on the daemon, safe since the token isn't

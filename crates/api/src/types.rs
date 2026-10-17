@@ -1102,6 +1102,80 @@ pub enum Problem {
     },
 }
 
+/// Who a token belongs to, and the folders devices may use: `GET /access`
+/// (docs/decisions/0052).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AccessInfo {
+    /// The device this token was given to; null for the computer running
+    /// Ottie (its token file's token), which alone manages devices and folders.
+    pub device: Option<Device>,
+    /// It may look but not change anything.
+    pub read_only: bool,
+    pub folders: AllowedFolders,
+}
+
+/// Where devices may have downloads written, besides every category's
+/// folder (and what's inside them). The computer running Ottie isn't limited.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AllowedFolders {
+    /// `folders` in config.toml: changed only there.
+    pub config: Vec<String>,
+    /// Chosen in Settings (`PUT /access/folders`).
+    pub chosen: Vec<String>,
+}
+
+/// Body of `PUT /access/folders`: absolute folders.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct FolderList {
+    pub folders: Vec<String>,
+}
+
+/// A device with a token of its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Device {
+    pub id: u32,
+    pub name: String,
+    /// It may look but not change anything.
+    pub read_only: bool,
+    /// When it was added, in milliseconds since 1970.
+    #[ts(type = "number")]
+    pub created: u64,
+    /// When its token was last used (to the minute), in milliseconds since 1970.
+    #[ts(type = "number | null")]
+    pub last_used: Option<u64>,
+}
+
+/// Body of `POST /access/devices`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AddDevice {
+    /// 1 to 60 characters: "Phone", "Laptop"…
+    pub name: String,
+    /// Default: false.
+    #[serde(default)]
+    #[ts(optional)]
+    pub read_only: Option<bool>,
+}
+
+/// Answer to `POST /access/devices`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AddedDevice {
+    pub device: Device,
+    /// Its token, shown this once: Ottie keeps only a hash of it.
+    pub token: String,
+}
+
 /// Body of every error answer: English text, plus a code (and details) for
 /// clients to translate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, ToSchema)]
@@ -1125,6 +1199,21 @@ pub struct ApiError {
 pub enum Reason {
     /// The token is missing or wrong (401).
     Unauthorized,
+    /// This device's token is read-only (403).
+    ReadOnly,
+    /// Only the computer running Ottie, with its token file's token, may do
+    /// this: manage devices and the folders they may use (403).
+    OwnerOnly,
+    /// This device may not have downloads written there: only in a
+    /// category's folder or one listed in Settings or config.toml (403).
+    FolderNotAllowed {
+        folder: String,
+    },
+    DeviceNotFound {
+        id: u32,
+    },
+    /// A device's name has 1 to 60 characters.
+    InvalidDeviceName,
     NoSuchEndpoint,
     /// The body isn't the JSON expected; `error` says what's wrong.
     InvalidBody,

@@ -116,6 +116,7 @@
 			now={session.now}
 			onEdit={(slot) => (editing = slot)}
 			onMove={(slot) => save(slot)}
+			readOnly={session.readOnly}
 		/>
 	</section>
 
@@ -125,10 +126,12 @@
 			<h2 id="slots-title">
 				{session.connection === 'live' ? m.sched_count({ count: formatCount(list.length) }) : ''}
 			</h2>
-			<button class="primary" onclick={() => (editing = null)} disabled={editing === null}>
-				<Plus size={16} aria-hidden="true" />
-				{m.sched_new()}
-			</button>
+			{#if !session.readOnly}
+				<button class="primary" onclick={() => (editing = null)} disabled={editing === null}>
+					<Plus size={16} aria-hidden="true" />
+					{m.sched_new()}
+				</button>
+			{/if}
 		</div>
 
 		<ul bind:this={rows}>
@@ -152,7 +155,7 @@
 						<span class="order">
 							<button
 								onclick={() => move(slot, true)}
-								disabled={i === 0}
+								disabled={i === 0 || session.readOnly}
 								aria-label={m.sched_up()}
 								title={m.sched_up()}
 							>
@@ -160,7 +163,7 @@
 							</button>
 							<button
 								onclick={() => move(slot, false)}
-								disabled={i === list.length - 1}
+								disabled={i === list.length - 1 || session.readOnly}
 								aria-label={m.sched_down()}
 								title={m.sched_down()}
 							>
@@ -209,24 +212,27 @@
 							<Switch
 								on={slot.enabled}
 								label={m.sched_switch()}
+								disabled={session.readOnly}
 								onChange={(on) => toggle(slot, on)}
 							/>
-							<span class="actions">
-								<button
-									onclick={() => (editing = slot)}
-									aria-label={m.sched_edit_label({ name })}
-									title={m.sched_edit()}
-								>
-									<Pencil size={15} />
-								</button>
-								<button
-									onclick={() => remove(slot)}
-									aria-label={m.sched_remove_label({ name })}
-									title={m.sched_remove()}
-								>
-									<Trash size={15} />
-								</button>
-							</span>
+							{#if !session.readOnly}
+								<span class="actions">
+									<button
+										onclick={() => (editing = slot)}
+										aria-label={m.sched_edit_label({ name })}
+										title={m.sched_edit()}
+									>
+										<Pencil size={15} />
+									</button>
+									<button
+										onclick={() => remove(slot)}
+										aria-label={m.sched_remove_label({ name })}
+										title={m.sched_remove()}
+									>
+										<Trash size={15} />
+									</button>
+								</span>
+							{/if}
 						</span>
 					{/if}
 				</li>

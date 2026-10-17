@@ -78,7 +78,9 @@
 </script>
 
 <div class="dashboard" bind:this={board}>
-	<AddCard />
+	{#if !session.readOnly}
+		<AddCard />
+	{/if}
 
 	<!-- The speed across the whole width, how far back it looks chosen here. -->
 	<section class="card speed" aria-labelledby="dash-speed">
@@ -145,7 +147,7 @@
 							{job}
 							flip="attention {job.id}"
 							now={session.now}
-							onRun={(action) => run(action, [job])}
+							onRun={session.readOnly ? undefined : (action) => run(action, [job])}
 						/>
 					{/each}
 				</ul>
@@ -203,7 +205,7 @@
 				{describe(job, bytesPerSec, session.now, undefined, session.slotNames)}
 			</span>
 		</span>
-		{#if canPause(job)}
+		{#if canPause(job) && !session.readOnly}
 			<button
 				class="round"
 				onclick={() => run('pause', [job])}
@@ -228,34 +230,36 @@
 				{describe(job, 0, session.now, undefined, session.slotNames)}
 			</span>
 		</span>
-		{#if canResume(job)}
+		{#if !session.readOnly}
+			{#if canResume(job)}
+				<button
+					class="round"
+					onclick={() => run('resume', [job])}
+					aria-label={m.resume_label({ name })}
+					title={m.resume()}
+				>
+					<Play size={15} aria-hidden="true" />
+				</button>
+			{/if}
 			<button
 				class="round"
-				onclick={() => run('resume', [job])}
-				aria-label={m.resume_label({ name })}
-				title={m.resume()}
+				disabled={!canReorder(session.list, [job], 'up')}
+				onclick={() => session.reorder([job.id], 'up')}
+				aria-label={m.queue_up_label({ name })}
+				title={m.queue_up()}
 			>
-				<Play size={15} aria-hidden="true" />
+				<ChevronUp size={16} aria-hidden="true" />
+			</button>
+			<button
+				class="round"
+				disabled={!canReorder(session.list, [job], 'down')}
+				onclick={() => session.reorder([job.id], 'down')}
+				aria-label={m.queue_down_label({ name })}
+				title={m.queue_down()}
+			>
+				<ChevronDown size={16} aria-hidden="true" />
 			</button>
 		{/if}
-		<button
-			class="round"
-			disabled={!canReorder(session.list, [job], 'up')}
-			onclick={() => session.reorder([job.id], 'up')}
-			aria-label={m.queue_up_label({ name })}
-			title={m.queue_up()}
-		>
-			<ChevronUp size={16} aria-hidden="true" />
-		</button>
-		<button
-			class="round"
-			disabled={!canReorder(session.list, [job], 'down')}
-			onclick={() => session.reorder([job.id], 'down')}
-			aria-label={m.queue_down_label({ name })}
-			title={m.queue_down()}
-		>
-			<ChevronDown size={16} aria-hidden="true" />
-		</button>
 	</li>
 {/snippet}
 

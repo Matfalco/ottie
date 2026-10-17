@@ -6,6 +6,7 @@
 //! are small helpers or, later, clients of its HTTP API (docs/decisions/0004).
 
 mod config;
+mod device;
 mod open;
 mod serve;
 mod service;
@@ -18,9 +19,11 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use tokio_util::sync::CancellationToken;
 
-use crate::config::{DaemonArgs, DirArgs};
+use crate::config::DaemonArgs;
+use crate::device::DeviceArgs;
 use crate::serve::ServeArgs;
 use crate::service::ServiceArgs;
+use crate::token::TokenArgs;
 
 #[derive(Parser)]
 #[command(
@@ -41,10 +44,13 @@ enum Command {
     Serve(ServeArgs),
     /// Open the web UI in your browser, signed in (`ottie serve` must be running).
     Open(DaemonArgs),
-    /// Print the API token, for the web UI's login page or the browser extension.
-    Token(DirArgs),
+    /// Print this computer's API token (or replace it with `--new`).
+    Token(TokenArgs),
     /// Print the web UI's address, signed in (for another browser, or the desktop app).
     Link(DaemonArgs),
+    /// Give another device a token of its own (a phone, a laptop, a TV), list
+    /// them, or take one away (`ottie serve` must be running).
+    Device(DeviceArgs),
     /// Run Ottie as a service, without the app: for you, or for the whole computer.
     Service(ServiceArgs),
 }
@@ -53,8 +59,9 @@ fn main() -> ExitCode {
     let result = match Cli::parse().command {
         Command::Serve(args) => serve_now(args),
         Command::Open(args) => block_on(open::run(&args)),
-        Command::Token(dirs) => token::print(&dirs),
+        Command::Token(args) => token::print(&args),
         Command::Link(args) => open::print_link(&args),
+        Command::Device(args) => block_on(device::run(args)),
         Command::Service(args) => service::run(args),
     };
     match result {

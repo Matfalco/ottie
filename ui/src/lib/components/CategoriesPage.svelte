@@ -74,10 +74,12 @@
 					? m.cat_count({ count: formatCount(session.categoryList.length) })
 					: ''}
 			</h2>
-			<button class="primary" onclick={() => (editing = null)} disabled={editing === null}>
-				<Plus size={16} aria-hidden="true" />
-				{m.cat_new()}
-			</button>
+			{#if !session.readOnly}
+				<button class="primary" onclick={() => (editing = null)} disabled={editing === null}>
+					<Plus size={16} aria-hidden="true" />
+					{m.cat_new()}
+				</button>
+			{/if}
 		</div>
 
 		<ul bind:this={list}>
@@ -130,24 +132,26 @@
 						<span class="count">
 							{m.cat_downloads({ count: formatCount(counts[category.id] ?? 0) })}
 						</span>
-						<span class="actions">
-							<button
-								onclick={() => (editing = category)}
-								aria-label={m.cat_edit_label({ name })}
-								title={m.cat_edit()}
-							>
-								<Pencil size={15} />
-							</button>
-							{#if category.builtIn === null}
+						{#if !session.readOnly}
+							<span class="actions">
 								<button
-									onclick={() => remove(category)}
-									aria-label={m.cat_remove_label({ name })}
-									title={m.cat_remove()}
+									onclick={() => (editing = category)}
+									aria-label={m.cat_edit_label({ name })}
+									title={m.cat_edit()}
 								>
-									<Trash size={15} />
+									<Pencil size={15} />
 								</button>
-							{/if}
-						</span>
+								{#if category.builtIn === null}
+									<button
+										onclick={() => remove(category)}
+										aria-label={m.cat_remove_label({ name })}
+										title={m.cat_remove()}
+									>
+										<Trash size={15} />
+									</button>
+								{/if}
+							</span>
+						{/if}
 					{/if}
 				</li>
 			{/each}

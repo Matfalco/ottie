@@ -22,6 +22,9 @@ getrandom = "0.4.3"
 open = "5.4.4"
 ottie-api = { path = "../api", version = "0.1.0" }
 ottie-core = { path = "../core", version = "0.1.0" }
+# `ottie device`: a client of the running daemon's API (already built for the
+# engine's downloads).
+reqwest = { version = "0.13.5", default-features = false, features = ["json"] }
 serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "net", "signal"] }
 tokio-util = "0.7.20"
@@ -37,6 +40,5 @@ windows-service = "0.8.1"
 windows-sys = { version = "0.61.2", features = ["Win32_System_Console"] }
 
 [dev-dependencies]
-reqwest = { version = "0.13.5", default-features = false }
 tempfile = "3.27.0"
 tokio = { version = "1.53.2", features = ["time"] }

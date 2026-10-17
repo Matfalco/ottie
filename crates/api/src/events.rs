@@ -9,6 +9,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 
 use crate::AppState;
+use crate::access::Caller;
 use crate::auth::EVENTS_PROTOCOL;
 use crate::types::{ApiError, ByteRange, Category, Event, Job, Settings, Slot, View};
 
@@ -26,24 +27,31 @@ use crate::types::{ApiError, ByteRange, Category, Event, Job, Settings, Slot, Vi
         (status = UNAUTHORIZED, description = "`unauthorized`: no `ottie.token.<token>` protocol with the right token", body = ApiError),
     )
 )]
-pub(crate) async fn subscribe(State(state): State<AppState>, ws: WebSocketUpgrade) -> Response {
+pub(crate) async fn subscribe(
+    State(state): State<AppState>,
+    caller: Caller,
+    ws: WebSocketUpgrade,
+) -> Response {
     // Subscribe now rather than after the upgrade, so a client that fetches
     // `GET /jobs` once connected can't miss a change in between.
     let events = state.manager.subscribe();
     let shutdown = state.shutdown.clone();
     ws.protocols([EVENTS_PROTOCOL])
-        .on_upgrade(move |socket| forward(socket, events, shutdown))
+        .on_upgrade(move |socket| forward(socket, events, shutdown, caller.revoked))
 }
 
-/// Sends engine events to the client until it leaves or the daemon stops.
+/// Sends engine events to the client until it leaves, the daemon stops or
+/// its token is taken away.
 async fn forward(
     mut socket: WebSocket,
     mut events: Receiver<JobEvent>,
     shutdown: CancellationToken,
+    revoked: CancellationToken,
 ) {
     loop {
         let event = tokio::select! {
             _ = shutdown.cancelled() => break,
+            _ = revoked.cancelled() => break,
             event = events.recv() => event,
             // The client sends nothing we use; this notices when it leaves.
             incoming = socket.recv() => match incoming {

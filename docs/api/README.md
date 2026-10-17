@@ -11,7 +11,7 @@ Both are generated from the code (`cargo test -p ottie-api` rewrites the file), 
 
 `ottie serve` listens on **`http://127.0.0.1:24068`**, on this computer only. Change it with `--address`/`--port`, `OTTIE_ADDRESS`/`OTTIE_PORT`, or `address`/`port` in `config.toml`. Everything is under **`/api/v1`**; every other path is the web UI.
 
-Reaching it from another device is up to you. Put it behind a reverse proxy or a VPN (with HTTPS) rather than exposing the port: the token below is the only thing guarding it.
+Reaching it from another device: see [`docs/remote.md`](../remote.md) (Tailscale, a VPN or a reverse proxy with HTTPS; never the port open to the internet), and give that device a token of its own (below).
 
 ## Signing in
 
@@ -33,6 +33,25 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:24068/api/v1/jobs
 Without it, or with the wrong one, every path under `/api/v1` answers `401` (even unknown paths, so they don't reveal what exists). The token never goes in a URL or a cookie.
 
 There are two exceptions. The events WebSocket takes the token in a different way (see [Live events](#live-events)), and play links need no token at all (see [Play while downloading](#play-while-downloading)).
+
+### This computer and other devices
+
+The token file's token is **this computer's** (the desktop app, `ottie open`, your scripts here): it can do everything. `ottie token --new` replaces it; the old one stops working at once.
+
+Every other device (a phone, a laptop, a TV, a script elsewhere) should get a **token of its own**, from Settings → Connection or the command line (docs/decisions/0052):
+
+```bash
+ottie device add Phone              # prints its token and a sign-in link, this once
+ottie device add TV --read-only     # it may look, play and copy links, nothing more
+ottie device list
+ottie device remove 2               # its requests are refused from now on
+```
+
+Or through the API, with this computer's token: `POST /access/devices` `{"name": "Phone", "readOnly": false}` answers `{"device": {…}, "token": "…"}`; `GET /access/devices` lists them, `DELETE /access/devices/{id}` removes one (its open event streams close). Ottie keeps only a hash of each device's token.
+
+A device's token is refused (`403`) where only this computer may act: managing devices and the folders they may use (`ownerOnly`). A **read-only** one may only `GET`, ask what links a text holds (`POST /jobs/preview`), which category a link gets (`POST /categories/match`) and make play links (`POST /jobs/{id}/stream`); anything else answers `403 readOnly`.
+
+A device may only have downloads written into **every category's folder and the folders listed** (`folderNotAllowed` otherwise, for `destDir` and a category's `folder`): those in `folders` in `config.toml`, and those chosen in Settings (`PUT /access/folders` `{"folders": ["/srv/downloads"]}`, this computer only). This computer isn't limited. `GET /access` tells any token who it is (`device`: null for this computer), whether it's `readOnly`, and the folders listed.
 
 ## Conventions
 

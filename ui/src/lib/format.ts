@@ -79,6 +79,14 @@ export function formatAdded(added: Date, locale: Locale = getLocale()): string {
 	}).format(added);
 }
 
+/** A moment to the minute: "16 Oct 2026, 14:03". */
+export function formatMoment(at: Date, locale: Locale = getLocale()): string {
+	return new Intl.DateTimeFormat(intlLocale(locale), {
+		dateStyle: 'medium',
+		timeStyle: 'short'
+	}).format(at);
+}
+
 /** The two largest units: "45 sec", "3 min 20 sec", "2 hr 5 min" (French: "2 h 5 min"). */
 export function formatDuration(seconds: number, locale: Locale = getLocale()): string {
 	const part = (value: number, unit: string) =>

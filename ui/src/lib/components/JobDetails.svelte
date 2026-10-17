@@ -59,6 +59,8 @@
 		/** Opens its file, and its folder: null where they can't open (a browser). */
 		onOpen: (() => void) | null;
 		onShowFolder: (() => void) | null;
+		/** A read-only device: it sees, plays and copies links, nothing more. */
+		readOnly?: boolean;
 	}
 
 	let {
@@ -74,7 +76,8 @@
 		onChange,
 		getLink,
 		onOpen,
-		onShowFolder
+		onShowFolder,
+		readOnly = false
 	}: Props = $props();
 	const { session } = useApp();
 	let panel: HTMLElement | undefined = $state();
@@ -205,7 +208,9 @@
 			{/if}
 		</div>
 		<div class="buttons">
-			{#if asks}
+			{#if readOnly}
+				<!-- Nothing to start, stop or answer. -->
+			{:else if asks}
 				<button class="primary" title={m.det_rename_hint()} onclick={() => choose('rename')}>
 					{m.existing_rename()}
 				</button>
@@ -252,7 +257,9 @@
 					{m.det_show_folder()}
 				</button>
 			{/if}
-			<button class="danger" onclick={() => onRun('remove')}>{m.remove()}</button>
+			{#if !readOnly}
+				<button class="danger" onclick={() => onRun('remove')}>{m.remove()}</button>
+			{/if}
 		</div>
 	</div>
 	<!-- In the top corner at the end of the line, wherever the buttons wrap to. -->
@@ -318,6 +325,7 @@
 											type="radio"
 											name="priority"
 											checked={job.priority === priority}
+											disabled={readOnly}
 											onchange={() => onChange({ priority })}
 										/>
 										{priorityName(priority)}
@@ -332,6 +340,7 @@
 								limit={job.speedLimit}
 								label={m.det_limit_switch()}
 								memory="download"
+								disabled={readOnly}
 								onChange={(speedLimit) => onChange({ speedLimit })}
 							/>
 						</div>
@@ -376,7 +385,7 @@
 			{/if}
 			<label class="field">
 				<span class="label">{m.det_category()}</span>
-				<select value={job.category} onchange={moved}>
+				<select value={job.category} disabled={readOnly} onchange={moved}>
 					{#each choices as category (category.id)}
 						<option value={category.id}>{categoryName(category)}</option>
 					{/each}
@@ -396,6 +405,7 @@
 						<Switch
 							on={job.streaming}
 							label={m.det_streaming()}
+							disabled={readOnly}
 							onChange={(streaming) => onChange({ streaming })}
 						/>
 					</span>
@@ -425,10 +435,11 @@
 				type="datetime-local"
 				aria-label={label}
 				value={toField(value)}
+				disabled={readOnly}
 				onblur={(event) => commit(event.currentTarget, key, value)}
 				onkeydown={(event) => event.key === 'Enter' && event.currentTarget.blur()}
 			/>
-			{#if value !== null}
+			{#if value !== null && !readOnly}
 				<button type="button" onclick={() => onChange(timeChange(key, null))}>
 					{m.det_clear_time()}
 				</button>
@@ -438,6 +449,11 @@
 {/snippet}
 
 <style>
+	/* A read-only device: the priorities as they are, dimmed. */
+	.segments:has(input:disabled) {
+		opacity: 0.6;
+	}
+
 	/* Under the list, on the same card; at most half of it, and less when
 	   the list needs its room (see JobTable), down to its header. It
 	   scrolls by itself beyond that. */

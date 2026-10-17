@@ -191,30 +191,32 @@
 	<td class="category" title={category}>{category}</td>
 	<td class="added">{added ? formatAdded(added) : ''}</td>
 	<td class="actions">
-		{#if canPause(job)}
+		{#if !session.readOnly}
+			{#if canPause(job)}
+				<button
+					onclick={(event) => run(event, 'pause')}
+					aria-label={m.pause_label({ name })}
+					title={m.pause()}
+				>
+					<Pause size={15} />
+				</button>
+			{:else if canResume(job)}
+				<button
+					onclick={(event) => run(event, 'resume')}
+					aria-label={m.resume_label({ name })}
+					title={m.resume()}
+				>
+					<Play size={15} />
+				</button>
+			{/if}
 			<button
-				onclick={(event) => run(event, 'pause')}
-				aria-label={m.pause_label({ name })}
-				title={m.pause()}
+				onclick={(event) => run(event, 'remove')}
+				aria-label={m.remove_label({ name })}
+				title={m.remove()}
 			>
-				<Pause size={15} />
-			</button>
-		{:else if canResume(job)}
-			<button
-				onclick={(event) => run(event, 'resume')}
-				aria-label={m.resume_label({ name })}
-				title={m.resume()}
-			>
-				<Play size={15} />
+				<Trash size={15} />
 			</button>
 		{/if}
-		<button
-			onclick={(event) => run(event, 'remove')}
-			aria-label={m.remove_label({ name })}
-			title={m.remove()}
-		>
-			<Trash size={15} />
-		</button>
 	</td>
 </tr>
 

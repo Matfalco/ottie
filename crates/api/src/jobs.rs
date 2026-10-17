@@ -9,6 +9,7 @@ use axum::http::StatusCode;
 use ottie_core::{CategoryId, JobId, NewJob};
 
 use crate::AppState;
+use crate::access::{Caller, Folders};
 use crate::categories::{absolute_folder, parse_url};
 use crate::error::Failure;
 use crate::types::{
@@ -61,23 +62,26 @@ pub(crate) async fn get(
     responses(
         (status = CREATED, description = "Queued", body = Added),
         (status = BAD_REQUEST, description = "`invalidUrl`, `unsupportedScheme`, `relativeFolder`, `nonUtf8Path`, `noFolder` or `stopBeforeStart`", body = ApiError),
+        (status = FORBIDDEN, description = "`readOnly`, or `folderNotAllowed`: a device's `destDir` outside the folders it may use", body = ApiError),
         (status = NOT_FOUND, description = "`categoryNotFound`", body = ApiError),
         (status = UNPROCESSABLE_ENTITY, description = "`invalidBody`", body = ApiError),
     )
 )]
 pub(crate) async fn add(
     State(state): State<AppState>,
+    caller: Caller,
     body: Result<Json<AddJob>, JsonRejection>,
 ) -> Result<(StatusCode, Json<Added>), Failure> {
     let Json(body) = body?;
-    let id = state.manager.add(new_job(body)?).await?;
+    let folders = state.access.folders_for(&caller, &state.manager).await?;
+    let id = state.manager.add(new_job(body, &folders)?).await?;
     Ok((StatusCode::CREATED, Json(Added { id: id.to_string() })))
 }
 
-fn new_job(body: AddJob) -> Result<NewJob, Failure> {
+fn new_job(body: AddJob, folders: &Folders) -> Result<NewJob, Failure> {
     let mut job = NewJob::new(parse_url(&body.url)?);
     if let Some(dir) = body.dest_dir {
-        job = job.in_dir(absolute_folder(dir)?);
+        job = job.in_dir(folders.check(absolute_folder(dir)?)?);
     }
     if let Some(category) = body.category {
         job = job.in_category(CategoryId(category));
@@ -110,14 +114,17 @@ fn new_job(body: AddJob) -> Result<NewJob, Failure> {
     responses(
         (status = OK, description = "Each one's ID, or why it was refused", body = AddedJobs),
         (status = BAD_REQUEST, description = "`tooManyLinks`: more than the setting `maxBatch`; none added", body = ApiError),
+        (status = FORBIDDEN, description = "`readOnly`", body = ApiError),
         (status = UNPROCESSABLE_ENTITY, description = "`invalidBody`", body = ApiError),
     )
 )]
 pub(crate) async fn add_many(
     State(state): State<AppState>,
+    caller: Caller,
     body: Result<Json<AddJobs>, JsonRejection>,
 ) -> Result<Json<AddedJobs>, Failure> {
     let Json(body) = body?;
+    let folders = state.access.folders_for(&caller, &state.manager).await?;
     let count = body.jobs.len();
     let mut refused = Vec::new();
     // The jobs to add, and the place of each in the request.
@@ -125,7 +132,7 @@ pub(crate) async fn add_many(
         .jobs
         .into_iter()
         .enumerate()
-        .filter_map(|(place, job)| match new_job(job) {
+        .filter_map(|(place, job)| match new_job(job, &folders) {
             Ok(job) => Some((place, job)),
             Err(failure) => {
                 refused.push((place, failure));

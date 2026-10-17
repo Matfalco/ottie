@@ -16,6 +16,328 @@
     }
   ],
   "paths": {
+    "/api/v1/access": {
+      "get": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Who this token is, and which folders devices may use.",
+        "operationId": "getAccess",
+        "responses": {
+          "200": {
+            "description": "This token's device (null: the computer running Ottie) and the folders devices may use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/access/devices": {
+      "get": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Every device with a token of its own. Only for the computer running Ottie.",
+        "operationId": "listDevices",
+        "responses": {
+          "200": {
+            "description": "Every device, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Device"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ownerOnly`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Gives a device a token of its own, full or read-only. The token is in\nthis answer only: Ottie keeps a hash of it. Only for the computer running\nOttie.",
+        "operationId": "addDevice",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDevice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The device and its token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddedDevice"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalidDeviceName`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ownerOnly`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/access/devices/{id}": {
+      "delete": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Takes a device's token away: its requests are refused from now on, and\nits open event streams close. Only for the computer running Ottie.",
+        "operationId": "removeDevice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Device ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ownerOnly`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`deviceNotFound`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/access/folders": {
+      "put": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Replaces the folders chosen in Settings, besides those of config.toml.\nCategories' folders are always allowed. Only for the computer running\nOttie.",
+        "operationId": "setFolders",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FolderList"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The folders devices may use now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllowedFolders"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`relativeFolder`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`ownerOnly`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`invalidBody`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopping`: the daemon is shutting down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/categories": {
       "get": {
         "tags": [
@@ -98,6 +420,16 @@
           },
           "401": {
             "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`, or `folderNotAllowed`: a device's folder outside the folders it may use",
             "content": {
               "application/json": {
                 "schema": {
@@ -264,6 +596,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`, or `folderNotAllowed`: a device's folder outside the folders it may use (another category's, or one listed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`categoryNotFound`",
             "content": {
@@ -331,6 +673,16 @@
           },
           "401": {
             "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
             "content": {
               "application/json": {
                 "schema": {
@@ -503,6 +855,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`, or `folderNotAllowed`: a device's `destDir` outside the folders it may use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`categoryNotFound`",
             "content": {
@@ -576,6 +938,16 @@
           },
           "401": {
             "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`",
             "content": {
               "application/json": {
                 "schema": {
@@ -711,6 +1083,16 @@
           },
           "401": {
             "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
             "content": {
               "application/json": {
                 "schema": {
@@ -864,6 +1246,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`jobNotFound`",
             "content": {
@@ -939,6 +1331,16 @@
           },
           "401": {
             "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
             "content": {
               "application/json": {
                 "schema": {
@@ -1032,6 +1434,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`jobNotFound`",
             "content": {
@@ -1109,6 +1521,16 @@
           },
           "401": {
             "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
             "content": {
               "application/json": {
                 "schema": {
@@ -1212,6 +1634,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`jobNotFound`",
             "content": {
@@ -1279,6 +1711,16 @@
           },
           "401": {
             "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
             "content": {
               "application/json": {
                 "schema": {
@@ -1509,6 +1951,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "422": {
             "description": "`invalidBody`",
             "content": {
@@ -1619,6 +2071,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`categoryNotFound`",
             "content": {
@@ -1685,6 +2147,16 @@
           },
           "401": {
             "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
             "content": {
               "application/json": {
                 "schema": {
@@ -1770,6 +2242,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`slotNotFound` or `categoryNotFound`",
             "content": {
@@ -1827,6 +2309,16 @@
           },
           "401": {
             "description": "`unauthorized`: no token, or the wrong one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
             "content": {
               "application/json": {
                 "schema": {
@@ -2131,6 +2623,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "409": {
             "description": "`viewNameTaken`",
             "content": {
@@ -2218,6 +2720,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`viewNotFound`",
             "content": {
@@ -2293,6 +2805,16 @@
               }
             }
           },
+          "403": {
+            "description": "`readOnly`: a device's token that may only read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`viewNotFound`",
             "content": {
@@ -2319,6 +2841,54 @@
   },
   "components": {
     "schemas": {
+      "AccessInfo": {
+        "type": "object",
+        "description": "Who a token belongs to, and the folders devices may use: `GET /access`\n(docs/decisions/0052).",
+        "required": [
+          "readOnly",
+          "folders"
+        ],
+        "properties": {
+          "device": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Device",
+                "description": "The device this token was given to; null for the computer running\nOttie (its token file's token), which alone manages devices and folders."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "folders": {
+            "$ref": "#/components/schemas/AllowedFolders"
+          },
+          "readOnly": {
+            "type": "boolean",
+            "description": "It may look but not change anything."
+          }
+        }
+      },
+      "AddDevice": {
+        "type": "object",
+        "description": "Body of `POST /access/devices`.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "1 to 60 characters: \"Phone\", \"Laptop\"…"
+          },
+          "readOnly": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Default: false."
+          }
+        }
+      },
       "AddJob": {
         "type": "object",
         "description": "Body of `POST /jobs`.",
@@ -2425,6 +2995,23 @@
           }
         }
       },
+      "AddedDevice": {
+        "type": "object",
+        "description": "Answer to `POST /access/devices`.",
+        "required": [
+          "device",
+          "token"
+        ],
+        "properties": {
+          "device": {
+            "$ref": "#/components/schemas/Device"
+          },
+          "token": {
+            "type": "string",
+            "description": "Its token, shown this once: Ottie keeps only a hash of it."
+          }
+        }
+      },
       "AddedJobs": {
         "type": "object",
         "description": "Answer to `POST /jobs/batch`.",
@@ -2488,6 +3075,30 @@
           "today",
           "week"
         ]
+      },
+      "AllowedFolders": {
+        "type": "object",
+        "description": "Where devices may have downloads written, besides every category's\nfolder (and what's inside them). The computer running Ottie isn't limited.",
+        "required": [
+          "config",
+          "chosen"
+        ],
+        "properties": {
+          "chosen": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Chosen in Settings (`PUT /access/folders`)."
+          },
+          "config": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`folders` in config.toml: changed only there."
+          }
+        }
       },
       "ApiError": {
         "allOf": [
@@ -2699,6 +3310,45 @@
           "saturday",
           "sunday"
         ]
+      },
+      "Device": {
+        "type": "object",
+        "description": "A device with a token of its own.",
+        "required": [
+          "id",
+          "name",
+          "readOnly",
+          "created"
+        ],
+        "properties": {
+          "created": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When it was added, in milliseconds since 1970.",
+            "minimum": 0
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "lastUsed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "When its token was last used (to the minute), in milliseconds since 1970.",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "readOnly": {
+            "type": "boolean",
+            "description": "It may look but not change anything."
+          }
+        }
       },
       "Event": {
         "oneOf": [
@@ -2946,6 +3596,21 @@
           "replace",
           "ask"
         ]
+      },
+      "FolderList": {
+        "type": "object",
+        "description": "Body of `PUT /access/folders`: absolute folders.",
+        "required": [
+          "folders"
+        ],
+        "properties": {
+          "folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "FoundLink": {
         "oneOf": [
@@ -3558,6 +4223,90 @@
                 "type": "string",
                 "enum": [
                   "unauthorized"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "This device's token is read-only (403).",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "readOnly"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Only the computer running Ottie, with its token file's token, may do\nthis: manage devices and the folders they may use (403).",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "ownerOnly"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "This device may not have downloads written there: only in a\ncategory's folder or one listed in Settings or config.toml (403).",
+            "required": [
+              "folder",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "folderNotAllowed"
+                ]
+              },
+              "folder": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "deviceNotFound"
+                ]
+              },
+              "id": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A device's name has 1 to 60 characters.",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidDeviceName"
                 ]
               }
             }
@@ -4908,7 +5657,7 @@
       "token": {
         "type": "http",
         "scheme": "bearer",
-        "description": "The token from `ottie token` (or `<config folder>/token`). The events WebSocket takes it as the protocol `ottie.token.<token>` instead."
+        "description": "The token from `ottie token` (or `<config folder>/token`): this computer's, or a device's from `POST /access/devices` (`ottie device add`). The events WebSocket takes it as the protocol `ottie.token.<token>` instead."
       }
     }
   },
@@ -4949,6 +5698,10 @@
     {
       "name": "events",
       "description": "Live changes over a WebSocket"
+    },
+    {
+      "name": "access",
+      "description": "Devices with tokens of their own, and the folders they may use"
     },
     {
       "name": "meta",

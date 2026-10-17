@@ -77,4 +77,4 @@ volumes:
 
 ## Reaching it from elsewhere
 
-Ottie listens on 127.0.0.1 only, unless `address` in `config.toml` says otherwise. Every request needs the token, but the API isn't meant to face the internet: reach it through a VPN or a reverse proxy with HTTPS.
+Ottie listens on 127.0.0.1 only, unless `address` in `config.toml` says otherwise. Every request needs a token, but the API isn't meant to face the internet: reach it through Tailscale, a VPN or a reverse proxy with HTTPS, and give each device a token of its own (`ottie device add`). How: [remote.md](remote.md).

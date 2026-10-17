@@ -185,6 +185,11 @@
 
 	/** Does it; false if there was nothing to do (the key keeps its usual job). */
 	function act(command: Command): boolean {
+		// A read-only device only moves through the list.
+		const changes = ['toggle', 'remove', 'queue'].includes(command.kind);
+		if (changes && session.readOnly) {
+			return false;
+		}
 		switch (command.kind) {
 			case 'step':
 				selection = step(current, order, command.to, command.extend);
@@ -261,7 +266,9 @@
 <svelte:window onkeydown={keydown} />
 
 <div class="page">
-	<div class="add"><AddCard /></div>
+	{#if !session.readOnly}
+		<div class="add"><AddCard /></div>
+	{/if}
 
 	<section class="pane" aria-label={m.nav_downloads()} bind:this={pane}>
 		<div class="head" bind:this={head}>
@@ -287,6 +294,7 @@
 				canResumeAll={resumable.length > 0}
 				onPauseAll={() => void pauseAll()}
 				onResumeAll={() => void session.run('resume', resumable)}
+				readOnly={session.readOnly}
 			/>
 			{#if open}
 				{#key resets}
@@ -297,7 +305,7 @@
 						categories={session.categoryList}
 						onFilters={setFilters}
 						onArrange={setArrangement}
-						onSaveView={() => (naming = { view: null })}
+						onSaveView={session.readOnly ? null : () => (naming = { view: null })}
 						onClose={() => (open = false)}
 					/>
 				{/key}
@@ -312,12 +320,13 @@
 					onArrange={setArrangement}
 					onRename={(view) => (naming = { view })}
 					onDelete={(view) => (deleting = view)}
+					readOnly={session.readOnly}
 				/>
 			{/if}
 		</div>
 
 		{#if session.list.length === 0 && session.connection === 'live'}
-			<p class="empty">{m.empty()}</p>
+			<p class="empty">{session.readOnly ? m.empty_read_only() : m.empty()}</p>
 		{:else if shown.length === 0 && session.connection === 'live'}
 			<div class="empty">
 				<p>{m.empty_filter()}</p>
@@ -345,6 +354,7 @@
 				onOpen={opens ? openJob : null}
 				onSort={(sort) => setArrangement(sortBy(arrangement, sort))}
 				onReorder={(ids, to) => void session.reorder(ids, to)}
+				readOnly={session.readOnly}
 			/>
 		{/if}
 
@@ -364,6 +374,7 @@
 				getLink={() => session.streamLink(job.id)}
 				onOpen={opens ? () => void openJob(job) : null}
 				onShowFolder={opens ? () => void reveal(job) : null}
+				readOnly={session.readOnly}
 			/>
 		{:else}
 			<DetailsEmpty

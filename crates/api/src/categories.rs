@@ -9,6 +9,7 @@ use axum::http::StatusCode;
 use ottie_core::{CategoryId, CategorySettings, Url};
 
 use crate::AppState;
+use crate::access::{Caller, Folders};
 use crate::error::Failure;
 use crate::types::{AddedCategory, ApiError, Category, CategoryBody, MatchLink, Matched, Reason};
 
@@ -35,16 +36,22 @@ pub(crate) async fn list(State(state): State<AppState>) -> Result<Json<Vec<Categ
     responses(
         (status = CREATED, description = "Added", body = AddedCategory),
         (status = BAD_REQUEST, description = "`invalidCategoryName`, `invalidExtension`, `relativeFolder` or `nonUtf8Path`", body = ApiError),
+        (status = FORBIDDEN, description = "`readOnly`, or `folderNotAllowed`: a device's folder outside the folders it may use", body = ApiError),
         (status = CONFLICT, description = "`categoryNameTaken` or `extensionTaken`", body = ApiError),
         (status = UNPROCESSABLE_ENTITY, description = "`invalidBody`", body = ApiError),
     )
 )]
 pub(crate) async fn add(
     State(state): State<AppState>,
+    caller: Caller,
     body: Result<Json<CategoryBody>, JsonRejection>,
 ) -> Result<(StatusCode, Json<AddedCategory>), Failure> {
     let Json(body) = body?;
-    let id = state.manager.add_category(settings(body)?).await?;
+    let folders = state.access.folders_for(&caller, &state.manager).await?;
+    let id = state
+        .manager
+        .add_category(settings(body, &folders)?)
+        .await?;
     Ok((StatusCode::CREATED, Json(AddedCategory { id: id.0 })))
 }
 
@@ -60,6 +67,7 @@ pub(crate) async fn add(
     responses(
         (status = NO_CONTENT, description = "Replaced"),
         (status = BAD_REQUEST, description = "`invalidCategoryName`, `invalidExtension`, `relativeFolder` or `nonUtf8Path`", body = ApiError),
+        (status = FORBIDDEN, description = "`readOnly`, or `folderNotAllowed`: a device's folder outside the folders it may use (another category's, or one listed)", body = ApiError),
         (status = NOT_FOUND, description = "`categoryNotFound`", body = ApiError),
         (status = CONFLICT, description = "`categoryNameTaken` or `extensionTaken`", body = ApiError),
         (status = UNPROCESSABLE_ENTITY, description = "`invalidBody`", body = ApiError),
@@ -67,13 +75,15 @@ pub(crate) async fn add(
 )]
 pub(crate) async fn update(
     State(state): State<AppState>,
+    caller: Caller,
     Path(id): Path<u32>,
     body: Result<Json<CategoryBody>, JsonRejection>,
 ) -> Result<StatusCode, Failure> {
     let Json(body) = body?;
+    let folders = state.access.folders_for(&caller, &state.manager).await?;
     state
         .manager
-        .update_category(CategoryId(id), settings(body)?)
+        .update_category(CategoryId(id), settings(body, &folders)?)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -151,10 +161,11 @@ pub(crate) fn absolute_folder(folder: String) -> Result<PathBuf, Failure> {
     }
 }
 
-fn settings(body: CategoryBody) -> Result<CategorySettings, Failure> {
+fn settings(body: CategoryBody, folders: &Folders) -> Result<CategorySettings, Failure> {
+    let folder = body.folder.map(absolute_folder).transpose()?;
     Ok(CategorySettings {
         name: body.name,
-        folder: body.folder.map(absolute_folder).transpose()?,
+        folder: folder.map(|folder| folders.check(folder)).transpose()?,
         extensions: body.extensions,
         speed_limit: body.speed_limit,
         max_concurrent: usize::try_from(body.max_concurrent).unwrap_or(usize::MAX),

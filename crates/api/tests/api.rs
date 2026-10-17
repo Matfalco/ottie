@@ -9,6 +9,7 @@ use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::routing::get;
 use futures_util::StreamExt;
+use ottie_api::{Access, AccessConfig, AccessInfo, AddDevice, AddedDevice, AllowedFolders};
 use ottie_api::{
     AddJob, AddJobs, Added, AddedCategory, AddedJobs, AddedView, AddedWithin, ApiError, Appearance,
     AppearanceMode, Arrangement, BuiltIn, Category, CategoryBody, EVENTS_PROTOCOL, Event, Existing,
@@ -18,6 +19,7 @@ use ottie_api::{
     ViewFilters,
 };
 use ottie_api::{AddedSlot, Day, ReorderSlots, Slot, SlotDownloads, SlotList};
+use ottie_api::{Device, FolderList};
 use ottie_core::{HttpBackend, Manager, Store};
 use reqwest::{RequestBuilder, StatusCode};
 use tempfile::TempDir;
@@ -56,7 +58,8 @@ async fn start_with(ui: UiSource) -> Daemon {
         .await
         .unwrap();
     let shutdown = CancellationToken::new();
-    let api = ottie_api::router(manager, Token::new(TOKEN), shutdown.clone(), ui);
+    let access = Access::open(AccessConfig::new(Token::new(TOKEN))).unwrap();
+    let api = ottie_api::router(manager, access, shutdown.clone(), ui);
     Daemon {
         addr: serve(api).await,
         files: format!("http://{files}"),
@@ -1503,4 +1506,237 @@ async fn the_api_describes_itself() {
         .unwrap();
     assert_eq!(spec, serde_json::to_value(ottie_api::openapi()).unwrap());
     assert!(spec["paths"]["/api/v1/jobs"]["post"].is_object());
+}
+
+impl Daemon {
+    /// A device with a token of its own, added by this computer.
+    async fn add_device(&self, name: &str, read_only: bool) -> AddedDevice {
+        let body = AddDevice {
+            name: name.into(),
+            read_only: Some(read_only),
+        };
+        let response = self.post("/access/devices").json(&body).send().await;
+        let response = response.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        response.json().await.unwrap()
+    }
+}
+
+#[tokio::test]
+async fn devices_get_tokens_of_their_own() {
+    let d = start().await;
+    let me: AccessInfo = d.get("/access").send().await.unwrap().json().await.unwrap();
+    assert_eq!(me.device, None, "the token file's token is this computer's");
+
+    let phone = d.add_device("  Phone ", false).await;
+    assert_eq!(phone.device.name, "Phone");
+    assert_eq!(phone.token.len(), 64);
+    let as_phone = |request: reqwest::RequestBuilder| request.bearer_auth(&phone.token);
+
+    let jobs = as_phone(d.client.get(d.url("/jobs"))).send().await.unwrap();
+    assert_eq!(jobs.status(), StatusCode::OK);
+    let seen: AccessInfo = as_phone(d.client.get(d.url("/access")))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        seen.device.as_ref().map(|device| device.id),
+        Some(phone.device.id)
+    );
+    assert!(seen.device.unwrap().last_used.is_some());
+
+    // Devices are this computer's to manage.
+    let mint = AddDevice {
+        name: "Another".into(),
+        read_only: None,
+    };
+    let refused = as_phone(d.client.post(d.url("/access/devices")))
+        .json(&mint)
+        .send()
+        .await
+        .unwrap();
+    let (status, refused) = error_of(refused).await;
+    assert_eq!(
+        (status, refused.reason),
+        (StatusCode::FORBIDDEN, Reason::OwnerOnly)
+    );
+
+    let empty = AddDevice {
+        name: " ".into(),
+        read_only: None,
+    };
+    let refused = d.post("/access/devices").json(&empty).send().await.unwrap();
+    assert_eq!(error_of(refused).await.1.reason, Reason::InvalidDeviceName);
+
+    // The events stream closes once the device is removed.
+    let protocols = format!("{EVENTS_PROTOCOL}, {TOKEN_PROTOCOL_PREFIX}{}", phone.token);
+    let (mut events, _) = d.events(&protocols).await.unwrap();
+    let devices: Vec<Device> = d
+        .get("/access/devices")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(devices.len(), 1);
+    let path = format!("/access/devices/{}", phone.device.id);
+    let removed = d
+        .client
+        .delete(d.url(&path))
+        .bearer_auth(TOKEN)
+        .send()
+        .await;
+    assert_eq!(removed.unwrap().status(), StatusCode::NO_CONTENT);
+    let closed = tokio::time::timeout(TIMEOUT, async {
+        loop {
+            match events.next().await {
+                Some(Ok(Message::Close(_)) | Err(_)) | None => break,
+                Some(Ok(_)) => {}
+            }
+        }
+    });
+    closed.await.expect("the events stream stayed open");
+    let jobs = as_phone(d.client.get(d.url("/jobs"))).send().await.unwrap();
+    assert_eq!(jobs.status(), StatusCode::UNAUTHORIZED);
+    let again = d
+        .client
+        .delete(d.url(&path))
+        .bearer_auth(TOKEN)
+        .send()
+        .await;
+    let (status, refused) = error_of(again.unwrap()).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(
+        refused.reason,
+        Reason::DeviceNotFound {
+            id: phone.device.id
+        }
+    );
+}
+
+#[tokio::test]
+async fn a_read_only_device_only_looks() {
+    let d = start().await;
+    let id = d.add("file.bin").await;
+    let tv = d.add_device("TV", true).await;
+    let as_tv = |request: reqwest::RequestBuilder| request.bearer_auth(&tv.token);
+
+    let listed = as_tv(d.client.get(d.url("/jobs"))).send().await.unwrap();
+    assert_eq!(listed.status(), StatusCode::OK);
+    let play = as_tv(d.client.post(d.url(&format!("/jobs/{id}/stream"))));
+    assert_eq!(play.send().await.unwrap().status(), StatusCode::OK);
+    let preview = PreviewLinks {
+        text: format!("{}/file.bin", d.files),
+        dest_dir: None,
+    };
+    let previewed = as_tv(d.client.post(d.url("/jobs/preview"))).json(&preview);
+    assert_eq!(previewed.send().await.unwrap().status(), StatusCode::OK);
+
+    let added = as_tv(d.client.post(d.url("/jobs")))
+        .json(&d.new_job("file.bin"))
+        .send()
+        .await
+        .unwrap();
+    let (status, refused) = error_of(added).await;
+    assert_eq!(
+        (status, refused.reason),
+        (StatusCode::FORBIDDEN, Reason::ReadOnly)
+    );
+    let paused = as_tv(d.client.post(d.url(&format!("/jobs/{id}/pause"))));
+    assert_eq!(paused.send().await.unwrap().status(), StatusCode::FORBIDDEN);
+    let removed = as_tv(d.client.delete(d.url(&format!("/jobs/{id}"))));
+    assert_eq!(
+        removed.send().await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+    let change = SettingsChange {
+        max_concurrent: Some(1),
+        ..SettingsChange::default()
+    };
+    let changed = as_tv(d.client.patch(d.url("/settings"))).json(&change);
+    assert_eq!(
+        changed.send().await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
+async fn devices_write_only_where_they_may() {
+    let d = start().await;
+    let laptop = d.add_device("Laptop", false).await;
+    let as_laptop = |request: reqwest::RequestBuilder| request.bearer_auth(&laptop.token);
+    let inside = d.dir.path().join("Films");
+    let elsewhere = tempfile::tempdir().unwrap();
+
+    // Nowhere yet: General has no folder in these tests, and none is listed.
+    let mut job = d.new_job("file.bin");
+    job.dest_dir = Some(inside.to_string_lossy().into_owned());
+    let refused = as_laptop(d.client.post(d.url("/jobs")))
+        .json(&job)
+        .send()
+        .await;
+    let (status, refused) = error_of(refused.unwrap()).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        refused.reason,
+        Reason::FolderNotAllowed {
+            folder: inside.to_string_lossy().into_owned()
+        }
+    );
+    // This computer isn't limited.
+    let added = d.post("/jobs").json(&job).send().await.unwrap();
+    assert_eq!(added.status(), StatusCode::CREATED);
+
+    // Listed in Settings, by this computer only.
+    let list = FolderList {
+        folders: vec![d.dir.path().to_string_lossy().into_owned()],
+    };
+    let by_laptop = as_laptop(d.client.put(d.url("/access/folders"))).json(&list);
+    assert_eq!(
+        by_laptop.send().await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+    let listed = d
+        .client
+        .put(d.url("/access/folders"))
+        .bearer_auth(TOKEN)
+        .json(&list);
+    let listed: AllowedFolders = listed.send().await.unwrap().json().await.unwrap();
+    assert_eq!(listed.chosen, list.folders);
+    let added = as_laptop(d.client.post(d.url("/jobs")))
+        .json(&job)
+        .send()
+        .await;
+    assert_eq!(added.unwrap().status(), StatusCode::CREATED);
+    job.dest_dir = Some(elsewhere.path().to_string_lossy().into_owned());
+    let refused = as_laptop(d.client.post(d.url("/jobs")))
+        .json(&job)
+        .send()
+        .await;
+    assert_eq!(refused.unwrap().status(), StatusCode::FORBIDDEN);
+
+    // A category's folder is allowed once this computer chose it.
+    let category = CategoryBody {
+        name: "Elsewhere".into(),
+        folder: job.dest_dir.clone(),
+        extensions: vec![],
+        speed_limit: 0,
+        max_concurrent: 0,
+    };
+    let by_laptop = as_laptop(d.client.post(d.url("/categories"))).json(&category);
+    assert_eq!(
+        by_laptop.send().await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+    let by_owner = d.post("/categories").json(&category).send().await.unwrap();
+    assert_eq!(by_owner.status(), StatusCode::CREATED);
+    let added = as_laptop(d.client.post(d.url("/jobs")))
+        .json(&job)
+        .send()
+        .await;
+    assert_eq!(added.unwrap().status(), StatusCode::CREATED);
 }

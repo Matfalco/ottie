@@ -36,7 +36,8 @@
 		onFilters: (filters: Filters) => void;
 		onArrange: (arrangement: Arrangement) => void;
 		/** Asks for a name to save what's shown as a view. */
-		onSaveView: () => void;
+		/** Null: views can't be saved here (a read-only device). */
+		onSaveView: (() => void) | null;
 		onClose: () => void;
 	}
 
@@ -193,7 +194,9 @@
 	<div class="footer">
 		<button class="plain" onclick={reset}>{m.fl_reset()}</button>
 		<span class="hint">{m.fl_views_hint()}</span>
-		<button onclick={onSaveView}>{m.fl_save_view()}</button>
+		{#if onSaveView}
+			<button onclick={onSaveView}>{m.fl_save_view()}</button>
+		{/if}
 		<button class="primary" onclick={onClose}>{m.fl_done()}</button>
 	</div>
 </div>

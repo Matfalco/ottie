@@ -7,6 +7,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Settings } from '@ottie/api-types/Settings';
+	import Eye from '@lucide/svelte/icons/eye';
 	import { AddRequest } from '#lib/addrequest.svelte.js';
 	import { appearance, setAppearance } from '#lib/appearance.svelte.js';
 	import { confirmation, targets, type Action } from '#lib/bulk.js';
@@ -78,7 +79,9 @@
 	});
 	/** The first start (or the setup run again from Settings): the setup page
 	 * replaces the app until it's done. */
-	let settingUp = $derived(session.settings?.setupDone === false || session.settingUpAgain);
+	let settingUp = $derived(
+		(session.settings?.setupDone === false && !session.readOnly) || session.settingUpAgain
+	);
 
 	// svelte-ignore state_referenced_locally
 	provideApp({ session, token, run, ask, add, addMany, adding });
@@ -99,7 +102,7 @@
 		if (steps.look) {
 			setAppearance(steps.look);
 		}
-		if (steps.share) {
+		if (steps.share && !session.readOnly) {
 			await session.changeSettings(steps.share);
 		}
 		if (steps.systemLanguage) {
@@ -157,7 +160,7 @@
 			}
 		} else if (command.kind === 'help') {
 			helping = true;
-		} else if (command.kind === 'focusAdd') {
+		} else if (command.kind === 'focusAdd' && !session.readOnly) {
 			void askAdd(null);
 		}
 	}
@@ -165,7 +168,7 @@
 	/** A link pasted anywhere but in a field: one goes in the add bar, with
 	 * its step open; several (or a sequence) open the list. */
 	function paste(event: ClipboardEvent) {
-		const text = settingUp ? null : pageText(event);
+		const text = settingUp || session.readOnly ? null : pageText(event);
 		if (text === null) {
 			return;
 		}
@@ -244,6 +247,7 @@
 					schedule={queueNow(session.slotList)}
 					connection={session.connection}
 					onLimit={setLimit}
+					readOnly={session.readOnly}
 				/>
 			</span>
 		{/snippet}
@@ -253,6 +257,12 @@
 		<Setup />
 	{:else}
 		<main bind:this={main}>
+			{#if session.readOnly}
+				<p class="looking">
+					<Eye size={15} aria-hidden="true" />
+					{m.read_only_note()}
+				</p>
+			{/if}
 			{#if session.error}
 				<div class="error" role="alert">
 					<span>{session.error}</span>
@@ -319,6 +329,19 @@
 		border-radius: 1.6rem;
 		background: var(--bg);
 		box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+	}
+
+	/* A read-only device: said once, above every page. */
+	.looking {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0 0.75rem 0.5rem;
+		padding: 0.45rem 0.9rem;
+		border-radius: var(--radius-pill);
+		background: var(--sunken);
+		color: var(--muted);
+		font-size: 0.85rem;
 	}
 
 	.error {

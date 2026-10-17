@@ -20,6 +20,8 @@
 		connection: Connection;
 		/** Saves a new total limit; resolves to false if it couldn't. */
 		onLimit: (bytesPerSec: number) => Promise<boolean>;
+		/** A read-only device sees the limit but can't change it. */
+		readOnly?: boolean;
 		/** The time slot's chip as its icon alone: the title bar is short of room. */
 		brief?: boolean;
 		/** The title bar is still short of room: the chip shortens to fit,
@@ -34,6 +36,7 @@
 		schedule,
 		connection,
 		onLimit,
+		readOnly = false,
 		brief = false,
 		squeezed = false
 	}: Props = $props();
@@ -119,8 +122,10 @@
 			<!-- Focusable, so a click inside doesn't count as leaving it. -->
 			<div class="popup" role="dialog" aria-label={m.limit_total()} tabindex="-1" in:drop out:drop>
 				<p class="title">{m.limit_total()}</p>
-				<LimitControl {limit} onChange={onLimit} />
-				<RatePresets {limit} onChange={onLimit} />
+				<fieldset class="locked" disabled={readOnly}>
+					<LimitControl {limit} onChange={onLimit} />
+					<RatePresets {limit} onChange={onLimit} />
+				</fieldset>
 				<p class="hint">{m.limit_chip_hint()}</p>
 			</div>
 		{/if}
@@ -138,6 +143,10 @@
 {/if}
 
 <style>
+	.locked {
+		display: contents;
+	}
+
 	.holder {
 		position: relative;
 		display: flex;
