@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Pornește când treci la el, de la următoarea pornire: pentru un calculator care doar comandă altul",
 	"cert_title": "Certificate de încredere",
 	"cert_hint": "Servere FTPS în al căror certificat ai avut încredere dintr-o descărcare. Elimină unul și certificatul lui este din nou refuzat.",
-	"cert_remove_label": "Nu mai avea încredere în certificatul lui {host}"
+	"cert_remove_label": "Nu mai avea încredere în certificatul lui {host}",
+	"ext_title": "Ottie în acest browser",
+	"ext_permission": "Ottie are nevoie de acces la toate site-urile: pentru a trimite cookie-urile unei descărcări împreună cu ea și pentru a ajunge la Ottie oriunde rulează.",
+	"ext_allow": "Permite",
+	"ext_signed_in": "Conectat la Ottie la {address}",
+	"ext_unreachable": "Ottie nu răspunde la {address}. Rulează?",
+	"ext_refused": "Ottie a refuzat tokenul acestui browser. Conectează-te din nou cu un link nou.",
+	"ext_signed_out": "Neconectat: descărcările rămân în browser.",
+	"ext_link_hint": "În Ottie, Setări → Conexiune: adaugă acest browser ca dispozitiv și copiază-i linkul de conectare. Pe computerul unde rulează Ottie, și comanda ottie link afișează unul.",
+	"ext_take_over": "Trimite descărcările la Ottie",
+	"ext_take_over_hint": "Descărcările pornite în acest browser merg în schimb la Ottie, cu cookie-urile site-ului. Cele pe care Ottie nu le poate cere din nou (dintr-un formular sau create de pagină) rămân în browser, la fel ca cele din ferestrele private.",
+	"ext_min_size": "Lasă fișierele mici browserului",
+	"ext_min_size_hint": "Fișierele pe care site-ul le declară mai mici rămân în browser. 0: niciunul.",
+	"ext_excluded": "Site-uri lăsate browserului",
+	"ext_excluded_hint": "Descărcările lor rămân în browser. Câte unul pe rând; fiecare include subdomeniile sale."
 }

@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Pokreće se kad prijeđete na njega, od sljedećeg pokretanja: za računalo koje samo upravlja drugim",
 	"cert_title": "Pouzdani certifikati",
 	"cert_hint": "FTPS poslužitelji čijem ste vlastitom certifikatu povjerovali iz preuzimanja. Uklonite jedan i njegov se certifikat ponovno odbija.",
-	"cert_remove_label": "Prestani vjerovati certifikatu poslužitelja {host}"
+	"cert_remove_label": "Prestani vjerovati certifikatu poslužitelja {host}",
+	"ext_title": "Ottie u ovom pregledniku",
+	"ext_permission": "Ottie treba pristup svim web-mjestima: da s preuzimanjem pošalje njegove kolačiće i da dođe do Ottieja gdje god radio.",
+	"ext_allow": "Dopusti",
+	"ext_signed_in": "Prijavljeno u Ottie na {address}",
+	"ext_unreachable": "Ottie ne odgovara na {address}. Radi li?",
+	"ext_refused": "Ottie je odbio token ovog preglednika. Prijavite se ponovno novom poveznicom.",
+	"ext_signed_out": "Niste prijavljeni: preuzimanja ostaju u pregledniku.",
+	"ext_link_hint": "U Ottieju, Postavke → Veza: dodajte ovaj preglednik kao uređaj i kopirajte njegovu poveznicu za prijavu. Na računalu na kojem radi Ottie i naredba ottie link ispisuje jednu.",
+	"ext_take_over": "Šalji preuzimanja u Ottie",
+	"ext_take_over_hint": "Preuzimanja pokrenuta u ovom pregledniku idu umjesto toga u Ottie, s kolačićima web-mjesta. Ona koja Ottie ne može ponovno zatražiti (iz obrasca ili ih je stvorila stranica) ostaju u pregledniku, kao i ona iz privatnih prozora.",
+	"ext_min_size": "Male datoteke prepusti pregledniku",
+	"ext_min_size_hint": "Datoteke za koje web-mjesto kaže da su manje ostaju u pregledniku. 0: nijedna.",
+	"ext_excluded": "Web-mjesta prepuštena pregledniku",
+	"ext_excluded_hint": "Njihova preuzimanja ostaju u pregledniku. Jedno po retku; svako obuhvaća i svoje poddomene."
 }

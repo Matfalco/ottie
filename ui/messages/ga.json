@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Tosaíonn sé nuair a athraíonn tú chuige, ón gcéad tosú eile: do ríomhaire nach ndéanann ach ceann eile a stiúradh",
 	"cert_title": "Teastais iontaofa",
 	"cert_hint": "Freastalaithe FTPS a raibh muinín agat as a dteastas féin ó íoslódáil. Bain ceann acu, agus diúltaítear dá theastas arís.",
-	"cert_remove_label": "Ná bíodh muinín as teastas {host} a thuilleadh"
+	"cert_remove_label": "Ná bíodh muinín as teastas {host} a thuilleadh",
+	"ext_title": "Ottie sa bhrabhsálaí seo",
+	"ext_permission": "Teastaíonn rochtain ar gach suíomh ó Ottie: chun fianáin íoslódála a sheoladh léi, agus chun Ottie a bhaint amach cibé áit a bhfuil sé ag rith.",
+	"ext_allow": "Ceadaigh",
+	"ext_signed_in": "Sínithe isteach in Ottie ag {address}",
+	"ext_unreachable": "Níl Ottie ag freagairt ag {address}. An bhfuil sé ag rith?",
+	"ext_refused": "Dhiúltaigh Ottie do chomhartha an bhrabhsálaí seo. Sínigh isteach arís le nasc nua.",
+	"ext_signed_out": "Gan síniú isteach: fanann íoslódálacha sa bhrabhsálaí.",
+	"ext_link_hint": "In Ottie, Socruithe → Ceangal: cuir an brabhsálaí seo leis mar ghléas agus cóipeáil a nasc sínithe isteach. Ar an ríomhaire ina bhfuil Ottie ag rith, taispeánann an t-ordú ottie link ceann freisin.",
+	"ext_take_over": "Seol íoslódálacha chuig Ottie",
+	"ext_take_over_hint": "Téann íoslódálacha a thosaítear sa bhrabhsálaí seo chuig Ottie ina ionad sin, le fianáin an tsuímh. Fanann na cinn nach féidir le Ottie a fháil arís (ó fhoirm, nó déanta ag an leathanach) sa bhrabhsálaí, mar a fhanann cinn ó fhuinneoga príobháideacha.",
+	"ext_min_size": "Fág comhaid bheaga ag an mbrabhsálaí",
+	"ext_min_size_hint": "Fanann comhaid a deir an suíomh atá níos lú sa bhrabhsálaí. 0: ceann ar bith.",
+	"ext_excluded": "Suíomhanna fágtha ag an mbrabhsálaí",
+	"ext_excluded_hint": "Fanann a n-íoslódálacha sa bhrabhsálaí. Ceann in aghaidh na líne; cuimsíonn gach ceann a fhofhearainn."
 }

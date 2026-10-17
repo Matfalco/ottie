@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Inicia quando mudar para ele, a partir do próximo arranque: para um computador que só comanda outro",
 	"cert_title": "Certificados de confiança",
 	"cert_hint": "Servidores FTPS em cujo certificado confiou a partir de uma transferência. Remova um e o seu certificado volta a ser recusado.",
-	"cert_remove_label": "Deixar de confiar no certificado de {host}"
+	"cert_remove_label": "Deixar de confiar no certificado de {host}",
+	"ext_title": "Ottie neste navegador",
+	"ext_permission": "O Ottie precisa de acesso a todos os sites: para enviar os cookies de uma transferência com ela e para chegar ao Ottie onde quer que esteja a correr.",
+	"ext_allow": "Permitir",
+	"ext_signed_in": "Sessão iniciada no Ottie em {address}",
+	"ext_unreachable": "O Ottie não responde em {address}. Está a correr?",
+	"ext_refused": "O Ottie recusou o token deste navegador. Inicie sessão de novo com uma nova ligação.",
+	"ext_signed_out": "Sem sessão: as transferências ficam no navegador.",
+	"ext_link_hint": "No Ottie, Definições → Ligação: adicione este navegador como dispositivo e copie o seu link de acesso. No computador onde o Ottie corre, o comando ottie link também mostra um.",
+	"ext_take_over": "Enviar as transferências para o Ottie",
+	"ext_take_over_hint": "As transferências iniciadas neste navegador vão para o Ottie, com os cookies do site. As que o Ottie não consegue pedir de novo (de um formulário ou criadas pela página) ficam no navegador, tal como as das janelas privadas.",
+	"ext_min_size": "Deixar os ficheiros pequenos ao navegador",
+	"ext_min_size_hint": "Os ficheiros que o site diz serem mais pequenos ficam no navegador. 0: nenhum.",
+	"ext_excluded": "Sites deixados ao navegador",
+	"ext_excluded_hint": "As suas transferências ficam no navegador. Um por linha; cada um abrange os seus subdomínios."
 }

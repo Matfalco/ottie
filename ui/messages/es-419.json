@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Se inicia cuando cambias a ella, a partir del próximo inicio: para una computadora que solo maneja otra",
 	"cert_title": "Certificados de confianza",
 	"cert_hint": "Servidores FTPS en cuyo propio certificado confiaste desde una descarga. Si quitas uno, su certificado vuelve a rechazarse.",
-	"cert_remove_label": "Dejar de confiar en el certificado de {host}"
+	"cert_remove_label": "Dejar de confiar en el certificado de {host}",
+	"ext_title": "Ottie en este navegador",
+	"ext_permission": "Ottie necesita acceso a todos los sitios: para enviar las cookies de una descarga con ella y para llegar a Ottie esté donde esté.",
+	"ext_allow": "Permitir",
+	"ext_signed_in": "Sesión iniciada en Ottie en {address}",
+	"ext_unreachable": "Ottie no responde en {address}. ¿Está en ejecución?",
+	"ext_refused": "Ottie rechazó el token de este navegador. Vuelve a iniciar sesión con un enlace nuevo.",
+	"ext_signed_out": "Sin sesión: las descargas se quedan en el navegador.",
+	"ext_link_hint": "En Ottie, Configuración → Conexión: agrega este navegador como dispositivo y copia su enlace de acceso. En la computadora donde se ejecuta Ottie, el comando ottie link también muestra uno.",
+	"ext_take_over": "Enviar las descargas a Ottie",
+	"ext_take_over_hint": "Las descargas iniciadas en este navegador van a Ottie, con las cookies del sitio. Las que Ottie no puede volver a pedir (de un formulario o creadas por la página) se quedan en el navegador, igual que las de las ventanas privadas.",
+	"ext_min_size": "Dejar los archivos pequeños al navegador",
+	"ext_min_size_hint": "Los archivos que según el sitio son más pequeños se quedan en el navegador. 0: ninguno.",
+	"ext_excluded": "Sitios que se quedan en el navegador",
+	"ext_excluded_hint": "Sus descargas se quedan en el navegador. Uno por línea; cada uno incluye sus subdominios."
 }

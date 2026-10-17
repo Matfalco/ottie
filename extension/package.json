@@ -1,0 +1,32 @@
+{
+	"name": "extension",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"i18n": "pnpm --filter ui i18n",
+		"build": "pnpm run i18n && vite build --mode chrome && vite build --mode firefox",
+		"check": "pnpm run i18n && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+		"test": "pnpm run i18n && vitest --run",
+		"lint": "prettier --check .",
+		"format": "prettier --write ."
+	},
+	"devDependencies": {
+		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"@types/chrome": "0.3.4",
+		"@types/node": "^26.6.5",
+		"prettier": "^3.8.3",
+		"prettier-plugin-svelte": "^4.1.0",
+		"svelte": "^5.57.1",
+		"svelte-check": "^4.6.0",
+		"typescript": "^6.0.3",
+		"vite": "^8.3.0",
+		"vitest": "^4.1.8"
+	},
+	"dependencies": {
+		"@fontsource-variable/outfit": "5.3.0",
+		"@fontsource/dm-mono": "5.3.0",
+		"@lucide/svelte": "1.48.0",
+		"@ottie/api-types": "workspace:*"
+	}
+}

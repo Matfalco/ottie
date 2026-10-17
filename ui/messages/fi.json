@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Käynnistyy, kun vaihdat siihen, seuraavasta käynnistyksestä alkaen: tietokoneelle, joka vain ohjaa toista",
 	"cert_title": "Luotetut varmenteet",
 	"cert_hint": "FTPS-palvelimet, joiden omaan varmenteeseen luotit latauksesta. Poista yksi, niin sen varmenne hylätään taas.",
-	"cert_remove_label": "Lopeta luottamus palvelimen {host} varmenteeseen"
+	"cert_remove_label": "Lopeta luottamus palvelimen {host} varmenteeseen",
+	"ext_title": "Ottie tässä selaimessa",
+	"ext_permission": "Ottie tarvitsee pääsyn kaikille sivustoille: lähettääkseen latauksen evästeet sen mukana ja tavoittaakseen Ottien, missä se ikinä toimii.",
+	"ext_allow": "Salli",
+	"ext_signed_in": "Kirjautunut Ottieen osoitteessa {address}",
+	"ext_unreachable": "Ottie ei vastaa osoitteessa {address}. Onko se käynnissä?",
+	"ext_refused": "Ottie hylkäsi tämän selaimen tunnuksen. Kirjaudu uudelleen uudella linkillä.",
+	"ext_signed_out": "Ei kirjautunut: lataukset jäävät selaimeen.",
+	"ext_link_hint": "Ottiessa: Asetukset → Yhteys: lisää tämä selain laitteeksi ja kopioi sen kirjautumislinkki. Tietokoneella, jolla Ottie toimii, myös komento ottie link tulostaa sellaisen.",
+	"ext_take_over": "Lähetä lataukset Ottielle",
+	"ext_take_over_hint": "Tässä selaimessa aloitetut lataukset menevät sen sijaan Ottielle sivuston evästeiden kanssa. Ne, joita Ottie ei voi hakea uudelleen (lomakkeesta tai sivun luomat), jäävät selaimeen, samoin yksityisten ikkunoiden lataukset.",
+	"ext_min_size": "Jätä pienet tiedostot selaimelle",
+	"ext_min_size_hint": "Tiedostot, jotka sivuston mukaan ovat tätä pienempiä, jäävät selaimeen. 0: ei mitään.",
+	"ext_excluded": "Selaimelle jätetyt sivustot",
+	"ext_excluded_hint": "Niiden lataukset jäävät selaimeen. Yksi riville; kukin kattaa myös aliverkkotunnuksensa."
 }

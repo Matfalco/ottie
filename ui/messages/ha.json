@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Yana farawa idan ka canja zuwa gare shi, daga farawa na gaba: don kwamfutar da ke sarrafa wata kawai",
 	"cert_title": "Takardun shaida da aka amince da su",
 	"cert_hint": "Sabobin FTPS da kuka amince da takardar shaidarsu daga wani saukewa. Cire ɗaya, sai a sake ƙin takardar shaidarsa.",
-	"cert_remove_label": "Daina amincewa da takardar shaidar {host}"
+	"cert_remove_label": "Daina amincewa da takardar shaidar {host}",
+	"ext_title": "Ottie a cikin wannan burauzar",
+	"ext_permission": "Ottie na buƙatar damar shiga duk shafuka: don aika kukis na saukewa tare da shi, kuma don isa ga Ottie duk inda yake aiki.",
+	"ext_allow": "Ba da izini",
+	"ext_signed_in": "An shiga Ottie a {address}",
+	"ext_unreachable": "Ottie ba ya amsawa a {address}. Yana aiki kuwa?",
+	"ext_refused": "Ottie ya ƙi alamar wannan burauzar. Sake shiga da sabon mahaɗi.",
+	"ext_signed_out": "Ba a shiga ba: saukewa suna zama a cikin burauzar.",
+	"ext_link_hint": "A cikin Ottie, Saituna → Haɗi: ƙara wannan burauzar a matsayin na'ura kuma kwafi mahaɗin shigarsa. A kwamfutar da Ottie ke aiki, umarnin ottie link ma yana nuna ɗaya.",
+	"ext_take_over": "Aika saukewa zuwa Ottie",
+	"ext_take_over_hint": "Saukewan da aka fara a wannan burauzar suna zuwa Ottie maimakon haka, tare da kukis na shafin. Waɗanda Ottie ba zai iya sake nema ba (daga fom, ko shafin ne ya yi su) suna zama a cikin burauzar, kamar na tagogin sirri.",
+	"ext_min_size": "Bar ƙananan fayiloli ga burauzar",
+	"ext_min_size_hint": "Fayilolin da shafin ya ce sun fi wannan ƙanƙanta suna zama a cikin burauzar. 0: babu.",
+	"ext_excluded": "Shafukan da aka bar wa burauzar",
+	"ext_excluded_hint": "Saukewansu suna zama a cikin burauzar. Ɗaya a kowane layi; kowanne ya haɗa da ƙananan yankunansa."
 }

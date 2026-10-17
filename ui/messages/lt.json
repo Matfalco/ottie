@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Paleidžiamas, kai į jį pereinate, nuo kito paleidimo: kompiuteriui, kuris tik valdo kitą",
 	"cert_title": "Patikimi sertifikatai",
 	"cert_hint": "FTPS serveriai, kurių sertifikatu pasitikėjote atsisiuntime. Pašalinkite vieną, ir jo sertifikatas vėl bus atmetamas.",
-	"cert_remove_label": "Nebepasitikėti serverio {host} sertifikatu"
+	"cert_remove_label": "Nebepasitikėti serverio {host} sertifikatu",
+	"ext_title": "Ottie šioje naršyklėje",
+	"ext_permission": "Ottie reikia prieigos prie visų svetainių: kad kartu su atsisiuntimu išsiųstų jo slapukus ir pasiektų Ottie, kad ir kur jis veiktų.",
+	"ext_allow": "Leisti",
+	"ext_signed_in": "Prisijungta prie Ottie adresu {address}",
+	"ext_unreachable": "Ottie neatsako adresu {address}. Ar jis veikia?",
+	"ext_refused": "Ottie atmetė šios naršyklės prieigos raktą. Prisijunkite iš naujo nauja nuoroda.",
+	"ext_signed_out": "Neprisijungta: atsisiuntimai lieka naršyklėje.",
+	"ext_link_hint": "Ottie: Nustatymai → Ryšys: pridėkite šią naršyklę kaip įrenginį ir nukopijuokite jos prisijungimo nuorodą. Kompiuteryje, kuriame veikia Ottie, ją parodo ir komanda ottie link.",
+	"ext_take_over": "Siųsti atsisiuntimus į Ottie",
+	"ext_take_over_hint": "Šioje naršyklėje pradėti atsisiuntimai vietoj to keliauja į Ottie, su svetainės slapukais. Tie, kurių Ottie negali gauti iš naujo (iš formos ar sukurti puslapio), lieka naršyklėje, kaip ir privačių langų atsisiuntimai.",
+	"ext_min_size": "Mažus failus palikti naršyklei",
+	"ext_min_size_hint": "Failai, kurie, pasak svetainės, mažesni, lieka naršyklėje. 0: jokie.",
+	"ext_excluded": "Naršyklei paliktos svetainės",
+	"ext_excluded_hint": "Jų atsisiuntimai lieka naršyklėje. Po vieną eilutėje; kiekviena apima ir savo subdomenus."
 }

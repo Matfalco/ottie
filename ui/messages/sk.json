@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Spustí sa, keď naň prepnete, od ďalšieho spustenia: pre počítač, ktorý len ovláda iný",
 	"cert_title": "Dôveryhodné certifikáty",
 	"cert_hint": "Servery FTPS, ktorých vlastnému certifikátu ste zo sťahovania dôverovali. Odstráňte jeden a jeho certifikát sa znova odmietne.",
-	"cert_remove_label": "Prestať dôverovať certifikátu servera {host}"
+	"cert_remove_label": "Prestať dôverovať certifikátu servera {host}",
+	"ext_title": "Ottie v tomto prehliadači",
+	"ext_permission": "Ottie potrebuje prístup ku všetkým webom: aby so sťahovaním poslal jeho súbory cookie a aby sa dostal k Ottie, nech beží kdekoľvek.",
+	"ext_allow": "Povoliť",
+	"ext_signed_in": "Prihlásené do Ottie na {address}",
+	"ext_unreachable": "Ottie na {address} neodpovedá. Beží?",
+	"ext_refused": "Ottie odmietol token tohto prehliadača. Prihláste sa znova novým odkazom.",
+	"ext_signed_out": "Neprihlásené: sťahovania zostávajú v prehliadači.",
+	"ext_link_hint": "V Ottie, Nastavenia → Pripojenie: pridajte tento prehliadač ako zariadenie a skopírujte jeho prihlasovací odkaz. Na počítači, kde Ottie beží, ho vypíše aj príkaz ottie link.",
+	"ext_take_over": "Posielať sťahovania do Ottie",
+	"ext_take_over_hint": "Sťahovania spustené v tomto prehliadači idú namiesto toho do Ottie, so súbormi cookie webu. Tie, ktoré Ottie nemôže stiahnuť znova (z formulára alebo vytvorené stránkou), zostávajú v prehliadači, rovnako ako tie zo súkromných okien.",
+	"ext_min_size": "Malé súbory nechať prehliadaču",
+	"ext_min_size_hint": "Súbory, ktoré sú podľa webu menšie, zostávajú v prehliadači. 0: žiadne.",
+	"ext_excluded": "Weby ponechané prehliadaču",
+	"ext_excluded_hint": "Ich sťahovania zostávajú v prehliadači. Jeden na riadok; každý zahŕňa aj svoje subdomény."
 }

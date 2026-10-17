@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Dimulai saat Anda beralih ke sana, mulai dari awal berikutnya: untuk komputer yang hanya mengendalikan komputer lain",
 	"cert_title": "Sertifikat tepercaya",
 	"cert_hint": "Server FTPS yang sertifikatnya sendiri Anda percayai dari sebuah unduhan. Hapus satu, dan sertifikatnya ditolak lagi.",
-	"cert_remove_label": "Berhenti memercayai sertifikat {host}"
+	"cert_remove_label": "Berhenti memercayai sertifikat {host}",
+	"ext_title": "Ottie di browser ini",
+	"ext_permission": "Ottie memerlukan akses ke semua situs: untuk mengirim cookie unduhan bersamanya, dan untuk menjangkau Ottie di mana pun ia berjalan.",
+	"ext_allow": "Izinkan",
+	"ext_signed_in": "Masuk ke Ottie di {address}",
+	"ext_unreachable": "Ottie tidak menjawab di {address}. Apakah sedang berjalan?",
+	"ext_refused": "Ottie menolak token browser ini. Masuk lagi dengan tautan baru.",
+	"ext_signed_out": "Belum masuk: unduhan tetap di browser.",
+	"ext_link_hint": "Di Ottie, Pengaturan → Koneksi: tambahkan browser ini sebagai perangkat dan salin tautan masuknya. Di komputer tempat Ottie berjalan, perintah ottie link juga menampilkannya.",
+	"ext_take_over": "Kirim unduhan ke Ottie",
+	"ext_take_over_hint": "Unduhan yang dimulai di browser ini dialihkan ke Ottie, dengan cookie situsnya. Unduhan yang tidak bisa diminta ulang oleh Ottie (dari formulir, atau dibuat oleh halaman) tetap di browser, begitu pula unduhan dari jendela pribadi.",
+	"ext_min_size": "Biarkan file kecil di browser",
+	"ext_min_size_hint": "File yang menurut situs lebih kecil tetap di browser. 0: tidak ada.",
+	"ext_excluded": "Situs yang dibiarkan di browser",
+	"ext_excluded_hint": "Unduhannya tetap di browser. Satu per baris; masing-masing mencakup subdomainnya."
 }

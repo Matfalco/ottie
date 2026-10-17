@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Démarre quand vous y revenez, à partir du prochain démarrage : pour un ordinateur qui ne fait qu’en piloter un autre",
 	"cert_title": "Certificats reconnus",
 	"cert_hint": "Les serveurs FTPS dont vous avez reconnu le certificat depuis un téléchargement. Retirez-en un, et son certificat est de nouveau refusé.",
-	"cert_remove_label": "Ne plus faire confiance au certificat de {host}"
+	"cert_remove_label": "Ne plus faire confiance au certificat de {host}",
+	"ext_title": "Ottie dans ce navigateur",
+	"ext_permission": "Ottie a besoin d’accéder à tous les sites : pour envoyer les cookies d’un téléchargement avec lui, et pour joindre Ottie où qu’il tourne.",
+	"ext_allow": "Autoriser",
+	"ext_signed_in": "Connecté à Ottie sur {address}",
+	"ext_unreachable": "Ottie ne répond pas sur {address}. Est-il lancé ?",
+	"ext_refused": "Ottie a refusé le jeton de ce navigateur. Reconnectez-vous avec un nouveau lien.",
+	"ext_signed_out": "Non connecté : les téléchargements restent dans le navigateur.",
+	"ext_link_hint": "Dans Ottie, Paramètres → Connexion : ajoutez ce navigateur comme appareil et copiez son lien de connexion. Sur l’ordinateur où tourne Ottie, la commande ottie link en affiche un aussi.",
+	"ext_take_over": "Envoyer les téléchargements à Ottie",
+	"ext_take_over_hint": "Les téléchargements lancés dans ce navigateur vont à Ottie à la place, avec les cookies du site. Ceux qu’Ottie ne peut pas redemander (issus d’un formulaire, ou créés par la page) restent dans le navigateur, comme ceux des fenêtres privées.",
+	"ext_min_size": "Laisser les petits fichiers au navigateur",
+	"ext_min_size_hint": "Les fichiers que le site annonce plus petits restent dans le navigateur. 0 : aucun.",
+	"ext_excluded": "Sites laissés au navigateur",
+	"ext_excluded_hint": "Leurs téléchargements restent dans le navigateur. Un par ligne ; chacun couvre ses sous-domaines."
 }

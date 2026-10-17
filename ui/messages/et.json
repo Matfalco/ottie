@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Käivitub, kui sellele lülitud, alates järgmisest käivitusest: arvutile, mis ainult juhib teist",
 	"cert_title": "Usaldatud sertifikaadid",
 	"cert_hint": "FTPS-serverid, mille sertifikaati usaldasid allalaadimise juures. Eemalda üks ja selle sertifikaat lükatakse taas tagasi.",
-	"cert_remove_label": "Ära usalda enam serveri {host} sertifikaati"
+	"cert_remove_label": "Ära usalda enam serveri {host} sertifikaati",
+	"ext_title": "Ottie selles brauseris",
+	"ext_permission": "Ottie vajab juurdepääsu kõigile saitidele: et saata allalaadimisega kaasa selle küpsised ja jõuda Ottieni, kus iganes see töötab.",
+	"ext_allow": "Luba",
+	"ext_signed_in": "Sisse logitud Ottiesse aadressil {address}",
+	"ext_unreachable": "Ottie ei vasta aadressil {address}. Kas see töötab?",
+	"ext_refused": "Ottie lükkas selle brauseri loa tagasi. Logi uue lingiga uuesti sisse.",
+	"ext_signed_out": "Pole sisse logitud: allalaadimised jäävad brauserisse.",
+	"ext_link_hint": "Ottie sätetes → Ühendus: lisa see brauser seadmena ja kopeeri selle sisselogimislink. Arvutis, kus Ottie töötab, näitab seda ka käsk ottie link.",
+	"ext_take_over": "Saada allalaadimised Ottiele",
+	"ext_take_over_hint": "Selles brauseris alustatud allalaadimised lähevad hoopis Ottiele, koos saidi küpsistega. Need, mida Ottie ei saa uuesti küsida (vormist või lehe loodud), jäävad brauserisse, nagu ka privaatakende omad.",
+	"ext_min_size": "Jäta väikesed failid brauserile",
+	"ext_min_size_hint": "Failid, mis saidi sõnul on väiksemad, jäävad brauserisse. 0: mitte ükski.",
+	"ext_excluded": "Brauserile jäetud saidid",
+	"ext_excluded_hint": "Nende allalaadimised jäävad brauserisse. Üks rea kohta; iga hõlmab ka oma alamdomeene."
 }

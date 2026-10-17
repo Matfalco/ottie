@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Si avvia quando passi a lui, dal prossimo avvio: per un computer che ne comanda solo un altro",
 	"cert_title": "Certificati attendibili",
 	"cert_hint": "Server FTPS il cui certificato hai considerato attendibile da un download. Rimuovine uno e il suo certificato torna a essere rifiutato.",
-	"cert_remove_label": "Non considerare più attendibile il certificato di {host}"
+	"cert_remove_label": "Non considerare più attendibile il certificato di {host}",
+	"ext_title": "Ottie in questo browser",
+	"ext_permission": "Ottie ha bisogno di accedere a tutti i siti: per inviare i cookie di un download insieme a esso e per raggiungere Ottie ovunque sia in esecuzione.",
+	"ext_allow": "Consenti",
+	"ext_signed_in": "Accesso eseguito a Ottie su {address}",
+	"ext_unreachable": "Ottie non risponde su {address}. È in esecuzione?",
+	"ext_refused": "Ottie ha rifiutato il token di questo browser. Accedi di nuovo con un nuovo link.",
+	"ext_signed_out": "Accesso non eseguito: i download restano nel browser.",
+	"ext_link_hint": "In Ottie, Impostazioni → Connessione: aggiungi questo browser come dispositivo e copia il suo link di accesso. Sul computer dove gira Ottie, anche il comando ottie link ne mostra uno.",
+	"ext_take_over": "Invia i download a Ottie",
+	"ext_take_over_hint": "I download avviati in questo browser vanno invece a Ottie, con i cookie del sito. Quelli che Ottie non può richiedere di nuovo (da un modulo o creati dalla pagina) restano nel browser, come quelli delle finestre private.",
+	"ext_min_size": "Lascia i file piccoli al browser",
+	"ext_min_size_hint": "I file che secondo il sito sono più piccoli restano nel browser. 0: nessuno.",
+	"ext_excluded": "Siti lasciati al browser",
+	"ext_excluded_hint": "I loro download restano nel browser. Uno per riga; ognuno include i suoi sottodomini."
 }

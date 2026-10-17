@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "다음 시작부터, 전환할 때 시작합니다: 다른 컴퓨터를 조작하기만 하는 컴퓨터용",
 	"cert_title": "신뢰하는 인증서",
 	"cert_hint": "다운로드에서 자체 인증서를 신뢰한 FTPS 서버입니다. 하나를 제거하면 그 인증서는 다시 거부됩니다.",
-	"cert_remove_label": "{host}의 인증서 신뢰 중지"
+	"cert_remove_label": "{host}의 인증서 신뢰 중지",
+	"ext_title": "이 브라우저의 Ottie",
+	"ext_permission": "Ottie는 모든 사이트에 접근해야 합니다: 다운로드와 함께 그 쿠키를 보내고, 어디에서 실행되든 Ottie에 닿기 위해서입니다.",
+	"ext_allow": "허용",
+	"ext_signed_in": "{address}의 Ottie에 로그인됨",
+	"ext_unreachable": "{address}의 Ottie가 응답하지 않습니다. 실행 중인가요?",
+	"ext_refused": "Ottie가 이 브라우저의 토큰을 거부했습니다. 새 링크로 다시 로그인하세요.",
+	"ext_signed_out": "로그인하지 않음: 다운로드가 브라우저에 남습니다.",
+	"ext_link_hint": "Ottie의 설정 → 연결에서 이 브라우저를 기기로 추가하고 로그인 링크를 복사하세요. Ottie가 실행되는 컴퓨터에서는 ottie link 명령으로도 볼 수 있습니다.",
+	"ext_take_over": "다운로드를 Ottie로 보내기",
+	"ext_take_over_hint": "이 브라우저에서 시작한 다운로드는 사이트의 쿠키와 함께 대신 Ottie로 갑니다. Ottie가 다시 요청할 수 없는 것(양식에서 왔거나 페이지가 만든 것)은 브라우저에 남으며, 비공개 창의 다운로드도 마찬가지입니다.",
+	"ext_min_size": "작은 파일은 브라우저에 맡기기",
+	"ext_min_size_hint": "사이트가 이보다 작다고 알린 파일은 브라우저에 남습니다. 0: 없음.",
+	"ext_excluded": "브라우저에 맡기는 사이트",
+	"ext_excluded_hint": "이 사이트들의 다운로드는 브라우저에 남습니다. 한 줄에 하나씩; 각각 하위 도메인도 포함합니다."
 }

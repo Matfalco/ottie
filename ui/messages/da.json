@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Starter, når du skifter til den, fra næste start: til en computer, der kun styrer en anden",
 	"cert_title": "Betroede certifikater",
 	"cert_hint": "FTPS-servere, hvis eget certifikat du har stolet på fra en download. Fjern et, så afvises certifikatet igen.",
-	"cert_remove_label": "Stop med at stole på certifikatet for {host}"
+	"cert_remove_label": "Stop med at stole på certifikatet for {host}",
+	"ext_title": "Ottie i denne browser",
+	"ext_permission": "Ottie skal have adgang til alle websteder: for at sende en downloads cookies med og for at nå Ottie, hvor det end kører.",
+	"ext_allow": "Tillad",
+	"ext_signed_in": "Logget ind på Ottie på {address}",
+	"ext_unreachable": "Ottie svarer ikke på {address}. Kører det?",
+	"ext_refused": "Ottie afviste denne browsers token. Log ind igen med et nyt link.",
+	"ext_signed_out": "Ikke logget ind: downloads bliver i browseren.",
+	"ext_link_hint": "I Ottie, Indstillinger → Forbindelse: tilføj denne browser som enhed, og kopiér dens loginlink. På computeren, hvor Ottie kører, viser kommandoen ottie link også et.",
+	"ext_take_over": "Send downloads til Ottie",
+	"ext_take_over_hint": "Downloads, der startes i denne browser, går i stedet til Ottie, med webstedets cookies. Dem, Ottie ikke kan hente igen (fra en formular eller lavet af siden), bliver i browseren, ligesom dem fra private vinduer.",
+	"ext_min_size": "Overlad små filer til browseren",
+	"ext_min_size_hint": "Filer, som webstedet siger er mindre, bliver i browseren. 0: ingen.",
+	"ext_excluded": "Websteder overladt til browseren",
+	"ext_excluded_hint": "Deres downloads bliver i browseren. Ét pr. linje; hvert dækker også underdomæner."
 }

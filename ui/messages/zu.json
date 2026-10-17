@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Iqala uma ushintshela kuyo, kusukela ekuqaleni okulandelayo: ekhompyutheni elawula enye kuphela",
 	"cert_title": "Izitifiketi ezithenjwayo",
 	"cert_hint": "Amaseva e-FTPS owathemba izitifiketi zawo ekulandeni. Susa eyodwa, bese isitifiketi sayo senqatshwa futhi.",
-	"cert_remove_label": "Yeka ukuthemba isitifiketi se-{host}"
+	"cert_remove_label": "Yeka ukuthemba isitifiketi se-{host}",
+	"ext_title": "I-Ottie kulesi siphequluli",
+	"ext_permission": "I-Ottie idinga ukufinyelela kuwo wonke amasayithi: ukuze ithumele amakhukhi wokulanda kanye nakho, futhi ifinyelele ku-Ottie noma ngabe isebenza kuphi.",
+	"ext_allow": "Vumela",
+	"ext_signed_in": "Ungene ku-Ottie ku-{address}",
+	"ext_unreachable": "I-Ottie ayiphenduli ku-{address}. Ingabe iyasebenza?",
+	"ext_refused": "I-Ottie yenqabe ithokheni yalesi siphequluli. Ngena futhi ngesixhumanisi esisha.",
+	"ext_signed_out": "Awungenile: ukulanda kuhlala esipheqululini.",
+	"ext_link_hint": "Ku-Ottie, Izilungiselelo → Uxhumano: engeza lesi siphequluli njengedivayisi bese ukopisha isixhumanisi saso sokungena. Kukhompyutha lapho i-Ottie isebenza khona, umyalo othi ottie link nawo ubonisa esisodwa.",
+	"ext_take_over": "Thumela ukulanda ku-Ottie",
+	"ext_take_over_hint": "Ukulanda okuqalwe kulesi siphequluli kuya ku-Ottie esikhundleni salokho, namakhukhi esayithi. Lokho i-Ottie engakwazi ukukucela futhi (kusuka efomini, noma okwenziwe yikhasi) kuhlala esipheqululini, njengalokho kwamawindi ayimfihlo.",
+	"ext_min_size": "Shiyela isiphequluli amafayela amancane",
+	"ext_min_size_hint": "Amafayela isayithi elithi mancane kunalokhu ahlala esipheqululini. 0: lutho.",
+	"ext_excluded": "Amasayithi ashiyelwe isiphequluli",
+	"ext_excluded_hint": "Ukulanda kwawo kuhlala esipheqululini. Elilodwa emugqeni ngamunye; ngalinye lifaka nezizinda zalo ezingaphansi."
 }

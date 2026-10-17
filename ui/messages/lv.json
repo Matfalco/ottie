@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Palaižas, kad pārslēdzaties uz to, no nākamās palaišanas: datoram, kas tikai vada citu",
 	"cert_title": "Uzticami sertifikāti",
 	"cert_hint": "FTPS serveri, kuru sertifikātam uzticējāties no lejupielādes. Noņemiet vienu, un tā sertifikāts atkal tiek noraidīts.",
-	"cert_remove_label": "Vairs neuzticēties servera {host} sertifikātam"
+	"cert_remove_label": "Vairs neuzticēties servera {host} sertifikātam",
+	"ext_title": "Ottie šajā pārlūkā",
+	"ext_permission": "Ottie vajag piekļuvi visām vietnēm: lai kopā ar lejupielādi nosūtītu tās sīkdatnes un lai sasniegtu Ottie, lai kur tas darbotos.",
+	"ext_allow": "Atļaut",
+	"ext_signed_in": "Pierakstījies Ottie adresē {address}",
+	"ext_unreachable": "Ottie neatbild adresē {address}. Vai tas darbojas?",
+	"ext_refused": "Ottie noraidīja šī pārlūka marķieri. Pierakstieties vēlreiz ar jaunu saiti.",
+	"ext_signed_out": "Nav pierakstīts: lejupielādes paliek pārlūkā.",
+	"ext_link_hint": "Ottie: Iestatījumi → Savienojums: pievienojiet šo pārlūku kā ierīci un nokopējiet tā pierakstīšanās saiti. Datorā, kurā darbojas Ottie, to izdrukā arī komanda ottie link.",
+	"ext_take_over": "Sūtīt lejupielādes uz Ottie",
+	"ext_take_over_hint": "Šajā pārlūkā sāktās lejupielādes tā vietā nonāk Ottie, ar vietnes sīkdatnēm. Tās, ko Ottie nevar pieprasīt vēlreiz (no veidlapas vai lapas izveidotas), paliek pārlūkā, tāpat kā privāto logu lejupielādes.",
+	"ext_min_size": "Mazos failus atstāt pārlūkam",
+	"ext_min_size_hint": "Faili, kas pēc vietnes datiem ir mazāki, paliek pārlūkā. 0: neviens.",
+	"ext_excluded": "Pārlūkam atstātās vietnes",
+	"ext_excluded_hint": "To lejupielādes paliek pārlūkā. Pa vienai rindā; katra aptver arī savus apakšdomēnus."
 }

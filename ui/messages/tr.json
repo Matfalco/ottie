@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Bir sonraki başlatmadan itibaren, ona geçtiğinizde başlar: yalnızca başka birini yöneten bir bilgisayar için",
 	"cert_title": "Güvenilen sertifikalar",
 	"cert_hint": "Bir indirmeden kendi sertifikasına güvendiğiniz FTPS sunucuları. Birini kaldırırsanız sertifikası yeniden reddedilir.",
-	"cert_remove_label": "{host} sertifikasına güvenmeyi bırak"
+	"cert_remove_label": "{host} sertifikasına güvenmeyi bırak",
+	"ext_title": "Bu tarayıcıda Ottie",
+	"ext_permission": "Ottie'nin tüm sitelere erişmesi gerekir: bir indirmenin çerezlerini onunla birlikte göndermek ve nerede çalışırsa çalışsın Ottie'ye ulaşmak için.",
+	"ext_allow": "İzin ver",
+	"ext_signed_in": "{address} adresindeki Ottie'de oturum açık",
+	"ext_unreachable": "{address} adresindeki Ottie yanıt vermiyor. Çalışıyor mu?",
+	"ext_refused": "Ottie bu tarayıcının belirtecini reddetti. Yeni bir bağlantıyla yeniden oturum açın.",
+	"ext_signed_out": "Oturum açılmadı: indirmeler tarayıcıda kalır.",
+	"ext_link_hint": "Ottie'de Ayarlar → Bağlantı: bu tarayıcıyı cihaz olarak ekleyin ve oturum açma bağlantısını kopyalayın. Ottie'nin çalıştığı bilgisayarda ottie link komutu da bir tane yazdırır.",
+	"ext_take_over": "İndirmeleri Ottie'ye gönder",
+	"ext_take_over_hint": "Bu tarayıcıda başlatılan indirmeler bunun yerine sitenin çerezleriyle Ottie'ye gider. Ottie'nin yeniden isteyemedikleri (bir formdan gelen ya da sayfanın oluşturduğu) tarayıcıda kalır, gizli pencerelerdekiler de öyle.",
+	"ext_min_size": "Küçük dosyaları tarayıcıya bırak",
+	"ext_min_size_hint": "Sitenin bundan küçük dediği dosyalar tarayıcıda kalır. 0: hiçbiri.",
+	"ext_excluded": "Tarayıcıya bırakılan siteler",
+	"ext_excluded_hint": "İndirmeleri tarayıcıda kalır. Her satıra bir tane; her biri alt alan adlarını da kapsar."
 }

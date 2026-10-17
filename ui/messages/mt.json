@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Jibda meta taqleb għalih, mill-bidu li jmiss: għal kompjuter li jmexxi biss ieħor",
 	"cert_title": "Ċertifikati fdati",
 	"cert_hint": "Servers FTPS li fdajt iċ-ċertifikat tagħhom minn tniżżil. Neħħi wieħed, u ċ-ċertifikat tiegħu jerġa’ jiġi miċħud.",
-	"cert_remove_label": "Tibqax tafda ċ-ċertifikat ta’ {host}"
+	"cert_remove_label": "Tibqax tafda ċ-ċertifikat ta’ {host}",
+	"ext_title": "Ottie f’dan il-brawżer",
+	"ext_permission": "Ottie jeħtieġ aċċess għas-siti kollha: biex jibgħat il-cookies ta’ tniżżila magħha, u biex jilħaq lil Ottie kull fejn ikun qed jaħdem.",
+	"ext_allow": "Ippermetti",
+	"ext_signed_in": "Dħalt f’Ottie fuq {address}",
+	"ext_unreachable": "Ottie mhux qed iwieġeb fuq {address}. Qed jaħdem?",
+	"ext_refused": "Ottie irrifjuta t-token ta’ dan il-brawżer. Erġa’ idħol b’ħolqa ġdida.",
+	"ext_signed_out": "Mhux dħalt: it-tniżżiliet jibqgħu fil-brawżer.",
+	"ext_link_hint": "F’Ottie, Issettjar → Konnessjoni: żid dan il-brawżer bħala apparat u kkopja l-ħolqa tad-dħul tiegħu. Fuq il-kompjuter fejn jaħdem Ottie, il-kmand ottie link juri waħda wkoll.",
+	"ext_take_over": "Ibgħat it-tniżżiliet lil Ottie",
+	"ext_take_over_hint": "It-tniżżiliet mibdija f’dan il-brawżer imorru għand Ottie minflok, bil-cookies tas-sit. Dawk li Ottie ma jistax jitlob mill-ġdid (minn formola, jew magħmula mill-paġna) jibqgħu fil-brawżer, kif ukoll dawk tat-twieqi privati.",
+	"ext_min_size": "Ħalli l-fajls żgħar lill-brawżer",
+	"ext_min_size_hint": "Il-fajls li s-sit jgħid li huma iżgħar jibqgħu fil-brawżer. 0: l-ebda wieħed.",
+	"ext_excluded": "Siti mħallija lill-brawżer",
+	"ext_excluded_hint": "It-tniżżiliet tagħhom jibqgħu fil-brawżer. Wieħed għal kull linja; kull wieħed ikopri s-sottodominji tiegħu."
 }

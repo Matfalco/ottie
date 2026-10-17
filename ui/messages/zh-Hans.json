@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "从下次启动起，在你切换到它时才启动：适合只用来控制另一台电脑的电脑",
 	"cert_title": "受信任的证书",
 	"cert_hint": "你在下载时信任了其自有证书的 FTPS 服务器。移除一个后，其证书会再次被拒绝。",
-	"cert_remove_label": "不再信任 {host} 的证书"
+	"cert_remove_label": "不再信任 {host} 的证书",
+	"ext_title": "此浏览器中的 Ottie",
+	"ext_permission": "Ottie 需要访问所有网站：以便随下载一起发送其 Cookie，并在任何运行 Ottie 的地方连接到它。",
+	"ext_allow": "允许",
+	"ext_signed_in": "已登录 {address} 上的 Ottie",
+	"ext_unreachable": "{address} 上的 Ottie 没有响应。它在运行吗？",
+	"ext_refused": "Ottie 拒绝了此浏览器的令牌。请用新链接重新登录。",
+	"ext_signed_out": "未登录：下载留在浏览器中。",
+	"ext_link_hint": "在 Ottie 的“设置 → 连接”中，将此浏览器添加为设备并复制其登录链接。在运行 Ottie 的电脑上，命令 ottie link 也会显示一个。",
+	"ext_take_over": "将下载交给 Ottie",
+	"ext_take_over_hint": "在此浏览器中开始的下载改由 Ottie 进行，并带上网站的 Cookie。Ottie 无法重新请求的下载（来自表单或由页面生成）留在浏览器中，隐私窗口中的下载也是如此。",
+	"ext_min_size": "小文件留给浏览器",
+	"ext_min_size_hint": "网站标明小于此大小的文件留在浏览器中。0：不保留。",
+	"ext_excluded": "留给浏览器的网站",
+	"ext_excluded_hint": "这些网站的下载留在浏览器中。每行一个；每个也包括其子域名。"
 }

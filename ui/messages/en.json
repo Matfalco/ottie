@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Starts when you switch to it, from the next start on: for a computer that only drives another one",
 	"cert_title": "Trusted certificates",
 	"cert_hint": "FTPS servers whose own certificate you trusted from a download. Remove one, and its certificate is refused again.",
-	"cert_remove_label": "Stop trusting the certificate of {host}"
+	"cert_remove_label": "Stop trusting the certificate of {host}",
+	"ext_title": "Ottie in this browser",
+	"ext_permission": "Ottie needs access to every site: to send a download’s cookies with it, and to reach Ottie wherever it runs.",
+	"ext_allow": "Allow",
+	"ext_signed_in": "Signed in to Ottie at {address}",
+	"ext_unreachable": "Ottie doesn’t answer at {address}. Is it running?",
+	"ext_refused": "Ottie refused this browser’s token. Sign in again with a new link.",
+	"ext_signed_out": "Not signed in: downloads stay in the browser.",
+	"ext_link_hint": "In Ottie, Settings → Connection: add this browser as a device and copy its sign-in link. On the computer Ottie runs on, the command ottie link prints one too.",
+	"ext_take_over": "Send downloads to Ottie",
+	"ext_take_over_hint": "Downloads started in this browser go to Ottie instead, with the site’s cookies. Those Ottie can’t fetch again (from a form, or made by the page) stay in the browser, as do those of private windows.",
+	"ext_min_size": "Leave small files to the browser",
+	"ext_min_size_hint": "Files the site says are smaller than this stay in the browser. 0: none do.",
+	"ext_excluded": "Sites left to the browser",
+	"ext_excluded_hint": "Their downloads stay in the browser. One per line; each covers its subdomains."
 }

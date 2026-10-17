@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Uruchamia się, gdy na niego przełączysz, od następnego uruchomienia: dla komputera, który tylko steruje innym",
 	"cert_title": "Zaufane certyfikaty",
 	"cert_hint": "Serwery FTPS, których własnemu certyfikatowi zaufano z poziomu pobierania. Usuń jeden, a jego certyfikat znów będzie odrzucany.",
-	"cert_remove_label": "Przestań ufać certyfikatowi {host}"
+	"cert_remove_label": "Przestań ufać certyfikatowi {host}",
+	"ext_title": "Ottie w tej przeglądarce",
+	"ext_permission": "Ottie potrzebuje dostępu do wszystkich witryn: aby wysłać ciasteczka pobierania razem z nim i aby dotrzeć do Ottie, gdziekolwiek działa.",
+	"ext_allow": "Zezwól",
+	"ext_signed_in": "Zalogowano do Ottie pod adresem {address}",
+	"ext_unreachable": "Ottie nie odpowiada pod adresem {address}. Czy działa?",
+	"ext_refused": "Ottie odrzucił token tej przeglądarki. Zaloguj się ponownie nowym linkiem.",
+	"ext_signed_out": "Nie zalogowano: pobierania zostają w przeglądarce.",
+	"ext_link_hint": "W Ottie, Ustawienia → Połączenie: dodaj tę przeglądarkę jako urządzenie i skopiuj jej link logowania. Na komputerze, na którym działa Ottie, polecenie ottie link też go wyświetla.",
+	"ext_take_over": "Wysyłaj pobierania do Ottie",
+	"ext_take_over_hint": "Pobierania rozpoczęte w tej przeglądarce trafiają zamiast tego do Ottie, z ciasteczkami witryny. Te, których Ottie nie może pobrać ponownie (z formularza lub utworzone przez stronę), zostają w przeglądarce, podobnie jak te z okien prywatnych.",
+	"ext_min_size": "Zostaw małe pliki przeglądarce",
+	"ext_min_size_hint": "Pliki, które według witryny są mniejsze, zostają w przeglądarce. 0: żadne.",
+	"ext_excluded": "Witryny pozostawione przeglądarce",
+	"ext_excluded_hint": "Ich pobierania zostają w przeglądarce. Jedna na wiersz; każda obejmuje swoje subdomeny."
 }

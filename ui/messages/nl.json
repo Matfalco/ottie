@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Start als je ernaar overschakelt, vanaf de volgende start: voor een computer die alleen een andere bestuurt",
 	"cert_title": "Vertrouwde certificaten",
 	"cert_hint": "FTPS-servers waarvan je het eigen certificaat vanuit een download vertrouwde. Verwijder er een en dat certificaat wordt weer geweigerd.",
-	"cert_remove_label": "Het certificaat van {host} niet meer vertrouwen"
+	"cert_remove_label": "Het certificaat van {host} niet meer vertrouwen",
+	"ext_title": "Ottie in deze browser",
+	"ext_permission": "Ottie heeft toegang tot alle sites nodig: om de cookies van een download mee te sturen en om Ottie te bereiken waar het ook draait.",
+	"ext_allow": "Toestaan",
+	"ext_signed_in": "Aangemeld bij Ottie op {address}",
+	"ext_unreachable": "Ottie antwoordt niet op {address}. Draait het?",
+	"ext_refused": "Ottie heeft het token van deze browser geweigerd. Meld je opnieuw aan met een nieuwe link.",
+	"ext_signed_out": "Niet aangemeld: downloads blijven in de browser.",
+	"ext_link_hint": "In Ottie, Instellingen → Verbinding: voeg deze browser toe als apparaat en kopieer zijn aanmeldlink. Op de computer waarop Ottie draait, geeft ook de opdracht ottie link er een.",
+	"ext_take_over": "Downloads naar Ottie sturen",
+	"ext_take_over_hint": "Downloads die in deze browser starten, gaan in plaats daarvan naar Ottie, met de cookies van de site. Wat Ottie niet opnieuw kan opvragen (uit een formulier, of door de pagina gemaakt) blijft in de browser, net als downloads uit privévensters.",
+	"ext_min_size": "Kleine bestanden aan de browser laten",
+	"ext_min_size_hint": "Bestanden die volgens de site kleiner zijn, blijven in de browser. 0: geen.",
+	"ext_excluded": "Sites die bij de browser blijven",
+	"ext_excluded_hint": "Hun downloads blijven in de browser. Eén per regel; elk geldt ook voor de subdomeinen."
 }

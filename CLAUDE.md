@@ -308,7 +308,20 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      DM Mono, else the system's; see "Languages and fonts" below, 0041), radii and the
                      surfaces of the shapes (sunken, raised, the frame; 0044, 0047)
   vite.config.ts     SvelteKit + adapter-static → ../crates/api/ui-dist; Paraglide; dev proxy /api → daemon
-extension/         WebExtension (Chrome + Firefox)
+extension/         the browser extension (pnpm package `extension`; Manifest V3, Chromium-based browsers and Firefox,
+                   0055)  [exists]
+  src/background.ts  takes the browser's downloads over: Ottie first, then the browser's cancelled and erased
+                     (never dropped: kept if Ottie refuses or the browser finished first); notes forms' POSTs
+  src/lib/           plain logic, unit-tested (*.test.ts, Vitest): settings.ts (the extension's own, in
+                     chrome.storage.local: pairing, take over, smallest size, sites left out), takeover.ts (which
+                     downloads go, and why not), daemon.ts (Ottie's API with this browser's token), signin.ts
+                     (a sign-in link), cookies.ts (the Cookie header), sites.ts, posts.ts, look.ts (Ottie's shared
+                     look and language, kept for the pages), sizes.ts
+  src/manifest.ts    the manifest per browser (service worker or background script, downloads.ui, gecko ID)
+  src/pages/start.ts what every extension page does first: fonts, app.css, theme, language (overwriteGetLocale)
+  src/options/       the options page (Options.svelte: sign in, take over, smallest size, sites)
+  options.html, vite.config.ts  `vite build --mode chrome|firefox` → dist/chrome, dist/firefox; `#ui/…` is
+                     ui/src/lib (its components, texts in ui/messages as `ext_*`, format, languages, theme)
 shared/api-types/  TypeScript types generated from Rust (ts-rs, by `cargo test -p ottie-api`;
                    output folder set in .cargo/config.toml), plus Ranges.ts (settings' ranges).
                    Never edit by hand.  [exists]
@@ -351,8 +364,10 @@ pnpm --filter app dev                # desktop app (builds the UI and ottie firs
 pnpm --filter app build              # installer: UI → release ottie → app (target/release/bundle/)
 pnpm --filter app icon               # rebuild app/icons/icon.ico after changing res/icons
 
+pnpm --filter extension build        # → extension/dist/chrome and dist/firefox (load unpacked from there)
+pnpm --filter extension check        # svelte-check + tsc; also test, lint, format
+
 # planned, not scaffolded yet:
-pnpm --filter extension build
 pnpm --filter app tauri android dev  # Android device/emulator
 ```
 
@@ -360,7 +375,7 @@ Before calling a task done: fmt, clippy, tests for the crates you touched; for T
 
 Development on Windows: Rust via rustup (stable, MSVC target) plus VS 2022 Build Tools with the C++ workload. Shells started before that install may lack `~/.cargo/bin` on `PATH`. Node 24 (nvm-windows) and pnpm 12 (`npm install -g pnpm`) are installed. The workspace includes the Tauri app, so `cargo build/test/clippy --workspace` compile Tauri too (WebView2 comes with Windows 11; Linux needs the webkit2gtk 4.1 dev packages, libayatana-appindicator3 for the tray, and libasound2 (ALSA) dev for notification sounds). In a dev run, set `OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` to keep away from your real downloads: the app passes them on to the daemon. The dev app still reads and writes the real `app.json` (`%APPDATA%\io.github.matfalco.ottie` on Windows): back it up first. `OTTIE_POWER_DRY_RUN=1` keeps the computer on when trying "when everything has finished".
 
-Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 30 GB of disk, Node 22, only the repo (nothing from the maintainer's machine). The SessionStart hook in `.claude/settings.json` runs `.claude/cloud-setup.sh`, which does nothing elsewhere: the Linux packages Tauri needs, current stable Rust with clippy and rustfmt, pnpm at the `packageManager` version, `pnpm install` when a lockfile or `package.json` changed, and `CARGO_PROFILE_DEV_DEBUG=line-tables-only` so `target/` fits on the disk. Its last line (`cloud-setup: ready …`) says what it found. There, `cargo build/test/clippy --workspace` and the UI's `check`/`test`/`lint`/`build` all run; the desktop app can't be seen on screen, and Windows-only code (`#[cfg(windows)]`: the Mark of the Web, power calls, the Run key) only compiles on Windows: say which of those a change touches, so the maintainer checks them on Windows. Code that only needs pure-Rust crates (like `crates/ottie/src/service/`) can still be checked for Windows and macOS: `rustup target add x86_64-pc-windows-msvc aarch64-apple-darwin`, then `cargo clippy --target …` on a scratch crate that links those files in (the whole workspace can't: aws-lc and SQLite need the target's C compiler). Pages can be checked in a headless browser on a test daemon (`OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` in a temporary folder) over the DevTools protocol; synthetic events there must bubble (`new Event('change', { bubbles: true })`), since Svelte 5 listens once at the root. Tests never hit the real internet anyway, and the network only reaches registries (crates.io, npm) and GitHub.
+Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 30 GB of disk, Node 22, only the repo (nothing from the maintainer's machine). The SessionStart hook in `.claude/settings.json` runs `.claude/cloud-setup.sh`, which does nothing elsewhere: the Linux packages Tauri needs, current stable Rust with clippy and rustfmt, pnpm at the `packageManager` version, `pnpm install` when a lockfile or `package.json` changed, and `CARGO_PROFILE_DEV_DEBUG=line-tables-only` so `target/` fits on the disk. Its last line (`cloud-setup: ready …`) says what it found. There, `cargo build/test/clippy --workspace` and the UI's `check`/`test`/`lint`/`build` all run; the desktop app can't be seen on screen, and Windows-only code (`#[cfg(windows)]`: the Mark of the Web, power calls, the Run key) only compiles on Windows: say which of those a change touches, so the maintainer checks them on Windows. Code that only needs pure-Rust crates (like `crates/ottie/src/service/`) can still be checked for Windows and macOS: `rustup target add x86_64-pc-windows-msvc aarch64-apple-darwin`, then `cargo clippy --target …` on a scratch crate that links those files in (the whole workspace can't: aws-lc and SQLite need the target's C compiler). Pages can be checked in a headless browser on a test daemon (`OTTIE_CONFIG_DIR`/`OTTIE_DATA_DIR`/`OTTIE_PORT` in a temporary folder) over the DevTools protocol; synthetic events there must bubble (`new Event('change', { bubbles: true })`), since Svelte 5 listens once at the root. The extension runs in that Chromium too: Playwright (installed globally, `/opt/node22/lib/node_modules/playwright`) with `launchPersistentContext`, `--load-extension=extension/dist/chrome` and `--headless=new`; its service worker's `evaluate` can sign it in (`chrome.storage.local`). `target/debug/incremental` grows past 10 GB: delete it when the disk fills. Tests never hit the real internet anyway, and the network only reaches registries (crates.io, npm) and GitHub.
 
 ## Engine rules (crates/core)
 
@@ -569,7 +584,7 @@ Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review. 
      SFTP later
 8. ‼️ Browser extension (`docs/decisions/0055`), in progress, a commit per slice:
    - ‼️ 8a the browser's cookie, referrer and user agent sent with a download it hands over (`POST /jobs`)
-   - 8b the extension: takes over downloads (with exceptions), sign-in link
+   - ‼️ 8b the extension: takes over downloads (with exceptions), sign-in link
    - 8c its popup: the daemon's own `/popup` page
    - 8d the native messaging host (`ottie` itself): signs in by itself, starts the daemon
    - 8e "Download with Ottie" in the context menu

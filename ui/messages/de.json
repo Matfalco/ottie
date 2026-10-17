@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Startet, wenn du zu ihm wechselst, ab dem nächsten Start: für einen Computer, der nur einen anderen steuert",
 	"cert_title": "Vertrauenswürdige Zertifikate",
 	"cert_hint": "FTPS-Server, deren eigenem Zertifikat Sie bei einem Download vertraut haben. Entfernen Sie eines, wird sein Zertifikat wieder abgelehnt.",
-	"cert_remove_label": "Dem Zertifikat von {host} nicht mehr vertrauen"
+	"cert_remove_label": "Dem Zertifikat von {host} nicht mehr vertrauen",
+	"ext_title": "Ottie in diesem Browser",
+	"ext_permission": "Ottie braucht Zugriff auf alle Websites: um die Cookies eines Downloads mitzuschicken und Ottie zu erreichen, wo es auch läuft.",
+	"ext_allow": "Erlauben",
+	"ext_signed_in": "Bei Ottie auf {address} angemeldet",
+	"ext_unreachable": "Ottie antwortet nicht auf {address}. Läuft es?",
+	"ext_refused": "Ottie hat das Token dieses Browsers abgelehnt. Melde dich mit einem neuen Link wieder an.",
+	"ext_signed_out": "Nicht angemeldet: Downloads bleiben im Browser.",
+	"ext_link_hint": "In Ottie unter Einstellungen → Verbindung diesen Browser als Gerät hinzufügen und seinen Anmeldelink kopieren. Auf dem Computer, auf dem Ottie läuft, gibt auch der Befehl ottie link einen aus.",
+	"ext_take_over": "Downloads an Ottie senden",
+	"ext_take_over_hint": "In diesem Browser gestartete Downloads gehen stattdessen an Ottie, mit den Cookies der Website. Was Ottie nicht erneut abrufen kann (aus einem Formular oder von der Seite erzeugt), bleibt im Browser, ebenso Downloads aus privaten Fenstern.",
+	"ext_min_size": "Kleine Dateien dem Browser lassen",
+	"ext_min_size_hint": "Dateien, die laut Website kleiner sind, bleiben im Browser. 0: keine.",
+	"ext_excluded": "Websites, die beim Browser bleiben",
+	"ext_excluded_hint": "Ihre Downloads bleiben im Browser. Eine pro Zeile; jede gilt auch für ihre Subdomains."
 }

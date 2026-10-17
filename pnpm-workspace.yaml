@@ -1,5 +1,6 @@
 packages:
   - app
+  - extension
   - ui
   - shared/api-types
 minimumReleaseAgeExclude:

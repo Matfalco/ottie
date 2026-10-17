@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Zažene se, ko preklopite nanj, od naslednjega zagona: za računalnik, ki le upravlja drugega",
 	"cert_title": "Zaupanja vredna potrdila",
 	"cert_hint": "Strežniki FTPS, katerih lastnemu potrdilu ste zaupali iz prenosa. Odstranite enega in njegovo potrdilo bo spet zavrnjeno.",
-	"cert_remove_label": "Ne zaupaj več potrdilu strežnika {host}"
+	"cert_remove_label": "Ne zaupaj več potrdilu strežnika {host}",
+	"ext_title": "Ottie v tem brskalniku",
+	"ext_permission": "Ottie potrebuje dostop do vseh spletnih mest: da s prenosom pošlje njegove piškotke in da doseže Ottie, kjerkoli teče.",
+	"ext_allow": "Dovoli",
+	"ext_signed_in": "Prijavljeni v Ottie na {address}",
+	"ext_unreachable": "Ottie se ne odziva na {address}. Ali teče?",
+	"ext_refused": "Ottie je zavrnil žeton tega brskalnika. Znova se prijavite z novo povezavo.",
+	"ext_signed_out": "Niste prijavljeni: prenosi ostanejo v brskalniku.",
+	"ext_link_hint": "V Ottieju, Nastavitve → Povezava: dodajte ta brskalnik kot napravo in kopirajte njegovo povezavo za prijavo. Na računalniku, kjer teče Ottie, eno izpiše tudi ukaz ottie link.",
+	"ext_take_over": "Pošiljaj prenose v Ottie",
+	"ext_take_over_hint": "Prenosi, začeti v tem brskalniku, gredo namesto tega v Ottie, s piškotki spletnega mesta. Tisti, ki jih Ottie ne more znova zahtevati (iz obrazca ali jih je ustvarila stran), ostanejo v brskalniku, prav tako tisti iz zasebnih oken.",
+	"ext_min_size": "Majhne datoteke prepusti brskalniku",
+	"ext_min_size_hint": "Datoteke, ki so po navedbi spletnega mesta manjše, ostanejo v brskalniku. 0: nobena.",
+	"ext_excluded": "Spletna mesta, prepuščena brskalniku",
+	"ext_excluded_hint": "Njihovi prenosi ostanejo v brskalniku. Eno na vrstico; vsako zajema tudi svoje poddomene."
 }

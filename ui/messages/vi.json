@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Khởi động khi bạn chuyển sang nó, từ lần khởi động tiếp theo: cho máy tính chỉ điều khiển máy khác",
 	"cert_title": "Chứng chỉ được tin cậy",
 	"cert_hint": "Các máy chủ FTPS mà bạn đã tin cậy chứng chỉ riêng từ một lần tải. Xóa một mục, chứng chỉ đó lại bị từ chối.",
-	"cert_remove_label": "Thôi tin cậy chứng chỉ của {host}"
+	"cert_remove_label": "Thôi tin cậy chứng chỉ của {host}",
+	"ext_title": "Ottie trong trình duyệt này",
+	"ext_permission": "Ottie cần quyền truy cập mọi trang web: để gửi cookie của một lượt tải cùng với nó, và để kết nối tới Ottie dù nó chạy ở đâu.",
+	"ext_allow": "Cho phép",
+	"ext_signed_in": "Đã đăng nhập Ottie tại {address}",
+	"ext_unreachable": "Ottie không trả lời tại {address}. Nó có đang chạy không?",
+	"ext_refused": "Ottie đã từ chối mã của trình duyệt này. Hãy đăng nhập lại bằng liên kết mới.",
+	"ext_signed_out": "Chưa đăng nhập: các lượt tải vẫn ở trong trình duyệt.",
+	"ext_link_hint": "Trong Ottie, Cài đặt → Kết nối: thêm trình duyệt này làm thiết bị và sao chép liên kết đăng nhập của nó. Trên máy tính chạy Ottie, lệnh ottie link cũng in ra một liên kết.",
+	"ext_take_over": "Gửi các lượt tải sang Ottie",
+	"ext_take_over_hint": "Các lượt tải bắt đầu trong trình duyệt này sẽ chuyển sang Ottie, kèm cookie của trang. Những lượt Ottie không thể yêu cầu lại (từ biểu mẫu, hoặc do trang tạo ra) vẫn ở trong trình duyệt, cũng như các lượt từ cửa sổ riêng tư.",
+	"ext_min_size": "Để tệp nhỏ cho trình duyệt",
+	"ext_min_size_hint": "Các tệp mà trang cho biết nhỏ hơn mức này vẫn ở trong trình duyệt. 0: không tệp nào.",
+	"ext_excluded": "Trang để cho trình duyệt",
+	"ext_excluded_hint": "Các lượt tải của chúng vẫn ở trong trình duyệt. Mỗi dòng một trang; mỗi trang bao gồm cả tên miền con."
 }

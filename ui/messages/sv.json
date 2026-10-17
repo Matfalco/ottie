@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Startar när du byter till den, från nästa start: för en dator som bara styr en annan",
 	"cert_title": "Betrodda certifikat",
 	"cert_hint": "FTPS-servrar vars eget certifikat du litat på från en nedladdning. Ta bort ett, så nekas certifikatet igen.",
-	"cert_remove_label": "Sluta lita på certifikatet för {host}"
+	"cert_remove_label": "Sluta lita på certifikatet för {host}",
+	"ext_title": "Ottie i den här webbläsaren",
+	"ext_permission": "Ottie behöver åtkomst till alla webbplatser: för att skicka med en nedladdnings kakor och för att nå Ottie var det än körs.",
+	"ext_allow": "Tillåt",
+	"ext_signed_in": "Inloggad på Ottie på {address}",
+	"ext_unreachable": "Ottie svarar inte på {address}. Körs det?",
+	"ext_refused": "Ottie avvisade webbläsarens token. Logga in igen med en ny länk.",
+	"ext_signed_out": "Inte inloggad: nedladdningar stannar i webbläsaren.",
+	"ext_link_hint": "I Ottie, Inställningar → Anslutning: lägg till den här webbläsaren som enhet och kopiera dess inloggningslänk. På datorn där Ottie körs skriver även kommandot ottie link ut en.",
+	"ext_take_over": "Skicka nedladdningar till Ottie",
+	"ext_take_over_hint": "Nedladdningar som startas i den här webbläsaren går till Ottie i stället, med webbplatsens kakor. De som Ottie inte kan hämta igen (från ett formulär eller skapade av sidan) stannar i webbläsaren, liksom de från privata fönster.",
+	"ext_min_size": "Lämna små filer åt webbläsaren",
+	"ext_min_size_hint": "Filer som webbplatsen säger är mindre stannar i webbläsaren. 0: inga.",
+	"ext_excluded": "Webbplatser som lämnas åt webbläsaren",
+	"ext_excluded_hint": "Deras nedladdningar stannar i webbläsaren. En per rad; var och en gäller även underdomäner."
 }

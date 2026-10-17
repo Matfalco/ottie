@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Inaanza unapobadili kwenda kwake, kuanzia mwanzo ujao: kwa kompyuta inayoendesha nyingine tu",
 	"cert_title": "Vyeti vinavyoaminiwa",
 	"cert_hint": "Seva za FTPS ambazo uliamini cheti chao kutoka kwa upakuaji. Ondoa kimoja, na cheti chake kinakataliwa tena.",
-	"cert_remove_label": "Acha kuamini cheti cha {host}"
+	"cert_remove_label": "Acha kuamini cheti cha {host}",
+	"ext_title": "Ottie katika kivinjari hiki",
+	"ext_permission": "Ottie inahitaji kufikia tovuti zote: ili kutuma vidakuzi vya upakuaji pamoja nao, na kufikia Ottie popote inapoendeshwa.",
+	"ext_allow": "Ruhusu",
+	"ext_signed_in": "Umeingia kwenye Ottie katika {address}",
+	"ext_unreachable": "Ottie haijibu katika {address}. Je, inaendeshwa?",
+	"ext_refused": "Ottie imekataa tokeni ya kivinjari hiki. Ingia tena kwa kiungo kipya.",
+	"ext_signed_out": "Hujaingia: vipakuliwa vinabaki kwenye kivinjari.",
+	"ext_link_hint": "Katika Ottie, Mipangilio → Muunganisho: ongeza kivinjari hiki kama kifaa na unakili kiungo chake cha kuingia. Kwenye kompyuta inayoendesha Ottie, amri ottie link pia huonyesha kimoja.",
+	"ext_take_over": "Tuma vipakuliwa kwa Ottie",
+	"ext_take_over_hint": "Vipakuliwa vinavyoanzishwa katika kivinjari hiki huenda kwa Ottie badala yake, pamoja na vidakuzi vya tovuti. Vile ambavyo Ottie haiwezi kuomba tena (kutoka kwa fomu, au vilivyotengenezwa na ukurasa) hubaki kwenye kivinjari, kama vile vya madirisha ya faragha.",
+	"ext_min_size": "Acha faili ndogo kwa kivinjari",
+	"ext_min_size_hint": "Faili ambazo tovuti inasema ni ndogo kuliko hii hubaki kwenye kivinjari. 0: hakuna.",
+	"ext_excluded": "Tovuti zilizoachwa kwa kivinjari",
+	"ext_excluded_hint": "Vipakuliwa vyake hubaki kwenye kivinjari. Moja kwa kila mstari; kila moja inajumuisha vikoa vyake vidogo."
 }

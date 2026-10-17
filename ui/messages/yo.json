@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Ó máa bẹ̀rẹ̀ nígbà tí o bá yí padà sí i, láti ìbẹ̀rẹ̀ tó ń bọ̀: fún kọ̀ǹpútà tó kàn ń darí òmíràn",
 	"cert_title": "Àwọn ìwé-ẹ̀rí tí a gbẹ́kẹ̀lé",
 	"cert_hint": "Àwọn olùpèsè FTPS tí o gbẹ́kẹ̀lé ìwé-ẹ̀rí wọn láti inú ìgbàsílẹ̀ kan. Yọ ọ̀kan kúrò, a ó sì tún kọ ìwé-ẹ̀rí rẹ̀.",
-	"cert_remove_label": "Dáwọ́ gbígbẹ́kẹ̀lé ìwé-ẹ̀rí {host} dúró"
+	"cert_remove_label": "Dáwọ́ gbígbẹ́kẹ̀lé ìwé-ẹ̀rí {host} dúró",
+	"ext_title": "Ottie nínú aṣàwákiri yìí",
+	"ext_permission": "Ottie nílò ààyè sí gbogbo ojú-ìwé: láti fi kúkì ìgbàsílẹ̀ ránṣẹ́ pẹ̀lú rẹ̀, àti láti dé ọ̀dọ̀ Ottie níbikíbi tí ó bá ti ń ṣiṣẹ́.",
+	"ext_allow": "Gbà láàyè",
+	"ext_signed_in": "O ti wọlé sí Ottie ní {address}",
+	"ext_unreachable": "Ottie kò dáhùn ní {address}. Ṣé ó ń ṣiṣẹ́?",
+	"ext_refused": "Ottie kọ àmì aṣàwákiri yìí. Tún wọlé pẹ̀lú ìjápọ̀ tuntun.",
+	"ext_signed_out": "O kò tíì wọlé: àwọn ìgbàsílẹ̀ wà nínú aṣàwákiri.",
+	"ext_link_hint": "Nínú Ottie, Ètò → Ìsopọ̀: fi aṣàwákiri yìí kún un gẹ́gẹ́ bí ẹ̀rọ kí o sì ṣe ẹ̀dà ìjápọ̀ ìwọlé rẹ̀. Lórí kọ̀mpútà tí Ottie ń ṣiṣẹ́, àṣẹ ottie link náà ń fi ọ̀kan hàn.",
+	"ext_take_over": "Fi àwọn ìgbàsílẹ̀ ránṣẹ́ sí Ottie",
+	"ext_take_over_hint": "Àwọn ìgbàsílẹ̀ tí a bẹ̀rẹ̀ nínú aṣàwákiri yìí ń lọ sí Ottie dípò, pẹ̀lú kúkì ojú-ìwé náà. Àwọn tí Ottie kò lè tún béèrè (láti inú fọ́ọ̀mù, tàbí tí ojú-ìwé ṣe) wà nínú aṣàwákiri, bí ti àwọn fèrèsé àdáni.",
+	"ext_min_size": "Fi àwọn fáìlì kékeré sílẹ̀ fún aṣàwákiri",
+	"ext_min_size_hint": "Àwọn fáìlì tí ojú-ìwé sọ pé wọ́n kéré ju èyí lọ wà nínú aṣàwákiri. 0: kò sí.",
+	"ext_excluded": "Àwọn ojú-ìwé tí a fi sílẹ̀ fún aṣàwákiri",
+	"ext_excluded_hint": "Àwọn ìgbàsílẹ̀ wọn wà nínú aṣàwákiri. Ọ̀kan ní ìlà kọ̀ọ̀kan; ọ̀kọ̀ọ̀kan ní àwọn ìpínlẹ̀ abẹ́ rẹ̀ nínú."
 }

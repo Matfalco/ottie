@@ -735,5 +735,19 @@
 	"set_local_when_shown_hint": "Akkor indul, amikor átváltasz rá, a következő indítástól: olyan számítógéphez, amely csak egy másikat irányít",
 	"cert_title": "Megbízható tanúsítványok",
 	"cert_hint": "FTPS-szerverek, amelyek saját tanúsítványát egy letöltésből megbízhatónak fogadta el. Ha eltávolít egyet, a tanúsítványát ismét elutasítja.",
-	"cert_remove_label": "{host} tanúsítványa többé ne legyen megbízható"
+	"cert_remove_label": "{host} tanúsítványa többé ne legyen megbízható",
+	"ext_title": "Ottie ebben a böngészőben",
+	"ext_permission": "Az Ottie-nak minden webhelyhez hozzá kell férnie: hogy a letöltés sütijeit is elküldje, és hogy elérje az Ottie-t, bárhol fut is.",
+	"ext_allow": "Engedélyezés",
+	"ext_signed_in": "Bejelentkezve az Ottie-ba itt: {address}",
+	"ext_unreachable": "Az Ottie nem válaszol itt: {address}. Fut?",
+	"ext_refused": "Az Ottie elutasította ennek a böngészőnek a tokenjét. Jelentkezz be újra egy új linkkel.",
+	"ext_signed_out": "Nincs bejelentkezve: a letöltések a böngészőben maradnak.",
+	"ext_link_hint": "Az Ottie-ban: Beállítások → Kapcsolat: add hozzá ezt a böngészőt eszközként, és másold ki a bejelentkezési linkjét. Azon a számítógépen, ahol az Ottie fut, az ottie link parancs is kiír egyet.",
+	"ext_take_over": "Letöltések küldése az Ottie-nak",
+	"ext_take_over_hint": "Az ebben a böngészőben indított letöltések helyette az Ottie-hoz kerülnek, a webhely sütijeivel. Amit az Ottie nem tud újra lekérni (űrlapból vagy az oldal által készítve), a böngészőben marad, ahogy a privát ablakokból indítottak is.",
+	"ext_min_size": "Kis fájlok maradjanak a böngészőben",
+	"ext_min_size_hint": "A webhely szerint ennél kisebb fájlok a böngészőben maradnak. 0: egyik sem.",
+	"ext_excluded": "A böngészőben hagyott webhelyek",
+	"ext_excluded_hint": "Ezek letöltései a böngészőben maradnak. Soronként egy; mindegyik az aldomainjeire is vonatkozik."
 }
