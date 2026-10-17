@@ -198,6 +198,16 @@ curl -H "Authorization: Bearer $TOKEN" $API/certificates                       #
 curl -H "Authorization: Bearer $TOKEN" -X DELETE $API/certificates/1           # refused again
 ```
 
+## Downloads from a browser
+
+A client handing over a download the browser started (the extension, docs/decisions/0055) can send what the browser would have: `cookie` (the `Cookie` header for that link), `referrer` (the page it came from) and `userAgent` (the browser's, sent instead of Ottie's). They go with every request of that download, and no other; on a redirect to another server, the cookie is left out. The daemon keeps them with the download, never gives them back (no job or event has them) and never logs them. A value with a line break, or over 32 KiB, is refused as `{"code": "invalidHeader", "name": "cookie"}`.
+
+```sh
+curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"url": "https://example.com/report.pdf", "cookie": "session=4f1c…",
+       "referrer": "https://example.com/reports", "userAgent": "Mozilla/5.0 …"}' $API/jobs
+```
+
 ## The first-start setup
 
 Until `setupDone` is true in `GET /settings`, front ends offer the setup. It comes in steps (`setupStep`, in this order: `look`, `downloads`, `categories`, then the desktop app's `startup`, `clipboard`, `notifications`); a front end shows those it has. Going past one, done or skipped, saves it with the settings it changes, so a setup stopped halfway carries on after it in whichever front end opens next. Ending it sets `setupDone` and clears the step.

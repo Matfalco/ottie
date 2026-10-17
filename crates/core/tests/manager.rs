@@ -6,8 +6,9 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use ottie_core::{
-    CategoryId, Error, Existing, HttpBackend, JobChange, JobEvent, JobId, JobSnapshot, JobState,
-    LinkPreview, Manager, NewJob, Priority, Problem, Reorder, SettingsChange, Store,
+    CategoryId, Error, Existing, HttpBackend, HttpConfig, JobChange, JobEvent, JobId, JobSnapshot,
+    JobState, LinkPreview, Manager, NewJob, Priority, Problem, Reorder, RequestHeaders,
+    SettingsChange, Store,
 };
 use support::{TestServer, test_data};
 use tempfile::TempDir;
@@ -274,6 +275,104 @@ async fn invalid_requests_are_refused() {
         s.manager.add(NewJob::new(sftp).in_dir(s.dir.path())).await,
         Err(Error::UnsupportedScheme(_))
     ));
+}
+
+fn browser_headers() -> RequestHeaders {
+    RequestHeaders {
+        cookie: Some("session=abc".to_owned()),
+        referrer: Some("https://example.com/page".to_owned()),
+        user_agent: Some("Browser/1.0".to_owned()),
+    }
+}
+
+#[tokio::test]
+async fn a_browsers_headers_go_with_every_request_of_its_job_only() {
+    let data = test_data(SIZE, 2);
+    let server = TestServer::start(data).await;
+    let config = HttpConfig {
+        connections: 4,
+        min_split: 64 * 1024,
+        ..HttpConfig::default()
+    };
+    let backend = HttpBackend::with_config(config).unwrap();
+    let manager = Manager::start(backend, Store::open_in_memory().await.unwrap())
+        .await
+        .unwrap();
+    let mut events = manager.subscribe();
+    let dir = tempfile::tempdir().unwrap();
+    let job = NewJob::new(server.url("/files/a.bin"))
+        .in_dir(dir.path())
+        .with_headers(browser_headers());
+    let first = manager.add(job).await.unwrap();
+    wait_completed(&mut events, first).await;
+
+    let sent = server.requests();
+    assert!(sent.len() > 1, "split across connections: {sent:?}");
+    for request in &sent {
+        assert_eq!(request.cookie.as_deref(), Some("session=abc"));
+        assert_eq!(request.referer.as_deref(), Some("https://example.com/page"));
+        assert_eq!(request.user_agent.as_deref(), Some("Browser/1.0"));
+    }
+
+    let other = NewJob::new(server.url("/files/b.bin")).in_dir(dir.path());
+    let second = manager.add(other).await.unwrap();
+    wait_completed(&mut events, second).await;
+    for request in &server.requests()[sent.len()..] {
+        assert_eq!(request.cookie, None);
+        assert_eq!(request.referer, None);
+        assert!(
+            request
+                .user_agent
+                .as_deref()
+                .unwrap()
+                .starts_with("ottie-core/")
+        );
+    }
+}
+
+async fn wait_completed(events: &mut Receiver<JobEvent>, id: JobId) {
+    tokio::time::timeout(TIMEOUT, async {
+        loop {
+            if let JobEvent::Changed(job) = events.recv().await.unwrap()
+                && job.id == id
+                && job.state == JobState::Completed
+            {
+                return;
+            }
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn headers_that_cant_be_sent_are_refused() {
+    let s = setup(1, 0).await;
+    for (headers, name) in [
+        (
+            RequestHeaders {
+                cookie: Some("a=1\r\nX-Evil: 1".to_owned()),
+                ..browser_headers()
+            },
+            "cookie",
+        ),
+        (
+            RequestHeaders {
+                user_agent: Some("x".repeat(RequestHeaders::MAX_LEN + 1)),
+                ..browser_headers()
+            },
+            "userAgent",
+        ),
+    ] {
+        let job = NewJob::new(s.server.url("/files/x.bin"))
+            .in_dir(s.dir.path())
+            .with_headers(headers);
+        assert!(matches!(
+            s.manager.add(job).await,
+            Err(Error::InvalidHeader(refused)) if refused == name
+        ));
+    }
+    assert!(s.manager.list().await.unwrap().is_empty());
 }
 
 #[tokio::test]

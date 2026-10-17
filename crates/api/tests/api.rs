@@ -113,6 +113,9 @@ impl Daemon {
             start_at: None,
             stop_at: None,
             existing: None,
+            cookie: None,
+            referrer: None,
+            user_agent: None,
         }
     }
 
@@ -282,6 +285,37 @@ async fn the_speed_history_gives_a_sample_per_second() {
         after.iter().all(|&bytes| bytes == 0),
         "nothing was downloading"
     );
+}
+
+#[tokio::test]
+async fn a_browsers_cookie_is_kept_but_never_given_back() {
+    let d = start().await;
+    let job = AddJob {
+        cookie: Some("session=secret-cookie".to_owned()),
+        referrer: Some("https://example.com/page".to_owned()),
+        user_agent: Some("Browser/1.0".to_owned()),
+        ..d.new_job("file.bin")
+    };
+    let response = d.post("/jobs").json(&job).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let id = response.json::<Added>().await.unwrap().id;
+    d.wait_until(&id, JobState::Completed).await;
+    let listed = d.get("/jobs").send().await.unwrap().text().await.unwrap();
+    let one = d.get(&format!("/jobs/{id}")).send().await;
+    let one = one.unwrap().text().await.unwrap();
+    for text in [listed, one] {
+        assert!(!text.contains("secret-cookie") && !text.contains("Browser/1.0"));
+    }
+
+    let broken = AddJob {
+        cookie: Some("a=1\r\nX-Other: 1".to_owned()),
+        ..d.new_job("file.bin")
+    };
+    let response = d.post("/jobs").json(&broken).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(body["code"], "invalidHeader");
+    assert_eq!(body["name"], "cookie");
 }
 
 #[tokio::test]

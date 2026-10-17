@@ -20,6 +20,11 @@ pub enum Error {
     #[error("not a valid link")]
     InvalidUrl,
 
+    /// A header the browser sent with a download (`cookie`, `referrer` or
+    /// `userAgent`) that can't be sent again: line breaks, or too long.
+    #[error("the {0} can't be sent as a header")]
+    InvalidHeader(&'static str),
+
     /// More links at once than [`crate::Settings::max_batch`] allows.
     #[error("{count} links at once; the most is {max}")]
     TooManyLinks { count: usize, max: usize },

@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use reqwest::Url;
+use reqwest::header::{COOKIE, HeaderMap, HeaderName, HeaderValue, REFERER, USER_AGENT};
 
 use crate::error::Error;
 use crate::filename::{self, Existing};
@@ -41,6 +43,83 @@ pub struct Download {
     /// by hand for this server, besides those the system trusts
     /// (docs/decisions/0054). Set for each run; not saved here.
     pub trusted: Vec<String>,
+    /// What the browser sent with it, when the extension handed it over
+    /// (docs/decisions/0055). Saved.
+    pub headers: RequestHeaders,
+}
+
+/// What a browser sent with a download it handed over (docs/decisions/0055):
+/// sent again with every HTTP request of that download, and of no other.
+/// Sites behind a sign-in need the cookies; some check the referrer, or that
+/// the user agent is the one the cookies were given to. FTP ignores them.
+///
+/// Saved with the job; never shown through the API nor logged: `Debug` only
+/// says which are set.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct RequestHeaders {
+    /// The `Cookie` header's value.
+    pub cookie: Option<String>,
+    /// The page the download came from (`Referer`).
+    pub referrer: Option<String>,
+    /// Instead of Ottie's own.
+    pub user_agent: Option<String>,
+}
+
+impl RequestHeaders {
+    /// The most bytes each value may have. Browsers keep a site's cookies
+    /// under about 4 KiB each, a few dozen at most.
+    pub const MAX_LEN: usize = 32 * 1024;
+
+    pub fn is_empty(&self) -> bool {
+        self.cookie.is_none() && self.referrer.is_none() && self.user_agent.is_none()
+    }
+
+    /// Fails with the header's name if a value can't be sent as one (line
+    /// breaks, other control characters) or is longer than [`Self::MAX_LEN`].
+    pub fn check(&self) -> Result<(), Error> {
+        for (name, _, value) in self.values() {
+            if value.len() > Self::MAX_LEN || HeaderValue::from_str(value).is_err() {
+                return Err(Error::InvalidHeader(name));
+            }
+        }
+        Ok(())
+    }
+
+    /// The headers every request of the download carries.
+    pub(crate) fn header_map(&self) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (_, header, value) in self.values() {
+            // `check` refused a value that can't be a header when the job
+            // was added; one that still can't is left out.
+            if let Ok(mut value) = HeaderValue::from_str(value) {
+                value.set_sensitive(true);
+                map.insert(header, value);
+            }
+        }
+        map
+    }
+
+    /// Those set: the field's name in the API, its header, its value.
+    fn values(&self) -> impl Iterator<Item = (&'static str, HeaderName, &str)> {
+        [
+            ("cookie", COOKIE, &self.cookie),
+            ("referrer", REFERER, &self.referrer),
+            ("userAgent", USER_AGENT, &self.user_agent),
+        ]
+        .into_iter()
+        .filter_map(|(name, header, value)| Some((name, header, value.as_deref()?)))
+    }
+}
+
+impl fmt::Debug for RequestHeaders {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let set = |value: &Option<String>| if value.is_some() { "…" } else { "-" };
+        f.debug_struct("RequestHeaders")
+            .field("cookie", &set(&self.cookie))
+            .field("referrer", &set(&self.referrer))
+            .field("user_agent", &set(&self.user_agent))
+            .finish()
+    }
 }
 
 /// Where to save a download once its real file name is known (from
@@ -95,6 +174,7 @@ impl Download {
             placement: None,
             existing: Existing::default(),
             trusted: Vec::new(),
+            headers: RequestHeaders::default(),
         })
     }
 

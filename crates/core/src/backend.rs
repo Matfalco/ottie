@@ -60,7 +60,7 @@ impl Backend for HttpBackend {
         cancel: &CancellationToken,
         on_event: &mut (dyn FnMut(Event) + Send),
     ) -> Result<Outcome, Error> {
-        let client = http::build_client()?;
+        let client = http::client_with(&dl.headers)?;
         let env = http::Env {
             client: &client,
             config: &self.config,

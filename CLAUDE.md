@@ -406,7 +406,7 @@ Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 3
 - Every API request carries a token (`docs/decisions/0014`): `Authorization: Bearer`, or for the events WebSocket the offered protocol `ottie.token.<token>` (never in a URL or a cookie). This computer's (32 random bytes, hex) lives in `<config>/token`, created on first use; `ottie serve` mentions where only when stdout is a terminal, never in logs. Unknown API paths also need it.
 - Other devices get tokens of their own (`docs/decisions/0052`), full or read-only, kept as SHA-256 hashes in `<config>/access.json`; only this computer's token manages them and the folders list. A read-only token passes `auth::only_reads` (GET, and a few POSTs that change nothing): a new endpoint that changes nothing but isn't a GET must be listed there. Every handler that takes a folder from a client checks it with `Access::folders_for` (devices: categories' folders and those listed only).
 - Play links (`/stream/{ticket}/…`, `docs/decisions/0029`) are the one exception: the random ticket reads one job's file and expires after 12 h unused. They're served with `Content-Security-Policy: sandbox`, so a downloaded page or SVG can't run scripts as the daemon's pages.
-- Cookies and auth headers forwarded by the extension belong to that one job: never log them, never reuse them for another job.
+- Cookies and auth headers forwarded by the extension belong to that one job: never log them, never reuse them for another job (`Download::headers`, `RequestHeaders`, `docs/decisions/0055`; the API never gives them back).
 - An FTP link's password (`docs/decisions/0054`) stays in the daemon's database: the API (jobs, events) gives links without it, logs go through `redact()`, `suppaftp` logs nothing (`no-log`). An FTPS certificate the system doesn't trust is accepted only when trusted by hand for that host, by its exact SHA-256 (`POST /certificates`, from the download that stopped at it); its handshake's signatures are still checked.
 - Another computer's Ottie shown in the desktop app (`docs/decisions/0053`) is only as trustworthy as that computer: its pages get `REMOTE_PERMISSIONS` (window, tray menu, copied links, switching), never a command that reaches this computer's files, programs, settings or power; a new app command is left out of that list unless it can't. Its token lives in the system's keychain, and no page gets a token back.
 - The desktop app opens files only through commands that take a job ID (`docs/decisions/0045`): it asks the daemon for the path and refuses a name that's more than a name. Running a program always asks first, in the app's own dialog.
@@ -487,7 +487,7 @@ Ottie embeds two fonts, Outfit and DM Mono for numbers in columns (`docs/decisio
 
 ## Build order
 
-Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review.
+Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review. ‼️: in progress (stopped partway: what's there is committed and documented).
 
 1. ✅ ~~`core`: single-connection HTTP download with pause/resume, plus the test server.~~
 2. ✅ Engine slices:
@@ -567,7 +567,12 @@ Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review.
      download (Settings → Connection lists them); resuming and several connections as for HTTP. Built, not
      reviewed yet: what's left to check (real servers, a NAS's own certificate on Windows) is at the end of 0054.
      SFTP later
-8. Browser extension.
+8. ‼️ Browser extension (`docs/decisions/0055`), in progress, a commit per slice:
+   - ‼️ 8a the browser's cookie, referrer and user agent sent with a download it hands over (`POST /jobs`)
+   - 8b the extension: takes over downloads (with exceptions), sign-in link
+   - 8c its popup: the daemon's own `/popup` page
+   - 8d the native messaging host (`ottie` itself): signs in by itself, starts the daemon
+   - 8e "Download with Ottie" in the context menu
 9. yt-dlp backend (its own updates, apart from the app's).
 10. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.
 

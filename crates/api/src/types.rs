@@ -166,6 +166,20 @@ pub struct AddJob {
     #[serde(default)]
     #[ts(optional)]
     pub existing: Option<Existing>,
+    /// For a download a browser hands over (the extension): its `Cookie`
+    /// header for this link, sent again with every request of this download
+    /// and no other. Kept by the daemon, never given back.
+    #[serde(default)]
+    #[ts(optional)]
+    pub cookie: Option<String>,
+    /// The page it came from (`Referer`), the same way.
+    #[serde(default)]
+    #[ts(optional)]
+    pub referrer: Option<String>,
+    /// The browser's user agent, sent instead of Ottie's, the same way.
+    #[serde(default)]
+    #[ts(optional)]
+    pub user_agent: Option<String>,
 }
 
 /// What a download does when a file with its name is already in its folder
@@ -1356,6 +1370,11 @@ pub enum Reason {
     /// The download started over while being played (its file changed).
     FileChanged {
         id: String,
+    },
+    /// A browser's `cookie`, `referrer` or `userAgent` (the field's name)
+    /// that can't be sent as a header: a line break, or over 32 KiB.
+    InvalidHeader {
+        name: String,
     },
     /// More links at once than the setting `maxBatch` allows.
     TooManyLinks {

@@ -3095,6 +3095,13 @@
             "description": "Default: matched by the file's extension.",
             "minimum": 0
           },
+          "cookie": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "For a download a browser hands over (the extension): its `Cookie`\nheader for this link, sent again with every request of this download\nand no other. Kept by the daemon, never given back."
+          },
           "destDir": {
             "type": [
               "string",
@@ -3112,6 +3119,13 @@
                 "type": "null"
               }
             ]
+          },
+          "referrer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The page it came from (`Referer`), the same way."
           },
           "startAt": {
             "type": [
@@ -3140,6 +3154,13 @@
           },
           "url": {
             "type": "string"
+          },
+          "userAgent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The browser's user agent, sent instead of Ottie's, the same way."
           }
         }
       },
@@ -5182,6 +5203,25 @@
                 ]
               },
               "id": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A browser's `cookie`, `referrer` or `userAgent` (the field's name)\nthat can't be sent as a header: a line break, or over 32 KiB.",
+            "required": [
+              "name",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "invalidHeader"
+                ]
+              },
+              "name": {
                 "type": "string"
               }
             }

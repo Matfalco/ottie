@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use reqwest::Url;
 
 use crate::category::{Category, CategoryId};
-use crate::download::{RestartReason, Segment};
+use crate::download::{RequestHeaders, RestartReason, Segment};
 use crate::filename::Existing;
 use crate::id::JobId;
 use crate::problem::Problem;
@@ -197,6 +197,8 @@ pub struct NewJob {
     /// What to do when a file with its name is already in its folder.
     /// `None`: [`Settings::existing`], when the time comes.
     pub existing: Option<Existing>,
+    /// What the browser sent with it (docs/decisions/0055).
+    pub headers: RequestHeaders,
 }
 
 impl NewJob {
@@ -209,6 +211,7 @@ impl NewJob {
             start_at: None,
             stop_at: None,
             existing: None,
+            headers: RequestHeaders::default(),
         }
     }
 
@@ -243,6 +246,12 @@ impl NewJob {
 
     pub fn stopping_at(mut self, at: SystemTime) -> Self {
         self.stop_at = Some(at);
+        self
+    }
+
+    /// Sent with every request of this download; checked when it's added.
+    pub fn with_headers(mut self, headers: RequestHeaders) -> Self {
+        self.headers = headers;
         self
     }
 }

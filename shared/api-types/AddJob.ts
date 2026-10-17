@@ -32,4 +32,18 @@ stopAt?: number,
  * What to do if a file with its name is already in its folder, when the
  * server answers. Default: the settings' `existing`.
  */
-existing?: Existing, };
+existing?: Existing, 
+/**
+ * For a download a browser hands over (the extension): its `Cookie`
+ * header for this link, sent again with every request of this download
+ * and no other. Kept by the daemon, never given back.
+ */
+cookie?: string, 
+/**
+ * The page it came from (`Referer`), the same way.
+ */
+referrer?: string, 
+/**
+ * The browser's user agent, sent instead of Ottie's, the same way.
+ */
+userAgent?: string, };

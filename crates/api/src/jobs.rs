@@ -6,7 +6,7 @@ use axum::Json;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use ottie_core::{CategoryId, JobId, NewJob};
+use ottie_core::{CategoryId, JobId, NewJob, RequestHeaders};
 
 use crate::AppState;
 use crate::access::{Caller, Folders};
@@ -98,7 +98,11 @@ fn new_job(body: AddJob, folders: &Folders) -> Result<NewJob, Failure> {
     if let Some(existing) = body.existing {
         job = job.existing(existing.into());
     }
-    Ok(job)
+    Ok(job.with_headers(RequestHeaders {
+        cookie: body.cookie,
+        referrer: body.referrer,
+        user_agent: body.user_agent,
+    }))
 }
 
 /// Queues several downloads at once, in order, each as `POST /jobs` would.

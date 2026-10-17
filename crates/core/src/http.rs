@@ -14,7 +14,9 @@ use reqwest::{Client, Response, StatusCode, Url, redirect};
 use tokio::fs::{self, File, OpenOptions};
 use tokio_util::sync::CancellationToken;
 
-use crate::download::{Download, Event, Outcome, RestartReason, Validator, check_http_scheme};
+use crate::download::{
+    Download, Event, Outcome, RequestHeaders, RestartReason, Validator, check_http_scheme,
+};
 use crate::error::Error;
 use crate::filename;
 use crate::playback::Playback;
@@ -69,6 +71,13 @@ impl Default for HttpConfig {
 /// It keeps connections open to use them again, so the manager's downloads
 /// take a new one for each run (see [`crate::HttpBackend`]).
 pub fn build_client() -> Result<Client, Error> {
+    client_with(&RequestHeaders::default())
+}
+
+/// [`build_client`], sending `headers` with every request: those a browser
+/// sent with the download (docs/decisions/0055). On a redirect to another
+/// server, reqwest leaves the cookies out.
+pub(crate) fn client_with(headers: &RequestHeaders) -> Result<Client, Error> {
     let policy = redirect::Policy::custom(|attempt| {
         if attempt.previous().len() >= MAX_REDIRECTS {
             attempt.error("too many redirects")
@@ -90,6 +99,8 @@ pub fn build_client() -> Result<Client, Error> {
             "/",
             env!("CARGO_PKG_VERSION")
         ))
+        // After `user_agent`: the browser's replaces Ottie's.
+        .default_headers(headers.header_map())
         .build()?)
 }
 

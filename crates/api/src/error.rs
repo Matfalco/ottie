@@ -99,6 +99,12 @@ impl From<Error> for Failure {
                 },
             ),
             Error::InvalidUrl => (S::BAD_REQUEST, Reason::InvalidUrl),
+            Error::InvalidHeader(name) => (
+                S::BAD_REQUEST,
+                Reason::InvalidHeader {
+                    name: (*name).to_owned(),
+                },
+            ),
             Error::TooManyLinks { count, max } => (
                 S::BAD_REQUEST,
                 Reason::TooManyLinks {

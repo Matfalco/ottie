@@ -1352,7 +1352,9 @@ impl<B: Backend> Actor<B> {
             self.settings.stream_media
                 && category::url_extension(&new.url).is_some_and(|ext| playback::is_media(&ext))
         });
-        let download = Download::new(new.url, dest_dir)?;
+        new.headers.check()?;
+        let mut download = Download::new(new.url, dest_dir)?;
+        download.headers = new.headers;
         let id = self.ids.next(unix_now());
         self.last_place += 1;
         self.jobs.insert(

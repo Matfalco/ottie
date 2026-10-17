@@ -15,7 +15,7 @@ use tokio::sync::oneshot;
 
 use crate::category::{BuiltIn, Category, CategoryId, CategorySettings};
 use crate::certificate::{CertificateId, TrustedCertificate};
-use crate::download::{Download, Segment, Validator};
+use crate::download::{Download, RequestHeaders, Segment, Validator};
 use crate::error::Error;
 use crate::filename::Existing;
 use crate::id::JobId;
@@ -462,6 +462,10 @@ const MIGRATIONS: &[&str] = &[
                                 AND fingerprint NOT GLOB '*[^0-9a-f]*'),
         UNIQUE (host, fingerprint)
      ) STRICT;",
+    // 21: what a browser sent with a download it handed over (0055).
+    "ALTER TABLE jobs ADD COLUMN cookie TEXT;
+     ALTER TABLE jobs ADD COLUMN referrer TEXT;
+     ALTER TABLE jobs ADD COLUMN user_agent TEXT;",
 ];
 
 /// Everything saved about one job.
@@ -835,9 +839,9 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
                            priority, speed_limit, category_id, category_chosen,
                            problem_kind, problem_number, problem_total, problem_detail,
                            streaming, streaming_chosen, queue_place, start_at, stop_at,
-                           ignores_slots, held_by, existing)
+                           ignores_slots, held_by, existing, cookie, referrer, user_agent)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                 ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)
+                 ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31)
          ON CONFLICT (id_secs, id_seq) DO UPDATE SET
              url = excluded.url, dest_dir = excluded.dest_dir,
              file_name = excluded.file_name, state = excluded.state,
@@ -852,7 +856,9 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
              streaming = excluded.streaming, streaming_chosen = excluded.streaming_chosen,
              queue_place = excluded.queue_place, start_at = excluded.start_at,
              stop_at = excluded.stop_at, ignores_slots = excluded.ignores_slots,
-             held_by = excluded.held_by, existing = excluded.existing",
+             held_by = excluded.held_by, existing = excluded.existing,
+             cookie = excluded.cookie, referrer = excluded.referrer,
+             user_agent = excluded.user_agent",
     )?
     .execute(params![
         secs,
@@ -883,6 +889,9 @@ fn write_job(tx: &Connection, record: &JobRecord) -> Result<(), Error> {
         record.ignores_slots,
         record.held_by.map(|slot| slot.0),
         record.existing.map(Existing::as_str),
+        dl.headers.cookie,
+        dl.headers.referrer,
+        dl.headers.user_agent,
     ])?;
     tx.prepare_cached("DELETE FROM segments WHERE job_secs = ?1 AND job_seq = ?2")?
         .execute(params![secs, seq])?;
@@ -955,7 +964,7 @@ fn load_jobs(conn: &Connection) -> Result<Vec<JobRecord>, Error> {
                 category_id, category_chosen,
                 problem_kind, problem_number, problem_total, problem_detail,
                 streaming, streaming_chosen, queue_place, start_at, stop_at, ignores_slots,
-                held_by, existing
+                held_by, existing, cookie, referrer, user_agent
          FROM jobs ORDER BY id_secs, id_seq",
     )?;
     let mut rows = stmt.query([])?;
@@ -1025,6 +1034,11 @@ fn record_from_row(row: &Row) -> rusqlite::Result<Result<JobRecord, String>> {
         placement: None,
         existing: Existing::default(),
         trusted: Vec::new(),
+        headers: RequestHeaders {
+            cookie: row.get(28)?,
+            referrer: row.get(29)?,
+            user_agent: row.get(30)?,
+        },
     };
     Ok(Ok(JobRecord {
         id,
@@ -1594,6 +1608,11 @@ mod tests {
         download.downloaded = 1234;
         download.validator = Some(Validator::ETag("\"abc\"".to_owned()));
         download.resumable = true;
+        download.headers = RequestHeaders {
+            cookie: Some("session=abc; theme=dark".to_owned()),
+            referrer: Some("https://example.com/files".to_owned()),
+            user_agent: None,
+        };
         JobRecord {
             id: JobId::from_parts(1_760_279_405, seq),
             state: JobState::Paused,

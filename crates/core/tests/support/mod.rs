@@ -11,8 +11,8 @@ use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::{ConnectInfo, Path, State};
 use axum::http::header::{
-    ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, ETAG, IF_RANGE, LOCATION,
-    RANGE, RETRY_AFTER,
+    ACCEPT_RANGES, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, COOKIE, ETAG, IF_RANGE,
+    LOCATION, RANGE, REFERER, RETRY_AFTER, USER_AGENT,
 };
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::Response;
@@ -49,6 +49,9 @@ pub struct Behavior {
 pub struct RecordedRequest {
     pub range: Option<String>,
     pub if_range: Option<String>,
+    pub cookie: Option<String>,
+    pub referer: Option<String>,
+    pub user_agent: Option<String>,
 }
 
 struct Shared {
@@ -161,6 +164,9 @@ async fn serve_file(
         shared.requests.push(RecordedRequest {
             range: range.clone(),
             if_range: if_range.clone(),
+            cookie: text(COOKIE),
+            referer: text(REFERER),
+            user_agent: text(USER_AGENT),
         });
         let b = &mut shared.behavior;
         let drop_after = b.drop_after.take();
