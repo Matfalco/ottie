@@ -344,6 +344,8 @@ shared/api-types/  TypeScript types generated from Rust (ts-rs, by `cargo test -
                    output folder set in .cargo/config.toml), plus Ranges.ts (settings' ranges).
                    Never edit by hand.  [exists]
 docs/api/          README.md (how to talk to the daemon) + openapi.json (generated) [exists]
+docs/screenshots/  the README's pictures: the real pages on a test daemon, with made-up downloads
+                   (2× scale, lossless WebP)                                  [exists]
 docs/decisions/    one short file per accepted decision (NNNN-title.md), and README.md,
                    one line per decision                                      [exists]
 res/icons/         the drawn Ottie icons (app, tray), PNG + SVG               [exists]
