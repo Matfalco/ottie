@@ -749,5 +749,7 @@
 	"ext_min_size": "Lasă fișierele mici browserului",
 	"ext_min_size_hint": "Fișierele pe care site-ul le declară mai mici rămân în browser. 0: niciunul.",
 	"ext_excluded": "Site-uri lăsate browserului",
-	"ext_excluded_hint": "Descărcările lor rămân în browser. Câte unul pe rând; fiecare include subdomeniile sale."
+	"ext_excluded_hint": "Descărcările lor rămân în browser. Câte unul pe rând; fiecare include subdomeniile sale.",
+	"popup_more": "Încă {count} în Ottie",
+	"popup_empty": "Încă nicio descărcare."
 }

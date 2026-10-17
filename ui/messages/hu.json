@@ -749,5 +749,7 @@
 	"ext_min_size": "Kis fájlok maradjanak a böngészőben",
 	"ext_min_size_hint": "A webhely szerint ennél kisebb fájlok a böngészőben maradnak. 0: egyik sem.",
 	"ext_excluded": "A böngészőben hagyott webhelyek",
-	"ext_excluded_hint": "Ezek letöltései a böngészőben maradnak. Soronként egy; mindegyik az aldomainjeire is vonatkozik."
+	"ext_excluded_hint": "Ezek letöltései a böngészőben maradnak. Soronként egy; mindegyik az aldomainjeire is vonatkozik.",
+	"popup_more": "Még {count} az Ottie-ban",
+	"popup_empty": "Még nincs letöltés."
 }

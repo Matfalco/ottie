@@ -18,7 +18,7 @@ export function manifest(browser: Browser, version: string): Record<string, unkn
 		description:
 			'Sends your downloads to Ottie: pause and resume, several connections, speed limits.',
 		icons: ICONS,
-		action: { default_title: 'Ottie', default_icon: ICONS },
+		action: { default_title: 'Ottie', default_icon: ICONS, default_popup: 'popup.html' },
 		options_ui: { page: 'options.html', open_in_tab: true },
 		// Every site: a download's cookies, and wherever Ottie runs.
 		host_permissions: ['<all_urls>']

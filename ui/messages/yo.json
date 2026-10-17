@@ -749,5 +749,7 @@
 	"ext_min_size": "Fi àwọn fáìlì kékeré sílẹ̀ fún aṣàwákiri",
 	"ext_min_size_hint": "Àwọn fáìlì tí ojú-ìwé sọ pé wọ́n kéré ju èyí lọ wà nínú aṣàwákiri. 0: kò sí.",
 	"ext_excluded": "Àwọn ojú-ìwé tí a fi sílẹ̀ fún aṣàwákiri",
-	"ext_excluded_hint": "Àwọn ìgbàsílẹ̀ wọn wà nínú aṣàwákiri. Ọ̀kan ní ìlà kọ̀ọ̀kan; ọ̀kọ̀ọ̀kan ní àwọn ìpínlẹ̀ abẹ́ rẹ̀ nínú."
+	"ext_excluded_hint": "Àwọn ìgbàsílẹ̀ wọn wà nínú aṣàwákiri. Ọ̀kan ní ìlà kọ̀ọ̀kan; ọ̀kọ̀ọ̀kan ní àwọn ìpínlẹ̀ abẹ́ rẹ̀ nínú.",
+	"popup_more": "{count} sí i nínú Ottie",
+	"popup_empty": "Kò sí ìgbàsílẹ̀ kankan síbẹ̀."
 }

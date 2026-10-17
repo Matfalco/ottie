@@ -749,5 +749,7 @@
 	"ext_min_size": "Mažus failus palikti naršyklei",
 	"ext_min_size_hint": "Failai, kurie, pasak svetainės, mažesni, lieka naršyklėje. 0: jokie.",
 	"ext_excluded": "Naršyklei paliktos svetainės",
-	"ext_excluded_hint": "Jų atsisiuntimai lieka naršyklėje. Po vieną eilutėje; kiekviena apima ir savo subdomenus."
+	"ext_excluded_hint": "Jų atsisiuntimai lieka naršyklėje. Po vieną eilutėje; kiekviena apima ir savo subdomenus.",
+	"popup_more": "Dar Ottie: {count}",
+	"popup_empty": "Atsisiuntimų dar nėra."
 }

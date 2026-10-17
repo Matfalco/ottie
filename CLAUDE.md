@@ -123,7 +123,8 @@ crates/api/        ottie-api: axum router under /api/v1 (static UI serving from 
   src/events.rs      GET /events WebSocket: changed / progress / removed / categoryChanged /
                      categoryRemoved / settingsChanged / viewChanged / viewRemoved / resync
   src/error.rs       engine Error → status + {"error": "…"}
-  src/ui.rs          the web UI: rust-embed of ui-dist/ (from disk in debug), --ui-dir, SPA fallback
+  src/ui.rs          the web UI: rust-embed of ui-dist/ (from disk in debug), --ui-dir, SPA fallback; pages may be
+                     framed only by its own and extensions' pages (`frame-ancestors`, 0055)
   ui-dist/           built UI (git-ignored, but packaged for crates.io)
   tests/api.rs       end to end: real server + small file server, reqwest + tungstenite
 crates/ottie/      ottie: the binary  [exists]
@@ -211,6 +212,8 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      +layout.ts (ssr = false), +page.svelte (Dashboard), downloads/+page.svelte
                      (Downloads, ?status= filter), categories/+page.svelte, schedule/+page.svelte,
                      settings/+page.svelte, tray/+page.svelte (the desktop app's tray menu: TrayMenu),
+                     popup/+page.svelte (the browser extension's popup, in its frame: Popup; the token handed
+                     over by postMessage, 0055),
                      finish/+page.svelte (its countdown window: Countdown), caught/+page.svelte (its
                      window for links copied elsewhere: Caught)
   src/lib/api.ts     fetch + WebSocket client for /api/v1 (Unauthorized, ApiFailure)
@@ -250,6 +253,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      what was added or refused, 0043),
                      access.ts (devices and the folders they may use, as Settings shows them, 0052),
                      certificates.ts (FTPS certificates: a fingerprint in pairs, the one a download stopped at, 0054),
+                     popup.ts (the extension's popup: which downloads it lists, its messages with the extension, 0055),
                      others.ts (Ottie on other computers: sign-in links, the switcher's rows, a browser's list, 0053;
                      others.svelte.ts: that list live, the app's or this browser's),
                      shortcuts.ts (keyboard shortcuts: what a key press means on every page and in
@@ -320,7 +324,9 @@ extension/         the browser extension (pnpm package `extension`; Manifest V3,
   src/manifest.ts    the manifest per browser (service worker or background script, downloads.ui, gecko ID)
   src/pages/start.ts what every extension page does first: fonts, app.css, theme, language (overwriteGetLocale)
   src/options/       the options page (Options.svelte: sign in, take over, smallest size, sites)
-  options.html, vite.config.ts  `vite build --mode chrome|firefox` → dist/chrome, dist/firefox; `#ui/…` is
+  src/popup/         the popup (Popup.svelte): its bar (take over, settings), then Ottie's /popup page in a frame,
+                     given the token once it's ready and as tall as it says (lib/frame.ts)
+  options.html, popup.html, vite.config.ts  `vite build --mode chrome|firefox` → dist/chrome, dist/firefox; `#ui/…` is
                      ui/src/lib (its components, texts in ui/messages as `ext_*`, format, languages, theme)
 shared/api-types/  TypeScript types generated from Rust (ts-rs, by `cargo test -p ottie-api`;
                    output folder set in .cargo/config.toml), plus Ranges.ts (settings' ranges).
@@ -420,6 +426,7 @@ Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 3
 - The daemon binds 127.0.0.1:24068 by default (`address`/`port` in config.toml, `--address`/`--port`, `OTTIE_ADDRESS`/`OTTIE_PORT`; flags win over the file). Remote access is opt-in, always requires a token, and should sit behind Tailscale, a VPN or a reverse proxy with HTTPS rather than be exposed directly (`docs/remote.md`).
 - Every API request carries a token (`docs/decisions/0014`): `Authorization: Bearer`, or for the events WebSocket the offered protocol `ottie.token.<token>` (never in a URL or a cookie). This computer's (32 random bytes, hex) lives in `<config>/token`, created on first use; `ottie serve` mentions where only when stdout is a terminal, never in logs. Unknown API paths also need it.
 - Other devices get tokens of their own (`docs/decisions/0052`), full or read-only, kept as SHA-256 hashes in `<config>/access.json`; only this computer's token manages them and the folders list. A read-only token passes `auth::only_reads` (GET, and a few POSTs that change nothing): a new endpoint that changes nothing but isn't a GET must be listed there. Every handler that takes a folder from a client checks it with `Access::folders_for` (devices: categories' folders and those listed only).
+- The daemon's pages may be shown in a frame only by its own pages and browser extensions' (`frame-ancestors`): the extension's popup frames `/popup` and hands it the token by `postMessage`, which that page takes only from an extension's page that is its parent (`docs/decisions/0055`).
 - Play links (`/stream/{ticket}/…`, `docs/decisions/0029`) are the one exception: the random ticket reads one job's file and expires after 12 h unused. They're served with `Content-Security-Policy: sandbox`, so a downloaded page or SVG can't run scripts as the daemon's pages.
 - Cookies and auth headers forwarded by the extension belong to that one job: never log them, never reuse them for another job (`Download::headers`, `RequestHeaders`, `docs/decisions/0055`; the API never gives them back).
 - An FTP link's password (`docs/decisions/0054`) stays in the daemon's database: the API (jobs, events) gives links without it, logs go through `redact()`, `suppaftp` logs nothing (`no-log`). An FTPS certificate the system doesn't trust is accepted only when trusted by hand for that host, by its exact SHA-256 (`POST /certificates`, from the download that stopped at it); its handshake's signatures are still checked.
@@ -585,7 +592,7 @@ Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review. 
 8. ‼️ Browser extension (`docs/decisions/0055`), in progress, a commit per slice:
    - ‼️ 8a the browser's cookie, referrer and user agent sent with a download it hands over (`POST /jobs`)
    - ‼️ 8b the extension: takes over downloads (with exceptions), sign-in link
-   - 8c its popup: the daemon's own `/popup` page
+   - ‼️ 8c its popup: the daemon's own `/popup` page
    - 8d the native messaging host (`ottie` itself): signs in by itself, starts the daemon
    - 8e "Download with Ottie" in the context menu
 9. yt-dlp backend (its own updates, apart from the app's).

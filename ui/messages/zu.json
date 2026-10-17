@@ -749,5 +749,7 @@
 	"ext_min_size": "Shiyela isiphequluli amafayela amancane",
 	"ext_min_size_hint": "Amafayela isayithi elithi mancane kunalokhu ahlala esipheqululini. 0: lutho.",
 	"ext_excluded": "Amasayithi ashiyelwe isiphequluli",
-	"ext_excluded_hint": "Ukulanda kwawo kuhlala esipheqululini. Elilodwa emugqeni ngamunye; ngalinye lifaka nezizinda zalo ezingaphansi."
+	"ext_excluded_hint": "Ukulanda kwawo kuhlala esipheqululini. Elilodwa emugqeni ngamunye; ngalinye lifaka nezizinda zalo ezingaphansi.",
+	"popup_more": "Okunye okungu-{count} ku-Ottie",
+	"popup_empty": "Akukabi khona ukulanda."
 }

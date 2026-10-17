@@ -749,5 +749,7 @@
 	"ext_min_size": "Lascia i file piccoli al browser",
 	"ext_min_size_hint": "I file che secondo il sito sono più piccoli restano nel browser. 0: nessuno.",
 	"ext_excluded": "Siti lasciati al browser",
-	"ext_excluded_hint": "I loro download restano nel browser. Uno per riga; ognuno include i suoi sottodomini."
+	"ext_excluded_hint": "I loro download restano nel browser. Uno per riga; ognuno include i suoi sottodomini.",
+	"popup_more": "Altri {count} in Ottie",
+	"popup_empty": "Ancora nessun download."
 }

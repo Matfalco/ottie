@@ -749,5 +749,7 @@
 	"ext_min_size": "Overlad små filer til browseren",
 	"ext_min_size_hint": "Filer, som webstedet siger er mindre, bliver i browseren. 0: ingen.",
 	"ext_excluded": "Websteder overladt til browseren",
-	"ext_excluded_hint": "Deres downloads bliver i browseren. Ét pr. linje; hvert dækker også underdomæner."
+	"ext_excluded_hint": "Deres downloads bliver i browseren. Ét pr. linje; hvert dækker også underdomæner.",
+	"popup_more": "{count} mere i Ottie",
+	"popup_empty": "Ingen downloads endnu."
 }

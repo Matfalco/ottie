@@ -749,5 +749,7 @@
 	"ext_min_size": "Küçük dosyaları tarayıcıya bırak",
 	"ext_min_size_hint": "Sitenin bundan küçük dediği dosyalar tarayıcıda kalır. 0: hiçbiri.",
 	"ext_excluded": "Tarayıcıya bırakılan siteler",
-	"ext_excluded_hint": "İndirmeleri tarayıcıda kalır. Her satıra bir tane; her biri alt alan adlarını da kapsar."
+	"ext_excluded_hint": "İndirmeleri tarayıcıda kalır. Her satıra bir tane; her biri alt alan adlarını da kapsar.",
+	"popup_more": "Ottie'de {count} tane daha",
+	"popup_empty": "Henüz indirme yok."
 }

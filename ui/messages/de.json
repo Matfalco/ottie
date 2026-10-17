@@ -749,5 +749,7 @@
 	"ext_min_size": "Kleine Dateien dem Browser lassen",
 	"ext_min_size_hint": "Dateien, die laut Website kleiner sind, bleiben im Browser. 0: keine.",
 	"ext_excluded": "Websites, die beim Browser bleiben",
-	"ext_excluded_hint": "Ihre Downloads bleiben im Browser. Eine pro Zeile; jede gilt auch für ihre Subdomains."
+	"ext_excluded_hint": "Ihre Downloads bleiben im Browser. Eine pro Zeile; jede gilt auch für ihre Subdomains.",
+	"popup_more": "{count} weitere in Ottie",
+	"popup_empty": "Noch keine Downloads."
 }

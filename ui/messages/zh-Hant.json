@@ -749,5 +749,7 @@
 	"ext_min_size": "小檔案留給瀏覽器",
 	"ext_min_size_hint": "網站標明小於此大小的檔案留在瀏覽器中。0：不保留。",
 	"ext_excluded": "留給瀏覽器的網站",
-	"ext_excluded_hint": "這些網站的下載留在瀏覽器中。每行一個；每個也包含其子網域。"
+	"ext_excluded_hint": "這些網站的下載留在瀏覽器中。每行一個；每個也包含其子網域。",
+	"popup_more": "Ottie 中還有 {count} 個",
+	"popup_empty": "還沒有下載。"
 }

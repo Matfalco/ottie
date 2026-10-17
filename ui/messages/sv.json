@@ -749,5 +749,7 @@
 	"ext_min_size": "Lämna små filer åt webbläsaren",
 	"ext_min_size_hint": "Filer som webbplatsen säger är mindre stannar i webbläsaren. 0: inga.",
 	"ext_excluded": "Webbplatser som lämnas åt webbläsaren",
-	"ext_excluded_hint": "Deras nedladdningar stannar i webbläsaren. En per rad; var och en gäller även underdomäner."
+	"ext_excluded_hint": "Deras nedladdningar stannar i webbläsaren. En per rad; var och en gäller även underdomäner.",
+	"popup_more": "{count} till i Ottie",
+	"popup_empty": "Inga nedladdningar än."
 }

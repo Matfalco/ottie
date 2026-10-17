@@ -749,5 +749,7 @@
 	"ext_min_size": "Bar ƙananan fayiloli ga burauzar",
 	"ext_min_size_hint": "Fayilolin da shafin ya ce sun fi wannan ƙanƙanta suna zama a cikin burauzar. 0: babu.",
 	"ext_excluded": "Shafukan da aka bar wa burauzar",
-	"ext_excluded_hint": "Saukewansu suna zama a cikin burauzar. Ɗaya a kowane layi; kowanne ya haɗa da ƙananan yankunansa."
+	"ext_excluded_hint": "Saukewansu suna zama a cikin burauzar. Ɗaya a kowane layi; kowanne ya haɗa da ƙananan yankunansa.",
+	"popup_more": "Ƙarin {count} a cikin Ottie",
+	"popup_empty": "Babu saukewa tukuna."
 }

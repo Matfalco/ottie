@@ -749,5 +749,7 @@
 	"ext_min_size": "Biarkan file kecil di browser",
 	"ext_min_size_hint": "File yang menurut situs lebih kecil tetap di browser. 0: tidak ada.",
 	"ext_excluded": "Situs yang dibiarkan di browser",
-	"ext_excluded_hint": "Unduhannya tetap di browser. Satu per baris; masing-masing mencakup subdomainnya."
+	"ext_excluded_hint": "Unduhannya tetap di browser. Satu per baris; masing-masing mencakup subdomainnya.",
+	"popup_more": "{count} lagi di Ottie",
+	"popup_empty": "Belum ada unduhan."
 }

@@ -749,5 +749,7 @@
 	"ext_min_size": "Laisser les petits fichiers au navigateur",
 	"ext_min_size_hint": "Les fichiers que le site annonce plus petits restent dans le navigateur. 0 : aucun.",
 	"ext_excluded": "Sites laissés au navigateur",
-	"ext_excluded_hint": "Leurs téléchargements restent dans le navigateur. Un par ligne ; chacun couvre ses sous-domaines."
+	"ext_excluded_hint": "Leurs téléchargements restent dans le navigateur. Un par ligne ; chacun couvre ses sous-domaines.",
+	"popup_more": "{count} de plus dans Ottie",
+	"popup_empty": "Aucun téléchargement pour l’instant."
 }

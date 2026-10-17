@@ -22,9 +22,9 @@
 	let token: string | null = $state(null);
 	let ready = $state(false);
 	/** The desktop app's tray menu, countdown window and the window for
-	 * links copied elsewhere: no shell around them (docs/decisions/0034,
-	 * 0040, 0043). */
-	const bare = ['/tray', '/finish', '/caught'].includes(page.route.id ?? '');
+	 * links copied elsewhere, and the browser extension's popup: no shell
+	 * around them (docs/decisions/0034, 0040, 0043, 0055). */
+	const bare = ['/tray', '/finish', '/caught', '/popup'].includes(page.route.id ?? '');
 
 	// For screen readers, spell checking and hyphenation, and which way the
 	// page runs: mirrored for a language written right to left. (Changing

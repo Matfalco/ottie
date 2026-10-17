@@ -749,5 +749,7 @@
 	"ext_min_size": "Fág comhaid bheaga ag an mbrabhsálaí",
 	"ext_min_size_hint": "Fanann comhaid a deir an suíomh atá níos lú sa bhrabhsálaí. 0: ceann ar bith.",
 	"ext_excluded": "Suíomhanna fágtha ag an mbrabhsálaí",
-	"ext_excluded_hint": "Fanann a n-íoslódálacha sa bhrabhsálaí. Ceann in aghaidh na líne; cuimsíonn gach ceann a fhofhearainn."
+	"ext_excluded_hint": "Fanann a n-íoslódálacha sa bhrabhsálaí. Ceann in aghaidh na líne; cuimsíonn gach ceann a fhofhearainn.",
+	"popup_more": "{count} eile in Ottie",
+	"popup_empty": "Níl aon íoslódáil fós."
 }

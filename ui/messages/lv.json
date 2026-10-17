@@ -749,5 +749,7 @@
 	"ext_min_size": "Mazos failus atstāt pārlūkam",
 	"ext_min_size_hint": "Faili, kas pēc vietnes datiem ir mazāki, paliek pārlūkā. 0: neviens.",
 	"ext_excluded": "Pārlūkam atstātās vietnes",
-	"ext_excluded_hint": "To lejupielādes paliek pārlūkā. Pa vienai rindā; katra aptver arī savus apakšdomēnus."
+	"ext_excluded_hint": "To lejupielādes paliek pārlūkā. Pa vienai rindā; katra aptver arī savus apakšdomēnus.",
+	"popup_more": "Vēl Ottie: {count}",
+	"popup_empty": "Lejupielāžu vēl nav."
 }

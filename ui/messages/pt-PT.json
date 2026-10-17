@@ -749,5 +749,7 @@
 	"ext_min_size": "Deixar os ficheiros pequenos ao navegador",
 	"ext_min_size_hint": "Os ficheiros que o site diz serem mais pequenos ficam no navegador. 0: nenhum.",
 	"ext_excluded": "Sites deixados ao navegador",
-	"ext_excluded_hint": "As suas transferências ficam no navegador. Um por linha; cada um abrange os seus subdomínios."
+	"ext_excluded_hint": "As suas transferências ficam no navegador. Um por linha; cada um abrange os seus subdomínios.",
+	"popup_more": "Mais {count} no Ottie",
+	"popup_empty": "Ainda não há transferências."
 }

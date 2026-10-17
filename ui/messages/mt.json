@@ -749,5 +749,7 @@
 	"ext_min_size": "Ħalli l-fajls żgħar lill-brawżer",
 	"ext_min_size_hint": "Il-fajls li s-sit jgħid li huma iżgħar jibqgħu fil-brawżer. 0: l-ebda wieħed.",
 	"ext_excluded": "Siti mħallija lill-brawżer",
-	"ext_excluded_hint": "It-tniżżiliet tagħhom jibqgħu fil-brawżer. Wieħed għal kull linja; kull wieħed ikopri s-sottodominji tiegħu."
+	"ext_excluded_hint": "It-tniżżiliet tagħhom jibqgħu fil-brawżer. Wieħed għal kull linja; kull wieħed ikopri s-sottodominji tiegħu.",
+	"popup_more": "{count} oħra f’Ottie",
+	"popup_empty": "L-ebda tniżżila s’issa."
 }

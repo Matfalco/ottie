@@ -749,5 +749,7 @@
 	"ext_min_size": "Male datoteke prepusti pregledniku",
 	"ext_min_size_hint": "Datoteke za koje web-mjesto kaže da su manje ostaju u pregledniku. 0: nijedna.",
 	"ext_excluded": "Web-mjesta prepuštena pregledniku",
-	"ext_excluded_hint": "Njihova preuzimanja ostaju u pregledniku. Jedno po retku; svako obuhvaća i svoje poddomene."
+	"ext_excluded_hint": "Njihova preuzimanja ostaju u pregledniku. Jedno po retku; svako obuhvaća i svoje poddomene.",
+	"popup_more": "Još u Ottieju: {count}",
+	"popup_empty": "Još nema preuzimanja."
 }

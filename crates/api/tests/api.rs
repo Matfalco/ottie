@@ -987,6 +987,10 @@ async fn the_ui_is_served_without_the_token() {
 
     let index = get("/").await.unwrap();
     assert_eq!(index.headers()["cache-control"], "no-cache");
+    assert_eq!(
+        index.headers()["content-security-policy"],
+        "frame-ancestors 'self' chrome-extension: moz-extension:"
+    );
     assert!(
         index.headers()["content-type"]
             .to_str()
@@ -996,6 +1000,7 @@ async fn the_ui_is_served_without_the_token() {
     assert_eq!(index.text().await.unwrap(), "<!doctype html>app");
 
     let script = get("/_app/immutable/start.abc.js").await.unwrap();
+    assert!(!script.headers().contains_key("content-security-policy"));
     assert!(
         script.headers()["cache-control"]
             .to_str()

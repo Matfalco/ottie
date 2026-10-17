@@ -749,5 +749,7 @@
 	"ext_min_size": "Để tệp nhỏ cho trình duyệt",
 	"ext_min_size_hint": "Các tệp mà trang cho biết nhỏ hơn mức này vẫn ở trong trình duyệt. 0: không tệp nào.",
 	"ext_excluded": "Trang để cho trình duyệt",
-	"ext_excluded_hint": "Các lượt tải của chúng vẫn ở trong trình duyệt. Mỗi dòng một trang; mỗi trang bao gồm cả tên miền con."
+	"ext_excluded_hint": "Các lượt tải của chúng vẫn ở trong trình duyệt. Mỗi dòng một trang; mỗi trang bao gồm cả tên miền con.",
+	"popup_more": "Còn {count} trong Ottie",
+	"popup_empty": "Chưa có lượt tải nào."
 }

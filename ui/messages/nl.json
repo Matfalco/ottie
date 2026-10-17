@@ -749,5 +749,7 @@
 	"ext_min_size": "Kleine bestanden aan de browser laten",
 	"ext_min_size_hint": "Bestanden die volgens de site kleiner zijn, blijven in de browser. 0: geen.",
 	"ext_excluded": "Sites die bij de browser blijven",
-	"ext_excluded_hint": "Hun downloads blijven in de browser. Eén per regel; elk geldt ook voor de subdomeinen."
+	"ext_excluded_hint": "Hun downloads blijven in de browser. Eén per regel; elk geldt ook voor de subdomeinen.",
+	"popup_more": "Nog {count} in Ottie",
+	"popup_empty": "Nog geen downloads."
 }

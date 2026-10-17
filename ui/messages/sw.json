@@ -749,5 +749,7 @@
 	"ext_min_size": "Acha faili ndogo kwa kivinjari",
 	"ext_min_size_hint": "Faili ambazo tovuti inasema ni ndogo kuliko hii hubaki kwenye kivinjari. 0: hakuna.",
 	"ext_excluded": "Tovuti zilizoachwa kwa kivinjari",
-	"ext_excluded_hint": "Vipakuliwa vyake hubaki kwenye kivinjari. Moja kwa kila mstari; kila moja inajumuisha vikoa vyake vidogo."
+	"ext_excluded_hint": "Vipakuliwa vyake hubaki kwenye kivinjari. Moja kwa kila mstari; kila moja inajumuisha vikoa vyake vidogo.",
+	"popup_more": "{count} zaidi katika Ottie",
+	"popup_empty": "Bado hakuna vipakuliwa."
 }

@@ -749,5 +749,7 @@
 	"ext_min_size": "Jätä pienet tiedostot selaimelle",
 	"ext_min_size_hint": "Tiedostot, jotka sivuston mukaan ovat tätä pienempiä, jäävät selaimeen. 0: ei mitään.",
 	"ext_excluded": "Selaimelle jätetyt sivustot",
-	"ext_excluded_hint": "Niiden lataukset jäävät selaimeen. Yksi riville; kukin kattaa myös aliverkkotunnuksensa."
+	"ext_excluded_hint": "Niiden lataukset jäävät selaimeen. Yksi riville; kukin kattaa myös aliverkkotunnuksensa.",
+	"popup_more": "{count} lisää Ottiessa",
+	"popup_empty": "Ei vielä latauksia."
 }

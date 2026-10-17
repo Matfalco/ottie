@@ -749,5 +749,7 @@
 	"ext_min_size": "Malé súbory nechať prehliadaču",
 	"ext_min_size_hint": "Súbory, ktoré sú podľa webu menšie, zostávajú v prehliadači. 0: žiadne.",
 	"ext_excluded": "Weby ponechané prehliadaču",
-	"ext_excluded_hint": "Ich sťahovania zostávajú v prehliadači. Jeden na riadok; každý zahŕňa aj svoje subdomény."
+	"ext_excluded_hint": "Ich sťahovania zostávajú v prehliadači. Jeden na riadok; každý zahŕňa aj svoje subdomény.",
+	"popup_more": "Ďalšie v Ottie: {count}",
+	"popup_empty": "Zatiaľ žiadne sťahovania."
 }

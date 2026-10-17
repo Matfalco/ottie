@@ -749,5 +749,7 @@
 	"ext_min_size": "Zostaw małe pliki przeglądarce",
 	"ext_min_size_hint": "Pliki, które według witryny są mniejsze, zostają w przeglądarce. 0: żadne.",
 	"ext_excluded": "Witryny pozostawione przeglądarce",
-	"ext_excluded_hint": "Ich pobierania zostają w przeglądarce. Jedna na wiersz; każda obejmuje swoje subdomeny."
+	"ext_excluded_hint": "Ich pobierania zostają w przeglądarce. Jedna na wiersz; każda obejmuje swoje subdomeny.",
+	"popup_more": "Więcej w Ottie: {count}",
+	"popup_empty": "Brak pobierań."
 }

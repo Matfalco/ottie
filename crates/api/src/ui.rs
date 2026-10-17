@@ -4,12 +4,16 @@
 //! instead, so rebuilding the UI doesn't need a Rust rebuild.
 //!
 //! The UI's files are public; only the API needs the token.
+//!
+//! Its pages may be shown in a frame only by its own pages and by browser
+//! extensions' (the extension's popup shows `/popup`, docs/decisions/0055),
+//! never by another site, which could trick clicks on a signed-in page.
 
 use std::borrow::Cow;
 use std::path::{Component, Path, PathBuf};
 
 use axum::body::Body;
-use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
+use axum::http::header::{CACHE_CONTROL, CONTENT_SECURITY_POLICY, CONTENT_TYPE};
 use axum::http::{HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use rust_embed::RustEmbed;
@@ -96,8 +100,14 @@ fn file(path: &str, data: Cow<'static, [u8]>) -> Response {
         headers.insert(CONTENT_TYPE, mime);
     }
     headers.insert(CACHE_CONTROL, HeaderValue::from_static(cache));
+    if mime.essence_str() == "text/html" {
+        headers.insert(CONTENT_SECURITY_POLICY, HeaderValue::from_static(FRAMED_BY));
+    }
     response
 }
+
+/// Who may show a page in a frame: its own pages and extensions' pages.
+const FRAMED_BY: &str = "frame-ancestors 'self' chrome-extension: moz-extension:";
 
 fn not_built() -> Response {
     let page = "<!doctype html><meta charset=utf-8><title>Ottie</title>\

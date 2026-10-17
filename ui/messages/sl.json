@@ -749,5 +749,7 @@
 	"ext_min_size": "Majhne datoteke prepusti brskalniku",
 	"ext_min_size_hint": "Datoteke, ki so po navedbi spletnega mesta manjše, ostanejo v brskalniku. 0: nobena.",
 	"ext_excluded": "Spletna mesta, prepuščena brskalniku",
-	"ext_excluded_hint": "Njihovi prenosi ostanejo v brskalniku. Eno na vrstico; vsako zajema tudi svoje poddomene."
+	"ext_excluded_hint": "Njihovi prenosi ostanejo v brskalniku. Eno na vrstico; vsako zajema tudi svoje poddomene.",
+	"popup_more": "Še v Ottieju: {count}",
+	"popup_empty": "Še ni prenosov."
 }
