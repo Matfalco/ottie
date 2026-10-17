@@ -2,11 +2,13 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig, type Plugin } from 'vitest/config';
+import { TOOLBAR_SIZES } from './src/lib/toolbar.ts';
 import { manifest, type Browser } from './src/manifest.ts';
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
-/** The manifest and the icons (the app's, res/icons) beside the build. */
+/** The manifest and the icons beside the build: the app's, and the tray's
+ * for the toolbar (res/icons). */
 function extensionFiles(browser: Browser): Plugin {
 	const { version } = JSON.parse(readFileSync(here('package.json'), 'utf8')) as {
 		version: string;
@@ -25,6 +27,15 @@ function extensionFiles(browser: Browser): Plugin {
 					fileName: `icons/${size}.png`,
 					source: readFileSync(here(`../res/icons/png/app/ottie-icon-rounded-${size}.png`))
 				});
+			}
+			for (const shade of ['black', 'white']) {
+				for (const size of TOOLBAR_SIZES) {
+					this.emitFile({
+						type: 'asset',
+						fileName: `icons/toolbar-${shade}-${size}.png`,
+						source: readFileSync(here(`../res/icons/png/tray/ottie-tray-${shade}-${size}.png`))
+					});
+				}
 			}
 		}
 	};
@@ -45,6 +56,8 @@ export default defineConfig(({ mode }) => {
 			rollupOptions: {
 				input: {
 					background: here('src/background.ts'),
+					// Firefox picks the toolbar icon itself (lib/toolbar.ts).
+					...(browser === 'chrome' ? { offscreen: here('offscreen.html') } : {}),
 					options: here('options.html'),
 					popup: here('popup.html')
 				},

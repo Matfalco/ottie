@@ -327,15 +327,17 @@ extension/         the browser extension (pnpm package `extension`; Manifest V3,
                      chrome.storage.local: pairing, take over, smallest size, sites left out), takeover.ts (which
                      downloads go, and why not), daemon.ts (Ottie's API with this browser's token), host.ts (Ottie
                      on this computer through its native host: sign in, start it), signin.ts
-                     (a sign-in link), cookies.ts (the Cookie header), menus.ts (a page's links, Ottie's list for
+                     (a sign-in link), cookies.ts (the Cookie header), toolbar.ts (the toolbar's icon: the tray's otter in the
+                     shade for the browser's dark mode), menus.ts (a page's links, Ottie's list for
                      adding several opened with them), sites.ts, posts.ts, look.ts (Ottie's shared
                      look and language, kept for the pages), sizes.ts
   src/manifest.ts    the manifest per browser (service worker or background script, downloads.ui, gecko ID)
   src/pages/start.ts what every extension page does first: fonts, app.css, theme, language (overwriteGetLocale)
   src/options/       the options page (Options.svelte: sign in, take over, smallest size, sites)
+  src/offscreen/     Chromium-based browsers' hidden page: tells the background whether the browser is in dark mode
   src/popup/         the popup (Popup.svelte): its bar (take over, settings), then Ottie's /popup page in a frame,
                      given the token once it's ready and as tall as it says (lib/frame.ts)
-  options.html, popup.html, vite.config.ts  `vite build --mode chrome|firefox` → dist/chrome, dist/firefox; `#ui/…` is
+  options.html, popup.html, offscreen.html, vite.config.ts  `vite build --mode chrome|firefox` → dist/chrome, dist/firefox; `#ui/…` is
                      ui/src/lib (its components, texts in ui/messages as `ext_*`, format, languages, theme)
 shared/api-types/  TypeScript types generated from Rust (ts-rs, by `cargo test -p ottie-api`;
                    output folder set in .cargo/config.toml), plus Ranges.ts (settings' ranges).

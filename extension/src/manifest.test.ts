@@ -23,6 +23,18 @@ describe('manifest', () => {
 		expect(id).toBe('njjhemepabjjkdpcdplfcgjiooggdpol');
 	});
 
+	it('keeps the app’s icon for the extensions page, the tray’s for the toolbar', () => {
+		for (const browser of ['chrome', 'firefox'] as const) {
+			const made = manifest(browser, '1');
+			const action = made.action as { default_icon: Record<number, string> };
+			expect((made.icons as Record<number, string>)[128]).toBe('icons/128.png');
+			expect(action.default_icon[16]).toBe('icons/toolbar-black-16.png');
+		}
+		expect(manifest('chrome', '1').permissions).toContain('offscreen');
+		expect(manifest('firefox', '1').permissions).not.toContain('offscreen');
+		expect(manifest('firefox', '1').action).toHaveProperty('theme_icons');
+	});
+
 	it('asks for the download UI only where it exists, and names Firefox’s ID', () => {
 		expect(manifest('chrome', '1').permissions).toContain('downloads.ui');
 		expect(manifest('firefox', '1').permissions).not.toContain('downloads.ui');

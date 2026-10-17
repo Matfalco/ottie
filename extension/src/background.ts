@@ -17,6 +17,7 @@ import { batchAddress, linksInPage } from './lib/menus';
 import { RecentPosts } from './lib/posts';
 import { loadSettings, saveSettings, type Pairing } from './lib/settings';
 import { skipReason } from './lib/takeover';
+import { isSchemeMessage, shadeFor, toolbarIcons } from './lib/toolbar';
 
 const posts = new RecentPosts();
 
@@ -36,6 +37,34 @@ chrome.runtime.onInstalled.addListener(() => {
 	void signInHere();
 	void makeMenus();
 });
+
+// The toolbar icon's shade follows the browser's dark mode: Firefox picks it
+// from the manifest; elsewhere the offscreen page says (lib/toolbar.ts).
+void followScheme();
+
+chrome.runtime.onMessage.addListener((message) => {
+	if (isSchemeMessage(message)) {
+		void chrome.action.setIcon({ path: toolbarIcons(shadeFor(message.dark)) });
+	}
+});
+
+async function followScheme(): Promise<void> {
+	if (chrome.offscreen === undefined) {
+		return;
+	}
+	try {
+		if (!(await chrome.offscreen.hasDocument())) {
+			await chrome.offscreen.createDocument({
+				url: 'offscreen.html',
+				reasons: [chrome.offscreen.Reason.MATCH_MEDIA],
+				justification: 'The toolbar icon follows the browser’s dark mode.'
+			});
+		}
+	} catch (error) {
+		// Another start created it meanwhile, or none can be: the black one stays.
+		console.warn('The toolbar icon won’t follow dark mode:', error);
+	}
+}
 
 // The menus' texts follow Ottie's shared language once it's known.
 chrome.storage.onChanged.addListener((changes, area) => {
