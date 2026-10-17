@@ -754,5 +754,7 @@
 	"popup_empty": "Zatiaľ žiadne sťahovania.",
 	"ext_pair_here": "Prihlásiť sa do Ottie na tomto počítači",
 	"ext_pair_here_hint": "Tam, kde je Ottie nainštalovaný, sa tento prehliadač prihlási sám a Ottie sa spustí, keď príde sťahovanie.",
-	"ext_no_host": "Ottie nie je na tomto počítači nastavený pre tento prehliadač: nainštalujte aplikáciu pre počítač alebo spustite príkaz ottie extension install. Alebo sa prihláste odkazom."
+	"ext_no_host": "Ottie nie je na tomto počítači nastavený pre tento prehliadač: nainštalujte aplikáciu pre počítač alebo spustite príkaz ottie extension install. Alebo sa prihláste odkazom.",
+	"ext_menu_one": "Stiahnuť pomocou Ottie",
+	"ext_menu_all": "Stiahnuť všetky odkazy pomocou Ottie"
 }

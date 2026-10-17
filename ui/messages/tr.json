@@ -754,5 +754,7 @@
 	"popup_empty": "Henüz indirme yok.",
 	"ext_pair_here": "Bu bilgisayardaki Ottie'de oturum aç",
 	"ext_pair_here_hint": "Ottie'nin kurulu olduğu yerde bu tarayıcı kendi kendine oturum açar ve bir indirme gelince Ottie başlar.",
-	"ext_no_host": "Ottie bu bilgisayarda bu tarayıcı için ayarlanmamış: masaüstü uygulamasını kurun ya da ottie extension install komutunu çalıştırın. Ya da bir bağlantıyla oturum açın."
+	"ext_no_host": "Ottie bu bilgisayarda bu tarayıcı için ayarlanmamış: masaüstü uygulamasını kurun ya da ottie extension install komutunu çalıştırın. Ya da bir bağlantıyla oturum açın.",
+	"ext_menu_one": "Ottie ile indir",
+	"ext_menu_all": "Tüm bağlantıları Ottie ile indir"
 }

@@ -754,5 +754,7 @@
 	"popup_empty": "Lejupielāžu vēl nav.",
 	"ext_pair_here": "Pierakstīties Ottie šajā datorā",
 	"ext_pair_here_hint": "Kur Ottie ir instalēts, šis pārlūks pierakstās pats, un Ottie startē, kad pienāk lejupielāde.",
-	"ext_no_host": "Ottie šajā datorā nav iestatīts šim pārlūkam: instalējiet darbvirsmas lietotni vai palaidiet komandu ottie extension install. Vai pierakstieties ar saiti."
+	"ext_no_host": "Ottie šajā datorā nav iestatīts šim pārlūkam: instalējiet darbvirsmas lietotni vai palaidiet komandu ottie extension install. Vai pierakstieties ar saiti.",
+	"ext_menu_one": "Lejupielādēt ar Ottie",
+	"ext_menu_all": "Lejupielādēt visas saites ar Ottie"
 }

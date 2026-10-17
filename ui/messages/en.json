@@ -754,5 +754,7 @@
 	"popup_empty": "No downloads yet.",
 	"ext_pair_here": "Sign in to Ottie on this computer",
 	"ext_pair_here_hint": "Where Ottie is installed, this browser signs in by itself, and Ottie starts when a download comes.",
-	"ext_no_host": "Ottie isn’t set up for this browser on this computer: install the desktop app, or run the command ottie extension install. Or sign in with a link."
+	"ext_no_host": "Ottie isn’t set up for this browser on this computer: install the desktop app, or run the command ottie extension install. Or sign in with a link.",
+	"ext_menu_one": "Download with Ottie",
+	"ext_menu_all": "Download all links with Ottie"
 }

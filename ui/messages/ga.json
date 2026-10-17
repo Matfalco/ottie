@@ -754,5 +754,7 @@
 	"popup_empty": "Níl aon íoslódáil fós.",
 	"ext_pair_here": "Sínigh isteach in Ottie ar an ríomhaire seo",
 	"ext_pair_here_hint": "Áit a bhfuil Ottie suiteáilte, síníonn an brabhsálaí seo isteach leis féin, agus tosaíonn Ottie nuair a thagann íoslódáil.",
-	"ext_no_host": "Níl Ottie socraithe don bhrabhsálaí seo ar an ríomhaire seo: suiteáil an aip deisce, nó rith an t-ordú ottie extension install. Nó sínigh isteach le nasc."
+	"ext_no_host": "Níl Ottie socraithe don bhrabhsálaí seo ar an ríomhaire seo: suiteáil an aip deisce, nó rith an t-ordú ottie extension install. Nó sínigh isteach le nasc.",
+	"ext_menu_one": "Íoslódáil le Ottie",
+	"ext_menu_all": "Íoslódáil gach nasc le Ottie"
 }

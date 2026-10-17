@@ -754,5 +754,7 @@
 	"popup_empty": "Aucun téléchargement pour l’instant.",
 	"ext_pair_here": "Se connecter à Ottie sur cet ordinateur",
 	"ext_pair_here_hint": "Là où Ottie est installé, ce navigateur se connecte tout seul, et Ottie démarre quand un téléchargement arrive.",
-	"ext_no_host": "Ottie n’est pas configuré pour ce navigateur sur cet ordinateur : installez l’application de bureau, ou lancez la commande ottie extension install. Ou connectez-vous avec un lien."
+	"ext_no_host": "Ottie n’est pas configuré pour ce navigateur sur cet ordinateur : installez l’application de bureau, ou lancez la commande ottie extension install. Ou connectez-vous avec un lien.",
+	"ext_menu_one": "Télécharger avec Ottie",
+	"ext_menu_all": "Télécharger tous les liens avec Ottie"
 }

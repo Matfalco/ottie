@@ -28,7 +28,15 @@ export function manifest(browser: Browser, version: string): Record<string, unkn
 		// Every site: a download's cookies, and wherever Ottie runs.
 		host_permissions: ['<all_urls>']
 	};
-	const permissions = ['downloads', 'cookies', 'storage', 'webRequest', 'nativeMessaging'];
+	const permissions = [
+		'downloads',
+		'cookies',
+		'storage',
+		'webRequest',
+		'nativeMessaging',
+		'contextMenus',
+		'scripting'
+	];
 	if (browser === 'chrome') {
 		return {
 			...common,

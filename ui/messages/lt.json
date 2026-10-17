@@ -754,5 +754,7 @@
 	"popup_empty": "Atsisiuntimų dar nėra.",
 	"ext_pair_here": "Prisijungti prie Ottie šiame kompiuteryje",
 	"ext_pair_here_hint": "Ten, kur įdiegta Ottie, ši naršyklė prisijungia pati, o Ottie pasileidžia, kai atsiranda atsisiuntimas.",
-	"ext_no_host": "Ottie šiame kompiuteryje nenustatyta šiai naršyklei: įdiekite darbalaukio programą arba paleiskite komandą ottie extension install. Arba prisijunkite nuoroda."
+	"ext_no_host": "Ottie šiame kompiuteryje nenustatyta šiai naršyklei: įdiekite darbalaukio programą arba paleiskite komandą ottie extension install. Arba prisijunkite nuoroda.",
+	"ext_menu_one": "Atsisiųsti su Ottie",
+	"ext_menu_all": "Atsisiųsti visas nuorodas su Ottie"
 }

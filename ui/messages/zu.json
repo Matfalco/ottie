@@ -754,5 +754,7 @@
 	"popup_empty": "Akukabi khona ukulanda.",
 	"ext_pair_here": "Ngena ku-Ottie kule khompyutha",
 	"ext_pair_here_hint": "Lapho i-Ottie ifakwe khona, lesi siphequluli singena sisodwa, futhi i-Ottie iqala uma kufika ukulanda.",
-	"ext_no_host": "I-Ottie ayisethiwe kulesi siphequluli kule khompyutha: faka uhlelo lwedeskithophu, noma usebenzise umyalo othi ottie extension install. Noma ngena ngesixhumanisi."
+	"ext_no_host": "I-Ottie ayisethiwe kulesi siphequluli kule khompyutha: faka uhlelo lwedeskithophu, noma usebenzise umyalo othi ottie extension install. Noma ngena ngesixhumanisi.",
+	"ext_menu_one": "Landa nge-Ottie",
+	"ext_menu_all": "Landa zonke izixhumanisi nge-Ottie"
 }

@@ -20,6 +20,7 @@
 	import { Session, type Answer } from '#lib/session.svelte.js';
 	import { anywhere, pageKey, pageText, pasted } from '#lib/shortcuts.js';
 	import { syncSteps } from '#lib/sync.js';
+	import { takeHandedLinks } from '#lib/token.js';
 	import { followAddLinks } from '#lib/window.js';
 	import BatchDialog from './BatchDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
@@ -118,6 +119,13 @@
 	});
 
 	onMount(() => followAddLinks((text) => (copied = text)));
+	// Links from the browser extension's "Download all links" (docs/decisions/0055).
+	onMount(() => {
+		const handed = takeHandedLinks();
+		if (handed !== null && !session.readOnly) {
+			copied = handed;
+		}
+	});
 
 	async function add(job: AddJob): Promise<boolean> {
 		const added = await session.add(job);

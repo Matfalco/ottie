@@ -754,5 +754,7 @@
 	"popup_empty": "아직 다운로드가 없습니다.",
 	"ext_pair_here": "이 컴퓨터의 Ottie에 로그인",
 	"ext_pair_here_hint": "Ottie가 설치된 곳에서는 이 브라우저가 스스로 로그인하고, 다운로드가 오면 Ottie가 시작됩니다.",
-	"ext_no_host": "이 컴퓨터의 Ottie가 이 브라우저용으로 설정되지 않았습니다: 데스크톱 앱을 설치하거나 ottie extension install 명령을 실행하세요. 또는 링크로 로그인하세요."
+	"ext_no_host": "이 컴퓨터의 Ottie가 이 브라우저용으로 설정되지 않았습니다: 데스크톱 앱을 설치하거나 ottie extension install 명령을 실행하세요. 또는 링크로 로그인하세요.",
+	"ext_menu_one": "Ottie로 다운로드",
+	"ext_menu_all": "모든 링크를 Ottie로 다운로드"
 }

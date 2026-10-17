@@ -754,5 +754,7 @@
 	"popup_empty": "L-ebda tniżżila s’issa.",
 	"ext_pair_here": "Idħol f’Ottie fuq dan il-kompjuter",
 	"ext_pair_here_hint": "Fejn Ottie huwa installat, dan il-brawżer jidħol waħdu, u Ottie jibda meta tasal tniżżila.",
-	"ext_no_host": "Ottie mhux issettjat għal dan il-brawżer fuq dan il-kompjuter: installa l-app tad-desktop, jew ħaddem il-kmand ottie extension install. Jew idħol b’ħolqa."
+	"ext_no_host": "Ottie mhux issettjat għal dan il-brawżer fuq dan il-kompjuter: installa l-app tad-desktop, jew ħaddem il-kmand ottie extension install. Jew idħol b’ħolqa.",
+	"ext_menu_one": "Niżżel b’Ottie",
+	"ext_menu_all": "Niżżel il-ħoloq kollha b’Ottie"
 }

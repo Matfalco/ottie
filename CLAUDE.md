@@ -236,7 +236,7 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
                      hint.ts (where an (i)'s explanation goes: above its button, inside the window),
                      views.ts (saved views ↔ filters + arrangement, which pill is lit),
                      languages.ts (each language's name, which are reviewed, the system's closest, the
-                     device's choice, 0041; which way it's written, 0042), format.ts, token.ts, adding.ts (the add step), setup.ts (the setup's steps, where
+                     device's choice, 0041; which way it's written, 0042), format.ts, token.ts (also links handed over after `#`, 0055), adding.ts (the add step), setup.ts (the setup's steps, where
                      it carries on, starter categories; 0050), choices.ts (choices Settings and the setup share),
                      theme.ts (light/dark/system + palette → theme (0044, 0047),
                      saved per device),
@@ -321,12 +321,14 @@ ui/                SvelteKit SPA shared by all front ends (pnpm package `ui`)  [
 extension/         the browser extension (pnpm package `extension`; Manifest V3, Chromium-based browsers and Firefox,
                    0055)  [exists]
   src/background.ts  takes the browser's downloads over: Ottie first, then the browser's cancelled and erased
-                     (never dropped: kept if Ottie refuses or the browser finished first); notes forms' POSTs
+                     (never dropped: kept if Ottie refuses or the browser finished first); notes forms' POSTs;
+                     signs in through the host at install; the context menus
   src/lib/           plain logic, unit-tested (*.test.ts, Vitest): settings.ts (the extension's own, in
                      chrome.storage.local: pairing, take over, smallest size, sites left out), takeover.ts (which
                      downloads go, and why not), daemon.ts (Ottie's API with this browser's token), host.ts (Ottie
                      on this computer through its native host: sign in, start it), signin.ts
-                     (a sign-in link), cookies.ts (the Cookie header), sites.ts, posts.ts, look.ts (Ottie's shared
+                     (a sign-in link), cookies.ts (the Cookie header), menus.ts (a page's links, Ottie's list for
+                     adding several opened with them), sites.ts, posts.ts, look.ts (Ottie's shared
                      look and language, kept for the pages), sizes.ts
   src/manifest.ts    the manifest per browser (service worker or background script, downloads.ui, gecko ID)
   src/pages/start.ts what every extension page does first: fonts, app.css, theme, language (overwriteGetLocale)
@@ -427,7 +429,7 @@ Cloud sessions (Claude Code on the web): Ubuntu 24.04 on x86_64, 16 GB of RAM, 3
 - **Android background work:** downloads must keep going when the app is in the background. Android 15 limits `dataSync` foreground services to 6 hours per 24 h; prefer user-initiated data transfer jobs. This needs a small Kotlin Tauri plugin. Check current Android docs before implementing.
 - **Android storage:** the engine needs a seekable file. Write `.part.ottie` files to app storage and publish finished files to Downloads through MediaStore.
 - **Android browser integration:** no reliable extension route (Chrome for Android has no extensions; Firefox for Android only partly supports the downloads API). Take URLs from the share sheet and "Open with" intent filters instead.
-- **Extension:** Chrome and Firefox downloads APIs differ; keep browser-specific code behind a small adapter. Chrome can hide its own download UI with `downloads.setUiOptions` (needs the `downloads.ui` permission). If the daemon is unreachable, let the browser download normally. Never drop a download.
+- **Extension:** Chrome and Firefox downloads APIs differ; keep browser-specific code behind a small adapter (`manifest.ts` builds one manifest each; `chrome.*` with promises works in both). Chrome can hide its own download UI with `downloads.setUiOptions` (needs the `downloads.ui` permission). If the daemon is unreachable, let the browser download normally. Never drop a download.
 
 ## Security
 
@@ -598,12 +600,12 @@ Done: ✅ and struck through. 🟡: built, waiting for the maintainer's review. 
      download (Settings → Connection lists them); resuming and several connections as for HTTP. Built, not
      reviewed yet: what's left to check (real servers, a NAS's own certificate on Windows) is at the end of 0054.
      SFTP later
-8. ‼️ Browser extension (`docs/decisions/0055`), in progress, a commit per slice:
-   - ‼️ 8a the browser's cookie, referrer and user agent sent with a download it hands over (`POST /jobs`)
-   - ‼️ 8b the extension: takes over downloads (with exceptions), sign-in link
-   - ‼️ 8c its popup: the daemon's own `/popup` page
-   - ‼️ 8d the native messaging host (`ottie` itself): signs in by itself, starts the daemon
-   - 8e "Download with Ottie" in the context menu
+8. 🟡 Browser extension (`docs/decisions/0055`), Chromium-based browsers and Firefox: every download taken over
+   (unless off, private, from a form, smaller than a chosen size or from a site left out) with the browser's cookie,
+   referrer and user agent (`POST /jobs`), never dropped; the popup is the daemon's own `/popup` page; signed in by
+   itself where Ottie is installed (`ottie` as the native messaging host, `ottie extension install`, run by the app),
+   else by a sign-in link; "Download with Ottie" and "Download all links with Ottie" in the context menu. Built in
+   slices 8a–8e, not reviewed yet: what's left to check (Firefox, Windows' registry, real sites) is at the end of 0055
 9. yt-dlp backend (its own updates, apart from the app's).
 10. Tauri Android, last, once everything else is done: embedded core, background downloads, share-sheet intake.
 
@@ -619,10 +621,9 @@ Each translation is drafted, then checked by a native speaker when one helps (a 
 
 ## Open decisions
 
-- Extension pairing: both, a native messaging host when installed (zero-config, can start the daemon) and the token as the fallback (remote daemon, portable setup). Details in step 8.
 - yt-dlp: bundled or found, how it updates, ffmpeg, format choice.
 
-Settled: no uGet import; no aria2 (its HTTP strengths are in our engine already) and no BitTorrent/magnet links.
+Settled: extension pairing (a native messaging host where Ottie is installed, else a sign-in link; `docs/decisions/0055`); no uGet import; no aria2 (its HTTP strengths are in our engine already) and no BitTorrent/magnet links.
 
 ## Later (TODO)
 

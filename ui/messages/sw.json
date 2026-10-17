@@ -754,5 +754,7 @@
 	"popup_empty": "Bado hakuna vipakuliwa.",
 	"ext_pair_here": "Ingia kwenye Ottie kwenye kompyuta hii",
 	"ext_pair_here_hint": "Mahali Ottie imesakinishwa, kivinjari hiki huingia chenyewe, na Ottie huanza upakuaji unapokuja.",
-	"ext_no_host": "Ottie haijawekwa kwa kivinjari hiki kwenye kompyuta hii: sakinisha programu ya kompyuta, au endesha amri ottie extension install. Au ingia kwa kiungo."
+	"ext_no_host": "Ottie haijawekwa kwa kivinjari hiki kwenye kompyuta hii: sakinisha programu ya kompyuta, au endesha amri ottie extension install. Au ingia kwa kiungo.",
+	"ext_menu_one": "Pakua kwa Ottie",
+	"ext_menu_all": "Pakua viungo vyote kwa Ottie"
 }

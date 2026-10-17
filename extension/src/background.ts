@@ -7,9 +7,13 @@
 // If the browser finished it first, it keeps it and Ottie's is removed.
 
 import type { AddJob } from '@ottie/api-types/AddJob';
+import { m } from '#ui/paraglide/messages.js';
+import { overwriteGetLocale } from '#ui/paraglide/runtime.js';
 import { cookieHeader } from './lib/cookies';
 import { addJob, removeJob, Unauthorized, Unreachable } from './lib/daemon';
 import { onThisComputer, pairHere, startHere } from './lib/host';
+import { loadLook, pageLanguage } from './lib/look';
+import { batchAddress, linksInPage } from './lib/menus';
 import { RecentPosts } from './lib/posts';
 import { loadSettings, saveSettings, type Pairing } from './lib/settings';
 import { skipReason } from './lib/takeover';
@@ -30,7 +34,101 @@ chrome.webRequest.onBeforeRequest.addListener(
 // Without Ottie's host, the options page asks for a sign-in link.
 chrome.runtime.onInstalled.addListener(() => {
 	void signInHere();
+	void makeMenus();
 });
+
+// The menus' texts follow Ottie's shared language once it's known.
+chrome.storage.onChanged.addListener((changes, area) => {
+	if (area === 'local' && 'look' in changes) {
+		void makeMenus();
+	}
+});
+
+const MENU_ONE = 'ottie-one';
+const MENU_ALL = 'ottie-all';
+
+async function makeMenus(): Promise<void> {
+	const shown = pageLanguage(await loadLook(), navigator.languages);
+	overwriteGetLocale(() => shown);
+	await chrome.contextMenus.removeAll();
+	chrome.contextMenus.create({
+		id: MENU_ONE,
+		title: m.ext_menu_one(),
+		contexts: ['link', 'image', 'video', 'audio']
+	});
+	chrome.contextMenus.create({
+		id: MENU_ALL,
+		title: m.ext_menu_all(),
+		contexts: ['page', 'selection']
+	});
+}
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+	if (info.menuItemId === MENU_ONE) {
+		const url = info.linkUrl ?? info.srcUrl;
+		if (url !== undefined) {
+			void downloadOne(url, info.pageUrl, tab);
+		}
+	} else if (info.menuItemId === MENU_ALL && tab?.id !== undefined) {
+		void downloadAll(tab.id, info.selectionText !== undefined);
+	}
+});
+
+/** The signed-in pairing, signing in through Ottie's host if there's none;
+ * null (and the options page opens) if that can't be done. */
+async function signedIn(): Promise<Pairing | null> {
+	const { pairing } = await loadSettings();
+	if (pairing !== null) {
+		return pairing;
+	}
+	try {
+		const fresh = await pairHere();
+		await saveSettings({ pairing: fresh });
+		return fresh;
+	} catch {
+		await chrome.runtime.openOptionsPage();
+		return null;
+	}
+}
+
+/** One link, as a download the browser would have started; if Ottie can't
+ * take it, the browser downloads it after all. */
+async function downloadOne(url: string, page: string | undefined, tab?: chrome.tabs.Tab) {
+	const pairing = await signedIn();
+	if (pairing === null) {
+		return;
+	}
+	const storeId = (tab as { cookieStoreId?: string } | undefined)?.cookieStoreId;
+	try {
+		await handOver(pairing, {
+			url,
+			cookie: (await cookiesFor(url, storeId)) ?? undefined,
+			referrer: page,
+			userAgent: navigator.userAgent
+		});
+	} catch (error) {
+		console.warn('Ottie did not take a link; the browser downloads it:', error);
+		await chrome.downloads.download({ url });
+	}
+}
+
+/** Every link in the page (or the selection) in Ottie's list for adding
+ * several, in a new tab: there, people choose which to add. */
+async function downloadAll(tabId: number, selectedOnly: boolean) {
+	const pairing = await signedIn();
+	if (pairing === null) {
+		return;
+	}
+	const [found] = await chrome.scripting.executeScript({
+		target: { tabId },
+		func: linksInPage,
+		args: [selectedOnly]
+	});
+	const links = typeof found?.result === 'string' ? found.result : '';
+	if (links !== '') {
+		await chrome.tabs.create({ url: batchAddress(pairing.address, pairing.token, links) });
+	}
+}
 
 async function signInHere(): Promise<void> {
 	const settings = await loadSettings();
@@ -59,7 +157,9 @@ async function takeOver(item: chrome.downloads.DownloadItem): Promise<void> {
 	try {
 		const job: AddJob = {
 			url: item.url,
-			cookie: (await cookiesFor(item)) ?? undefined,
+			cookie:
+				(await cookiesFor(item.url, (item as { cookieStoreId?: string }).cookieStoreId)) ??
+				undefined,
 			referrer: item.referrer === '' ? undefined : item.referrer,
 			userAgent: navigator.userAgent
 		};
@@ -104,12 +204,11 @@ async function handOver(pairing: Pairing, job: AddJob): Promise<[Pairing, string
 	}
 }
 
-/** The cookies the browser would send with the download's link, from the
- * store it came from (Firefox's containers have their own). */
-async function cookiesFor(item: chrome.downloads.DownloadItem): Promise<string | null> {
-	const storeId = (item as { cookieStoreId?: string }).cookieStoreId;
+/** The cookies the browser would send with a link, from the store it came
+ * from (Firefox's containers have their own). */
+async function cookiesFor(url: string, storeId: string | undefined): Promise<string | null> {
 	try {
-		const cookies = await chrome.cookies.getAll({ url: item.url, storeId });
+		const cookies = await chrome.cookies.getAll({ url, storeId });
 		return cookieHeader(cookies);
 	} catch {
 		return null;

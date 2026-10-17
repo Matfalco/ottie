@@ -754,5 +754,7 @@
 	"popup_empty": "Încă nicio descărcare.",
 	"ext_pair_here": "Conectează-te la Ottie pe acest computer",
 	"ext_pair_here_hint": "Acolo unde Ottie e instalat, acest browser se conectează singur, iar Ottie pornește când vine o descărcare.",
-	"ext_no_host": "Ottie nu e configurat pentru acest browser pe acest computer: instalează aplicația desktop sau rulează comanda ottie extension install. Sau conectează-te cu un link."
+	"ext_no_host": "Ottie nu e configurat pentru acest browser pe acest computer: instalează aplicația desktop sau rulează comanda ottie extension install. Sau conectează-te cu un link.",
+	"ext_menu_one": "Descarcă cu Ottie",
+	"ext_menu_all": "Descarcă toate linkurile cu Ottie"
 }

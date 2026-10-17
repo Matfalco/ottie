@@ -754,5 +754,7 @@
 	"popup_empty": "Ei vielä latauksia.",
 	"ext_pair_here": "Kirjaudu Ottieen tällä tietokoneella",
 	"ext_pair_here_hint": "Missä Ottie on asennettuna, tämä selain kirjautuu itse, ja Ottie käynnistyy, kun lataus tulee.",
-	"ext_no_host": "Ottieta ei ole määritetty tälle selaimelle tällä tietokoneella: asenna työpöytäsovellus tai suorita komento ottie extension install. Tai kirjaudu linkillä."
+	"ext_no_host": "Ottieta ei ole määritetty tälle selaimelle tällä tietokoneella: asenna työpöytäsovellus tai suorita komento ottie extension install. Tai kirjaudu linkillä.",
+	"ext_menu_one": "Lataa Ottiella",
+	"ext_menu_all": "Lataa kaikki linkit Ottiella"
 }

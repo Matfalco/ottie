@@ -11,6 +11,36 @@ export function tokenFromFragment(hash: string): string | null {
 	return match ? match[1] : null;
 }
 
+/** What a link can hand this page after `#`: the token, and links to add
+ * (`#token=…&links=…`, from the browser extension's "Download all links",
+ * docs/decisions/0055), opened in the list for adding several. */
+export function fromFragment(hash: string): { token: string | null; links: string | null } {
+	const strict = tokenFromFragment(hash);
+	if (strict !== null || !hash.startsWith('#token=')) {
+		return { token: strict, links: null };
+	}
+	const params = new URLSearchParams(hash.slice(1));
+	const token = params.get('token');
+	const links = params.get('links');
+	return {
+		token: token !== null && /^[\w.~-]+$/.test(token) ? token : null,
+		links: links !== null && links.trim() !== '' ? links : null
+	};
+}
+
+/** Links handed over by `fromFragment`, until the shell takes them. */
+let handed: string | null = null;
+
+export function handLinks(links: string | null): void {
+	handed = links;
+}
+
+export function takeHandedLinks(): string | null {
+	const links = handed;
+	handed = null;
+	return links;
+}
+
 /** The address that opens this page signed in, as `ottie link` prints it:
  * the page's own address, with the token after `#`. */
 export function signInLink(origin: string, token: string): string {

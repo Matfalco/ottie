@@ -754,5 +754,7 @@
 	"popup_empty": "还没有下载。",
 	"ext_pair_here": "登录此电脑上的 Ottie",
 	"ext_pair_here_hint": "在安装了 Ottie 的电脑上，此浏览器会自行登录，有下载时 Ottie 会自动启动。",
-	"ext_no_host": "此电脑上的 Ottie 尚未为此浏览器设置：请安装桌面应用，或运行命令 ottie extension install。也可以用链接登录。"
+	"ext_no_host": "此电脑上的 Ottie 尚未为此浏览器设置：请安装桌面应用，或运行命令 ottie extension install。也可以用链接登录。",
+	"ext_menu_one": "用 Ottie 下载",
+	"ext_menu_all": "用 Ottie 下载所有链接"
 }

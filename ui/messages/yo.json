@@ -754,5 +754,7 @@
 	"popup_empty": "Kò sí ìgbàsílẹ̀ kankan síbẹ̀.",
 	"ext_pair_here": "Wọlé sí Ottie lórí kọ̀mpútà yìí",
 	"ext_pair_here_hint": "Níbi tí a ti fi Ottie sí, aṣàwákiri yìí ń wọlé fúnra rẹ̀, Ottie sì ń bẹ̀rẹ̀ nígbà tí ìgbàsílẹ̀ bá dé.",
-	"ext_no_host": "A kò tíì ṣètò Ottie fún aṣàwákiri yìí lórí kọ̀mpútà yìí: fi áàpù kọ̀mpútà sí i, tàbí ṣiṣẹ́ àṣẹ ottie extension install. Tàbí wọlé pẹ̀lú ìjápọ̀."
+	"ext_no_host": "A kò tíì ṣètò Ottie fún aṣàwákiri yìí lórí kọ̀mpútà yìí: fi áàpù kọ̀mpútà sí i, tàbí ṣiṣẹ́ àṣẹ ottie extension install. Tàbí wọlé pẹ̀lú ìjápọ̀.",
+	"ext_menu_one": "Gba sílẹ̀ pẹ̀lú Ottie",
+	"ext_menu_all": "Gba gbogbo ìjápọ̀ sílẹ̀ pẹ̀lú Ottie"
 }

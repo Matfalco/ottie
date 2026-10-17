@@ -754,5 +754,7 @@
 	"popup_empty": "Ainda não há transferências.",
 	"ext_pair_here": "Iniciar sessão no Ottie neste computador",
 	"ext_pair_here_hint": "Onde o Ottie está instalado, este navegador inicia sessão sozinho, e o Ottie arranca quando chega uma transferência.",
-	"ext_no_host": "O Ottie não está configurado para este navegador neste computador: instale a aplicação de ambiente de trabalho ou execute o comando ottie extension install. Ou inicie sessão com uma ligação."
+	"ext_no_host": "O Ottie não está configurado para este navegador neste computador: instale a aplicação de ambiente de trabalho ou execute o comando ottie extension install. Ou inicie sessão com uma ligação.",
+	"ext_menu_one": "Transferir com o Ottie",
+	"ext_menu_all": "Transferir todas as ligações com o Ottie"
 }

@@ -754,5 +754,7 @@
 	"popup_empty": "Još nema preuzimanja.",
 	"ext_pair_here": "Prijava u Ottie na ovom računalu",
 	"ext_pair_here_hint": "Gdje je Ottie instaliran, ovaj se preglednik prijavljuje sam, a Ottie se pokreće kad stigne preuzimanje.",
-	"ext_no_host": "Ottie na ovom računalu nije postavljen za ovaj preglednik: instalirajte aplikaciju za računalo ili pokrenite naredbu ottie extension install. Ili se prijavite poveznicom."
+	"ext_no_host": "Ottie na ovom računalu nije postavljen za ovaj preglednik: instalirajte aplikaciju za računalo ili pokrenite naredbu ottie extension install. Ili se prijavite poveznicom.",
+	"ext_menu_one": "Preuzmi pomoću Ottieja",
+	"ext_menu_all": "Preuzmi sve poveznice pomoću Ottieja"
 }

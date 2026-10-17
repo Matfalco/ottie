@@ -754,5 +754,7 @@
 	"popup_empty": "Babu saukewa tukuna.",
 	"ext_pair_here": "Shiga Ottie a wannan kwamfutar",
 	"ext_pair_here_hint": "Inda aka saka Ottie, wannan burauzar tana shiga da kanta, kuma Ottie yana farawa idan saukewa ta zo.",
-	"ext_no_host": "Ba a saita Ottie don wannan burauzar a wannan kwamfutar ba: saka manhajar kwamfuta, ko gudanar da umarnin ottie extension install. Ko shiga da mahaɗi."
+	"ext_no_host": "Ba a saita Ottie don wannan burauzar a wannan kwamfutar ba: saka manhajar kwamfuta, ko gudanar da umarnin ottie extension install. Ko shiga da mahaɗi.",
+	"ext_menu_one": "Sauke da Ottie",
+	"ext_menu_all": "Sauke duk mahaɗai da Ottie"
 }

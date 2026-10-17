@@ -754,5 +754,7 @@
 	"popup_empty": "Brak pobierań.",
 	"ext_pair_here": "Zaloguj się do Ottie na tym komputerze",
 	"ext_pair_here_hint": "Tam, gdzie zainstalowano Ottie, ta przeglądarka loguje się sama, a Ottie uruchamia się, gdy pojawi się pobieranie.",
-	"ext_no_host": "Ottie nie jest skonfigurowany dla tej przeglądarki na tym komputerze: zainstaluj aplikację na komputer lub uruchom polecenie ottie extension install. Albo zaloguj się linkiem."
+	"ext_no_host": "Ottie nie jest skonfigurowany dla tej przeglądarki na tym komputerze: zainstaluj aplikację na komputer lub uruchom polecenie ottie extension install. Albo zaloguj się linkiem.",
+	"ext_menu_one": "Pobierz przez Ottie",
+	"ext_menu_all": "Pobierz wszystkie linki przez Ottie"
 }

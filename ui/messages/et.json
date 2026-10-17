@@ -754,5 +754,7 @@
 	"popup_empty": "Allalaadimisi veel pole.",
 	"ext_pair_here": "Logi selles arvutis Ottiesse sisse",
 	"ext_pair_here_hint": "Kus Ottie on paigaldatud, logib see brauser ise sisse ja Ottie käivitub, kui tuleb allalaadimine.",
-	"ext_no_host": "Ottie pole selles arvutis selle brauseri jaoks seadistatud: paigalda töölauarakendus või käivita käsk ottie extension install. Või logi sisse lingiga."
+	"ext_no_host": "Ottie pole selles arvutis selle brauseri jaoks seadistatud: paigalda töölauarakendus või käivita käsk ottie extension install. Või logi sisse lingiga.",
+	"ext_menu_one": "Laadi Ottiega alla",
+	"ext_menu_all": "Laadi kõik lingid Ottiega alla"
 }

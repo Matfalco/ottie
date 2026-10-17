@@ -754,5 +754,7 @@
 	"popup_empty": "Noch keine Downloads.",
 	"ext_pair_here": "Bei Ottie auf diesem Computer anmelden",
 	"ext_pair_here_hint": "Wo Ottie installiert ist, meldet sich dieser Browser selbst an, und Ottie startet, wenn ein Download kommt.",
-	"ext_no_host": "Ottie ist auf diesem Computer nicht für diesen Browser eingerichtet: Installiere die Desktop-App oder führe den Befehl ottie extension install aus. Oder melde dich mit einem Link an."
+	"ext_no_host": "Ottie ist auf diesem Computer nicht für diesen Browser eingerichtet: Installiere die Desktop-App oder führe den Befehl ottie extension install aus. Oder melde dich mit einem Link an.",
+	"ext_menu_one": "Mit Ottie herunterladen",
+	"ext_menu_all": "Alle Links mit Ottie herunterladen"
 }

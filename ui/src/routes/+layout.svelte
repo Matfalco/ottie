@@ -14,7 +14,7 @@
 	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { themeFor } from '#lib/theme.js';
 	import { moving } from '#lib/moving.svelte.js';
-	import { forgetToken, loadToken, saveToken, tokenFromFragment } from '#lib/token.js';
+	import { forgetToken, fromFragment, handLinks, loadToken, saveToken } from '#lib/token.js';
 	import { tellLanguage } from '#lib/window.js';
 	import type { LayoutProps } from './$types';
 
@@ -73,7 +73,9 @@
 	});
 
 	onMount(() => {
-		const fromLink = tokenFromFragment(location.hash);
+		const { token: fromLink, links } = fromFragment(location.hash);
+		// Links handed over open in the list for adding several (the shell).
+		handLinks(links);
 		if (fromLink) {
 			saveToken(fromLink);
 			// Take it out of the address bar and the history entry.

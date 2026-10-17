@@ -754,5 +754,7 @@
 	"popup_empty": "Inga nedladdningar än.",
 	"ext_pair_here": "Logga in på Ottie på den här datorn",
 	"ext_pair_here_hint": "Där Ottie är installerat loggar webbläsaren in av sig själv, och Ottie startar när en nedladdning kommer.",
-	"ext_no_host": "Ottie är inte konfigurerat för den här webbläsaren på den här datorn: installera skrivbordsappen eller kör kommandot ottie extension install. Eller logga in med en länk."
+	"ext_no_host": "Ottie är inte konfigurerat för den här webbläsaren på den här datorn: installera skrivbordsappen eller kör kommandot ottie extension install. Eller logga in med en länk.",
+	"ext_menu_one": "Ladda ned med Ottie",
+	"ext_menu_all": "Ladda ned alla länkar med Ottie"
 }
